@@ -18,6 +18,7 @@ Common traits:
 
 import datetime
 import json
+import warnings
 
 import dateutil
 
@@ -170,6 +171,14 @@ EDXMKTG_USER_INFO_COOKIE_NAME = ENV_TOKENS.get('EDXMKTG_USER_INFO_COOKIE_NAME', 
 ENV_FEATURES = ENV_TOKENS.get('FEATURES', {})
 for feature, value in ENV_FEATURES.items():
     FEATURES[feature] = value
+
+# Backward compatibility for deprecated feature names
+if 'ENABLE_S3_GRADE_DOWNLOADS' in FEATURES:
+    warnings.warn(
+        "'ENABLE_S3_GRADE_DOWNLOADS' is deprecated. Please use 'ENABLE_GRADE_DOWNLOADS' instead",
+        DeprecationWarning,
+    )
+    FEATURES['ENABLE_GRADE_DOWNLOADS'] = FEATURES['ENABLE_S3_GRADE_DOWNLOADS']
 
 CMS_BASE = ENV_TOKENS.get('CMS_BASE', 'studio.edx.org')
 
@@ -428,10 +437,24 @@ if AWS_SECRET_ACCESS_KEY == "":
 
 AWS_STORAGE_BUCKET_NAME = AUTH_TOKENS.get('AWS_STORAGE_BUCKET_NAME', 'edxuploads')
 
+#
+# To support Azure Storage via the Django-Storages library
+#
+AZURE_ACCOUNT_NAME = AUTH_TOKENS["AZURE_ACCOUNT_NAME"]
+AZURE_ACCOUNT_KEY = AUTH_TOKENS["AZURE_ACCOUNT_KEY"]
+AZURE_CONTAINER = AUTH_TOKENS["AZURE_CONTAINER"]
+
+# Disabling querystring auth instructs Boto to exclude the querystring parameters (e.g. signature, access key) it
+# normally appends to every returned URL.
+AWS_QUERYSTRING_AUTH = AUTH_TOKENS.get('AWS_QUERYSTRING_AUTH', True)
+AWS_S3_CUSTOM_DOMAIN = AUTH_TOKENS.get('AWS_S3_CUSTOM_DOMAIN', 'edxuploads.s3.amazonaws.com')
+
 if AUTH_TOKENS.get('DEFAULT_FILE_STORAGE'):
     DEFAULT_FILE_STORAGE = AUTH_TOKENS.get('DEFAULT_FILE_STORAGE')
 elif AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY:
     DEFAULT_FILE_STORAGE = 'storages.backends.s3boto.S3BotoStorage'
+elif AZURE_ACCOUNT_NAME and AZURE_ACCOUNT_KEY and AZURE_CONTAINER:
+    DEFAULT_FILE_STORAGE = 'openedx.core.storage.AzureStorageExtended'
 else:
     DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
 

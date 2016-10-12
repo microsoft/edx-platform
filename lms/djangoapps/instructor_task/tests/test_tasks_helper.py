@@ -63,7 +63,8 @@ class InstructorGradeReportTestCase(TestReportMixin, InstructorTaskCourseTestCas
             self.assertDictContainsSubset({'attempted': 2, 'succeeded': 2, 'failed': 0}, result)
             report_store = ReportStore.from_config(config_name='GRADES_DOWNLOAD')
             report_csv_filename = report_store.links_for(course_id)[0][0]
-            with open(report_store.path_to(course_id, report_csv_filename)) as csv_file:
+            report_path = report_store.path_to(course_id, report_csv_filename)
+            with report_store.storage.open(report_path) as csv_file:
                 for row in unicodecsv.DictReader(csv_file):
                     if row.get('username') == username:
                         self.assertEqual(row[column_header], expected_cell_content)
@@ -548,7 +549,8 @@ class TestInstructorDetailedEnrollmentReport(TestReportMixin, InstructorTaskCour
         """
         report_store = ReportStore.from_config(config_name='FINANCIAL_REPORTS')
         report_csv_filename = report_store.links_for(self.course.id)[0][0]
-        with open(report_store.path_to(self.course.id, report_csv_filename)) as csv_file:
+        report_path = report_store.path_to(self.course.id, report_csv_filename)
+        with report_store.storage.open(report_path) as csv_file:
             # Expand the dict reader generator so we don't lose it's content
             for row in unicodecsv.DictReader(csv_file):
                 if row.get('Username') == username:
@@ -966,7 +968,8 @@ class TestExecutiveSummaryReport(TestReportMixin, InstructorTaskCourseTestCase):
         Verify grade report data.
         """
         report_html_filename = report_store.links_for(self.course.id)[0][0]
-        with open(report_store.path_to(self.course.id, report_html_filename)) as html_file:
+        report_path = report_store.path_to(self.course.id, report_html_filename)
+        with report_store.storage.open(report_path) as html_file:
             html_file_data = html_file.read()
             for data in expected_data:
                 self.assertTrue(data in html_file_data)
@@ -1059,7 +1062,8 @@ class TestCourseSurveyReport(TestReportMixin, InstructorTaskCourseTestCase):
         Verify course survey data.
         """
         report_csv_filename = report_store.links_for(self.course.id)[0][0]
-        with open(report_store.path_to(self.course.id, report_csv_filename)) as csv_file:
+        report_path = report_store.path_to(self.course.id, report_csv_filename)
+        with report_store.storage.open(report_path) as csv_file:
             csv_file_data = csv_file.read()
             for data in expected_data:
                 self.assertIn(data, csv_file_data)
@@ -1141,7 +1145,8 @@ class TestTeamStudentReport(TestReportMixin, InstructorTaskCourseTestCase):
             self.assertDictContainsSubset({'attempted': 2, 'succeeded': 2, 'failed': 0}, result)
             report_store = ReportStore.from_config(config_name='GRADES_DOWNLOAD')
             report_csv_filename = report_store.links_for(self.course.id)[0][0]
-            with open(report_store.path_to(self.course.id, report_csv_filename)) as csv_file:
+            report_path = report_store.path_to(self.course.id, report_csv_filename)
+            with report_store.storage.open(report_path) as csv_file:
                 for row in unicodecsv.DictReader(csv_file):
                     if row.get('username') == username:
                         self.assertEqual(row['team'], expected_team)
@@ -1511,7 +1516,8 @@ class TestGradeReportEnrollmentAndCertificateInfo(TestReportMixin, InstructorTas
             upload_grades_csv(None, None, self.course.id, None, 'graded')
             report_store = ReportStore.from_config(config_name='GRADES_DOWNLOAD')
             report_csv_filename = report_store.links_for(self.course.id)[0][0]
-            with open(report_store.path_to(self.course.id, report_csv_filename)) as csv_file:
+            report_path = report_store.path_to(self.course.id, report_csv_filename)
+            with report_store.storage.open(report_path) as csv_file:
                 for row in unicodecsv.DictReader(csv_file):
                     if row.get('username') == username:
                         csv_row_data = [row[column] for column in self.columns_to_check]
