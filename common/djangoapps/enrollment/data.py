@@ -23,13 +23,14 @@ from student.models import (
 log = logging.getLogger(__name__)
 
 
-def get_course_enrollments(user_id):
+def get_course_enrollments(user_id, org_filter=None):
     """Retrieve a list representing all aggregated data for a user's course enrollments.
 
     Construct a representation of all course enrollment data for a specific user.
 
     Args:
         user_id (str): The name of the user to retrieve course enrollment information for.
+        org_filter (str): Optional. Only return courses related to the specified ORG.
 
     Returns:
         A serializable list of dictionaries of all aggregated enrollment data for a user.
@@ -39,6 +40,18 @@ def get_course_enrollments(user_id):
         user__username=user_id,
         is_active=True
     ).order_by('created')
+
+    # apply ORG filter, if specified
+    # NOTE, do not do a Falsy type check here because an empty list
+    # and None do not have the same semantic meaning. None means no filtering.
+    # Empty list means 'filter everything out'
+    if org_filter is not None:
+        _set = []
+        for enrollment in qset:
+            if enrollment.course_id.org in org_filter:
+                _set.append(enrollment)
+
+        qset = _set
 
     enrollments = CourseEnrollmentSerializer(qset, many=True).data
 

@@ -7,11 +7,12 @@ from rest_framework import generics
 from rest_framework.exceptions import APIException
 
 from openedx.core.djangoapps.user_api.permissions import is_field_shared_factory
+from openedx.core.djangoapps.xmodule_django.models import CourseKeyField
 from openedx.core.lib.api.authentication import (
     OAuth2AuthenticationAllowInactiveUser,
     SessionAuthenticationAllowInactiveUser
 )
-from openedx.core.djangoapps.xmodule_django.models import CourseKeyField
+from openedx.core.lib.api.permissions import OAuth2RestrictedApplicatonPermission
 
 from badges.models import BadgeAssertion
 from .serializers import BadgeAssertionSerializer
@@ -97,7 +98,10 @@ class UserBadgeAssertions(generics.ListAPIView):
         OAuth2AuthenticationAllowInactiveUser,
         SessionAuthenticationAllowInactiveUser
     )
-    permission_classes = (is_field_shared_factory("accomplishments_shared"),)
+    permission_classes = (
+        is_field_shared_factory("accomplishments_shared"),
+        OAuth2RestrictedApplicatonPermission
+    )
 
     def filter_queryset(self, queryset):
         """
