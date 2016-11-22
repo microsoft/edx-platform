@@ -93,7 +93,7 @@ class Command(BaseCommand):
 
         storage = get_storage(storage_class, container=container)
 
-        files = [f for f in listdir(path) if isfile(join(path, f))]
+        files = [f for f in listdir(path) if isfile(join(path, f)) and f.endswith('.gz')]
 
         for file in files:
             print 'Inspecting {} ....'.format(file)
@@ -106,7 +106,7 @@ class Command(BaseCommand):
                     if not exists or overwrite:
                         # even if we overwrite, don't do so if filesize has not
                         # changed
-                        if overwrite:
+                        if exists and overwrite:
                             remote_size = storage.size(dest_fn)
                             local_size = stat(local_path).st_size
                             print '{} {}'.format(remote_size, local_size)
