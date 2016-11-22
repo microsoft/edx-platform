@@ -132,7 +132,7 @@ class Command(BaseCommand):
                         
                         if delete_local:
                           print 'Deleting {} from disk...'.format(file)
-                          os.remove(local_path)
+                          remove(local_path)
                     else:
                         print 'File {} already exists in remote storage. Skipping...'.format(file)
             except Exception, ex:
