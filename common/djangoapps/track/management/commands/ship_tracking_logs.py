@@ -1,4 +1,4 @@
-from os import listdir, stat
+from os import listdir, remove, stat
 from os.path import isfile, join
 
 from optparse import make_option
@@ -45,6 +45,10 @@ class Command(BaseCommand):
             targest destination
             DEFAULT: False (don't overwrite)
 
+        -d <delete_local>   (True/False)
+            A Boolean flag whether to delete local log files after successful upload
+            DEFAULT: False (don't delete)
+
     To periodically ship off tracking logs, one can trigger an execution of
     this command to some recurring task (like cron). Be sure to configure your
     environments logrotate so that tracking files are rotated on a periodic
@@ -53,11 +57,10 @@ class Command(BaseCommand):
     """
     option_list = BaseCommand.option_list + (
         make_option('-p', '--path',
-            metavar='PATH',
-            dest='path',
-            default='/edx/var/log/tracking',
-            help='where to find the tracking logs',
-        ),
+                    metavar='PATH',
+                    dest='path',
+                    default='/edx/var/log/tracking',
+                    help='where to find the tracking logs'),
         make_option('-c', '--container',
                     metavar='CONTAINER',
                     dest='container',
@@ -75,10 +78,15 @@ class Command(BaseCommand):
                     default='openedx.core.storage.AzureStorageExtended',
                     help='Which storage class to use'),
         make_option('-o', '--overwrite',
-            metavar='OVERWRITE',
-            dest='overwrite',
-            default=False,
-            help='Overwrite existing files in remote storage')
+                    metavar='OVERWRITE',
+                    dest='overwrite',
+                    default=False,
+                    help='Overwrite existing files in remote storage'),
+        make_option('-d', '--delete_local',
+                    metavar='DELETE',
+                    dest='delete_local',
+                    default=False,
+                    help='Delete local files after successful upload')
     )
 
     def handle(self, *args, **options):
@@ -87,6 +95,7 @@ class Command(BaseCommand):
         container = options['container']
         path = options['path']
         overwrite = options['overwrite']
+        delete_local = options['delete_local']
 
         if not storage_class or not folder or not container or not path:
             print 'You must specify the -c, -f, -p, and -s parameters for this command'
@@ -120,6 +129,10 @@ class Command(BaseCommand):
 
                         print 'Shipping {} to remote storage...'.format(file)
                         storage.save(dest_fn, f)
+                        
+                        if delete_local:
+                          print 'Deleting {} from disk...'.format(file)
+                          os.remove(local_path)
                     else:
                         print 'File {} already exists in remote storage. Skipping...'.format(file)
             except Exception, ex:
