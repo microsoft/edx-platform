@@ -1,6 +1,6 @@
 // LMS - CSS application architecture
 // Version 1 styling (pre-Pattern Library)
 // ====================
-
+$output-bourbon-deprecation-warnings: false;
 @import 'build-base-v1';
 @import 'build-lms-v1'; // shared app style assets/rendering

@@ -20,6 +20,8 @@
 
 // +Basic Setup
 // ====================
+$output-bourbon-deprecation-warnings: false;
+
 html {
   font-size: 62.5%;
   height: 102%; // force scrollbar to prevent jump when scroll appears, cannot use overflow because it breaks drag

@@ -9,22 +9,26 @@ services:
   - memcached
   
 env:
-  # - TEST_SUITE="quality"
-  # - TEST_SUITE="lib"
-  - TEST_SUITE="cms-unit"
   - TEST_SUITE="lms-unit"
+  - TEST_SUITE="cms-unit"
+  - TEST_SUITE="lib"
+  - TEST_SUITE="quality"  
 
-#cache:
-  #- npm
-  #- pip
+cache:
+  pip: true
+  directories: node_modules
 
 branches:
   only:
-  # - master
-  # - oxa/master.fic
-  # - oxa/devfic
-  # Testing CI Branch
+  - master
+  - oxa/master.fic
+  - oxa/devfic
   - oxa/ci
+  - oxa/ci-reset
+
+# before_install:
+#  - sudo apt-get install netcat-traditional
+#  - eval "$(curl -sL https://raw.github.com/kabirkhan/travis-remote-shell/master/run.sh)"
 
 # command to install dependencies
 install:   
