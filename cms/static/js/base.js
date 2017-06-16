@@ -99,7 +99,7 @@ require([
                 dropdownMenuView.postRender();
             }
 			
-			// Change link based on selected site
+            // Change link based on selected site
             $('.view-button').bind('click', selectSite);
         });
 
@@ -137,7 +137,7 @@ require([
             $(this).closest('.wrapper-alert').removeClass('is-shown');
         }
 		
-		function selectSite() {
+        function selectSite() {
             var selectedSite = $(this).parent().parent().find('.site_name');
             var site_name = selectedSite.find("option:selected").val();
             var site = $(this).attr('href');
