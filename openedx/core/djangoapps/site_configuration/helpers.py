@@ -237,7 +237,7 @@ def get_lms_base_values(org, default=None):
 	This function will take org value, search for course_org_filter,
 	using that get LMS_BASE value from site configuration and return dictionary 
 	of site display name as key and LMS base value as Value
-	"""
+    """
     Site_dict = {}
     for site in Site.objects.all():
         if  SiteConfiguration.objects.get(site=site).get_value('course_org_filter'):
