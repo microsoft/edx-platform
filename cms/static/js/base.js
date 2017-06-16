@@ -98,6 +98,9 @@ require([
                 });
                 dropdownMenuView.postRender();
             }
+			
+			// Change link based on selected site
+            $('.view-button').bind('click', selectSite);
         });
 
         function smoothScrollLink(e) {
@@ -132,5 +135,13 @@ require([
         function hideAlert(e) {
             (e).preventDefault();
             $(this).closest('.wrapper-alert').removeClass('is-shown');
+        }
+		
+		function selectSite() {
+            var selectedSite = $(this).parent().parent().find('.site_name');
+            var site_name = selectedSite.find("option:selected").val();
+            var site = $(this).attr('href');
+            var href = site.replace(site.split('/')[2], site_name);
+            $(this).attr('href',href);
         }
     }); // end require()
