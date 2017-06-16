@@ -240,11 +240,11 @@ def get_lms_base_values(org, default=None):
     """
     Site_dict = {}
     for site in Site.objects.all():
-        if  SiteConfiguration.objects.get(site=site).get_value('course_org_filter'):
-            if org in SiteConfiguration.objects.get(site=site).get_value('course_org_filter'):
-                lms_base_value = SiteConfiguration.objects.get(site=site).get_value('LMS_BASE')
-                if site.name not in Site_dict.keys():
-                    Site_dict[site.name] = lms_base_value
+	Site_config = SiteConfiguration.objects.get(site=site)
+        if Site_config.get_value('course_org_filter') is not None and org in Site_config.get_value('course_org_filter'):
+            lms_base_value = Site_config.get_value('LMS_BASE')
+            if site.name not in Site_dict:
+                Site_dict[site.name] = lms_base_value
         else:
             return default
     return Site_dict
