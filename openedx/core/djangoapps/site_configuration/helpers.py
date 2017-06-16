@@ -4,6 +4,7 @@ Helpers methods for site configuration.
 from django.conf import settings
 from openedx.core.djangoapps.site_configuration.models import SiteConfiguration
 from microsite_configuration import microsite
+from django.contrib.sites.models import Site
 
 
 def get_current_site_configuration():
@@ -230,3 +231,21 @@ def page_title_breadcrumbs(*crumbs, **kwargs):
         return u'{}{}{}'.format(separator.join(crumbs), separator, platform_name)
     else:
         return platform_name
+		
+def get_lms_base_values(org, default=None):
+    """
+	This function will take org value, search for course_org_filter,
+	using that get LMS_BASE value from site configuration and return dictionary 
+	of site display name as key and LMS base value as Value
+    """
+    Site_dict = {}
+    for site in Site.objects.all():
+	Site_config = SiteConfiguration.objects.get(site=site)
+        if Site_config.get_value('course_org_filter') is not None and org in Site_config.get_value('course_org_filter'):
+            lms_base_value = Site_config.get_value('LMS_BASE')
+            if site.name not in Site_dict:
+                Site_dict[site.name] = lms_base_value
+        else:
+            return default
+    return Site_dict
+
