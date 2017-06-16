@@ -332,7 +332,7 @@ from openedx.core.djangolib.markup import HTML, Text
             </a>
 
             <ul  class="item-actions course-actions">
-			  <%
+     <%
                 Sites = configuration_helpers.get_lms_base_values(course_info['org'],settings.SITE_NAME)
               %>
               % if Sites != settings.SITE_NAME:
