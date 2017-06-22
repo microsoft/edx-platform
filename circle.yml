@@ -29,6 +29,9 @@ dependencies:
     - pip install  --exists-action w pbr==0.9.0
     - pip install --exists-action w -r requirements/edx/base.txt
     - pip install --exists-action w -r requirements/edx/paver.txt
+    - sudo apt-get update
+    - sudo apt-get install libxmlsec1-dev
+    - sudo apt-get install swig
     - if [ -e requirements/edx/post.txt ]; then pip install --exists-action w -r requirements/edx/post.txt ; fi
 
     - pip install coveralls==1.0
@@ -65,4 +68,8 @@ test:
     # data will automatically be sent to coveralls. See https://coveralls.io/
     # If you have not set up set up coveralls then the following statement will
     # print a message but not affect the pass/fail status of the build.
-    - if [ -z $COVERALLS_REPO_TOKEN ]; then echo "Coveralls token not defined."; else coveralls; fi
+    # - if [ -z $COVERALLS_REPO_TOKEN ]; then echo "Coveralls token not defined."; else coveralls; fi
+
+    - pip install codecov==2.0.5
+    - codecov --token=$CODE_COV_TOKEN
+    

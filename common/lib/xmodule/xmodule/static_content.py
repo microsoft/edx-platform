@@ -96,6 +96,7 @@ def _write_styles(selector, output_root, classes):
             css_imports[class_].add(fragment_name)
 
     module_styles_lines = [
+        "$output-bourbon-deprecation-warnings: false;",
         "@import 'bourbon/bourbon';",
         "@import 'base/variables';",
     ]

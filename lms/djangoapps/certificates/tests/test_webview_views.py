@@ -437,12 +437,7 @@ class CertificatesViewsTests(CommonCertificatesTestCase):
         self.assertIn(
             'course_title_0',
             response.content
-        )
-        # Test an item from user info
-        self.assertIn(
-            "{fullname}, you&#39;ve earned a certificate!".format(fullname=self.user.profile.name),
-            response.content
-        )
+        )        
         # Test an item from social info
         self.assertIn(
             "Post on Facebook",
