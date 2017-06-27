@@ -13,6 +13,14 @@ PAVER_ARGS="--with-flaky --processes=-1 --cov-args='-p' --with-xunitmp --fasttes
 
 EXIT=0
 
+
+docker exec -it devstack /bin/bash -s <<EOF
+sudo su edxapp -s /bin/bash
+source /edx/app/edxapp/edxapp_env
+cd /edx/app/edxapp/edx-platform
+paver test_system -s lms --with-flaky --processes=-1 --cov-args='-p' --with-xunitmp
+EOF
+
 case "$TEST_SUITE" in
 
     "quality")
