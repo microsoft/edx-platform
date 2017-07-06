@@ -128,6 +128,8 @@ class SessionCookieDomainSiteConfigurationOverrideTests(TestCase):
         response = self.client.get('/', HTTP_HOST=self.site.domain)
         self.assertIn(self.site.domain, str(response.cookies['sessionid']))
 
+
+@unittest.skipUnless(settings.ROOT_URLCONF == 'lms.urls', 'Test only valid in lms')
 class LoginRequiredMiddlewareTests(TestCase):
 
     def setUp(self):
@@ -144,7 +146,6 @@ class LoginRequiredMiddlewareTests(TestCase):
             site=self.open_site,
             values={}
         )
-
         self.restricted_site = SiteFactory.create(
             domain='testserver.fake.restricted',
             name='testserver.fake.restricted'
@@ -160,11 +161,11 @@ class LoginRequiredMiddlewareTests(TestCase):
 
     def test_anonymous_user_can_access_open_site(self):
         response = self.client.get('/courses', HTTP_HOST=self.open_site.domain)
-        self.assertEqual(response.status_code, 200, 'Response: ' + str(response.status_code) + ' ' + str(response))
+        self.assertEqual(response.status_code, 200)
 
     def test_anonymous_user_cannot_access_restricted_site(self):
-        response = self.client.get('/courses', HTTP_HOST=self.restricted_site.domain)
-        self.assertEqual(response.status_code, 302)
+        response = self.client.get('/courses', HTTP_HOST=self.restricted_site.domain, follow=True)
+        self.assertRedirects(response, '/login?next=/courses', host=self.restricted_site.domain)
 
     def test_logged_in_user_can_access_both_sites(self):
         self.client.login(username=self.user.username, password="password")
@@ -176,4 +177,3 @@ class LoginRequiredMiddlewareTests(TestCase):
     def test_anonymous_user_can_access_login_exempt_urls_for_restricted_site(self):
         response = self.client.get('/about', HTTP_HOST=self.restricted_site.domain)
         self.assertEqual(response.status_code, 200)
-

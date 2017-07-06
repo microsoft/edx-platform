@@ -1,0 +1,80 @@
+language: python
+python:
+  - "2.7"
+services:
+  - mongodb
+  - mysql
+  - rabbitmq
+  - memcached
+  
+env:
+  - TEST_SUITE="lms-unit"
+    SHARD=1
+  - TEST_SUITE="lms-unit"
+    SHARD=2
+  - TEST_SUITE="lms-unit"
+    SHARD=3
+  - TEST_SUITE="lms-unit"
+    SHARD=4
+  - TEST_SUITE="cms-unit"
+  - TEST_SUITE="lib"  
+  - TEST_SUITE="js-unit"
+  
+cache:
+  pip: true
+  directories: node_modules
+
+branches:
+  only:
+  - master
+  - oxa/master.fic
+  - oxa/devfic
+  - oxa/dev.fic
+  - oxa/ci
+
+# command to install dependencies
+install: 
+  - rm -rf ~/.nvm && git clone https://github.com/creationix/nvm.git ~/.nvm && (cd ~/.nvm && git checkout `git describe --abbrev=0 --tags`) && source ~/.nvm/nvm.sh && nvm install 6.9.4
+  - npm install
+
+  # Fixes errors with boto package. 
+  # google-compute-engine required for 
+  # django-storages to recognize boto packages
+  # See open edx answers here:
+  # https://openedx.atlassian.net/wiki/pages/viewpage.action?pageId=158663390
+  - pip install --exists-action w google-compute-engine
+
+  - pip install setuptools
+  - pip install --exists-action w -r requirements/edx/paver.txt
+
+  # Mirror what paver install_prereqs does.
+  # After a successful build, Travis will
+  # cache the virtualenv at that state, so that  
+  # the next build will not need to install them
+  # from scratch again.
+  - pip install --exists-action w -r requirements/edx/pre.txt
+  - pip install --exists-action w -r requirements/edx/github.txt
+  - pip install --exists-action w -r requirements/edx/local.txt
+  
+  - pip install --exists-action w pbr==0.9.0
+  - pip install --exists-action w -r requirements/edx/base.txt
+  - sudo apt-get update
+  - sudo apt-get install libxmlsec1-dev
+  - sudo apt-get install swig
+  - if [ -e requirements/edx/post.txt ]; then pip install --exists-action w -r requirements/edx/post.txt ; fi
+
+  
+before_script:
+  - "export PATH=$PATH:$PWD/node_modules/.bin"
+  - "export DISPLAY=:99.0"
+  - "sh -e /etc/init.d/xvfb start"
+  - sleep 3
+
+# command to run tests
+script: ./scripts/travis-tests.sh
+
+addons:
+  firefox: "45.0"
+  chrome: stable
+
+dist: trusty
