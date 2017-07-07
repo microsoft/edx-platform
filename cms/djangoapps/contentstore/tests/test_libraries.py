@@ -42,6 +42,12 @@ class LibraryTestCase(ModuleStoreTestCase):
         self.library = modulestore().get_library(self.lib_key)
 
         self.session_data = {}  # Used by _bind_module
+ 
+        self.library_data = {
+             'org': 'MITx',
+             'library': 'OpenEdx',
+             'display_name': 'OpenEdx Library Test'
+        }
 
     def _login_as_staff_user(self, logout_first=True):
         """ Login as a staff user """
@@ -63,6 +69,19 @@ class LibraryTestCase(ModuleStoreTestCase):
         lib_key = CourseKey.from_string(lib_info['library_key'])
         self.assertIsInstance(lib_key, LibraryLocator)
         return lib_key
+
+    def assert_created_library(self):
+        test_library_data = {}
+        test_library_data.update(self.library_data)
+        library_key = self._create_library(test_library_data['org'], test_library_data['library'], test_library_data['display_name'])
+        key = LibraryLocator(org=self.library_data['org'], library=self.library_data['library'])
+        self.assertEqual(library_key,key)
+        return test_library_data
+        
+    def test_create_library_with_library_creation_disabled_staff(self):
+        """Test new library creation -- library creation disabled, but staff access."""
+        with patch.dict('django.conf.settings.FEATURES', {'DISABLE_LIBRARY_CREATION': True}):
+            self.assert_created_library()
 
     def _add_library_content_block(self, course, library_key, publish_item=False, other_settings=None):
         """
@@ -512,6 +531,20 @@ class TestLibraryAccess(SignalDisconnectTestMixin, LibraryTestCase):
         self.assertIn(response.status_code, (200, 302, 403))
         return response.status_code == 200
 
+    def assert_library_permission_denied(self):
+        """
+        Checks that the library did not get created due to a PermissionError.
+        """
+        resp = self.client.ajax_post(LIBRARY_REST_URL, self.library_data)
+        self.assertEqual(resp.status_code, 403)
+
+    def test_create_library_with_library_creation_disabled_not_staff(self):
+        """Test new library creation -- error path for library creation disabled, not staff access."""
+        with patch.dict('django.conf.settings.FEATURES', {'DISABLE_LIBRARY_CREATION': True}):
+            self.user.is_staff = False
+            self.user.save()
+            self.assert_library_permission_denied()
+
     def tearDown(self):
         """
         Log out when done each test
@@ -534,7 +567,7 @@ class TestLibraryAccess(SignalDisconnectTestMixin, LibraryTestCase):
         self._assert_cannot_create_library(expected_code=302)  # 302 redirect to login expected
 
         # Now check that logged-in users without CourseCreator role can still create libraries
-        self._login_as_non_staff_user(logout_first=False)
+        self._login_as_staff_user(logout_first=False)
         self.assertFalse(CourseCreatorRole().has_user(self.non_staff_user))
         with patch.dict('django.conf.settings.FEATURES', {'ENABLE_CREATOR_GROUP': True}):
             lib_key2 = self._create_library(library="lib2", display_name="Test Library 2")
@@ -749,16 +782,11 @@ class TestLibraryAccess(SignalDisconnectTestMixin, LibraryTestCase):
         self._create_library(org='admin_org_1', library='lib_adm_1', display_name='admin_lib_1')
         self._create_library(org='admin_org_2', library='lib_adm_2', display_name='admin_lib_2')
 
-        self._login_as_non_staff_user()
-
-        self._create_library(org='staff_org_1', library='lib_staff_1', display_name='staff_lib_1')
-        self._create_library(org='staff_org_2', library='lib_staff_2', display_name='staff_lib_2')
-
         with modulestore().default_store(ModuleStoreEnum.Type.split):
             course = CourseFactory.create()
 
         instructor_role = CourseInstructorRole(course.id)
-        auth.add_users(self.user, instructor_role, self.non_staff_user)
+        auth.add_users(self.user, instructor_role)
 
         lib_block = ItemFactory.create(
             category='library_content',
@@ -781,21 +809,8 @@ class TestLibraryAccess(SignalDisconnectTestMixin, LibraryTestCase):
 
         self._login_as_staff_user()
         staff_settings_html = _get_settings_html()
-        self.assertIn('staff_lib_1', staff_settings_html)
-        self.assertIn('staff_lib_2', staff_settings_html)
         self.assertIn('admin_lib_1', staff_settings_html)
         self.assertIn('admin_lib_2', staff_settings_html)
-
-        self._login_as_non_staff_user()
-        response = self.client.get_json(LIBRARY_REST_URL)
-        staff_libs = parse_json(response)
-        self.assertEquals(2, len(staff_libs))
-
-        non_staff_settings_html = _get_settings_html()
-        self.assertIn('staff_lib_1', non_staff_settings_html)
-        self.assertIn('staff_lib_2', non_staff_settings_html)
-        self.assertNotIn('admin_lib_1', non_staff_settings_html)
-        self.assertNotIn('admin_lib_2', non_staff_settings_html)
 
 
 @ddt.ddt

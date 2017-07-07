@@ -26,10 +26,11 @@ from xmodule.modulestore.django import modulestore
 from .user import user_with_role
 
 from .component import get_component_templates, CONTAINER_TEMPLATES
+from student import auth
 from student.auth import (
     STUDIO_VIEW_USERS, STUDIO_EDIT_ROLES, get_user_permissions, has_studio_read_access, has_studio_write_access
 )
-from student.roles import CourseInstructorRole, CourseStaffRole, LibraryUserRole
+from student.roles import CourseInstructorRole, CourseStaffRole, LibraryUserRole, LibraryCreatorRole
 from util.json_request import expect_json, JsonResponse, JsonResponseBadRequest
 
 __all__ = ['library_handler', 'manage_library_users']
@@ -38,6 +39,22 @@ log = logging.getLogger(__name__)
 
 LIBRARIES_ENABLED = settings.FEATURES.get('ENABLE_CONTENT_LIBRARIES', False)
 
+def get_library_creator_status(user):
+    """
+    Helper method for returning the library creation status for a particular user,
+    taking into account the value LIBRARIES_ENABLED.
+    """
+ 
+    if not LIBRARIES_ENABLED:
+        library_creater_status = False
+    elif user.is_staff and (user.is_staff or user.is_superuser):   
+        library_creater_status = True
+    elif settings.FEATURES.get('DISABLE_LIBRARY_CREATION', False):
+        library_creater_status = False
+    else:
+        library_creater_status = True
+
+    return library_creater_status
 
 @login_required
 @ensure_csrf_cookie
@@ -113,6 +130,8 @@ def _create_library(request):
     """
     Helper method for creating a new library.
     """
+    if not auth.user_has_role(request.user, LibraryCreatorRole()):
+        raise PermissionDenied()
     display_name = None
     try:
         display_name = request.json['display_name']

@@ -305,6 +305,16 @@ class OrgLibraryUserRole(OrgRole):
     def __init__(self, *args, **kwargs):
         super(OrgLibraryUserRole, self).__init__(self.ROLE, *args, **kwargs)
 
+@register_access_role
+class LibraryCreatorRole(RoleBase):
+    """
+    This is the group of people who have permission to create new libraries (we may want to eventually
+    make this an org based role).
+    """
+    ROLE = "library_creator_group"
+
+    def __init__(self, *args, **kwargs):
+        super(LibraryCreatorRole, self).__init__(self.ROLE, *args, **kwargs)
 
 @register_access_role
 class CourseCreatorRole(RoleBase):

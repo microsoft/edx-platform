@@ -85,10 +85,10 @@ class UnitTestLibraries(ModuleStoreTestCase):
         # That's all we check. More detailed tests are in contentstore.tests.test_libraries...
 
     @patch.dict('django.conf.settings.FEATURES', {'ENABLE_CREATOR_GROUP': True})
-    def test_lib_create_permission(self):
+    def test_lib_create_permission_denied(self):
         """
-        Users who are not given course creator roles should still be able to
-        create libraries.
+        Users who are not given course creator roles and not given staff access
+        should not be able to create libraries.
         """
         self.client.logout()
         ns_user, password = self.create_non_staff_user()
@@ -97,7 +97,7 @@ class UnitTestLibraries(ModuleStoreTestCase):
         response = self.client.ajax_post(LIBRARY_REST_URL, {
             'org': 'org', 'library': 'lib', 'display_name': "New Library",
         })
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 403)
 
     @ddt.data(
         {},

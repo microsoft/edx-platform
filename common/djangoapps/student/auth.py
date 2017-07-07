@@ -10,7 +10,7 @@ from opaque_keys.edx.locator import LibraryLocator
 from ccx_keys.locator import CCXLocator, CCXBlockUsageLocator
 
 from student.roles import GlobalStaff, CourseCreatorRole, CourseStaffRole, CourseInstructorRole, CourseRole, \
-    CourseBetaTesterRole, OrgInstructorRole, OrgStaffRole, LibraryUserRole, OrgLibraryUserRole
+    CourseBetaTesterRole, OrgInstructorRole, OrgStaffRole, LibraryUserRole, OrgLibraryUserRole, LibraryCreatorRole
 
 
 # Studio permissions:
@@ -49,6 +49,12 @@ def user_has_role(user, role):
         # wide open course creation setting
         if not settings.FEATURES.get('ENABLE_CREATOR_GROUP', False):
             return True
+
+    # LibraryCreator is odd b/c it can be disabled via config
+    if isinstance(role, LibraryCreatorRole):
+        # completely shut down library creation setting
+        if settings.FEATURES.get('DISABLE_LIBRARY_CREATION', False):
+            return False
 
     if role.has_user(user):
         return True
