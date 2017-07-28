@@ -2231,7 +2231,7 @@ def password_reset(request):
     from_email = request.POST.get('email')
     return JsonResponse({
         'success': True,
-        'value': render_to_string('registration/password_reset_done.html', {'email':  from_email}),
+        'value': render_to_string('registration/password_reset_done.html', {'email': from_email}),
     })
 
 
@@ -2270,7 +2270,7 @@ def validate_password(user, password):
 
     enforce_password_policy = configuration_helpers.get_value(
         "ENFORCE_PASSWORD_POLICY", settings.FEATURES.get("ENFORCE_PASSWORD_POLICY", False)
-    ) 
+    )
 
     if enforce_password_policy:
         try:
