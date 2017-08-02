@@ -1,10 +1,4 @@
 # inspired by https://github.com/alexkaratarakis/gitattributes
-#
-# list built using the following commands
-# files WITH extensions
-#   find . -type f -printf '%f\n' | grep -i "\." | sed 's|.*\.||' | grep -v -i "^\(db\|pkl\|pyc\|pyd\|pyo\|ai\|bmp\|eps\|gif\|ico\|jng\|jp2\|jpg\|jpeg\|jpx\|jxr\|pdf\|png\|psb\|psd\|svg\|graphml\|svgz\|tif\|tiff\|wbmp\|webp\|3gpp\|3gp\|as\|asf\|asx\|fla\|flv\|m4v\|mng\|mov\|mp4\|mpeg\|mpg\|ogv\|swc\|swf\|webm\|7z\|gz\|jar\|rar\|tar\|zip\|mo\|bcmap\|ttf\|eot\|otf\|woff\|woff2\|dat\|dll\|exe\|wav\|cer\|config\|content\|crt\|cscfg\|csdef\|cur\|DS_Store\|fic\|idx\|key\|ogg\|lci\|lib\|man\|metagen\|mui\|snk\|winmd\|xsd\|csplugin\|exp\|nupkg\|pack\|pdb\|pem\|pfx\|pub\|ps1xml\|sample\|assemblylookupcache\|psd1\|notyaml\|mp99\|out\|noci\)$" | sort | uniq
-# files with NO extensions
-#   find . -type f | grep -v "\.git" | sed 's|.*/||' | grep -v "\." | grep -v -i "font\|default_mdsd\|rsa\|10periodic\|20unattended-upgrade\|bash_profile\|browsermob-proxy\|go\-agent\-env\-vars\|ec2_\|mongodb_\|munin\-edx\|rds_local\|route53_2_1_1_0\|ssh_key_forward\|tag_environment_prod\|util_map\|vimrc\|vpc_lookup\|x11_display"  | sort | uniq
 
  ## Default
 * text=auto
@@ -85,3 +79,12 @@ AUTHORS         text eol=lf
 COPYING         text eol=lf
 LICENSE         text eol=lf
 README          text eol=lf
+
+# list built using the following commands
+#
+# files WITH extensions
+#   find . -type f -printf '%f\n' | grep -i "\." | sed 's|.*\.||' | grep -v -i "^\(db\|pkl\|pyc\|pyd\|pyo\|ai\|bmp\|eps\|gif\|ico\|jng\|jp2\|jpg\|jpeg\|jpx\|jxr\|pdf\|png\|psb\|psd\|svg\|graphml\|svgz\|tif\|tiff\|wbmp\|webp\|3gpp\|3gp\|as\|asf\|asx\|fla\|flv\|m4v\|mng\|mov\|mp4\|mpeg\|mpg\|ogv\|swc\|swf\|webm\|7z\|gz\|jar\|rar\|tar\|zip\|mo\|bcmap\|ttf\|eot\|otf\|woff\|woff2\|dat\|dll\|exe\|wav\|cer\|config\|content\|crt\|cscfg\|csdef\|cur\|DS_Store\|fic\|idx\|key\|ogg\|lci\|lib\|man\|metagen\|mui\|snk\|winmd\|xsd\|csplugin\|exp\|nupkg\|pack\|pdb\|pem\|pfx\|pub\|ps1xml\|sample\|assemblylookupcache\|psd1\|notyaml\|mp99\|out\|noci\)$" | sort | uniq
+#
+# files with NO extensions
+#   find . -type f | grep -v "\.git" | sed 's|.*/||' | grep -v "\." | grep -v -i "font\|default_mdsd\|rsa\|10periodic\|20unattended-upgrade\|bash_profile\|browsermob-proxy\|go\-agent\-env\-vars\|ec2_\|mongodb_\|munin\-edx\|rds_local\|route53_2_1_1_0\|ssh_key_forward\|tag_environment_prod\|util_map\|vimrc\|vpc_lookup\|x11_display"  | sort | uniq
+#
