@@ -1,7 +1,7 @@
 # based on https://github.com/alexkaratarakis/gitattributes
 
 ## Default
-* text=auto   eol=lf
+* text=auto
 
 ## Python Binary files
 *.db     binary
