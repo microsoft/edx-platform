@@ -2195,7 +2195,6 @@ def activate_account(request, key):
     return HttpResponseServerError(_("Unknown error. Please e-mail us to let us know how it happened."))
 
 
-@csrf_exempt
 @require_POST
 def password_reset(request):
     """ Attempts to send a password reset e-mail. """
