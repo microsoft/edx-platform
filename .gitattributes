@@ -1,8 +1,8 @@
 # inspired by https://github.com/alexkaratarakis/gitattributes
 
  ## Default
-*   text=auto
-svg text=auto
+*       text=auto
+*.svg   -text
 
 ## Repo configurations
 .*coveragerc*   text eol=lf
