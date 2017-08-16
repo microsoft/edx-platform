@@ -2,7 +2,7 @@
 
  ## Default
 *       text=auto
-*.svg   -text
+*.svg   binary
 
 ## Repo configurations
 .*coveragerc*   text eol=lf
