@@ -5,16 +5,12 @@ import json
 from nose.plugins.attrib import attr
 from unittest import skip
 
-from common.test.acceptance.tests.lms.test_lms_instructor_dashboard import BaseInstructorDashboardTest
-from common.test.acceptance.pages.lms.instructor_dashboard import InstructorDashboardPage
-from common.test.acceptance.tests.studio.base_studio_test import ContainerBase
 from common.test.acceptance.fixtures import LMS_BASE_URL
 from common.test.acceptance.fixtures.course import CourseFixture
-
-from common.test.acceptance.tests.helpers import (
-    assert_link,
-    assert_opened_help_link_is_correct
-)
+from common.test.acceptance.pages.lms.instructor_dashboard import InstructorDashboardPage
+from common.test.acceptance.tests.helpers import assert_opened_help_link_is_correct, url_for_help
+from common.test.acceptance.tests.lms.test_lms_instructor_dashboard import BaseInstructorDashboardTest
+from common.test.acceptance.tests.studio.base_studio_test import ContainerBase
 
 
 @attr(shard=10)
@@ -45,14 +41,11 @@ class TestCohortHelp(ContainerBase):
         Arguments:
             href (str): Help url
         """
-        expected_link = {
-            'href': href,
-            'text': 'What does this mean?'
-        }
         actual_link = self.cohort_management.get_cohort_help_element_and_click_help()
-
         assert_link(self, expected_link, actual_link)
         assert_opened_help_link_is_correct(self, self.get_url_with_changed_domain(href))
+        self.assertEqual(actual_link.text, "What does this mean?")
+        assert_opened_help_link_is_correct(self, href)
 
     @skip("Disabled as openedx.microsoft.com doesn't use the default Open edX help links.")
     def test_manual_cohort_help(self):
@@ -69,9 +62,10 @@ class TestCohortHelp(ContainerBase):
         """
         self.cohort_management.add_cohort('cohort_name')
 
-        href = 'http://edx.readthedocs.org/projects/edx-partner-course-staff/en/latest/' \
-               'course_features/cohorts/cohort_config.html#assign-learners-to-cohorts-manually'
-
+        href = url_for_help(
+            'course_author',
+            '/course_features/cohorts/cohort_config.html#assign-learners-to-cohorts-manually',
+        )
         self.verify_help_link(href)
 
     @skip("Disabled as openedx.microsoft.com doesn't use the default Open edX help links.")
@@ -90,9 +84,10 @@ class TestCohortHelp(ContainerBase):
 
         self.cohort_management.add_cohort('cohort_name', assignment_type='random')
 
-        href = 'http://edx.readthedocs.org/projects/edx-partner-course-staff/en/latest/' \
-               'course_features/cohorts/cohorts_overview.html#all-automated-assignment'
-
+        href = url_for_help(
+            'course_author',
+            '/course_features/cohorts/cohorts_overview.html#all-automated-assignment',
+        )
         self.verify_help_link(href)
 
     def enable_cohorting(self, course_fixture):
@@ -124,6 +119,6 @@ class InstructorDashboardHelp(BaseInstructorDashboardTest):
         When I click "Help"
         Then I see help about the instructor dashboard in a new tab
         """
-        href = 'http://edx.readthedocs.io/projects/edx-guide-for-students/en/latest/SFD_instructor_dash_help.html'
+        href = url_for_help('learner', '/SFD_instructor_dash_help.html')
         self.instructor_dashboard_page.click_help()
         assert_opened_help_link_is_correct(self, href)

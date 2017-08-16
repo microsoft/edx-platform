@@ -4,21 +4,22 @@ Test courseware search
 
 import json
 
-from common.test.acceptance.tests.helpers import remove_file
+from nose.plugins.attrib import attr
+
 from common.test.acceptance.pages.common.logout import LogoutPage
 from common.test.acceptance.pages.studio.overview import CourseOutlinePage
 from common.test.acceptance.pages.lms.courseware_search import CoursewareSearchPage
+
 from common.test.acceptance.pages.lms.course_nav import CourseNavPage
 from common.test.acceptance.fixtures.course import XBlockFixtureDesc
 from common.test.acceptance.tests.helpers import create_user_partition_json
 
-from xmodule.partitions.partitions import Group
 
-from nose.plugins.attrib import attr
-
+from common.test.acceptance.pages.common.auto_auth import AutoAuthPage
+from common.test.acceptance.tests.helpers import create_user_partition_json, remove_file
 from common.test.acceptance.tests.studio.base_studio_test import ContainerBase
 
-from common.test.acceptance.pages.studio.auto_auth import AutoAuthPage as StudioAutoAuthPage
+from xmodule.partitions.partitions import Group
 
 
 @attr(shard=1)
@@ -60,8 +61,7 @@ class SplitTestCoursewareSearchTest(ContainerBase):
         Logout and login with given credentials.
         """
         LogoutPage(self.browser).visit()
-        StudioAutoAuthPage(self.browser, username=username, email=email,
-                           course_id=self.course_id, staff=staff).visit()
+        AutoAuthPage(self.browser, username=username, email=email, course_id=self.course_id, staff=staff).visit()
 
     def _studio_reindex(self):
         """

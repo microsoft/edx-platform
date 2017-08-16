@@ -1,22 +1,23 @@
 """
 Acceptance tests for Home Page (My Courses / My Libraries).
 """
+from uuid import uuid4
+
 from flaky import flaky
 from opaque_keys.edx.locator import LibraryLocator
-from uuid import uuid4
 
 from common.test.acceptance.fixtures.catalog import CatalogFixture, CatalogConfigMixin
 from common.test.acceptance.fixtures.programs import ProgramsFixture, ProgramsConfigMixin
-from common.test.acceptance.pages.studio.auto_auth import AutoAuthPage
 from common.test.acceptance.pages.studio.library import LibraryEditPage
 from common.test.acceptance.pages.studio.index import DashboardPage, DashboardPageWithPrograms
-from common.test.acceptance.pages.lms.account_settings import AccountSettingsPage
 from common.test.acceptance.tests.helpers import (
     AcceptanceTest,
     select_option_by_text,
     get_selected_option_text
 )
 from openedx.core.djangoapps.programs.tests import factories
+from common.test.acceptance.pages.common.auto_auth import AutoAuthPage
+from common.test.acceptance.pages.lms.account_settings import AccountSettingsPage
 
 
 class CreateLibraryTest(AcceptanceTest):

@@ -2,7 +2,13 @@
 Courseware page.
 """
 
+<<<<<<< HEAD
 from common.test.acceptance.pages.lms.course_page import CoursePage
+=======
+import re
+
+from bok_choy.page_object import PageObject, unguarded
+>>>>>>> 74f9858... Optimized all imports in common.test.acceptance
 from bok_choy.promise import EmptyPromise
 from selenium.webdriver.common.action_chains import ActionChains
 

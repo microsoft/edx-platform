@@ -1,39 +1,48 @@
 """
 Test helper functions and base classes.
 """
+
+import functools
 import inspect
 import json
-import unittest
-import functools
 import operator
-import pprint
-import requests
 import os
+import pprint
+import unittest
 import urlparse
 from contextlib import contextmanager
 from datetime import datetime
-from path import Path as path
-from bok_choy.javascript import js_defined
-from bok_choy.web_app_test import WebAppTest
-from bok_choy.promise import EmptyPromise, Promise
-from bok_choy.page_object import XSS_INJECTION
-from capa.tests.response_xml_factory import MultipleChoiceResponseXMLFactory
-from common.test.acceptance.pages.studio.auto_auth import AutoAuthPage
-from common.test.acceptance.fixtures.course import XBlockFixtureDesc
-from opaque_keys.edx.locator import CourseLocator
-from pymongo import MongoClient, ASCENDING
-from openedx.core.lib.tests.assertions.events import assert_event_matches, is_matching_event, EventMatchTolerates
-from xmodule.partitions.partitions import UserPartition
-from xmodule.partitions.tests.test_partitions import MockUserPartitionScheme
-from selenium.common.exceptions import StaleElementReferenceException
-from selenium.webdriver.support.select import Select
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 from unittest import TestCase
 
+import requests
+from bok_choy.javascript import js_defined
+from bok_choy.page_object import XSS_INJECTION
+from bok_choy.promise import EmptyPromise, Promise
+from bok_choy.web_app_test import WebAppTest
 
+from pymongo import MongoClient, ASCENDING
+from openedx.core.lib.tests.assertions.events import assert_event_matches, is_matching_event, EventMatchTolerates
+from xmodule.partitions.tests.test_partitions import MockUserPartitionScheme
+
+from opaque_keys.edx.locator import CourseLocator
+from path import Path as path
+from pymongo import ASCENDING, MongoClient
+from selenium.common.exceptions import StaleElementReferenceException
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support import expected_conditions as EC
+
+from selenium.webdriver.support.select import Select
+from selenium.webdriver.support.ui import WebDriverWait
+from xmodule.partitions.partitions import UserPartition
+
+from capa.tests.response_xml_factory import MultipleChoiceResponseXMLFactory
+from common.test.acceptance.fixtures.course import XBlockFixtureDesc
 from common.test.acceptance.pages.common import BASE_URL
-
+from common.test.acceptance.pages.studio.auto_auth import AutoAuthPage
+from openedx.core.lib.partitions.partitions import UserPartition
+from openedx.core.lib.tests.assertions.events import EventMatchTolerates, assert_event_matches, is_matching_event
+from openedx.core.release import RELEASE_LINE, doc_version
 
 MAX_EVENTS_IN_FAILURE_OUTPUT = 20
 
@@ -424,7 +433,31 @@ def assert_opened_help_link_is_correct(test, url):
     test.browser.switch_to_window(test.browser.window_handles[-1])
     # Assert that url in the browser is the same.
     test.assertEqual(url, test.browser.current_url)
-    test.assertNotIn('Maze Found', test.browser.title)
+    # Check that the URL loads. Can't do this in the browser because it might
+    # be loading a "Maze Found" missing content page.
+    response = requests.get(url)
+    test.assertEqual(response.status_code, 200, "URL {!r} returned {}".format(url, response.status_code))
+
+
+EDX_BOOKS = {
+    'course_author': 'edx-partner-course-staff',
+    'learner': 'edx-guide-for-students',
+}
+
+OPEN_BOOKS = {
+    'course_author': 'open-edx-building-and-running-a-course',
+    'learner': 'open-edx-learner-guide',
+}
+
+
+def url_for_help(book_slug, path):
+    """
+    Create a full help URL given a book slug and a path component.
+    """
+    # Emulate the switch between books that happens in envs/bokchoy.py
+    books = EDX_BOOKS if RELEASE_LINE == "master" else OPEN_BOOKS
+    url = 'http://edx.readthedocs.io/projects/{}/en/{}{}'.format(books[book_slug], doc_version(), path)
+    return url
 
 
 class EventsTestMixin(TestCase):

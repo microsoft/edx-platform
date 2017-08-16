@@ -2,38 +2,48 @@
 Test the Studio help links.
 """
 
-from nose.plugins.attrib import attr
 from unittest import skip
 
+from nose.plugins.attrib import attr
+
 from common.test.acceptance.fixtures.course import XBlockFixtureDesc
-from common.test.acceptance.tests.studio.base_studio_test import StudioCourseTest, ContainerBase
 from common.test.acceptance.pages.studio.index import DashboardPage, DashboardPageWithPrograms
-from common.test.acceptance.pages.studio.utils import click_studio_help, studio_help_links
-from common.test.acceptance.pages.studio.index import IndexPage, HomePage
-from common.test.acceptance.tests.studio.base_studio_test import StudioLibraryTest
-from common.test.acceptance.pages.studio.course_info import CourseUpdatesPage
-from common.test.acceptance.pages.studio.utils import click_css
-from common.test.acceptance.pages.studio.library import LibraryPage
-from common.test.acceptance.pages.studio.users import LibraryUsersPage
-from common.test.acceptance.pages.studio.overview import CourseOutlinePage
+from common.test.acceptance.pages.common.auto_auth import AutoAuthPage
 from common.test.acceptance.pages.studio.asset_index import AssetIndexPage
+from common.test.acceptance.pages.studio.course_info import CourseUpdatesPage
 from common.test.acceptance.pages.studio.edit_tabs import PagesPage
-from common.test.acceptance.pages.studio.textbook_upload import TextbookUploadPage
+from common.test.acceptance.pages.studio.import_export import (
+    ExportCoursePage,
+    ExportLibraryPage,
+    ImportCoursePage,
+    ImportLibraryPage
+)
+from common.test.acceptance.pages.studio.index import HomePage, IndexPage
+from common.test.acceptance.pages.studio.library import LibraryPage
+from common.test.acceptance.pages.studio.overview import CourseOutlinePage
 from common.test.acceptance.pages.studio.settings import SettingsPage
-from common.test.acceptance.pages.studio.settings_graders import GradingPage
-from common.test.acceptance.pages.studio.settings_group_configurations import GroupConfigurationsPage
 from common.test.acceptance.pages.studio.settings_advanced import AdvancedSettingsPage
 from common.test.acceptance.pages.studio.settings_certificates import CertificatesPage
-from common.test.acceptance.pages.studio.import_export import ExportCoursePage, ImportCoursePage
-from common.test.acceptance.pages.studio.users import CourseTeamPage
 from common.test.acceptance.fixtures.programs import ProgramsConfigMixin
+from common.test.acceptance.pages.studio.settings_graders import GradingPage
+from common.test.acceptance.pages.studio.settings_group_configurations import GroupConfigurationsPage
+from common.test.acceptance.pages.studio.textbook_upload import TextbookUploadPage
+from common.test.acceptance.pages.studio.users import CourseTeamPage, LibraryUsersPage
+from common.test.acceptance.pages.studio.utils import click_css, click_studio_help, studio_help_links
 from common.test.acceptance.tests.helpers import (
     AcceptanceTest,
     assert_nav_help_link,
-    assert_side_bar_help_link
+    assert_side_bar_help_link,
+    url_for_help
 )
-from common.test.acceptance.pages.studio.import_export import ExportLibraryPage, ImportLibraryPage
-from common.test.acceptance.pages.studio.auto_auth import AutoAuthPage
+from common.test.acceptance.tests.studio.base_studio_test import ContainerBase, StudioCourseTest, StudioLibraryTest
+
+
+def _get_expected_documentation_url(path):
+    """
+    Returns the expected URL for the building and running a course documentation.
+    """
+    return url_for_help('course_author', path)
 
 
 @attr(shard=10)
@@ -95,18 +105,16 @@ class SignInHelpTest(AcceptanceTest):
         And I want help about the sign in
         And I click the 'Help' in the navigation bar
         Then Help link should open.
-        And help url should end with 'getting_started/get_started.html'
+        And help url should be correct
         """
         sign_in_page = self.index_page.click_sign_in()
-        # The href we want to see in anchor help element.
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/getting_started/get_started.html'
+        expected_url = _get_expected_documentation_url('/getting_started/index.html')
 
         # Assert that help link is correct.
         assert_nav_help_link(
             test=self,
             page=sign_in_page,
-            href=href,
+            href=expected_url,
             signed_in=False
         )
 
@@ -129,18 +137,16 @@ class SignUpHelpTest(AcceptanceTest):
         And I want help about the sign up
         And I click the 'Help' in the navigation bar
         Then Help link should open.
-        And help url should end with 'getting_started/get_started.html'
+        And help url should be correct
         """
         sign_up_page = self.index_page.click_sign_up()
-        # The href we want to see in anchor help element.
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/getting_started/get_started.html'
+        expected_url = _get_expected_documentation_url('/getting_started/index.html')
 
         # Assert that help link is correct.
         assert_nav_help_link(
             test=self,
             page=sign_up_page,
-            href=href,
+            href=expected_url,
             signed_in=False
         )
 
@@ -163,17 +169,15 @@ class HomeHelpTest(StudioCourseTest):
         And I want help about the courses
         And I click the 'Help' in the navigation bar
         Then Help link should open.
-        And help url should end with 'getting_started/get_started.html'
+        And help url should be correct
         """
-        # The href we want to see in anchor help element.
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/getting_started/get_started.html'
+        expected_url = _get_expected_documentation_url('/getting_started/CA_get_started_Studio.html')
 
         # Assert that help link is correct.
         assert_nav_help_link(
             test=self,
             page=self.home_page,
-            href=href
+            href=expected_url
         )
 
     @skip("Disabled as openedx.microsoft.com doesn't use the default Open edX help links.")
@@ -184,17 +188,15 @@ class HomeHelpTest(StudioCourseTest):
         And I want help about the courses
         And I click the 'Getting Started with edX Studio' in the sidebar links
         Then Help link should open.
-        And help url should end with 'getting_started/get_started.html'
+        And help url should be correct
         """
-        # The href we want to see in anchor help element.
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/getting_started/get_started.html'
+        expected_url = _get_expected_documentation_url('/getting_started/CA_get_started_Studio.html')
 
         # Assert that help link is correct.
         assert_side_bar_help_link(
             test=self,
             page=self.home_page,
-            href=href,
+            href=expected_url,
             help_text='Getting Started with edX Studio',
             as_list_item=True
         )
@@ -222,17 +224,15 @@ class NewCourseHelpTest(AcceptanceTest):
         And I want help about the process
         And I click the 'Help' in the navigation bar
         Then Help link should open.
-        And help url should end with 'getting_started/get_started.html'
+        And help url should be correct
         """
-        # The href we want to see in anchor help element.
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course' \
-               '/en/latest/getting_started/get_started.html'
+        expected_url = _get_expected_documentation_url('/getting_started/CA_get_started_Studio.html')
 
         # Assert that help link is correct.
         assert_nav_help_link(
             test=self,
             page=self.dashboard_page,
-            href=href
+            href=expected_url
         )
 
     @skip("Disabled as openedx.microsoft.com doesn't use the default Open edX help links.")
@@ -243,17 +243,15 @@ class NewCourseHelpTest(AcceptanceTest):
         And I want help about the process
         And I click the 'Getting Started with edX Studio' in the sidebar links
         Then Help link should open.
-        And help url should end with 'getting_started/get_started.html'
+        And help url should be correct
         """
-        # The href we want to see in anchor help element.
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/getting_started/get_started.html'
+        expected_url = _get_expected_documentation_url('/getting_started/CA_get_started_Studio.html')
 
         # Assert that help link is correct.
         assert_side_bar_help_link(
             test=self,
             page=self.dashboard_page,
-            href=href,
+            href=expected_url,
             help_text='Getting Started with edX Studio',
             as_list_item=True
         )
@@ -281,17 +279,15 @@ class NewLibraryHelpTest(AcceptanceTest):
         And I want help about the process
         And I click the 'Help' in the navigation bar
         Then Help link should open.
-        And help url should end with 'getting_started/get_started.html'
+        And help url should be correct
         """
-        # The href we want to see in anchor help element.
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/getting_started/get_started.html'
+        expected_url = _get_expected_documentation_url('/getting_started/CA_get_started_Studio.html')
 
         # Assert that help link is correct.
         assert_nav_help_link(
             test=self,
             page=self.dashboard_page,
-            href=href
+            href=expected_url
         )
 
     @skip("Disabled as openedx.microsoft.com doesn't use the default Open edX help links.")
@@ -302,17 +298,15 @@ class NewLibraryHelpTest(AcceptanceTest):
         And I want help about the process
         And I click the 'Getting Started with edX Studio' in the sidebar links
         Then Help link should open.
-        And help url should end with 'getting_started/get_started.html'
+        And help url should be correct
         """
-        # The href we want to see in anchor help element.
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/getting_started/get_started.html'
+        expected_url = _get_expected_documentation_url('/getting_started/CA_get_started_Studio.html')
 
         # Assert that help link is correct.
         assert_side_bar_help_link(
             test=self,
             page=self.dashboard_page,
-            href=href,
+            href=expected_url,
             help_text='Getting Started with edX Studio',
             as_list_item=True
         )
@@ -338,19 +332,17 @@ class LibraryTabHelpTest(AcceptanceTest):
         And I want help about the process
         And I click the 'Help' in the navigation bar
         Then Help link should open.
-        And help url should end with 'getting_started/get_started.html'
+        And help url should be correct
         """
         self.assertTrue(self.dashboard_page.has_new_library_button)
         click_css(self.dashboard_page, '#course-index-tabs .libraries-tab', 0, False)
-        # The href we want to see in anchor help element.
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/getting_started/get_started.html'
+        expected_url = _get_expected_documentation_url('/getting_started/CA_get_started_Studio.html')
 
         # Assert that help link is correct.
         assert_nav_help_link(
             test=self,
             page=self.dashboard_page,
-            href=href
+            href=expected_url
         )
 
 
@@ -373,18 +365,16 @@ class LibraryHelpTest(StudioLibraryTest):
         And I want help about the process
         And I click the 'Help' in the navigation bar
         Then Help link should open.
-        And help url should end with 'course/components/libraries.html'
+        And help url should be correct
         """
         self.library_page.visit()
-        # The href we want to see in anchor help element.
-        href = "http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/" \
-               "en/latest/course_components/libraries.html"
+        expected_url = _get_expected_documentation_url('/course_components/libraries.html')
 
         # Assert that help link is correct.
         assert_nav_help_link(
             test=self,
             page=self.library_page,
-            href=href
+            href=expected_url
         )
 
     @skip("Disabled as openedx.microsoft.com doesn't use the default Open edX help links.")
@@ -396,18 +386,16 @@ class LibraryHelpTest(StudioLibraryTest):
         And I want help about the process
         And I click the 'Learn more about content libraries' in the sidebar links
         Then Help link should open.
-        And help url should end with 'course/components/libraries.html'
+        And help url should be correct
         """
         self.library_page.visit()
-        # The href we want to see in anchor help element.
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/course_components/libraries.html'
+        expected_url = _get_expected_documentation_url('/course_components/libraries.html')
 
         # Assert that help link is correct.
         assert_side_bar_help_link(
             test=self,
             page=self.library_page,
-            href=href,
+            href=expected_url,
             help_text='Learn more about content libraries'
         )
 
@@ -420,19 +408,18 @@ class LibraryHelpTest(StudioLibraryTest):
         And I want help about the process
         And I click the 'Help' in the navigation bar
         Then Help link should open.
-        And help url should end with
-        'creating_content/libraries.html#give-other-users-access-to-your-library'
+        And help url should be correct.
         """
         self.library_user_page.visit()
-        # The href we want to see in anchor help element.
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/en/' \
-               'latest/course_components/libraries.html#give-other-users-access-to-your-library'
+        expected_url = _get_expected_documentation_url(
+            '/course_components/libraries.html#give-other-users-access-to-your-library'
+        )
 
         # Assert that help link is correct.
         assert_nav_help_link(
             test=self,
             page=self.library_user_page,
-            href=href
+            href=expected_url,
         )
 
 
@@ -454,17 +441,15 @@ class LibraryImportHelpTest(StudioLibraryTest):
         And I want help about the process
         And I click the 'Help' in the navigation bar
         Then Help link should open.
-        And help url should end with 'creating_content/libraries.html#import-a-library'
+        And help url should be correct
         """
-        # The href we want to see in anchor help element.
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/en/' \
-               'latest/course_components/libraries.html#import-a-library'
+        expected_url = _get_expected_documentation_url('/course_components/libraries.html#import-a-library')
 
         # Assert that help link is correct.
         assert_nav_help_link(
             test=self,
             page=self.library_import_page,
-            href=href
+            href=expected_url
         )
 
     @skip("Disabled as openedx.microsoft.com doesn't use the default Open edX help links.")
@@ -475,17 +460,15 @@ class LibraryImportHelpTest(StudioLibraryTest):
         And I want help about the process
         And I click the 'Learn more about importing a library' in the sidebar links
         Then Help link should open.
-        And help url should end with 'creating_content/libraries.html#import-a-library'
+        And help url should be correct
         """
-        # The href we want to see in anchor help element.
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/en/' \
-               'latest/course_components/libraries.html#import-a-library'
+        expected_url = _get_expected_documentation_url('/course_components/libraries.html#import-a-library')
 
         # Assert that help link is correct.
         assert_side_bar_help_link(
             test=self,
             page=self.library_import_page,
-            href=href,
+            href=expected_url,
             help_text='Learn more about importing a library'
         )
 
@@ -508,17 +491,15 @@ class LibraryExportHelpTest(StudioLibraryTest):
         And I want help about the process
         And I click the 'Help' in the navigation bar
         Then Help link should open.
-        And help url should end with 'creating_content/libraries.html#export-a-library'
+        And help url should be correct
         """
-        # The href we want to see in anchor help element.
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/en/' \
-               'latest/course_components/libraries.html#export-a-library'
+        expected_url = _get_expected_documentation_url('/course_components/libraries.html#export-a-library')
 
         # Assert that help link is correct.
         assert_nav_help_link(
             test=self,
             page=self.library_export_page,
-            href=href
+            href=expected_url
         )
 
     @skip("Disabled as openedx.microsoft.com doesn't use the default Open edX help links.")
@@ -529,17 +510,15 @@ class LibraryExportHelpTest(StudioLibraryTest):
         And I want help about the process
         And I click the 'Learn more about exporting a library' in the sidebar links
         Then Help link should open.
-        And help url should end with 'creating_content/libraries.html#export-a-library'
+        And help url should be correct
         """
-        # The href we want to see in anchor help element.
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/en/' \
-               'latest/course_components/libraries.html#export-a-library'
+        expected_url = _get_expected_documentation_url('/course_components/libraries.html#export-a-library')
 
         # Assert that help link is correct.
         assert_side_bar_help_link(
             test=self,
             page=self.library_export_page,
-            href=href,
+            href=expected_url,
             help_text='Learn more about exporting a library'
         )
 
@@ -601,16 +580,15 @@ class CourseOutlineHelpTest(StudioCourseTest):
         And I want help about the process
         And I click the 'Help' in the navigation bar
         Then Help link should open.
-        And help url should end with 'developing_course/course_outline.html'
+        And help url should be correct
         """
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course' \
-               '/en/latest/developing_course/course_outline.html'
+        expected_url = _get_expected_documentation_url('/developing_course/course_outline.html')
 
         # Assert that help link is correct.
         assert_nav_help_link(
             test=self,
             page=self.course_outline_page,
-            href=href
+            href=expected_url
         )
 
     @skip("Disabled as openedx.microsoft.com doesn't use the default Open edX help links.")
@@ -621,16 +599,15 @@ class CourseOutlineHelpTest(StudioCourseTest):
         And I want help about the process
         And I click the 'Learn more about the course outline' in the sidebar links
         Then Help link should open.
-        And help url should end with 'developing_course/course_outline.html'
+        And help url should be correct
         """
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course' \
-               '/en/latest/developing_course/course_outline.html'
+        expected_url = _get_expected_documentation_url('/developing_course/course_outline.html')
 
         # Assert that help link is correct.
         assert_side_bar_help_link(
             test=self,
             page=self.course_outline_page,
-            href=href,
+            href=expected_url,
             help_text='Learn more about the course outline',
             index=0
         )
@@ -659,16 +636,15 @@ class CourseUpdateHelpTest(StudioCourseTest):
         And I want help about the process
         And I click the 'Help' in the navigation bar
         Then Help link should open.
-        And help url should end with 'course_assets/handouts_updates.html'
+        And help url should be correct
         """
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/course_assets/handouts_updates.html'
+        expected_url = _get_expected_documentation_url('/course_assets/handouts_updates.html')
 
         # Assert that help link is correct.
         assert_nav_help_link(
             test=self,
             page=self.course_update_page,
-            href=href
+            href=expected_url,
         )
 
 
@@ -695,16 +671,15 @@ class AssetIndexHelpTest(StudioCourseTest):
         And I want help about the process
         And I click the 'Help' in the navigation bar
         Then Help link should open.
-        And help url should end with 'course_assets/course_files.html'
+        And help url should be correct
         """
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/course_assets/course_files.html'
+        expected_url = _get_expected_documentation_url('/course_assets/course_files.html')
 
         # Assert that help link is correct.
         assert_nav_help_link(
             test=self,
             page=self.course_asset_index_page,
-            href=href
+            href=expected_url,
         )
 
     @skip("Disabled as openedx.microsoft.com doesn't use the default Open edX help links.")
@@ -715,16 +690,15 @@ class AssetIndexHelpTest(StudioCourseTest):
         And I want help about the process
         And I click the 'Learn more about managing files' in the sidebar links
         Then Help link should open.
-        And help url should end with 'course_assets/course_files.html'
+        And help url should be correct
         """
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/course_assets/course_files.html'
+        expected_url = _get_expected_documentation_url('/course_assets/course_files.html')
 
         # Assert that help link is correct.
         assert_side_bar_help_link(
             test=self,
             page=self.course_asset_index_page,
-            href=href,
+            href=expected_url,
             help_text='Learn more about managing files'
         )
 
@@ -752,16 +726,15 @@ class CoursePagesHelpTest(StudioCourseTest):
         And I want help about the process
         And I click the 'Help' in the navigation bar
         Then Help link should open.
-        And help url should end with 'course_assets/pages.html'
+        And help url should be correct
         """
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/course_assets/pages.html'
+        expected_url = _get_expected_documentation_url('/course_assets/pages.html')
 
         # Assert that help link is correct.
         assert_nav_help_link(
             test=self,
             page=self.course_pages_page,
-            href=href
+            href=expected_url,
         )
 
 
@@ -788,16 +761,15 @@ class UploadTextbookHelpTest(StudioCourseTest):
         And I want help about the process
         And I click the 'Help' in the navigation bar
         Then Help link should open.
-        And help url should end with 'course_assets/textbooks.html'
+        And help url should be correct
         """
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course' \
-               '/en/latest/course_assets/textbooks.html'
+        expected_url = _get_expected_documentation_url('/course_assets/textbooks.html')
 
         # Assert that help link is correct.
         assert_nav_help_link(
             test=self,
             page=self.course_textbook_upload_page,
-            href=href
+            href=expected_url,
         )
 
     @skip("Disabled as openedx.microsoft.com doesn't use the default Open edX help links.")
@@ -808,16 +780,15 @@ class UploadTextbookHelpTest(StudioCourseTest):
         And I want help about the process
         And I click the 'Learn more about textbooks' in the sidebar links
         Then Help link should open.
-        And help url should end with 'course_assets/textbooks.html'
+        And help url should be correct
         """
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course' \
-               '/en/latest/course_assets/textbooks.html'
+        expected_url = _get_expected_documentation_url('/course_assets/textbooks.html')
 
         # Assert that help link is correct.
         assert_side_bar_help_link(
             test=self,
             page=self.course_textbook_upload_page,
-            href=href,
+            href=expected_url,
             help_text='Learn more about textbooks'
         )
 
@@ -859,17 +830,16 @@ class StudioUnitHelpTest(ContainerBase):
         And I want help about the process
         And I click the 'Help' in the navigation bar
         Then Help link should open.
-        And help url should end with 'developing_course/course_units.html'
+        And help url should be correct
         """
         unit_page = self.go_to_unit_page()
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course' \
-               '/en/latest/developing_course/course_units.html'
+        expected_url = _get_expected_documentation_url('/developing_course/course_units.html')
 
         # Assert that help link is correct.
         assert_nav_help_link(
             test=self,
             page=unit_page,
-            href=href
+            href=expected_url,
         )
 
 
@@ -898,16 +868,15 @@ class SettingsHelpTest(StudioCourseTest):
         And I want help about the process
         And I click the 'Help' in the navigation bar
         Then Help link should open.
-        And help url should end with 'set_up_course/setting_up_student_view.html'
+        And help url should be correct
         """
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course' \
-               '/en/latest/set_up_course/setting_up_student_view.html'
+        expected_url = _get_expected_documentation_url('/set_up_course/studio_add_course_information/index.html')
 
         # Assert that help link is correct.
         assert_nav_help_link(
             test=self,
             page=self.settings_page,
-            href=href
+            href=expected_url,
         )
 
 
@@ -936,16 +905,15 @@ class GradingPageHelpTest(StudioCourseTest):
         And I want help about the process
         And I click the 'Help' in the navigation bar
         Then Help link should open.
-        And help url should end with 'grading/index.html'
+        And help url should be correct
         """
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/grading/index.html'
+        expected_url = _get_expected_documentation_url('/grading/index.html')
 
         # Assert that help link is correct.
         assert_nav_help_link(
             test=self,
             page=self.grading_page,
-            href=href
+            href=expected_url,
         )
 
 
@@ -974,16 +942,15 @@ class CourseTeamSettingsHelpTest(StudioCourseTest):
         And I want help about the process
         And I click the 'Help' in the navigation bar
         Then Help link should open.
-        And help url should end with 'set_up_course/course_staffing.html#add-course-team-members'
+        And help url should be correct
         """
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/set_up_course/course_staffing.html#add-course-team-members'
+        expected_url = _get_expected_documentation_url('/set_up_course/studio_add_course_information/studio_course_staffing.html')
 
         # Assert that help link is correct.
         assert_nav_help_link(
             test=self,
             page=self.course_team_settings_page,
-            href=href
+            href=expected_url,
         )
 
 
@@ -1013,16 +980,15 @@ class CourseGroupConfigurationHelpTest(StudioCourseTest):
         And I want help about the process
         And I click the 'Help' in the navigation bar
         Then Help link should open.
-        And help url should end with 'index.html'
+        And help url should be correct
         """
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/index.html'
+        expected_url = _get_expected_documentation_url('/index.html')
 
         # Assert that help link is correct.
         assert_nav_help_link(
             test=self,
             page=self.course_group_configuration_page,
-            href=href
+            href=expected_url,
         )
 
     @skip("Disabled as openedx.microsoft.com doesn't use the default Open edX help links.")
@@ -1034,16 +1000,15 @@ class CourseGroupConfigurationHelpTest(StudioCourseTest):
         And I want help about the process
         And I click the 'Learn More' in the sidebar links
         Then Help link should open.
-        And help url should end with 'course_features/cohorts/cohorted_courseware.html'
+        And help url should be correct
         """
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/course_features/cohorts/cohorted_courseware.html'
+        expected_url = _get_expected_documentation_url('/course_features/cohorts/cohorted_courseware.html')
 
         # Assert that help link is correct.
         assert_side_bar_help_link(
             test=self,
             page=self.course_group_configuration_page,
-            href=href,
+            href=expected_url,
             help_text='Learn More'
         )
 
@@ -1073,16 +1038,15 @@ class AdvancedSettingHelpTest(StudioCourseTest):
         And I want help about the process
         And I click the 'Help' in the navigation bar
         Then Help link should open.
-        And help url should end with 'index.html'
+        And help url should be correct
         """
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course' \
-               '/en/latest/index.html'
+        expected_url = _get_expected_documentation_url('/index.html')
 
         # Assert that help link is correct.
         assert_nav_help_link(
             test=self,
             page=self.advanced_settings,
-            href=href
+            href=expected_url,
         )
 
 
@@ -1111,16 +1075,15 @@ class CertificatePageHelpTest(StudioCourseTest):
         And I want help about the process
         And I click the 'Help' in the navigation bar
         Then Help link should open.
-        And help url should end with 'set_up_course/creating_course_certificates.html'
+        And help url should be correct
         """
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course' \
-               '/en/latest/set_up_course/creating_course_certificates.html'
+        expected_url = _get_expected_documentation_url('/set_up_course/studio_add_course_information/studio_creating_certificates.html')
 
         # Assert that help link is correct.
         assert_nav_help_link(
             test=self,
             page=self.certificates_page,
-            href=href
+            href=expected_url,
         )
 
     @skip("Disabled as openedx.microsoft.com doesn't use the default Open edX help links.")
@@ -1131,16 +1094,15 @@ class CertificatePageHelpTest(StudioCourseTest):
         And I want help about the process
         And I click the 'Learn more about certificates' in the sidebar links
         Then Help link should open.
-        And help url should end with 'set_up_course/creating_course_certificates.html'
+        And help url should be correct
         """
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course' \
-               '/en/latest/set_up_course/creating_course_certificates.html'
+        expected_url = _get_expected_documentation_url('/set_up_course/studio_add_course_information/studio_creating_certificates.html')
 
         # Assert that help link is correct.
         assert_side_bar_help_link(
             test=self,
             page=self.certificates_page,
-            href=href,
+            href=expected_url,
             help_text='Learn more about certificates',
         )
 
@@ -1183,16 +1145,18 @@ class GroupExperimentConfigurationHelpTest(ContainerBase):
         And I want help about the process
         And I click the 'Learn More' in the sidebar links
         Then Help link should open.
-        And help url should end with
-        'content_experiments_configure.html#set-up-group-configurations-in-edx-studio'
+        And help url should be correct
         """
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/en/latest/course_features' \
-               '/content_experiments/content_experiments_configure.html#set-up-group-configurations-in-edx-studio'
+        expected_url = _get_expected_documentation_url(
+            '/course_features/content_experiments/content_experiments_configure.html'
+            '#set-up-group-configurations-in-edx-studio'
+        )
+
         # Assert that help link is correct.
         assert_side_bar_help_link(
             test=self,
             page=self.group_configuration_page,
-            href=href,
+            href=expected_url,
             help_text='Learn More',
         )
 
@@ -1222,16 +1186,15 @@ class ToolsImportHelpTest(StudioCourseTest):
         And I want help about the process
         And I click the 'Help' in the navigation bar
         Then Help link should open.
-        And help url should end with 'releasing_course/export_import_course.html#import-a-course'
+        And help url should be correct
         """
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/en/' \
-               'latest/releasing_course/export_import_course.html#import-a-course'
+        expected_url = _get_expected_documentation_url('/releasing_course/export_import_course.html#import-a-course')
 
         # Assert that help link is correct.
         assert_nav_help_link(
             test=self,
             page=self.import_page,
-            href=href
+            href=expected_url,
         )
 
     @skip("Disabled as openedx.microsoft.com doesn't use the default Open edX help links.")
@@ -1242,16 +1205,15 @@ class ToolsImportHelpTest(StudioCourseTest):
         And I want help about the process
         And I click the 'Learn more about importing a course' in the sidebar links
         Then Help link should open.
-        And help url should end with 'releasing_course/export_import_course.html#import-a-course'
+        And help url should be correct
         """
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/en/' \
-               'latest/releasing_course/export_import_course.html#import-a-course'
+        expected_url = _get_expected_documentation_url('/releasing_course/export_import_course.html#import-a-course')
 
         # Assert that help link is correct.
         assert_side_bar_help_link(
             test=self,
             page=self.import_page,
-            href=href,
+            href=expected_url,
             help_text='Learn more about importing a course',
         )
 
@@ -1281,16 +1243,15 @@ class ToolsExportHelpTest(StudioCourseTest):
         And I want help about the process
         And I click the 'Help' in the navigation bar
         Then Help link should open.
-        And help url should end with 'releasing_course/export_import_course.html#export-a-course'
+        And help url should be correct
         """
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/en/' \
-               'latest/releasing_course/export_import_course.html#export-a-course'
+        expected_url = _get_expected_documentation_url('/releasing_course/export_import_course.html#export-a-course')
 
         # Assert that help link is correct.
         assert_nav_help_link(
             test=self,
             page=self.export_page,
-            href=href
+            href=expected_url,
         )
 
     @skip("Disabled as openedx.microsoft.com doesn't use the default Open edX help links.")
@@ -1301,16 +1262,15 @@ class ToolsExportHelpTest(StudioCourseTest):
         And I want help about the process
         And I click the 'Learn more about exporting a course' in the sidebar links
         Then Help link should open.
-        And help url should end with 'releasing_course/export_import_course.html#export-a-course'
+        And help url should be correct
         """
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/en/' \
-               'latest/releasing_course/export_import_course.html#export-a-course'
+        expected_url = _get_expected_documentation_url('/releasing_course/export_import_course.html#export-a-course')
 
         # Assert that help link is correct.
         assert_side_bar_help_link(
             test=self,
             page=self.export_page,
-            href=href,
+            href=expected_url,
             help_text='Learn more about exporting a course',
         )
 
@@ -1333,16 +1293,14 @@ class StudioWelcomeHelpTest(AcceptanceTest):
         And I want help about the edx
         And I click the 'Help' in the navigation bar
         Then Help link should open.
-        And help url should contain 'getting_started/get_started.html'
+        And help url should be correct
         """
-        # The url we want to see in anchor help element.
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/getting_started/get_started.html'
+        expected_url = _get_expected_documentation_url('/getting_started/index.html')
 
         # Assert that help link is correct.
         assert_nav_help_link(
             test=self,
             page=self.index_page,
-            href=href,
+            href=expected_url,
             signed_in=False
         )

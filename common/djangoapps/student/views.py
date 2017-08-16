@@ -1,18 +1,19 @@
 """
 Student Views
 """
+
 import datetime
 import logging
 import uuid
 import json
 import warnings
-from collections import defaultdict
 from urlparse import urljoin, urlsplit, parse_qs, urlunsplit
 
 from django.views.generic import TemplateView
 from pytz import UTC
 from requests import HTTPError
 from ipware.ip import get_ip
+from collections import defaultdict, namedtuple
 
 import edx_oauth2_provider
 from django.conf import settings
@@ -27,16 +28,24 @@ from django.core.urlresolvers import reverse, NoReverseMatch, reverse_lazy
 from django.core.validators import validate_email, ValidationError
 from django.db import IntegrityError, transaction
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden, HttpResponseServerError, Http404
+from django.db.models.signals import post_save
+from django.dispatch import Signal, receiver
 from django.shortcuts import redirect
 from django.utils.encoding import force_bytes, force_text
 from django.utils.translation import ungettext
 from django.utils.http import base36_to_int, urlsafe_base64_encode, urlencode
 from django.utils.translation import ugettext as _, get_language
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
-from django.views.decorators.http import require_POST, require_GET
-from django.db.models.signals import post_save
-from django.dispatch import receiver, Signal
 from django.template.response import TemplateResponse
+from django.views.decorators.http import require_GET, require_POST
+from django.views.generic import TemplateView
+from eventtracking import tracker
+from ipware.ip import get_ip
+from opaque_keys import InvalidKeyError
+from opaque_keys.edx.keys import CourseKey
+from opaque_keys.edx.locations import SlashSeparatedCourseKey
+from opaque_keys.edx.locator import CourseLocator
+
 from provider.oauth2.models import Client
 from ratelimitbackend.exceptions import RateLimitException
 
@@ -79,7 +88,7 @@ from collections import namedtuple
 from courseware.courses import get_courses, sort_by_announcement, sort_by_start_date  # pylint: disable=import-error
 from courseware.access import has_access
 
-from django_comment_common.models import Role
+from django_comment_common.models import Role, assign_role
 
 from openedx.core.djangoapps.external_auth.models import ExternalAuthMap
 import openedx.core.djangoapps.external_auth.views
@@ -109,7 +118,6 @@ from student.helpers import (
     destroy_oauth_tokens
 )
 from student.cookies import set_logged_in_cookies, delete_logged_in_cookies, set_user_info_cookie
-from student.models import anonymous_id_for_user, UserAttribute, EnrollStatusChange
 from shoppingcart.models import DonationConfiguration, CourseRegistrationCode
 
 from openedx.core.djangoapps.embargo import api as embargo_api
@@ -117,6 +125,10 @@ from openedx.core.djangoapps.embargo import api as embargo_api
 import analytics
 from eventtracking import tracker
 
+from edxmako.shortcuts import render_to_response, render_to_string
+from lms.djangoapps.commerce.utils import EcommerceService  # pylint: disable=import-error
+from lms.djangoapps.grades.new.course_grade_factory import CourseGradeFactory
+from lms.djangoapps.verify_student.models import SoftwareSecurePhotoVerification  # pylint: disable=import-error
 # Note that this lives in LMS, so this dependency should be refactored.
 from notification_prefs.views import enable_notifications
 
@@ -129,6 +141,51 @@ from openedx.core.djangoapps.theming import helpers as theming_helpers
 from openedx.core.djangoapps.user_api.preferences import api as preferences_api
 from openedx.core.djangoapps.catalog.utils import get_programs_data
 
+from openedx.core.djangolib.markup import HTML
+from openedx.features.course_experience import course_home_url_name
+from openedx.features.enterprise_support.api import get_dashboard_consent_notification
+from shoppingcart.api import order_history
+from shoppingcart.models import CourseRegistrationCode, DonationConfiguration
+from student.cookies import delete_logged_in_cookies, set_logged_in_cookies, set_user_info_cookie
+from student.forms import AccountCreationForm, PasswordResetFormNoActive, get_registration_extension_form
+from student.helpers import (
+    DISABLE_UNENROLL_CERT_STATES,
+    auth_pipeline_urls,
+    check_verify_status_by_course,
+    destroy_oauth_tokens,
+    get_next_url_for_login_page
+)
+from student.models import (
+    ALLOWEDTOENROLL_TO_ENROLLED,
+    CourseAccessRole,
+    CourseEnrollment,
+    CourseEnrollmentAllowed,
+    CourseEnrollmentAttribute,
+    DashboardConfiguration,
+    LinkedInAddToProfileConfiguration,
+    LoginFailures,
+    LogoutViewConfiguration,
+    ManualEnrollmentAudit,
+    PasswordHistory,
+    PendingEmailChange,
+    Registration,
+    RegistrationCookieConfiguration,
+    UserAttribute,
+    UserProfile,
+    UserSignupSource,
+    UserStanding,
+    anonymous_id_for_user,
+    create_comments_service_user,
+    unique_id_for_user
+)
+from student.tasks import send_activation_email
+from third_party_auth import pipeline, provider
+from util.bad_request_rate_limiter import BadRequestRateLimiter
+from util.db import outer_atomic
+from util.json_request import JsonResponse
+from util.milestones_helpers import get_pre_requisite_courses_not_completed
+from util.password_policy_validators import validate_password_strength
+from xmodule.modulestore.django import modulestore
 
 log = logging.getLogger("edx.student")
 AUDIT_LOG = logging.getLogger("audit")
@@ -2009,6 +2066,27 @@ def create_account(request, post_override=None):
     return response
 
 
+def str2bool(s):
+    s = str(s)
+    return s.lower() in ('yes', 'true', 't', '1')
+
+
+def _clean_roles(roles):
+    """ Clean roles.
+
+    Strips whitespace from roles, and removes empty items.
+
+    Args:
+        roles (str[]): List of role names.
+
+    Returns:
+        str[]
+    """
+    roles = [role.strip() for role in roles]
+    roles = [role for role in roles if role]
+    return roles
+
+
 def auto_auth(request):
     """
     Create or configure a user account, then log in as that user.
@@ -2032,29 +2110,27 @@ def auto_auth(request):
     """
 
     # Generate a unique name to use if none provided
-    unique_name = uuid.uuid4().hex[0:30]
+    generated_username = uuid.uuid4().hex[0:30]
 
     # Use the params from the request, otherwise use these defaults
-    username = request.GET.get('username', unique_name)
-    password = request.GET.get('password', unique_name)
-    email = request.GET.get('email', unique_name + "@example.com")
+    username = request.GET.get('username', generated_username)
+    password = request.GET.get('password', username)
+    email = request.GET.get('email', username + "@example.com")
     full_name = request.GET.get('full_name', username)
-    is_staff = request.GET.get('staff', None)
-    is_superuser = request.GET.get('superuser', None)
-    course_id = request.GET.get('course_id', None)
-    redirect_to = request.GET.get('redirect_to', None)
-    active_status = request.GET.get('is_active')
+    is_staff = str2bool(request.GET.get('staff', False))
+    is_superuser = str2bool(request.GET.get('superuser', False))
+    course_id = request.GET.get('course_id')
+    redirect_to = request.GET.get('redirect_to')
+    is_active = str2bool(request.GET.get('is_active', True))
 
-    # mode has to be one of 'honor'/'professional'/'verified'/'audit'/'no-id-professional'/'credit'
+    # Valid modes: audit, credit, honor, no-id-professional, professional, verified
     enrollment_mode = request.GET.get('enrollment_mode', 'honor')
 
-    active_status = (not active_status or active_status == 'true')
+    # Parse roles, stripping whitespace, and filtering out empty strings
+    roles = _clean_roles(request.GET.get('roles', '').split(','))
+    course_access_roles = _clean_roles(request.GET.get('course_access_roles', '').split(','))
 
-    course_key = None
-    if course_id:
-        course_key = CourseLocator.from_string(course_id)
-    role_names = [v.strip() for v in request.GET.get('roles', '').split(',') if v.strip()]
-    redirect_when_done = request.GET.get('redirect', '').lower() == 'true' or redirect_to
+    redirect_when_done = str2bool(request.GET.get('redirect', '')) or redirect_to
     login_when_done = 'no_login' not in request.GET
 
     form = AccountCreationForm(
@@ -2077,21 +2153,18 @@ def auto_auth(request):
         user = User.objects.get(username=username)
         user.email = email
         user.set_password(password)
-        user.is_active = active_status
+        user.is_active = is_active
         user.save()
         profile = UserProfile.objects.get(user=user)
         reg = Registration.objects.get(user=user)
+    except PermissionDenied:
+        return HttpResponseForbidden(_('Account creation not allowed.'))
 
-    # Set the user's global staff bit
-    if is_staff is not None:
-        user.is_staff = (is_staff == "true")
-        user.save()
+    user.is_staff = is_staff
+    user.is_superuser = is_superuser
+    user.save()
 
-    if is_superuser is not None:
-        user.is_superuser = (is_superuser == "true")
-        user.save()
-
-    if active_status:
+    if is_active:
         reg.activate()
         reg.save()
 
@@ -2102,13 +2175,17 @@ def auto_auth(request):
     profile.save()
 
     # Enroll the user in a course
-    if course_key is not None:
+    course_key = None
+    if course_id:
+        course_key = CourseLocator.from_string(course_id)
         CourseEnrollment.enroll(user, course_key, mode=enrollment_mode)
 
-    # Apply the roles
-    for role_name in role_names:
-        role = Role.objects.get(name=role_name, course_id=course_key)
-        user.roles.add(role)
+        # Apply the roles
+        for role in roles:
+            assign_role(course_key, user, role)
+
+        for role in course_access_roles:
+            CourseAccessRole.objects.update_or_create(user=user, course_id=course_key, org=course_key.org, role=role)
 
     # Log in as the user
     if login_when_done:
@@ -2117,50 +2194,38 @@ def auto_auth(request):
 
     create_comments_service_user(user)
 
-    # Provide the user with a valid CSRF token
-    # then return a 200 response unless redirect is true
     if redirect_when_done:
-        # Redirect to specific page if specified
         if redirect_to:
+            # Redirect to page specified by the client
             redirect_url = redirect_to
-        # Redirect to course info page if course_id is known
         elif course_id:
+            # Redirect to the course homepage (in LMS) or outline page (in Studio)
             try:
                 # redirect to course info page in LMS
                 redirect_url = reverse(
                     'info',
                     kwargs={'course_id': course_id}
                 )
+                redirect_url = reverse(course_home_url_name(request), kwargs={'course_id': course_id})
             except NoReverseMatch:
-                # redirect to course outline page in Studio
-                redirect_url = reverse(
-                    'course_handler',
-                    kwargs={'course_key_string': course_id}
-                )
+                redirect_url = reverse('course_handler', kwargs={'course_key_string': course_id})
         else:
+            # Redirect to the learner dashboard (in LMS) or homepage (in Studio)
             try:
-                # redirect to dashboard for LMS
                 redirect_url = reverse('dashboard')
             except NoReverseMatch:
-                # redirect to home for Studio
                 redirect_url = reverse('home')
 
         return redirect(redirect_url)
-    elif request.META.get('HTTP_ACCEPT') == 'application/json':
+    else:
         response = JsonResponse({
-            'created_status': u"Logged in" if login_when_done else "Created",
+            'created_status': 'Logged in' if login_when_done else 'Created',
             'username': username,
             'email': email,
             'password': password,
             'user_id': user.id,  # pylint: disable=no-member
             'anonymous_id': anonymous_id_for_user(user, None),
         })
-    else:
-        success_msg = u"{} user {} ({}) with password {} and user_id {}".format(
-            u"Logged in" if login_when_done else "Created",
-            username, email, password, user.id  # pylint: disable=no-member
-        )
-        response = HttpResponse(success_msg)
     response.set_cookie('csrftoken', csrf(request)['csrf_token'])
     return response
 
