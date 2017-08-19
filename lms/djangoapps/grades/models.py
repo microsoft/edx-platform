@@ -221,6 +221,17 @@ class PersistentSubsectionGrade(TimeStampedModel):
             # * Course staff can see all grades for a course using (course_id,)
             ('course_id', 'user_id', 'usage_key'),
         ]
+        # Allows querying in the following ways:
+        # (modified): find all the grades updated within a certain timespan
+        # (modified, course_id): find all the grades updated within a timespan for a certain course
+        # (modified, course_id, usage_key): find all the grades updated within a timespan for a subsection
+        #   in a course
+        # (first_attempted, course_id, user_id): find all attempted subsections in a course for a user
+        # (first_attempted, course_id): find all attempted subsections in a course for all users
+        index_together = [
+            ('modified', 'course_id', 'usage_key'),
+            ('first_attempted', 'course_id', 'user_id')
+        ]
 
     # primary key will need to be large for this table
     id = UnsignedBigIntAutoField(primary_key=True)  # pylint: disable=invalid-name
@@ -470,11 +481,14 @@ class PersistentCourseGrade(TimeStampedModel):
         # (course_id) for instructors to see all course grades, implicitly created via the unique_together constraint
         # (user_id) for course dashboard; explicitly declared as an index below
         # (passed_timestamp, course_id) for tracking when users first earned a passing grade.
+        # (modified): find all the grades updated within a certain timespan
+        # (modified, course_id): find all the grades updated within a certain timespan for a course
         unique_together = [
             ('course_id', 'user_id'),
         ]
         index_together = [
             ('passed_timestamp', 'course_id'),
+            ('modified', 'course_id')
         ]
 
     # primary key will need to be large for this table
