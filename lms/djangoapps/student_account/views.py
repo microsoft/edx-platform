@@ -503,11 +503,15 @@ def account_settings_context(request):
     return context
 
 def cookies_api(request):
-    localeVar = request.LANGUAGE_CODE # gets the user language code
+     """Getting the common API URL from the settings page
+       If the URL is not None or not empty then returning the response
+       Replacing the locale with the user locale value in the API URL
+    """
+    localeVar = request.LANGUAGE_CODE
     if settings.COOKIES_API_URL is not None or settings.COOKIES_API_URL != "":
-        endpoint = settings.COOKIES_API_URL #gets the cookies url from the settings file
+        endpoint = settings.COOKIES_API_URL
         split_url = endpoint.split('//')[1].split('/')
-        split_url[1] = localeVar #replacing the user language code into the url locale value
+        split_url[1] = localeVar
         addr = "https://" +  "/".join(split_url)
         response = requests.get(addr)
 
