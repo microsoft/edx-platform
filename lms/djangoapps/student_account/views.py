@@ -502,7 +502,7 @@ def account_settings_context(request):
 
     return context
 
-def cookiesApi(request):
+def cookies_api(request):
     localeVar = request.LANGUAGE_CODE # gets the user language code
     if settings.COOKIES_API_URL is not None or settings.COOKIES_API_URL != "":
         endpoint = settings.COOKIES_API_URL #gets the cookies url from the settings file
