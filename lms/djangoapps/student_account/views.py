@@ -1,4 +1,4 @@
-""" Views for a student's account information. """
+""" Views for a student's account information. Add for tests """
 
 import logging
 import json
