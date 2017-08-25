@@ -3,6 +3,8 @@
 import logging
 import json
 import urlparse
+import requests
+
 from datetime import datetime
 
 from django.conf import settings
@@ -11,7 +13,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth import get_user_model
 from django.core.urlresolvers import reverse, resolve
 from django.http import (
-    HttpResponse, HttpResponseBadRequest, HttpResponseForbidden, HttpRequest
+    HttpResponse, HttpResponseBadRequest, HttpResponseForbidden, HttpRequest, JsonResponse
 )
 from django.shortcuts import redirect
 from django.utils.translation import ugettext as _
@@ -499,3 +501,15 @@ def account_settings_context(request):
         } for state in auth_states if state.provider.display_for_login or state.has_account]
 
     return context
+
+def cookiesApi(request):
+    localeVar = request.LANGUAGE_CODE # gets the user language code
+    if settings.COOKIES_API_URL is not None or settings.COOKIES_API_URL != "":
+        endpoint = settings.COOKIES_API_URL #gets the cookies url from the settings file
+        split_url = endpoint.split('//')[1].split('/')
+        split_url[1] = localeVar #replacing the user language code into the url locale value
+        addr = "https://" +  "/".join(split_url)
+        response = requests.get(addr)
+
+        return JsonResponse(json.loads(response.content))
+
