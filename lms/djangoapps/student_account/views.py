@@ -508,12 +508,12 @@ def cookies_api(request):
        Replacing the locale with the user locale value in the API URL
        we expect this conditions to be met. otherwise, an exception will be thrown
     """
-    localeVar = request.LANGUAGE_CODE
+    locale_var = request.LANGUAGE_CODE
     if settings.COOKIES_API_URL is not None or settings.COOKIES_API_URL != "":
-        endpoint = settings.COOKIES_API_URL
-        parse_url = urlparse.urlparse(endpoint)
+        end_point = settings.COOKIES_API_URL
+        parse_url = urlparse.urlparse(end_point)
         i = parse_url.path.index('/', 1)
-        updated_path = '/' + localeVar + '/' + parse_url.path[1+i:]
+        updated_path = '/' + locale_var + '/' + parse_url.path[1+i:]
         addr = urlparse.urlunparse((parse_url.scheme, parse_url.netloc, updated_path, parse_url.params, parse_url.query, parse_url.fragment))
         response = requests.get(addr)
         return JsonResponse(json.loads(response.content))
