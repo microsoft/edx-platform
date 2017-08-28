@@ -511,10 +511,10 @@ def cookies_api(request):
     localeVar = request.LANGUAGE_CODE
     if settings.COOKIES_API_URL is not None or settings.COOKIES_API_URL != "":
         endpoint = settings.COOKIES_API_URL
-        split_url = endpoint.split('//')[1].split('/')
-        split_url[1] = localeVar
-        addr = "https://" +  "/".join(split_url)
+        parse_url = urlparse.urlparse(endpoint)
+        i = parse_url.path.index('/', 1)
+        updated_path = '/' + localeVar + '/' + parse_url.path[1+i:]
+        addr = urlparse.urlunparse((parse_url.scheme, parse_url.netloc, updated_path, parse_url.params, parse_url.query, parse_url.fragment))
         response = requests.get(addr)
-
         return JsonResponse(json.loads(response.content))
 
