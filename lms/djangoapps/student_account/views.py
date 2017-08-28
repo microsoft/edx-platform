@@ -506,6 +506,7 @@ def cookies_api(request):
     """Getting the common API URL from the settings page
        If the URL is not None or not empty then returning the response
        Replacing the locale with the user locale value in the API URL
+       we expect this conditions to be met. otherwise, an exception will be thrown
     """
     localeVar = request.LANGUAGE_CODE
     if settings.COOKIES_API_URL is not None or settings.COOKIES_API_URL != "":
