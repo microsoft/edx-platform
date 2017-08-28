@@ -503,7 +503,7 @@ def account_settings_context(request):
     return context
 
 def cookies_api(request):
-     """Getting the common API URL from the settings page
+    """Getting the common API URL from the settings page
        If the URL is not None or not empty then returning the response
        Replacing the locale with the user locale value in the API URL
     """
