@@ -509,8 +509,8 @@ def cookies_api(request):
        we expect this conditions to be met. otherwise, an exception will be thrown
     """
     locale_var = request.LANGUAGE_CODE
-    if settings.COOKIES_API_URL is not None or settings.COOKIES_API_URL != "":
-        end_point = settings.COOKIES_API_URL
+    if settings.API_COOKIE_URL is not None or settings.API_COOKIE_URL != "":
+        end_point = settings.API_COOKIE_URL
         parse_url = urlparse.urlparse(end_point)
         i = parse_url.path.index('/', 1)
         updated_path = '/' + locale_var + '/' + parse_url.path[1+i:]
