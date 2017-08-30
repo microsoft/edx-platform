@@ -84,7 +84,7 @@ class CookieApiVerification(TestCase):
             "MaximumDate": "2017-04-01T00:00:00",
             "Error": "null",
             "IsItRequired": "true",
-            "Array1": ["https://example.com/example"],
+            "Array1": ["https://example.com/example"], 
             "Culture": "en-us",
             "Name": "DFGT",
             "Array2": ["https://example.com/example"]
