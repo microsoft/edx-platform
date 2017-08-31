@@ -409,6 +409,7 @@ class TestCreateAccount(TestCase):
         profile = self.create_account_and_fetch_profile(host=self.site.domain)
         self.assertEqual(UserAttribute.get_user_attribute(profile.user, 'created_on_site'), self.site.domain)
 
+
 @ddt.ddt
 class TestCreateAccountValidation(TestCase):
     """
