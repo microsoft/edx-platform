@@ -3,12 +3,16 @@
 
 import logging
 import re
+import requests
+import json
+
 from unittest import skipUnless
 from urllib import urlencode
 
 import ddt
 import mock
 import pytest
+from mock import patch
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
@@ -48,17 +52,47 @@ from openedx.core.djangolib.js_utils import dump_js_escaped_json
 from openedx.core.djangolib.markup import HTML, Text
 from openedx.core.djangolib.testing.utils import CacheIsolationTestCase
 from student.tests.factories import UserFactory
-from student_account.views import account_settings_context, get_user_orders
+from student_account.views import account_settings_context, get_user_orders, cookies_api
 from third_party_auth.tests.testutil import ThirdPartyAuthTestMixin, simulate_running_pipeline
 from util.testing import UrlResetMixin
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from openedx.core.djangoapps.user_api.errors import UserAPIInternalError
 
 LOGGER_NAME = 'audit'
+TEST_COOKIE_URL = "https://example.com/locale/test/api/dftg?sitename=testsite"
+
 User = get_user_model()  # pylint:disable=invalid-name
 
 FEATURES_WITH_FAILED_PASSWORD_RESET_EMAIL = settings.FEATURES.copy()
 FEATURES_WITH_FAILED_PASSWORD_RESET_EMAIL['ENABLE_PASSWORD_RESET_FAILURE_EMAIL'] = True
+
+
+@ddt.ddt
+@override_settings(API_COOKIE_URL=TEST_COOKIE_URL)
+@patch('requests.get')
+class CookieApiVerification(TestCase):
+    """ Tests for the cookie api call """
+    def setUp(self):
+        self.request = HttpRequest()
+        self.request.LANGUAGE_CODE = "en-us"
+
+    def test_cookie_api_call(self, mock_get):
+        expected_response = {
+            "City": "redmond",
+            "Text": "<div id=\'msccBanner\' dir=\'ltr\' data-site-name=\'uhf-openedx\' data-mscc-version=\'0.2.1\' data-nver=\'aspnet-2.0.2\' data-sver=\'0.1.2\' class=\'cc-banner\' role=\'alert\'><div class=\'cc-container\'><svg class=\'cc-icon cc-v-center\' x=\'0px\' y=\'0px\' viewBox=\'0 0 44 44\' height=\'30px\' fill=\'none\' stroke=\'currentColor\'><circle cx=\'22\' cy=\'22\' r=\'20\' stroke-width=\'2\'></circle><line x1=\'22\' x2=\'22\' y1=\'18\' y2=\'33\' stroke-width=\'3\'></line><line x1=\'22\' x2=\'22\' y1=\'12\' y2=\'15\' stroke-width=\'3\'></line></svg> <span class=\'cc-v-center cc-text\'>This site is a test site </span> <a href=\'https://example.com/en/\' aria-label=\'learn about \\u2019s \' id=\'\' class=\'cc-link cc-v-center cc-float-right\'>Learn </a></div></div>",
+            "Version": "null",
+            "MaximumDate": "2017-04-01T00:00:00",
+            "Error": "null",
+            "IsItRequired": "true",
+            "Array1": ["https://example.com/example"],
+            "Culture": "en-us",
+            "Name": "DFGT",
+            "Array2": ["https://example.com/example"]
+        }
+
+        mock_get.return_value.content = json.dumps(expected_response)
+        response = cookies_api(self.request)
+        self.assertJSONEqual(response.content.decode("utf-8"), expected_response)
 
 
 @ddt.ddt
