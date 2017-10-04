@@ -202,11 +202,50 @@ class TrackMiddleware(object):
 
     def get_request_ip_address(self, request):
         """Gets the IP address of the request"""
-        ip_address = get_ip(request)
-        if ip_address is not None:
-            return ip_address
+        return self._get_request_ip(request)
+
+    def _get_request_ip(self, request, default=''):
+        """
+        Helper method to get IP from a request's META dict, if present.
+        If SQUELCH_PII_IN_LOGS is True:
+        Anonymize the ip address to the first two octets.
+        This gives enough data to be useful for Analysis
+        without explicitly identifying user
+            eg. 127.0.0.1 => 127.0
+        """
+        def _anonymize_if_needed(ip_address_str):
+            if settings.FEATURES.get('SQUELCH_PII_IN_LOGS', False):
+                return self._get_anonymous_ip(ip_address_str)
+            else:
+                return ip_address_str
+
+        # raise ValueError("IP ADDRESS FOR SERVER: ", hasattr(request, 'META'))
+
+        if request is not None and hasattr(request, 'META'):
+            ip_address = get_ip(request)
+            return _anonymize_if_needed(ip_address)
+        elif request is not None and request.get('ip'):
+            return _anonymize_if_needed(request.get('ip'))
         else:
-            return ''
+            return default
+
+    def _get_anonymous_ip(ip_address_str):
+        """Helper method to obbuscate the last two octets of an ip address"""
+        try:
+            ip_comps = ip_address_str.split('.')
+            first, second = '.'.join(ip_comps[0:2]), '.'.join(ip_comps[2:])
+            second_out = ''
+            for char in second:
+                if char != '.':
+                    second_out += 'x'
+                else:
+                    second_out += '.'
+
+            ip_address = '{}.{}'.format(first, second_out)
+        except:
+            ip_address = 'unknown'
+
+        return ip_address
 
     def process_response(self, _request, response):
         """Exit the context if it exists."""
