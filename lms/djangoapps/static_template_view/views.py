@@ -71,7 +71,7 @@ def render_press_release(request, slug):
 
 
 def render_404(request):
-    return HttpResponseNotFound(render_to_string('static_templates/404.html', {}, request=request))
+    return redirect('/')
 
 
 def render_500(request):
