@@ -456,7 +456,7 @@ class TestCoachDashboard(CcxTestCase, LoginEnrollmentTestCase):
             'ccx_coach_dashboard',
             kwargs={'course_id': CCXLocator.from_course_locator(self.course_disable_ccx.id, ccx.id)})
         response = self.client.get(url)
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)
 
     def test_dashboard_access_with_invalid_ccx_id(self):
         """
@@ -467,7 +467,7 @@ class TestCoachDashboard(CcxTestCase, LoginEnrollmentTestCase):
             'ccx_coach_dashboard',
             kwargs={'course_id': CCXLocator.from_course_locator(self.course_disable_ccx.id, 700)})
         response = self.client.get(url)
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)
 
     def test_get_date(self):
         """

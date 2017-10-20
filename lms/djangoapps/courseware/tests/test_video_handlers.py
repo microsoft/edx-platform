@@ -139,7 +139,7 @@ class TestVideo(BaseTestXmodule):
         }
 
         status_codes = {response.status_code for response in responses.values()}
-        self.assertEqual(status_codes.pop(), 404)
+        self.assertEqual(status_codes.pop(), 302)
 
     def test_handle_ajax(self):
 

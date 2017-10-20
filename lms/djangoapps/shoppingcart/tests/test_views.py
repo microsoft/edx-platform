@@ -205,7 +205,7 @@ class ShoppingCartViewsTests(SharedModuleStoreTestCase, XssTestMixin):
 
         # page not found error because order_type is not business
         resp = self.client.get(billing_url)
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 302)
 
         #chagne the order_type to business
         self.cart.order_type = 'business'
@@ -292,7 +292,7 @@ class ShoppingCartViewsTests(SharedModuleStoreTestCase, XssTestMixin):
         self.add_course_to_user_cart(self.course_key)
         non_existing_code = "non_existing_code"
         resp = self.client.post(reverse('shoppingcart.views.use_code'), {'code': non_existing_code})
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 302)
         self.assertIn("Discount does not exist against code '{0}'.".format(non_existing_code), resp.content)
 
     def test_valid_qty_greater_then_one_and_purchase_type_should_business(self):
@@ -329,7 +329,7 @@ class ShoppingCartViewsTests(SharedModuleStoreTestCase, XssTestMixin):
         item_id = '-1'
         self.login_user()
         resp = self.client.post(reverse('shoppingcart.views.update_user_cart'), {'ItemId': item_id, 'qty': qty})
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 302)
         self.assertEqual('Order item does not exist.', resp.content)
 
         # now testing the case if item id not found in request,
@@ -414,14 +414,14 @@ class ShoppingCartViewsTests(SharedModuleStoreTestCase, XssTestMixin):
         self.add_course_to_user_cart(self.course_key)
         non_existing_code = "non_existing_code"
         resp = self.client.post(reverse('shoppingcart.views.use_code'), {'code': non_existing_code})
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 302)
         self.assertIn("Discount does not exist against code '{0}'.".format(non_existing_code), resp.content)
 
     def test_course_discount_inactive_coupon(self):
         self.add_coupon(self.course_key, False, self.coupon_code)
         self.add_course_to_user_cart(self.course_key)
         resp = self.client.post(reverse('shoppingcart.views.use_code'), {'code': self.coupon_code})
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 302)
         self.assertIn("Discount does not exist against code '{0}'.".format(self.coupon_code), resp.content)
 
     def test_course_does_not_exist_in_cart_against_valid_coupon(self):
@@ -430,7 +430,7 @@ class ShoppingCartViewsTests(SharedModuleStoreTestCase, XssTestMixin):
         self.add_course_to_user_cart(self.course_key)
 
         resp = self.client.post(reverse('shoppingcart.views.use_code'), {'code': self.coupon_code})
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 302)
         self.assertIn("Discount does not exist against code '{0}'.".format(self.coupon_code), resp.content)
 
     def test_inactive_registration_code_returns_error(self):
@@ -456,7 +456,7 @@ class ShoppingCartViewsTests(SharedModuleStoreTestCase, XssTestMixin):
         self.add_course_to_user_cart(self.course_key)
 
         resp = self.client.post(reverse('shoppingcart.views.use_code'), {'code': self.reg_code})
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 302)
         self.assertIn("Code '{0}' is not valid for any course in the shopping cart.".format(self.reg_code), resp.content)
 
     def test_cart_item_qty_greater_than_1_against_valid_reg_code(self):
@@ -468,7 +468,7 @@ class ShoppingCartViewsTests(SharedModuleStoreTestCase, XssTestMixin):
         # now update the cart item quantity and then apply the registration code
         # it will raise an exception
         resp = self.client.post(reverse('shoppingcart.views.use_code'), {'code': self.reg_code})
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 302)
         self.assertIn("Cart item quantity should not be greater than 1 when applying activation code", resp.content)
 
     @ddt.data(True, False)
@@ -773,7 +773,7 @@ class ShoppingCartViewsTests(SharedModuleStoreTestCase, XssTestMixin):
     def test_add_nonexistent_course_to_cart(self):
         self.login_user()
         resp = self.client.post(reverse('shoppingcart.views.add_course_to_cart', args=['non/existent/course']))
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 302)
         self.assertIn("The course you requested does not exist.", resp.content)
 
     def test_add_course_to_cart_success(self):
@@ -1042,10 +1042,10 @@ class ShoppingCartViewsTests(SharedModuleStoreTestCase, XssTestMixin):
 
         self.login_user()
         resp = self.client.get(reverse('shoppingcart.views.show_receipt', args=[cart2.id]))
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 302)
 
         resp2 = self.client.get(reverse('shoppingcart.views.show_receipt', args=[1000]))
-        self.assertEqual(resp2.status_code, 404)
+        self.assertEqual(resp2.status_code, 302)
 
     def test_total_amount_of_purchased_course(self):
         self.add_course_to_user_cart(self.course_key)
@@ -1364,7 +1364,7 @@ class ShoppingCartViewsTests(SharedModuleStoreTestCase, XssTestMixin):
             response = self.client.post(url)
         else:
             response = self.client.get(url)
-        self.assertEquals(response.status_code, 404)
+        self.assertEquals(response.status_code, 302)
 
     @patch.dict('django.conf.settings.FEATURES', {'ENABLE_PAID_COURSE_REGISTRATION': False})
     def test_disabled_paid_courses(self):
@@ -1745,7 +1745,7 @@ class RegistrationCodeRedemptionCourseEnrollment(SharedModuleStoreTestCase):
         self.login_user()
         for i in xrange(30):  # pylint: disable=unused-variable
             response = self.client.post(url)
-            self.assertEquals(response.status_code, 404)
+            self.assertEquals(response.status_code, 302)
 
         # then the rate limiter should kick in and give a HttpForbidden response
         response = self.client.post(url)
@@ -1755,7 +1755,7 @@ class RegistrationCodeRedemptionCourseEnrollment(SharedModuleStoreTestCase):
         reset_time = datetime.now(UTC) + timedelta(seconds=300)
         with freeze_time(reset_time):
             response = self.client.post(url)
-            self.assertEquals(response.status_code, 404)
+            self.assertEquals(response.status_code, 302)
 
         cache.clear()
 
@@ -1769,7 +1769,7 @@ class RegistrationCodeRedemptionCourseEnrollment(SharedModuleStoreTestCase):
         self.login_user()
         for i in xrange(30):  # pylint: disable=unused-variable
             response = self.client.get(url)
-            self.assertEquals(response.status_code, 404)
+            self.assertEquals(response.status_code, 302)
 
         # then the rate limiter should kick in and give a HttpForbidden response
         response = self.client.get(url)
@@ -1779,7 +1779,7 @@ class RegistrationCodeRedemptionCourseEnrollment(SharedModuleStoreTestCase):
         reset_time = datetime.now(UTC) + timedelta(seconds=300)
         with freeze_time(reset_time):
             response = self.client.get(url)
-            self.assertEquals(response.status_code, 404)
+            self.assertEquals(response.status_code, 302)
 
         cache.clear()
 
@@ -1973,12 +1973,12 @@ class DonationViewTest(SharedModuleStoreTestCase):
 
         # Logged in -- should be a 404
         response = self.client.post(reverse('donation'))
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)
 
         # Logged out -- should still be a 404
         self.client.logout()
         response = self.client.post(reverse('donation'))
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)
 
     def _donate(self, donation_amount, course_id=None):
         """Simulate a donation to a course.

@@ -1025,7 +1025,7 @@ class EdxNotesViewsTest(ModuleStoreTestCase):
         Tests that 404 status code is received if EdxNotes feature is disabled.
         """
         response = self.client.get(self.notes_page_url)
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)
 
     @patch.dict("django.conf.settings.FEATURES", {"ENABLE_EDXNOTES": True})
     @patch("edxnotes.views.get_notes", autospec=True)
@@ -1045,7 +1045,7 @@ class EdxNotesViewsTest(ModuleStoreTestCase):
         Tests that 404 status code is received if EdxNotes feature is disabled.
         """
         response = self.client.get(self.notes_url, {"text": "test"})
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)
 
     @patch.dict("django.conf.settings.FEATURES", {"ENABLE_EDXNOTES": True})
     @patch("edxnotes.views.get_notes", autospec=True)
@@ -1111,7 +1111,7 @@ class EdxNotesViewsTest(ModuleStoreTestCase):
         Tests that 404 response is received if EdxNotes feature is disabled.
         """
         response = self.client.post(self.visibility_url)
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)
 
     @patch.dict("django.conf.settings.FEATURES", {"ENABLE_EDXNOTES": True})
     def test_edxnotes_visibility_invalid_json(self):

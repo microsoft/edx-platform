@@ -210,12 +210,12 @@ class RenderXBlockTestMixin(object):
     def test_unauthenticated(self):
         self.setup_course()
         self.setup_user(admin=False, enroll=True, login=False)
-        self.verify_response(expected_response_code=404)
+        self.verify_response(expected_response_code=302)
 
     def test_unenrolled_student(self):
         self.setup_course()
         self.setup_user(admin=False, enroll=False, login=True)
-        self.verify_response(expected_response_code=404)
+        self.verify_response(expected_response_code=302)
 
     @patch.dict('django.conf.settings.FEATURES', {'DISABLE_START_DATES': False})
     def test_fail_block_unreleased(self):
@@ -223,14 +223,14 @@ class RenderXBlockTestMixin(object):
         self.setup_user(admin=False, enroll=True, login=True)
         self.block_to_be_tested.start = datetime.max
         modulestore().update_item(self.block_to_be_tested, self.user.id)
-        self.verify_response(expected_response_code=404)
+        self.verify_response(expected_response_code=302)
 
     def test_fail_block_nonvisible(self):
         self.setup_course()
         self.setup_user(admin=False, enroll=True, login=True)
         self.block_to_be_tested.visible_to_staff_only = True
         modulestore().update_item(self.block_to_be_tested, self.user.id)
-        self.verify_response(expected_response_code=404)
+        self.verify_response(expected_response_code=302)
 
     @ddt.data(
         'vertical_block',

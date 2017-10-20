@@ -350,7 +350,7 @@ class TestAuthorizationView(_DispatchingViewTestCase):
         Check that django-oauth-toolkit gives an appropriate authorization response.
         """
         # django-oauth-toolkit tries to redirect to the user's redirect URL
-        self.assertEqual(response.status_code, 404)  # We used a non-existent redirect url.
+        self.assertEqual(response.status_code, 302)  # We used a non-existent redirect url.
         expected_redirect_prefix = u'{}?'.format(DUMMY_REDIRECT_URL)
         self._assert_startswith(self._redirect_destination(response), expected_redirect_prefix)
 

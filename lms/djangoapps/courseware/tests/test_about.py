@@ -125,7 +125,7 @@ class AboutTestCase(LoginEnrollmentTestCase, SharedModuleStoreTestCase, EventTra
 
         url = reverse('about_course', args=[self.course_without_about.id.to_deprecated_string()])
         resp = self.client.get(url)
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 302)
 
     @patch.dict(settings.FEATURES, {'ENABLE_MKTG_SITE': True})
     def test_logged_in_marketing(self):

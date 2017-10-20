@@ -157,7 +157,7 @@ class TestProgramListing(ProgramsApiConfigMixin, CredentialsApiConfigMixin, Shar
         self.create_programs_config(program_listing_enabled=False)
 
         response = self.client.get(self.url)
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 358)
 
     def test_empty_state(self):
         """
@@ -355,7 +355,7 @@ class TestProgramDetails(ProgramsApiConfigMixin, SharedModuleStoreTestCase):
         self.create_programs_config(program_details_enabled=False)
 
         response = self.client.get(self.url)
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 358)
 
     def test_404_if_no_data(self):
         """Verify that the page 404s if no program data is found."""
@@ -363,13 +363,13 @@ class TestProgramDetails(ProgramsApiConfigMixin, SharedModuleStoreTestCase):
 
         self.mock_programs_api(self.data, status=404)
         response = self.client.get(self.url)
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)
 
         httpretty.reset()
 
         self.mock_programs_api({})
         response = self.client.get(self.url)
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)
 
     def test_page_routing(self):
         """Verify that the page can be hit with or without a program name in the URL."""
@@ -383,4 +383,4 @@ class TestProgramDetails(ProgramsApiConfigMixin, SharedModuleStoreTestCase):
         self.assert_program_data_present(response)
 
         response = self.client.get(self.url + 'program_name/invalid/')
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)

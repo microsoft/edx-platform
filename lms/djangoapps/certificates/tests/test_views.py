@@ -83,7 +83,7 @@ class UpdateExampleCertificateViewTest(CacheIsolationTestCase):
             })
         }
         response = self.client.post(self.url, data=payload)
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)
 
     def test_update_example_certificate_error(self):
         response = self._post_to_view(self.cert, error_reason=self.ERROR_REASON)

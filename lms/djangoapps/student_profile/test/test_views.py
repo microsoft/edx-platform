@@ -100,4 +100,4 @@ class LearnerProfileViewTest(UrlResetMixin, TestCase):
         """
         profile_path = reverse('learner_profile', kwargs={'username': "no_such_user"})
         response = self.client.get(path=profile_path)
-        self.assertEqual(404, response.status_code)
+        self.assertEqual(302, response.status_code)

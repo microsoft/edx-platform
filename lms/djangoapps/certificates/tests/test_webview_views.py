@@ -706,7 +706,7 @@ class CertificatesViewsTests(CommonCertificatesTestCase):
             course_id=unicode(self.course.id)
         )
         response = self.client.get(test_url)
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)
 
     @override_settings(FEATURES=FEATURES_WITH_CERTS_ENABLED)
     def test_render_html_view_invalid_user_certificate(self):

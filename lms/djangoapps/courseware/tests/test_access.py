@@ -157,7 +157,7 @@ class CoachAccessTestCaseCCX(SharedModuleStoreTestCase, LoginEnrollmentTestCase)
         # Assert access of a student
         self.client.login(username=student.username, password='test')
         resp = self.client.get(reverse('student_progress', args=[unicode(ccx_locator), self.coach.id]))
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 302)
 
 
 @attr(shard=1)

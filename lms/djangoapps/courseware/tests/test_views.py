@@ -84,7 +84,7 @@ class TestJumpTo(ModuleStoreTestCase):
         # can't use the reverse calls from the CMS
         jumpto_url = '{0}/{1}/jump_to/{2}'.format('/courses', unicode(self.course_key), unicode(location))
         response = self.client.get(jumpto_url)
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)
 
     @unittest.skip
     def test_jumpto_from_chapter(self):
@@ -188,7 +188,7 @@ class TestJumpTo(ModuleStoreTestCase):
         location = Location('edX', 'toy', 'NoSuchPlace', None, None, None)
         jumpto_url = '{0}/{1}/jump_to_id/{2}'.format('/courses', unicode(self.course_key), unicode(location))
         response = self.client.get(jumpto_url)
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)
 
 
 @attr(shard=2)
@@ -313,7 +313,7 @@ class ViewsTestCase(ModuleStoreTestCase):
         self.assertIn(unicode(self.problem2.location), response.content.decode("utf-8"))
 
     def test_index_nonexistent_chapter(self):
-        self._verify_index_response(expected_response_code=404, chapter_name='non-existent')
+        self._verify_index_response(expected_response_code=302, chapter_name='non-existent')
 
     def test_index_nonexistent_chapter_masquerade(self):
         with patch('courseware.views.index.setup_masquerade') as patch_masquerade:
@@ -322,7 +322,7 @@ class ViewsTestCase(ModuleStoreTestCase):
             self._verify_index_response(expected_response_code=302, chapter_name='non-existent')
 
     def test_index_nonexistent_section(self):
-        self._verify_index_response(expected_response_code=404, section_name='non-existent')
+        self._verify_index_response(expected_response_code=302, section_name='non-existent')
 
     def test_index_nonexistent_section_masquerade(self):
         with patch('courseware.views.index.setup_masquerade') as patch_masquerade:
@@ -575,11 +575,11 @@ class ViewsTestCase(ModuleStoreTestCase):
 
     def test_invalid_course_id(self):
         response = self.client.get('/courses/MITx/3.091X/')
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)
 
     def test_incomplete_course_id(self):
         response = self.client.get('/courses/MITx/')
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)
 
     def test_index_invalid_position(self):
         request_url = '/'.join([
@@ -592,7 +592,7 @@ class ViewsTestCase(ModuleStoreTestCase):
         ])
         self.assertTrue(self.client.login(username=self.user.username, password=self.password))
         response = self.client.get(request_url)
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)
 
     def test_unicode_handling_in_url(self):
         url_parts = [
@@ -609,7 +609,7 @@ class ViewsTestCase(ModuleStoreTestCase):
             url_parts_copy[idx] = val + u'χ'
             request_url = '/'.join(url_parts_copy)
             response = self.client.get(request_url)
-            self.assertEqual(response.status_code, 404)
+            self.assertEqual(response.status_code, 302)
 
     @override_settings(PAID_COURSE_REGISTRATION_CURRENCY=["USD", "$"])
     def test_get_cosmetic_display_price(self):
@@ -633,7 +633,7 @@ class ViewsTestCase(ModuleStoreTestCase):
         # TODO add a test for invalid location
         # TODO add a test for no data *
         response = self.client.get(reverse('jump_to', args=['foo/bar/baz', 'baz']))
-        self.assertEquals(response.status_code, 404)
+        self.assertEquals(response.status_code, 302)
 
     @unittest.skip
     def test_no_end_on_about_page(self):
@@ -1232,7 +1232,7 @@ class ProgressPageTests(ModuleStoreTestCase):
             resp = self.client.get(
                 reverse('student_progress', args=[unicode(self.course.id), invalid_id])
             )
-            self.assertEquals(resp.status_code, 404)
+            self.assertEquals(resp.status_code, 302)
 
         # Assert that valid 'student_id' returns 200 status
         self._get_student_progress_page()
@@ -1807,7 +1807,7 @@ class GenerateUserCertTests(ModuleStoreTestCase):
     def test_user_with_invalid_course_id(self):
         # If try to access a course with invalid key pattern then 404 will return
         resp = self.client.post('/courses/def/generate_user_cert')
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 302)
 
     def test_user_without_login_return_error(self):
         # If user try to access without login should see a bad request status code with message
@@ -2038,7 +2038,7 @@ class TestIndexViewWithGating(ModuleStoreTestCase, MilestonesTestCaseMixin):
             )
         )
 
-        self.assertEquals(response.status_code, 404)
+        self.assertEquals(response.status_code, 302)
 
 
 class TestRenderXBlock(RenderXBlockTestMixin, ModuleStoreTestCase):
@@ -2057,7 +2057,7 @@ class TestRenderXBlock(RenderXBlockTestMixin, ModuleStoreTestCase):
         Test XBlockRendering with invalid usage key
         """
         response = self.get_response(usage_key='some_invalid_usage_key')
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)
         self.assertIn('Page not found', response.content)
 
     def get_response(self, usage_key, url_encoded_params=None):

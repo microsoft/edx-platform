@@ -98,7 +98,7 @@ class UserStandingTest(TestCase):
         response = self.non_staff_client.get(reverse('manage_user_standing'), {
             'user': self.non_staff,
         })
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)
 
     @unittest.skipUnless(settings.ROOT_URLCONF == 'lms.urls', 'Test only valid in lms')
     def test_non_staff_cant_disable_account(self):
@@ -107,7 +107,7 @@ class UserStandingTest(TestCase):
             'user': self.non_staff,
             'account_action': 'disable'
         })
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)
         self.assertEqual(
             UserStanding.objects.filter(user=self.good_user).count(), 0
         )

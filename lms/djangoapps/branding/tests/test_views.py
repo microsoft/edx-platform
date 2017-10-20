@@ -28,7 +28,7 @@ class TestFooter(TestCase):
     def test_feature_flag(self, accepts):
         self._set_feature_flag(False)
         resp = self._get_footer(accepts=accepts)
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 302)
 
     @ddt.data(
         # Open source version

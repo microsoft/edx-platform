@@ -18,7 +18,7 @@ class FaviconTestCase(UrlResetMixin, TestCase):
         self.assertRedirects(
             resp,
             "/static/images/favicon.ico",
-            status_code=301, target_status_code=404  # @@@ how to avoid 404?
+            status_code=301, target_status_code=302  # @@@ how to avoid 404?
         )
 
     @override_settings(FAVICON_PATH="images/foo.ico")
@@ -30,5 +30,5 @@ class FaviconTestCase(UrlResetMixin, TestCase):
         self.assertRedirects(
             resp,
             "/static/images/foo.ico",
-            status_code=301, target_status_code=404  # @@@ how to avoid 404?
+            status_code=301, target_status_code=302  # @@@ how to avoid 404?
         )

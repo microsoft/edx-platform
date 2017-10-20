@@ -190,7 +190,7 @@ class TestLTIModuleListing(SharedModuleStoreTestCase):
         for bad_course_id in bad_ids:
             lti_rest_endpoints_url = 'courses/{}/lti_rest_endpoints/'.format(bad_course_id)
             response = self.client.get(lti_rest_endpoints_url)
-            self.assertEqual(404, response.status_code)
+            self.assertEqual(302, response.status_code)
 
     def test_lti_rest_listing(self):
         """tests that the draft lti module is part of the endpoint response"""

@@ -150,7 +150,7 @@ class TestSites(SharedModuleStoreTestCase, LoginEnrollmentTestCase):
         """
 
         resp = self.client.get('/copyright')
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 302)
 
     def test_no_redirect_on_homepage_when_no_enrollments(self):
         """
@@ -226,7 +226,7 @@ class TestSites(SharedModuleStoreTestCase, LoginEnrollmentTestCase):
 
         url = reverse('about_course', args=[self.course_hidden_visibility.id.to_deprecated_string()])
         resp = self.client.get(url, HTTP_HOST=settings.MICROSITE_TEST_HOSTNAME)
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 302)
 
     @override_settings(SITE_NAME=settings.MICROSITE_TEST_HOSTNAME)
     def test_paid_course_registration(self):

@@ -123,7 +123,7 @@ class CourseInfoTestCase(LoginEnrollmentTestCase, SharedModuleStoreTestCase):
         self.setup_user()
         url = reverse('info', args=['not/a/course'])
         response = self.client.get(url)
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)
 
 
 @attr(shard=1)

@@ -28,7 +28,7 @@ class SAMLMetadataTest(SAMLTestCase):
         """ When SAML is not enabled, the metadata view should return 404 """
         self.enable_saml(enabled=False)
         response = self.client.get(self.METADATA_URL)
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)
 
     def test_metadata(self):
         self.enable_saml()
@@ -151,4 +151,4 @@ class SAMLAuthTest(SAMLTestCase):
         """ When SAML is not enabled, the login view should return 404 """
         self.enable_saml(enabled=False)
         response = self.client.get(self.LOGIN_URL)
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)

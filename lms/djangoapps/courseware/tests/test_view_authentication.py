@@ -68,7 +68,7 @@ class TestViewAuth(ModuleStoreTestCase, LoginEnrollmentTestCase):
             for index, __ in enumerate(course.textbooks)
         ])
         for url in urls:
-            self.assert_request_status_code(404, url)
+            self.assert_request_status_code(302, url)
 
     def _check_staff(self, course):
         """
@@ -209,7 +209,7 @@ class TestViewAuth(ModuleStoreTestCase, LoginEnrollmentTestCase):
 
         # Shouldn't be able to get to the instructor pages
         for url in urls:
-            self.assert_request_status_code(404, url)
+            self.assert_request_status_code(302, url)
 
     def test_staff_course_access(self):
         """
@@ -223,7 +223,7 @@ class TestViewAuth(ModuleStoreTestCase, LoginEnrollmentTestCase):
         self.assert_request_status_code(200, url)
 
         url = reverse('instructor_dashboard', kwargs={'course_id': self.test_course.id.to_deprecated_string()})
-        self.assert_request_status_code(404, url)
+        self.assert_request_status_code(302, url)
 
     def test_instructor_course_access(self):
         """
@@ -237,7 +237,7 @@ class TestViewAuth(ModuleStoreTestCase, LoginEnrollmentTestCase):
         self.assert_request_status_code(200, url)
 
         url = reverse('instructor_dashboard', kwargs={'course_id': self.test_course.id.to_deprecated_string()})
-        self.assert_request_status_code(404, url)
+        self.assert_request_status_code(302, url)
 
     def test_org_staff_access(self):
         """
@@ -252,7 +252,7 @@ class TestViewAuth(ModuleStoreTestCase, LoginEnrollmentTestCase):
         self.assert_request_status_code(200, url)
 
         url = reverse('instructor_dashboard', kwargs={'course_id': self.other_org_course.id.to_deprecated_string()})
-        self.assert_request_status_code(404, url)
+        self.assert_request_status_code(302, url)
 
     def test_org_instructor_access(self):
         """
@@ -267,7 +267,7 @@ class TestViewAuth(ModuleStoreTestCase, LoginEnrollmentTestCase):
         self.assert_request_status_code(200, url)
 
         url = reverse('instructor_dashboard', kwargs={'course_id': self.other_org_course.id.to_deprecated_string()})
-        self.assert_request_status_code(404, url)
+        self.assert_request_status_code(302, url)
 
     def test_global_staff_access(self):
         """

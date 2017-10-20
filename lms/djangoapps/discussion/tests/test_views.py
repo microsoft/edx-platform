@@ -96,7 +96,7 @@ class ViewsExceptionTestCase(UrlResetMixin, ModuleStoreTestCase):
         url = reverse('discussion.views.user_profile',
                       kwargs={'course_id': self.course.id.to_deprecated_string(), 'user_id': '12345'})  # There is no user 12345
         self.response = self.client.get(url)
-        self.assertEqual(self.response.status_code, 404)
+        self.assertEqual(self.response.status_code, 302)
 
     @patch('student.models.cc.User.from_django_user')
     @patch('student.models.cc.User.subscribed_threads')
@@ -113,7 +113,7 @@ class ViewsExceptionTestCase(UrlResetMixin, ModuleStoreTestCase):
         url = reverse('discussion.views.followed_threads',
                       kwargs={'course_id': self.course.id.to_deprecated_string(), 'user_id': '12345'})  # There is no user 12345
         self.response = self.client.get(url)
-        self.assertEqual(self.response.status_code, 404)
+        self.assertEqual(self.response.status_code, 302)
 
 
 def make_mock_thread_data(
@@ -627,7 +627,7 @@ class SingleThreadContentGroupTestCase(ForumsEnableMixin, UrlResetMixin, Content
         if should_have_access:
             self.assertEqual(call_single_thread().status_code, 200)
         else:
-            self.assertEqual(call_single_thread().status_code, 404)
+            self.assertEqual(call_single_thread().status_code, 302)
 
     def test_staff_user(self, mock_request):
         """

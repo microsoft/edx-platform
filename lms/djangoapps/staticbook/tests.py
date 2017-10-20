@@ -109,7 +109,7 @@ class StaticImageBookTest(StaticBookTest):
         self.make_course()
         url = self.make_url('book', book_index=0)
         response = self.client.get(url)
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)
 
     def test_bad_page_id(self):
         # A bad page id will cause a 404.
@@ -170,14 +170,14 @@ class StaticPdfBookTest(StaticBookTest):
         self.make_course(pdf_textbooks=[PDF_BOOK])
         url = self.make_url('pdf_book', book_index=1, chapter=1)
         response = self.client.get(url)
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)
 
     def test_no_book(self):
         # If we have no books, asking for the first book will fail with a 404.
         self.make_course()
         url = self.make_url('pdf_book', book_index=0, chapter=1)
         response = self.client.get(url)
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)
 
     def test_chapter_xss(self):
         # The chapter in the URL used to go right on the page.
@@ -265,14 +265,14 @@ class StaticHtmlBookTest(StaticBookTest):
         self.make_course(html_textbooks=[HTML_BOOK])
         url = self.make_url('html_book', book_index=1, chapter=1)
         response = self.client.get(url)
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)
 
     def test_no_book(self):
         # If we have no books, asking for the first book will fail with a 404.
         self.make_course()
         url = self.make_url('html_book', book_index=0, chapter=1)
         response = self.client.get(url)
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)
 
     def test_chapter_xss(self):
         # The chapter in the URL used to go right on the page.

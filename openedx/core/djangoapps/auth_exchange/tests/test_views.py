@@ -97,7 +97,7 @@ class AccessTokenExchangeViewTest(AccessTokenExchangeTestMixin):
     def test_invalid_provider(self):
         url = reverse("exchange_access_token", kwargs={"backend": "invalid"})
         response = self.client.post(url, self.data)
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)
 
 
 # This is necessary because cms does not implement third party auth

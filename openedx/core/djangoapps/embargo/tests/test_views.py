@@ -50,7 +50,7 @@ class CourseAccessMessageViewTest(CacheIsolationTestCase, UrlResetMixin):
 
     @ddt.data('enrollment', 'courseware')
     def test_invalid_message_key(self, access_point):
-        self._load_page(access_point, 'invalid', expected_status=404)
+        self._load_page(access_point, 'invalid', expected_status=302)
 
     @with_comprehensive_theme("test-theme")
     @ddt.data('enrollment', 'courseware')

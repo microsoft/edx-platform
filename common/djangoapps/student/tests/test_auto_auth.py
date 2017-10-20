@@ -282,4 +282,4 @@ class AutoAuthDisabledTestCase(AutoAuthTestCase):
         Make sure automatic authentication is disabled.
         """
         response = self.client.get(self.url)
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)

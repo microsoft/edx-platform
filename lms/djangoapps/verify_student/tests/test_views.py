@@ -613,7 +613,7 @@ class TestPayAndVerifyView(UrlResetMixin, ModuleStoreTestCase, XssTestMixin):
             self._get_page(
                 page_name,
                 course.id,
-                expected_status_code=404
+                expected_status_code=302
             )
 
     @ddt.data(
@@ -630,7 +630,7 @@ class TestPayAndVerifyView(UrlResetMixin, ModuleStoreTestCase, XssTestMixin):
         if "no-id-professional" in modes_available or "professional" in modes_available:
             self._get_page(payment_flow, course.id, expected_status_code=200)
         else:
-            self._get_page(payment_flow, course.id, expected_status_code=404)
+            self._get_page(payment_flow, course.id, expected_status_code=302)
 
     @ddt.data(
         "verify_student_start_flow",
@@ -661,7 +661,7 @@ class TestPayAndVerifyView(UrlResetMixin, ModuleStoreTestCase, XssTestMixin):
         self._get_page(
             url_name,
             non_existent_course,
-            expected_status_code=404
+            expected_status_code=302
         )
 
     @ddt.data("verify_student_start_flow", "verify_student_begin_flow")
@@ -2161,7 +2161,7 @@ class TestInCourseReverifyView(ModuleStoreTestCase):
     def test_incourse_reverify_invalid_checkpoint_get(self):
         # Retrieve a checkpoint that doesn't yet exist
         response = self.client.get(self._get_url(self.course_key, "invalid_checkpoint"))
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)
 
     @patch.dict(settings.FEATURES, {'AUTOMATIC_VERIFY_STUDENT_IDENTITY_FOR_TESTING': True})
     def test_incourse_reverify_initial_redirect_get(self):

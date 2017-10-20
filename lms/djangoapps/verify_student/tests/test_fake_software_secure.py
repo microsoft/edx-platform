@@ -44,7 +44,7 @@ class SoftwareSecureFakeViewDisabledTest(SoftwareSecureFakeViewTest):
             '/verify_student/software-secure-fake-response'
         )
 
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 302)
 
 
 class SoftwareSecureFakeViewEnabledTest(SoftwareSecureFakeViewTest):
