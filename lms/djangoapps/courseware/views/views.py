@@ -1,6 +1,7 @@
 """
 Courseware views functions
 """
+
 import json
 import logging
 import urllib
