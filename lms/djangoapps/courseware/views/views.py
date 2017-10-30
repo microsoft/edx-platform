@@ -1,4 +1,3 @@
-
 """
 Courseware views functions
 """
