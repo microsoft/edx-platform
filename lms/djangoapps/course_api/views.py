@@ -209,7 +209,7 @@ class CourseListView(DeveloperErrorViewMixin, ListAPIView):
 
 
 @view_auth_classes(is_authenticated=True)
-class CourseListViewPrivate(DeveloperErrorViewMixinPrivate, ListAPIView):
+class CourseListViewPrivate(DeveloperErrorViewMixin, ListAPIView):
     """
     **Use Cases**
 
