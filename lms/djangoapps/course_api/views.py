@@ -219,62 +219,9 @@ class CourseListViewPrivate(DeveloperErrorViewMixinPrivate, ListAPIView):
 
         GET /api/courses/v1/courses_private/
 
-    **Response Values**
+    This was almost a duplicate of the above CourseListView Class with some access
+    restrictions. Refer CourseListView for return types and example parameters
 
-        Body comprises a list of objects as returned by `CourseDetailView`.
-
-    **Parameters**
-
-        username (optional):
-            The username of the specified user whose visible courses we
-            want to see. The username is not required only if the API is
-            requested by an Anonymous user.
-
-        org (optional):
-            If specified, visible `CourseOverview` objects are filtered
-            such that only those belonging to the organization with the
-            provided org code (e.g., "HarvardX") are returned.
-            Case-insensitive.
-
-        mobile (optional):
-            If specified, only visible `CourseOverview` objects that are
-            designated as mobile_available are returned.
-
-    **Returns**
-
-        * 200 on success, with a list of course discovery objects as returned
-          by `CourseDetailView`.
-        * 400 if an invalid parameter was sent or the username was not provided
-          for an authenticated request.
-        * 403 if a user who does not have permission to masquerade as
-          another user specifies a username other than their own.
-        * 404 if the specified user does not exist, or the requesting user does
-          not have permission to view their courses.
-
-        Example response:
-
-            [
-              {
-                "blocks_url": "/api/courses/v1/blocks/?course_id=edX%2Fexample%2F2012_Fall",
-                "media": {
-                  "course_image": {
-                    "uri": "/c4x/edX/example/asset/just_a_test.jpg",
-                    "name": "Course Image"
-                  }
-                },
-                "description": "An example course.",
-                "end": "2015-09-19T18:00:00Z",
-                "enrollment_end": "2015-07-15T00:00:00Z",
-                "enrollment_start": "2015-06-15T00:00:00Z",
-                "course_id": "edX/example/2012_Fall",
-                "name": "Example Course",
-                "number": "example",
-                "org": "edX",
-                "start": "2015-07-17T12:00:00Z",
-                "start_display": "July 17, 2015",
-                "start_type": "timestamp"
-              }
-            ]
     """
 
     pagination_class = NamespacedPageNumberPagination
