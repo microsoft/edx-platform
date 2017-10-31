@@ -4,7 +4,7 @@ Course API URLs
 from django.conf import settings
 from django.conf.urls import patterns, url, include
 
-from .views import CourseDetailView, CourseListView
+from .views import CourseDetailView, CourseListView, CourseListViewPrivate
 
 
 urlpatterns = patterns(
