@@ -2,7 +2,7 @@
 Course API Views
 """
 
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, PermissionDenied
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 
 from openedx.core.lib.api.paginators import NamespacedPageNumberPagination
@@ -199,6 +199,96 @@ class CourseListView(DeveloperErrorViewMixin, ListAPIView):
         form = CourseListGetForm(self.request.query_params, initial={'requesting_user': self.request.user})
         if not form.is_valid():
             raise ValidationError(form.errors)
+
+        return list_courses(
+            self.request,
+            form.cleaned_data['username'],
+            org=form.cleaned_data['org'],
+            filter_=form.cleaned_data['filter_'],
+        )
+
+
+@view_auth_classes(is_authenticated=True)
+class CourseListView(DeveloperErrorViewMixinPrivate, ListAPIView):
+    """
+    **Use Cases**
+
+        Request information on all courses visible to the specified user.
+
+    **Example Requests**
+
+        GET /api/courses/v1/courses_private/
+
+    **Response Values**
+
+        Body comprises a list of objects as returned by `CourseDetailView`.
+
+    **Parameters**
+
+        username (optional):
+            The username of the specified user whose visible courses we
+            want to see. The username is not required only if the API is
+            requested by an Anonymous user.
+
+        org (optional):
+            If specified, visible `CourseOverview` objects are filtered
+            such that only those belonging to the organization with the
+            provided org code (e.g., "HarvardX") are returned.
+            Case-insensitive.
+
+        mobile (optional):
+            If specified, only visible `CourseOverview` objects that are
+            designated as mobile_available are returned.
+
+    **Returns**
+
+        * 200 on success, with a list of course discovery objects as returned
+          by `CourseDetailView`.
+        * 400 if an invalid parameter was sent or the username was not provided
+          for an authenticated request.
+        * 403 if a user who does not have permission to masquerade as
+          another user specifies a username other than their own.
+        * 404 if the specified user does not exist, or the requesting user does
+          not have permission to view their courses.
+
+        Example response:
+
+            [
+              {
+                "blocks_url": "/api/courses/v1/blocks/?course_id=edX%2Fexample%2F2012_Fall",
+                "media": {
+                  "course_image": {
+                    "uri": "/c4x/edX/example/asset/just_a_test.jpg",
+                    "name": "Course Image"
+                  }
+                },
+                "description": "An example course.",
+                "end": "2015-09-19T18:00:00Z",
+                "enrollment_end": "2015-07-15T00:00:00Z",
+                "enrollment_start": "2015-06-15T00:00:00Z",
+                "course_id": "edX/example/2012_Fall",
+                "name": "Example Course",
+                "number": "example",
+                "org": "edX",
+                "start": "2015-07-17T12:00:00Z",
+                "start_display": "July 17, 2015",
+                "start_type": "timestamp"
+              }
+            ]
+    """
+
+    pagination_class = NamespacedPageNumberPagination
+    serializer_class = CourseSerializer
+
+    def get_queryset(self):
+        """
+        Return a list of courses visible to the user.
+        """
+        form = CourseListGetForm(self.request.query_params, initial={'requesting_user': self.request.user})
+        if not form.is_valid():
+            raise ValidationError(form.errors)
+        elif not self.request.user.is_staff:
+            raise PermissionDenied
 
         return list_courses(
             self.request,
