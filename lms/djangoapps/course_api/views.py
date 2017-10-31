@@ -289,7 +289,7 @@ class CourseListView(DeveloperErrorViewMixinPrivate, ListAPIView):
             raise ValidationError(form.errors)
         elif not self.request.user.is_staff:
             raise PermissionDenied
-            
+
         return list_courses(
             self.request,
             form.cleaned_data['username'],
