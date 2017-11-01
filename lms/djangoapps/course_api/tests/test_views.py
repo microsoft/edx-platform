@@ -132,7 +132,7 @@ class CourseListViewPrivateTestCase(CourseApiTestViewMixin, SharedModuleStoreTes
 
     def test_not_logged_in(self):
         self.client.logout()
-        self.verify_response(expected_status_code=403)
+        self.verify_response(expected_status_code=401)
 
 
 class CourseListViewTestCaseMultipleCourses(CourseApiTestViewMixin, ModuleStoreTestCase):
