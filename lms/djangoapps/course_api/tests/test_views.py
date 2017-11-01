@@ -95,6 +95,7 @@ class CourseListViewTestCase(CourseApiTestViewMixin, SharedModuleStoreTestCase):
         self.client.logout()
         self.verify_response()
 
+
 class CourseListViewPrivateTestCase(CourseApiTestViewMixin, SharedModuleStoreTestCase):
     """
     Test responses returned from CourseListViewPrivate.
@@ -118,7 +119,7 @@ class CourseListViewPrivateTestCase(CourseApiTestViewMixin, SharedModuleStoreTes
 
     def test_as_honor(self):
         self.setup_user(self.honor_user)
-        self.verify_response( expected_status_code=403, params={'username': self.honor_user.username})
+        self.verify_response(expected_status_code=403, params={'username': self.honor_user.username})
 
     def test_as_honor_for_explicit_self(self):
         self.setup_user(self.honor_user)
