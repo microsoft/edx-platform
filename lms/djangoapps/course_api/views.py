@@ -2,7 +2,7 @@
 Course API Views
 """
 
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, PermissionDenied
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 
 from openedx.core.lib.api.paginators import NamespacedPageNumberPagination
@@ -199,6 +199,43 @@ class CourseListView(DeveloperErrorViewMixin, ListAPIView):
         form = CourseListGetForm(self.request.query_params, initial={'requesting_user': self.request.user})
         if not form.is_valid():
             raise ValidationError(form.errors)
+
+        return list_courses(
+            self.request,
+            form.cleaned_data['username'],
+            org=form.cleaned_data['org'],
+            filter_=form.cleaned_data['filter_'],
+        )
+
+
+@view_auth_classes(is_authenticated=True)
+class CourseListViewPrivate(DeveloperErrorViewMixin, ListAPIView):
+    """
+    **Use Cases**
+
+        Request information on all courses visible to the specified user.
+
+    **Example Requests**
+
+        GET /api/courses/v1/courses_private/
+
+    This was almost a duplicate of the above CourseListView Class with some access
+    restrictions. Refer CourseListView for return types and example parameters
+
+    """
+
+    pagination_class = NamespacedPageNumberPagination
+    serializer_class = CourseSerializer
+
+    def get_queryset(self):
+        """
+        Return a list of courses visible to the user.
+        """
+        form = CourseListGetForm(self.request.query_params, initial={'requesting_user': self.request.user})
+        if not form.is_valid():
+            raise ValidationError(form.errors)
+        elif not self.request.user.is_staff:
+            raise PermissionDenied
 
         return list_courses(
             self.request,

@@ -96,6 +96,45 @@ class CourseListViewTestCase(CourseApiTestViewMixin, SharedModuleStoreTestCase):
         self.verify_response()
 
 
+class CourseListViewPrivateTestCase(CourseApiTestViewMixin, SharedModuleStoreTestCase):
+    """
+    Test responses returned from CourseListViewPrivate.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super(CourseListViewPrivateTestCase, cls).setUpClass()
+        cls.course = cls.create_course()
+        cls.url = reverse('course-list-private')
+        cls.staff_user = cls.create_user(username='staff', is_staff=True)
+        cls.honor_user = cls.create_user(username='honor', is_staff=False)
+
+    def test_as_staff(self):
+        self.setup_user(self.staff_user)
+        self.verify_response(params={'username': self.staff_user.username})
+
+    def test_as_staff_for_honor(self):
+        self.setup_user(self.staff_user)
+        self.verify_response(params={'username': self.honor_user.username})
+
+    def test_as_honor(self):
+        self.setup_user(self.honor_user)
+        self.verify_response(expected_status_code=403, params={'username': self.honor_user.username})
+
+    def test_as_honor_for_explicit_self(self):
+        self.setup_user(self.honor_user)
+        self.verify_response(expected_status_code=403, params={'username': self.honor_user.username})
+
+    def test_as_inactive_user(self):
+        inactive_user = self.create_user(username='inactive', is_staff=False)
+        self.setup_user(inactive_user, make_inactive=True)
+        self.verify_response(expected_status_code=403, params={'username': inactive_user.username})
+
+    def test_not_logged_in(self):
+        self.client.logout()
+        self.verify_response(expected_status_code=401)
+
+
 class CourseListViewTestCaseMultipleCourses(CourseApiTestViewMixin, ModuleStoreTestCase):
     """
     Test responses returned from CourseListView (with tests that modify the
