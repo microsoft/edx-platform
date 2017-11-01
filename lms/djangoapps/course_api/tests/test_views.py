@@ -102,7 +102,7 @@ class CourseListViewPrivateTestCase(CourseApiTestViewMixin, SharedModuleStoreTes
 
     @classmethod
     def setUpClass(cls):
-        super(CourseListViewTestCase, cls).setUpClass()
+        super(CourseListViewPrivateTestCase, cls).setUpClass()
         cls.course = cls.create_course()
         cls.url = reverse('course-list-private')
         cls.staff_user = cls.create_user(username='staff', is_staff=True)
