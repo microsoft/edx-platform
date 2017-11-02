@@ -10,6 +10,7 @@ from openedx.core.lib.api.view_utils import view_auth_classes, DeveloperErrorVie
 from .api import course_detail, list_courses
 from .forms import CourseDetailGetForm, CourseListGetForm
 from .serializers import CourseSerializer, CourseDetailSerializer
+from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 
 
 @view_auth_classes(is_authenticated=False)
