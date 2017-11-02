@@ -13,7 +13,7 @@ from ..views import CourseDetailView
 from openedx.core.djangoapps.site_configuration.tests.test_util import with_site_configuration
 
 TEST_SITE_CONFIGURATION = {
-    'RESTRICT_COURSES_API': true
+    'RESTRICT_COURSES_API': True
 }
 
 
