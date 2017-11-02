@@ -99,7 +99,7 @@ class CourseListViewTestCase(CourseApiTestViewMixin, SharedModuleStoreTestCase):
     def test_not_logged_in(self):
         self.client.logout()
         self.verify_response()
-    
+
     @with_site_configuration(configuration=TEST_SITE_CONFIGURATION)
     def test_as_honor_with_site_configuration(self):
         self.setup_user(self.honor_user)
