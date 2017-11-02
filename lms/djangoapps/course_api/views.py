@@ -201,8 +201,8 @@ class CourseListView(DeveloperErrorViewMixin, ListAPIView):
         form = CourseListGetForm(self.request.query_params, initial={'requesting_user': self.request.user})
         if not form.is_valid():
             raise ValidationError(form.errors)
-        elif  restrict_course_api and not self.request.user.is_staff:
-            raise PermissionDenied()  
+        elif restrict_course_api and not self.request.user.is_staff:
+            raise PermissionDenied()
 
         return list_courses(
             self.request,
