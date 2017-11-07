@@ -15,7 +15,7 @@
 - [ ] Get at least two approvals
 
 #### Reminders DURING merge
-1. If you're merging from a feature branch into the development branch then "Squash and merge" to keep our history clean.
+1. If you're merging from a short-term (feature) branch into a long-term branch (like dev, release, or master) then "Squash and merge" to keep our history clean.
 1. If merging from two longterm branches (like cherry picks from upstream, dev to release, etc) then "Create merge commit" to preserve individual commits.
 
 [//]: # ( fyi: This content was heavily inspired by )
