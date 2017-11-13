@@ -188,6 +188,7 @@ class TrackMiddleware(object):
 
     def get_user_primary_key(self, request):
         """Gets the primary key of the logged in Django user"""
+        """TODO: Check if request is a video event and set it to null if it is, define here track/views/__init__.py """
         try:
             return request.user.pk
         except AttributeError:
@@ -195,6 +196,7 @@ class TrackMiddleware(object):
 
     def get_username(self, request):
         """Gets the username of the logged in Django user"""
+        """TODO: Check if request is a video event and set it to null if it is, define here track/views/__init__.py """
         try:
             return request.user.username
         except AttributeError:
