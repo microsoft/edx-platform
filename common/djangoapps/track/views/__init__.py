@@ -89,6 +89,23 @@ def _get_request_value(request, value_name, default=''):
     return default
 
 
+def is_anonim_needed(request):
+    event_type = _get_request_value(request, 'event_type')
+    event_path = request.META['PATH_INFO']
+
+    video_event_names = ['load_video', 'play_video', 'pause_video', 'seek_video',
+                         'speed_change_video', 'edx.video.closed_captions.shown',
+                         'edx.video.closed_captions.hidden', 'hide_transcript',
+                         'show_transcript', 'stop_video']
+    server_video_event_identifier = 'type@video+block@'
+
+    if event_type in video_event_names or server_video_event_identifier in event_path:
+        return True
+
+    else:
+        return False
+
+
 def user_track(request):
     """
     Log when POST call to "event" URL is made by a user.
@@ -112,7 +129,10 @@ def user_track(request):
 
     context_override = contexts.course_context_from_url(page)
     """TODO: Check if request is a video event and set it to null if it is, define here track/views/__init__.py """
-    context_override['username'] = username
+    if is_anonim_needed(request):
+        context_override['username'] = ''
+    else:
+        context_override['username'] = username
     context_override['event_source'] = 'browser'
     context_override['page'] = page
 
@@ -133,7 +153,10 @@ def server_track(request, event_type, event, page=None):
 
     try:
         """TODO: Check if request is a video event and set it to null if it is, define here track/views/__init__.py """
-        username = request.user.username
+        if is_anonim_needed(request):
+            username = ''
+        else:
+            username = request.user.username
     except:
         username = "anonymous"
 

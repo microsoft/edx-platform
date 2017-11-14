@@ -133,12 +133,21 @@ class TrackMiddleware(object):
         * path - The path part of the requested URL.
         * client_id - The unique key used by Google Analytics to identify a user
         """
-        context = {
-            'session': self.get_session_key(request),
-            'user_id': self.get_user_primary_key(request),
-            'username': self.get_username(request),
-            'ip': self.get_request_ip_address(request),
-        }
+        if views.is_anonim_needed(request):
+            context = {
+                'session': self.get_session_key(request),
+                'user_id': '',
+                'username': '',
+                'ip': self.get_request_ip_address(request),
+            }
+        else:
+            context = {
+                'session': self.get_session_key(request),
+                'user_id': self.get_user_primary_key(request),
+                'username': self.get_username(request),
+                'ip': self.get_request_ip_address(request),
+            }
+
         for header_name, context_key in META_KEY_TO_CONTEXT_KEY.iteritems():
             # HTTP headers may contain Latin1 characters. Decoding using Latin1 encoding here
             # avoids encountering UnicodeDecodeError exceptions when these header strings are
