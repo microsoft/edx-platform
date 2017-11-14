@@ -128,7 +128,7 @@ def user_track(request):
             pass
 
     context_override = contexts.course_context_from_url(page)
-    """TODO: Check if request is a video event and set it to null if it is, define here track/views/__init__.py """
+    """ Check if request should  be anonimized """
     if is_anonim_needed(request):
         context_override['username'] = ''
     else:
@@ -152,7 +152,7 @@ def server_track(request, event_type, event, page=None):
         return  # don't log
 
     try:
-        """TODO: Check if request is a video event and set it to null if it is, define here track/views/__init__.py """
+        """ Check if request should  be anonimized """
         if is_anonim_needed(request):
             username = ''
         else:

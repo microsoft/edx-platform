@@ -133,6 +133,7 @@ class TrackMiddleware(object):
         * path - The path part of the requested URL.
         * client_id - The unique key used by Google Analytics to identify a user
         """
+        """ Check if request should  be anonimized """
         if views.is_anonim_needed(request):
             context = {
                 'session': self.get_session_key(request),
@@ -197,7 +198,6 @@ class TrackMiddleware(object):
 
     def get_user_primary_key(self, request):
         """Gets the primary key of the logged in Django user"""
-        """TODO: Check if request is a video event and set it to null if it is, define here track/views/__init__.py """
         try:
             return request.user.pk
         except AttributeError:
@@ -205,7 +205,6 @@ class TrackMiddleware(object):
 
     def get_username(self, request):
         """Gets the username of the logged in Django user"""
-        """TODO: Check if request is a video event and set it to null if it is, define here track/views/__init__.py """
         try:
             return request.user.username
         except AttributeError:
