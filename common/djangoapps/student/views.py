@@ -43,6 +43,7 @@ from ratelimitbackend.exceptions import RateLimitException
 from social.apps.django_app import utils as social_utils
 from social.backends import oauth as social_oauth
 from social.exceptions import AuthException, AuthAlreadyAssociated
+from social.apps.django_app.default.models import UserSocialAuth
 
 from edxmako.shortcuts import render_to_response, render_to_string
 
@@ -101,6 +102,7 @@ from util.milestones_helpers import (
 
 from util.password_policy_validators import validate_password_strength
 import third_party_auth
+from third_party_auth.models import UserSocialAuthMapping
 from third_party_auth import pipeline, provider
 from student.helpers import (
     check_verify_status_by_course,
