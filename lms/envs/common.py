@@ -3053,3 +3053,6 @@ ENTERPRISE_ENROLLMENT_API_URL = LMS_ROOT_URL + "/api/enrollment/v1/"
 #To prevent the browser from guessing the content type and force it to always use the type provided in the Content-Type header,
 #we need this to be enabled as True. (Security fix)
 SECURE_CONTENT_TYPE_NOSNIFF = True
+
+############## Bulk Grades API Options #############################
+BULK_GRADES_API_ADMIN_USERNAME = None

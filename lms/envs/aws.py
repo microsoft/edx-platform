@@ -927,3 +927,6 @@ if ALL_LANGUAGES_OVERRIDE:
     ALL_LANGUAGES_DICT = OrderedDict(sorted(ALL_LANGUAGES_DICT.items(), key=itemgetter(1)))
 
 API_COOKIE_URL = ENV_TOKENS.get('API_COOKIE_URL', None)
+
+# Allow configuration of superuser that can access the bulk grades api
+BULK_GRADES_API_ADMIN_USERNAME = AUTH_TOKENS.get('BULK_GRADES_API_ADMIN_USERNAME', None)
