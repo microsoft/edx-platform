@@ -1,4 +1,5 @@
 import datetime
+import datetime
 import json
 
 import pytz
@@ -90,19 +91,23 @@ def _get_request_value(request, value_name, default=''):
 
 
 def is_anonim_needed(request):
-    event_type = _get_request_value(request, 'event_type')
-    event_path = request.META['PATH_INFO']
+    try:
+        event_type = _get_request_value(request, 'event_type')
+        event_path = request.META['PATH_INFO']
 
-    video_event_names = ['load_video', 'play_video', 'pause_video', 'seek_video',
-                         'speed_change_video', 'edx.video.closed_captions.shown',
-                         'edx.video.closed_captions.hidden', 'hide_transcript',
-                         'show_transcript', 'stop_video']
-    server_video_event_identifier = 'type@video+block@'
+        browser_video_event_types = ['load_video', 'play_video', 'pause_video', 'seek_video',
+                                     'speed_change_video', 'edx.video.closed_captions.shown',
+                                     'edx.video.closed_captions.hidden', 'hide_transcript',
+                                     'show_transcript', 'stop_video']
 
-    if event_type in video_event_names or server_video_event_identifier in event_path:
-        return True
+        server_video_event_identifiers = ['type@video+block@', 'type@azure_media_services+block@']
 
-    else:
+        if event_type in browser_video_event_types or server_video_event_identifiers in event_path:
+            return True
+
+        else:
+            return False
+    except:
         return False
 
 
