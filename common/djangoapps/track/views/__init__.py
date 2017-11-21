@@ -91,22 +91,22 @@ def _get_request_value(request, value_name, default=''):
 
 
 def is_anonim_needed(request):
+    """Checks if the event is coming through one of the video players"""
     try:
         event_type = _get_request_value(request, 'event_type')
         event_path = request.META['PATH_INFO']
 
-        browser_video_event_types = ['load_video', 'play_video', 'pause_video', 'seek_video',
-                                     'speed_change_video', 'edx.video.closed_captions.shown',
-                                     'edx.video.closed_captions.hidden', 'hide_transcript',
-                                     'show_transcript', 'stop_video']
+        browser_video_event_types = ['load_video', 'play_video', 'pause_video', 'seek_video', 'do_not_show_again_video',
+                                     'skip_video', 'edx.video.language_menu.shown', 'edx.video.language_menu.hidden',
+                                     'speed_change_video', 'edx.video.closed_captions.shown', 'show_transcript'
+                                     'edx.video.closed_captions.hidden', 'hide_transcript', 'stop_video']
+        server_video_event_identifiers = ['+type@azure_media_services+block@', '+type@video+block@']
 
-        server_video_event_identifiers = ['type@video+block@', 'type@azure_media_services+block@']
-
-        if event_type in browser_video_event_types or server_video_event_identifiers in event_path:
+        if event_type in browser_video_event_types or any(identifier in event_path for identifier in server_video_event_identifiers):
             return True
-
         else:
             return False
+
     except:
         return False
 
@@ -157,9 +157,14 @@ def server_track(request, event_type, event, page=None):
         return  # don't log
 
     try:
-        """ Check if request should  be anonimized """
+        """ Check if request content should  be anonimized """
         if is_anonim_needed(request):
             username = ''
+            try:
+                """WAMS is also logging for the user_id"""
+                event["user_id"] = ''
+            except:
+                pass
         else:
             username = request.user.username
     except:
