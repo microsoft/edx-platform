@@ -145,7 +145,7 @@ class TrackMiddleware(object):
             context = {
                 'session': self.get_session_key(request),
                 'user_id': self.get_user_primary_key(request),
-                'username': self.get_username(request),
+                'username': '',
                 'ip': self.get_request_ip_address(request),
             }
 
