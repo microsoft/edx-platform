@@ -51,6 +51,7 @@ matrix:
 branches:
   only:
   - master
+  - oxa/video
   - oxa/master.fic
   - oxa/release.fic
   - oxa/dev.fic
