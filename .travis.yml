@@ -55,6 +55,7 @@ branches:
   - oxa/release.fic
   - oxa/dev.fic
   - oxa/ci
+  - oxa/video
 
 before_install:
   # Login and fetch container from Azure container registry
