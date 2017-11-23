@@ -91,23 +91,28 @@ def _get_request_value(request, value_name, default=''):
 
 
 def is_anonim_needed(request):
-    """Checks if the event is coming through one of the video players"""
-    try:
-        event_type = _get_request_value(request, 'event_type')
-        event_path = request.META['PATH_INFO']
+    if request is None:
+        return False
+    if settings.FEATURES.get('SQUELCH_PII_IN_LOGS', False):
+        """Checks if the event is coming through one of the video players"""
+        try:
+            event_type = _get_request_value(request, 'event_type')
+            event_path = request.META['PATH_INFO']
 
-        browser_video_event_types = ['load_video', 'play_video', 'pause_video', 'seek_video', 'do_not_show_again_video',
-                                     'skip_video', 'edx.video.language_menu.shown', 'edx.video.language_menu.hidden',
-                                     'speed_change_video', 'edx.video.closed_captions.shown', 'show_transcript'
-                                     'edx.video.closed_captions.hidden', 'hide_transcript', 'stop_video']
-        server_video_event_identifiers = ['+type@azure_media_services+block@', '+type@video+block@']
+            browser_video_event_types = ['load_video', 'play_video', 'pause_video', 'seek_video', 'do_not_show_again_video',
+                                         'skip_video', 'edx.video.language_menu.shown', 'edx.video.language_menu.hidden',
+                                         'speed_change_video', 'edx.video.closed_captions.shown', 'show_transcript',
+                                         'edx.video.closed_captions.hidden', 'hide_transcript', 'stop_video']
+            server_video_event_identifiers = ['+type@azure_media_services+block@', '+type@video+block@']
 
-        if event_type in browser_video_event_types or any(identifier in event_path for identifier in server_video_event_identifiers):
-            return True
-        else:
+            if event_type in browser_video_event_types or any(identifier in event_path for identifier in server_video_event_identifiers):
+                return True
+            else:
+                return False
+
+        except:
             return False
-
-    except:
+    else:
         return False
 
 
@@ -136,6 +141,7 @@ def user_track(request):
     """ Check if request should  be anonimized """
     if is_anonim_needed(request):
         context_override['username'] = ''
+        context_override['user_id'] = ''
     else:
         context_override['username'] = username
     context_override['event_source'] = 'browser'
@@ -156,12 +162,14 @@ def server_track(request, event_type, event, page=None):
     if event_type.startswith("/event_logs") and request.user.is_staff:
         return  # don't log
 
+    context_override = eventtracker.get_tracker().resolve_context()
     try:
         """ Check if request content should  be anonimized """
         if is_anonim_needed(request):
             username = ''
+            context_override['user_id'] = ''
             try:
-                """WAMS is also logging for the user_id"""
+                """WAMS is also logging the user_id, strip that out as well"""
                 event["user_id"] = ''
             except:
                 pass
@@ -183,7 +191,7 @@ def server_track(request, event_type, event, page=None):
         "page": page,
         "time": datetime.datetime.utcnow(),
         "host": _get_request_header(request, 'SERVER_NAME'),
-        "context": eventtracker.get_tracker().resolve_context(),
+        "context": context_override,
     }
 
     # Some duplicated fields are passed into event-tracking via the context by track.middleware.
