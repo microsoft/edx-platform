@@ -146,17 +146,17 @@ from openedx.core.djangoapps.site_configuration import helpers as configuration_
                 </li>
                 <%
                     sites = configuration_helpers.get_lms_base_values(
-                        context_course.display_org_with_default,settings.SITE_NAME
+                        context_course.display_org_with_default,settings.FEATURES.get('PREVIEW_LMS_BASE')
                     )
                 %>
                 <li class="nav-item">
                     <select name="site_name" class="form-control site_name">
-                        % if sites != settings.SITE_NAME:
+                        % if sites != settings.FEATURES.get('PREVIEW_LMS_BASE'):
                             % for name, site in sites.items():
                                 <option value="${site}" ${'selected' if loop and loop.first else ''}>${name}</option>
                             % endfor
                         % else:
-                                <option value="${settings.SITE_NAME}" selected>${settings.SITE_NAME}</option>
+                                <option value="${settings.FEATURES.get('PREVIEW_LMS_BASE')}" selected>${settings.FEATURES.get('PREVIEW_LMS_BASE')}</option>
                         % endif
                     </select>
                 </li>
