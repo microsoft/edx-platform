@@ -149,6 +149,7 @@ from openedx.core.djangoapps.site_configuration import helpers as configuration_
                         context_course.display_org_with_default,settings.FEATURES.get('PREVIEW_LMS_BASE')
                     )
                 %>
+                % if settings.ENABLE_VIEWLIVE_DROPDOWN:
                 <li class="nav-item">
                     <select name="site_name" class="form-control site_name">
                         % if sites != settings.FEATURES.get('PREVIEW_LMS_BASE'):
@@ -160,6 +161,7 @@ from openedx.core.djangoapps.site_configuration import helpers as configuration_
                         % endif
                     </select>
                 </li>
+                % endif
             </ul>
         </nav>
     </header>
