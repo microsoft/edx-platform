@@ -233,10 +233,10 @@ def page_title_breadcrumbs(*crumbs, **kwargs):
         return platform_name
 
 
-def get_lms_base_values(org, default=None):
+def get_preview_lms_base_values(org, default=None):
     """
     This function will return a dictionary of site's display name as key
-    and LMS_BASE value as value based on org value.
+    and PREVIEW_LMS_BASE value as value based on org value.
     """
     site_dict = {}
     for site in Site.objects.all():

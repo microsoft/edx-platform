@@ -333,7 +333,7 @@ from openedx.core.djangolib.markup import HTML, Text
 
             <ul  class="item-actions course-actions">
 	      <%
-	          sites = configuration_helpers.get_lms_base_values(course_info['org'],settings.FEATURES.get('PREVIEW_LMS_BASE'))
+	          sites = configuration_helpers.get_preview_lms_base_values(course_info['org'],settings.FEATURES.get('PREVIEW_LMS_BASE'))
 	      %>
 	      <li class="action">
 	        <select name="site_name" class="form-control site_name">

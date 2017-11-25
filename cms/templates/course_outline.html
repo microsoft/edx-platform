@@ -145,7 +145,7 @@ from openedx.core.djangoapps.site_configuration import helpers as configuration_
                        title="${_('Click to open the courseware in the LMS in a new tab')}">${_("View Live")}</a>
                 </li>
                 <%
-                    sites = configuration_helpers.get_lms_base_values(
+                    sites = configuration_helpers.get_preview_lms_base_values(
                         context_course.display_org_with_default,settings.FEATURES.get('PREVIEW_LMS_BASE')
                     )
                 %>
