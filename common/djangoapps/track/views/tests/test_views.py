@@ -203,6 +203,7 @@ class TestTrackViews(EventTrackingTestCase):
     )
     @override_settings(FEATURES={'SQUELCH_PII_IN_LOGS': True})
     def test_anonimize_video_user_track(self):
+        """Tests if the user_id and username are anonimized for the video events from the browser source"""
         browser_video_event_types = ['load_video', 'play_video', 'pause_video', 'seek_video', 'do_not_show_again_video',
                                      'skip_video', 'edx.video.language_menu.shown', 'edx.video.language_menu.hidden',
                                      'speed_change_video', 'edx.video.closed_captions.shown', 'show_transcript',
@@ -256,6 +257,7 @@ class TestTrackViews(EventTrackingTestCase):
     )
     @override_settings(FEATURES={'SQUELCH_PII_IN_LOGS': True})
     def test_anonimize_video_server_track(self):
+        """Tests if the user_id(both in context and event information for WAMS player) and username are anonimized for the video events from the server source"""
         middleware = TrackMiddleware()
         user_id = 1
         payload = dict()
@@ -269,7 +271,7 @@ class TestTrackViews(EventTrackingTestCase):
         request = self.request_factory.post(path, {
             'page': self.url_with_course,
             'event_type': str(sentinel.event_type),
-            'event': '{}'
+            'event': payload
         })
         request.user = User.objects.create(pk=user_id, username=str(sentinel.username))
         request.META['REMOTE_ADDR'] = '10.0.0.1'
