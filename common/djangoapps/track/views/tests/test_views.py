@@ -1,7 +1,7 @@
 # pylint: disable=missing-docstring,maybe-no-member
 
-from random import randint
 from mock import patch, sentinel
+from random import randint
 
 from django.contrib.auth.models import User
 from django.test.client import RequestFactory

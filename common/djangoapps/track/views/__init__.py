@@ -1,5 +1,4 @@
 import datetime
-import datetime
 import json
 
 import pytz
@@ -91,6 +90,7 @@ def _get_request_value(request, value_name, default=''):
 
 
 def is_anonim_needed(request):
+    """Checks if an event should be anonimized, currently we are only anonimizing video events"""
     if request is None:
         return False
     if settings.FEATURES.get('SQUELCH_PII_IN_LOGS', False):
@@ -169,7 +169,7 @@ def server_track(request, event_type, event, page=None):
             username = ''
             context_override['user_id'] = ''
             try:
-                """WAMS is also logging the user_id, strip that out as well"""
+                """WAMS is also logging the user_id, anonimize that as well"""
                 event["user_id"] = ''
             except:
                 pass
