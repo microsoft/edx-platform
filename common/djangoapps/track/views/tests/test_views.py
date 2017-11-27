@@ -204,12 +204,7 @@ class TestTrackViews(EventTrackingTestCase):
     @override_settings(FEATURES={'SQUELCH_PII_IN_LOGS': True})
     def test_anonimize_video_user_track(self):
         """Tests if the user_id and username are anonimized for the video events from the browser source"""
-        browser_video_event_types = ['load_video', 'play_video', 'pause_video', 'seek_video', 'do_not_show_again_video',
-                                     'skip_video', 'edx.video.language_menu.shown', 'edx.video.language_menu.hidden',
-                                     'speed_change_video', 'edx.video.closed_captions.shown', 'show_transcript',
-                                     'edx.video.closed_captions.hidden', 'hide_transcript', 'stop_video']
-
-        event_type = str(browser_video_event_types[randint(0, 13)])
+        event_type = str(views.BROWSER_VIDEO_EVENT_TYPES[randint(0, 13)])
 
         self.recreate_tracker()
 

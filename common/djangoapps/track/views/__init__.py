@@ -89,29 +89,30 @@ def _get_request_value(request, value_name, default=''):
     return default
 
 
-def is_anonim_needed(request):
+BROWSER_VIDEO_EVENT_TYPES = ['load_video', 'play_video', 'pause_video', 'seek_video', 'do_not_show_again_video',
+                            'skip_video', 'edx.video.language_menu.shown', 'edx.video.language_menu.hidden',
+                            'speed_change_video', 'edx.video.closed_captions.shown', 'show_transcript',
+                            'edx.video.closed_captions.hidden', 'hide_transcript', 'stop_video']
+
+
+SERVER_VIDEO_EVENT_IDENTIFIERS = ['+type@azure_media_services+block@', '+type@video+block@']
+
+
+def is_anonimization_needed(request, default=''):
     """Checks if an event should be anonimized, currently we are only anonimizing video events"""
     if request is None:
         return False
     if settings.FEATURES.get('SQUELCH_PII_IN_LOGS', False):
         """Checks if the event is coming through one of the video players"""
-        try:
-            event_type = _get_request_value(request, 'event_type')
-            event_path = request.META['PATH_INFO']
+        event_type = _get_request_value(request, 'event_type')
+        if hasattr(request, 'META'):
+            event_path = request.META.get('PATH_INFO', default)
+        else:
+            event_path = ''
 
-            browser_video_event_types = ['load_video', 'play_video', 'pause_video', 'seek_video', 'do_not_show_again_video',
-                                         'skip_video', 'edx.video.language_menu.shown', 'edx.video.language_menu.hidden',
-                                         'speed_change_video', 'edx.video.closed_captions.shown', 'show_transcript',
-                                         'edx.video.closed_captions.hidden', 'hide_transcript', 'stop_video']
-            server_video_event_identifiers = ['+type@azure_media_services+block@', '+type@video+block@']
+        return event_type in BROWSER_VIDEO_EVENT_TYPES or any(
+            identifier in event_path for identifier in SERVER_VIDEO_EVENT_IDENTIFIERS)
 
-            if event_type in browser_video_event_types or any(identifier in event_path for identifier in server_video_event_identifiers):
-                return True
-            else:
-                return False
-
-        except:
-            return False
     else:
         return False
 
@@ -139,7 +140,7 @@ def user_track(request):
 
     context_override = contexts.course_context_from_url(page)
     """ Check if request should  be anonimized """
-    if is_anonim_needed(request):
+    if is_anonimization_needed(request):
         context_override['username'] = ''
         context_override['user_id'] = ''
     else:
@@ -165,14 +166,14 @@ def server_track(request, event_type, event, page=None):
     context_override = eventtracker.get_tracker().resolve_context()
     try:
         """ Check if request content should  be anonimized """
-        if is_anonim_needed(request):
+        if is_anonimization_needed(request):
             username = ''
             context_override['user_id'] = ''
-            try:
-                """WAMS is also logging the user_id, anonimize that as well"""
-                event["user_id"] = ''
-            except:
-                pass
+            context_override['username'] = ''
+            if isinstance(event, dict):
+                """WAMS is logging the user_id for events that are triggered from the media player, if that is the case anonimize that as well"""
+                if 'user_id' in event:
+                    event['user_id'] = ''
         else:
             username = request.user.username
     except:
