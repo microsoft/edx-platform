@@ -230,9 +230,9 @@ class TestTrackViews(EventTrackingTestCase):
             views.user_track(request)
 
             expected_event = {
-                'username': '', # expect username to be anonimized
+                'username': '',  # expect username to be anonimized
                 'session': '',
-                'ip': '10.0.x.x', # expect ip address to be anonimized
+                'ip': '10.0.x.x',  # expect ip address to be anonimized
                 'event_source': 'browser',
                 'event_type': event_type,
                 'name': event_type,
