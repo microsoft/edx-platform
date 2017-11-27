@@ -1244,4 +1244,4 @@ RETRY_ACTIVATION_EMAIL_TIMEOUT = 0.5
 USER_TASKS_MAX_AGE = timedelta(days=7)
 
 # this setting will enable dropdown with site names, used in multi sites with multiple org scenarios
-ENABLE_VIEWLIVE_DROPDOWN = False
+ENABLE_MULTI_SITE_VIEWLIVE_DROPDOWN = False
