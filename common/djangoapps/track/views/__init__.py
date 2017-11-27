@@ -98,8 +98,8 @@ BROWSER_VIDEO_EVENT_TYPES = ['load_video', 'play_video', 'pause_video', 'seek_vi
 SERVER_VIDEO_EVENT_IDENTIFIERS = ['+type@azure_media_services+block@', '+type@video+block@']
 
 
-def is_anonimization_needed(request, default=''):
-    """Checks if an event should be anonimized, currently we are only anonimizing video events"""
+def is_anonymization_needed(request, default=''):
+    """Checks if an event should be anonymized, currently we are only anonymizing video events"""
     if request is None:
         return False
     if settings.FEATURES.get('SQUELCH_PII_IN_LOGS', False):
@@ -139,8 +139,8 @@ def user_track(request):
             pass
 
     context_override = contexts.course_context_from_url(page)
-    """ Check if request should  be anonimized """
-    if is_anonimization_needed(request):
+    """ Check if request should  be anonymized """
+    if is_anonymization_needed(request):
         context_override['username'] = ''
         context_override['user_id'] = ''
     else:
@@ -165,13 +165,13 @@ def server_track(request, event_type, event, page=None):
 
     context_override = eventtracker.get_tracker().resolve_context()
     try:
-        """ Check if request content should  be anonimized """
-        if is_anonimization_needed(request):
+        """Check if request content should  be anonymized"""
+        if is_anonymization_needed(request):
             username = ''
             context_override['user_id'] = ''
             context_override['username'] = ''
             if isinstance(event, dict):
-                """WAMS is logging the user_id for events that are triggered from the media player, if that is the case anonimize that as well"""
+                """WAMS is logging the user_id for events that are triggered from the media player, if that is the case anonyimize that as well"""
                 if 'user_id' in event:
                     event['user_id'] = ''
         else:

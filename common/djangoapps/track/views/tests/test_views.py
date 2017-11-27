@@ -202,8 +202,8 @@ class TestTrackViews(EventTrackingTestCase):
         EVENT_TRACKING_PROCESSORS=[{'ENGINE': 'track.shim.LegacyFieldMappingProcessor'}],
     )
     @override_settings(FEATURES={'SQUELCH_PII_IN_LOGS': True})
-    def test_anonimize_video_user_track(self):
-        """Tests if the user_id and username are anonimized for the video events from the browser source"""
+    def test_anonymize_video_user_track(self):
+        """Tests if the user_id and username are anonymized for the video events from the browser source"""
         event_type = str(views.BROWSER_VIDEO_EVENT_TYPES[randint(0, 13)])
 
         self.recreate_tracker()
@@ -225,9 +225,9 @@ class TestTrackViews(EventTrackingTestCase):
             views.user_track(request)
 
             expected_event = {
-                'username': '',  # expect username to be anonimized
+                'username': '',  # expect username to be anonymized
                 'session': '',
-                'ip': '10.0.x.x',  # expect ip address to be anonimized
+                'ip': '10.0.x.x',  # expect ip address to be anonymized
                 'event_source': 'browser',
                 'event_type': event_type,
                 'name': event_type,
@@ -237,7 +237,7 @@ class TestTrackViews(EventTrackingTestCase):
                 'context': {
                     'course_id': 'foo/bar/baz',
                     'org_id': 'foo',
-                    'user_id': '',  # expect user id to be anonimized
+                    'user_id': '',  # expect user id to be anonymized
                     'path': u'/event'
                 },
             }
@@ -251,8 +251,8 @@ class TestTrackViews(EventTrackingTestCase):
         EVENT_TRACKING_PROCESSORS=[{'ENGINE': 'track.shim.LegacyFieldMappingProcessor'}],
     )
     @override_settings(FEATURES={'SQUELCH_PII_IN_LOGS': True})
-    def test_anonimize_video_server_track(self):
-        """Tests if the user_id(both in context and event information for WAMS player) and username are anonimized for the video events from the server source"""
+    def test_anonymize_video_server_track(self):
+        """Tests if the user_id(both in context and event information for WAMS player) and username are anonymized for the video events from the server source"""
         middleware = TrackMiddleware()
         user_id = 1
         payload = dict()
