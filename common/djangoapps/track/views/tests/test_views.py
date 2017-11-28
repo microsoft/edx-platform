@@ -200,8 +200,8 @@ class TestTrackViews(EventTrackingTestCase):
 
     @override_settings(
         EVENT_TRACKING_PROCESSORS=[{'ENGINE': 'track.shim.LegacyFieldMappingProcessor'}],
+        FEATURES={'SQUELCH_PII_IN_LOGS': True}
     )
-    @override_settings(FEATURES={'SQUELCH_PII_IN_LOGS': True})
     def test_anonymize_video_user_track(self):
         """Tests if the user_id and username are anonymized for the video events from the browser source"""
         event_type = str(views.BROWSER_VIDEO_EVENT_TYPES[randint(0, 13)])
@@ -249,8 +249,8 @@ class TestTrackViews(EventTrackingTestCase):
 
     @override_settings(
         EVENT_TRACKING_PROCESSORS=[{'ENGINE': 'track.shim.LegacyFieldMappingProcessor'}],
+        FEATURES={'SQUELCH_PII_IN_LOGS': True}
     )
-    @override_settings(FEATURES={'SQUELCH_PII_IN_LOGS': True})
     def test_anonymize_video_server_track(self):
         """Tests if the user_id(both in context and event information for WAMS player) and username are anonymized for the video events from the server source"""
         middleware = TrackMiddleware()
