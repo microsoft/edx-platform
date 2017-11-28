@@ -124,6 +124,10 @@ def user_track(request):
     """
     try:
         username = request.user.username
+
+        if settings.FEATURES.get('SQUELCH_PII_IN_LOGS', False):
+            username = ''
+
     except:
         username = "anonymous"
 
@@ -138,12 +142,11 @@ def user_track(request):
             pass
 
     context_override = contexts.course_context_from_url(page)
-    """ Check if request should  be anonymized """
+    """Check if this is an event(e.g. video) that needs anonymization"""
     if is_anonymization_needed(request):
-        context_override['username'] = ''
         context_override['user_id'] = ''
-    else:
-        context_override['username'] = username
+
+    context_override['username'] = username
     context_override['event_source'] = 'browser'
     context_override['page'] = page
 
@@ -164,17 +167,19 @@ def server_track(request, event_type, event, page=None):
 
     context_override = eventtracker.get_tracker().resolve_context()
     try:
-        """Check if request content should  be anonymized"""
-        if is_anonymization_needed(request):
+        username = request.user.username
+        """Check if we want to keep username"""
+        if settings.FEATURES.get('SQUELCH_PII_IN_LOGS', False):
             username = ''
-            context_override['user_id'] = ''
             context_override['username'] = ''
+
+        """Check if this is an event(e.g. video) that needs anonymization"""
+        if is_anonymization_needed(request):
+            context_override['user_id'] = ''
             if isinstance(event, dict):
                 """WAMS is logging the user_id for events that are triggered from the media player, if that is the case anonyimize that as well"""
                 if 'user_id' in event:
                     event['user_id'] = ''
-        else:
-            username = request.user.username
     except:
         username = "anonymous"
 
