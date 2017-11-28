@@ -39,7 +39,7 @@ def get_request_ip(request):
 
 
 def _get_request_ip(request, default=''):
-        """
+    """
         Helper method to get IP from a request's META dict, if present.
         If SQUELCH_PII_IN_LOGS is True:
         Anonymize the ip address to the first two octets.
@@ -47,24 +47,24 @@ def _get_request_ip(request, default=''):
         without explicitly identifying user
             e.g. 127.0.0.1 => 127.0.X.X
         """
-        if request is None:
-            return default
+    if request is None:
+        return default
 
-        def _anonymize_if_needed(ip_address_str):
-            if settings.FEATURES.get('SQUELCH_PII_IN_LOGS', False):
-                return _get_anonymous_ip(ip_address_str)
-            else:
-                return ip_address_str
-
-        if hasattr(request, 'META'):
-            ip_address = get_ip(request)
-            request_ip = _anonymize_if_needed(ip_address)
-        elif request.get('ip'):
-            request_ip = _anonymize_if_needed(request.get('ip'))
+    def _anonymize_if_needed(ip_address_str):
+        if settings.FEATURES.get('SQUELCH_PII_IN_LOGS', False):
+            return _get_anonymous_ip(ip_address_str)
         else:
-            request_ip = default
+            return ip_address_str
 
-        return request_ip
+    if hasattr(request, 'META'):
+        ip_address = get_ip(request)
+        request_ip = _anonymize_if_needed(ip_address)
+    elif request.get('ip'):
+        request_ip = _anonymize_if_needed(request.get('ip'))
+    else:
+        request_ip = default
+
+    return request_ip
 
 
 def _get_anonymous_ip(ip_address_str):
@@ -90,10 +90,9 @@ def _get_request_value(request, value_name, default=''):
 
 
 BROWSER_VIDEO_EVENT_TYPES = ['load_video', 'play_video', 'pause_video', 'seek_video', 'do_not_show_again_video',
-                            'skip_video', 'edx.video.language_menu.shown', 'edx.video.language_menu.hidden',
-                            'speed_change_video', 'edx.video.closed_captions.shown', 'show_transcript',
-                            'edx.video.closed_captions.hidden', 'hide_transcript', 'stop_video']
-
+                             'skip_video', 'edx.video.language_menu.shown', 'edx.video.language_menu.hidden',
+                             'speed_change_video', 'edx.video.closed_captions.shown', 'show_transcript',
+                             'edx.video.closed_captions.hidden', 'hide_transcript', 'stop_video']
 
 SERVER_VIDEO_EVENT_IDENTIFIERS = ['+type@azure_media_services+block@', '+type@video+block@']
 
