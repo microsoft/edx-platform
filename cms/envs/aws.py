@@ -476,3 +476,8 @@ AFFILIATE_COOKIE_NAME = ENV_TOKENS.get('AFFILIATE_COOKIE_NAME', AFFILIATE_COOKIE
 ############## Settings for Studio Context Sensitive Help ##############
 
 DOC_LINK_BASE_URL = ENV_TOKENS.get('DOC_LINK_BASE_URL', DOC_LINK_BASE_URL)
+
+############# Enable viewlive drop down for courses ####################
+
+# this setting will enable dropdown with site names, used in multi sites with multiple org scenarios
+ENABLE_MULTI_SITE_VIEWLIVE_DROPDOWN = ENV_TOKENS.get('ENABLE_MULTI_SITE_VIEWLIVE_DROPDOWN', False)
