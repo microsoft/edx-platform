@@ -90,9 +90,9 @@ def _get_request_value(request, value_name, default=''):
 
 
 BROWSER_VIDEO_EVENT_TYPES = ['load_video', 'play_video', 'pause_video', 'seek_video', 'do_not_show_again_video',
-                             'skip_video', 'edx.video.language_menu.shown', 'edx.video.language_menu.hidden',
-                             'speed_change_video', 'edx.video.closed_captions.shown', 'show_transcript',
-                             'edx.video.closed_captions.hidden', 'hide_transcript', 'stop_video']
+    'skip_video', 'edx.video.language_menu.shown', 'edx.video.language_menu.hidden',
+    'speed_change_video', 'edx.video.closed_captions.shown', 'show_transcript',
+    'edx.video.closed_captions.hidden', 'hide_transcript', 'stop_video']
 
 SERVER_VIDEO_EVENT_IDENTIFIERS = ['+type@azure_media_services+block@', '+type@video+block@']
 
@@ -107,10 +107,11 @@ def is_anonymization_needed(request, default=''):
         if hasattr(request, 'META'):
             event_path = request.META.get('PATH_INFO', default)
         else:
-            event_path = ''
+            event_path = default
 
         return event_type in BROWSER_VIDEO_EVENT_TYPES or any(
-            identifier in event_path for identifier in SERVER_VIDEO_EVENT_IDENTIFIERS)
+            identifier in event_path for identifier in SERVER_VIDEO_EVENT_IDENTIFIERS
+        )
 
     else:
         return False
@@ -233,9 +234,17 @@ def task_track(request_info, task_info, event_type, event, page=None):
     # All fields must be specified, in case the tracking information is
     # also saved to the TrackingLog model.  Get values from the task-level
     # information, or just add placeholder values.
+
     with eventtracker.get_tracker().context('edx.course.task', contexts.course_context_from_url(page)):
+        username = request_info.get('username', 'unknown')
+        context_override = eventtracker.get_tracker().resolve_context()
+
+        if settings.FEATURES.get('SQUELCH_PII_IN_LOGS', False):
+            username = ''
+            context_override['username'] = username
+
         event = {
-            "username": request_info.get('username', 'unknown'),
+            "username": username,
             "ip": _get_request_ip(request_info, 'unknown'),
             "event_source": "task",
             "event_type": event_type,
@@ -244,7 +253,7 @@ def task_track(request_info, task_info, event_type, event, page=None):
             "page": page,
             "time": datetime.datetime.utcnow(),
             "host": request_info.get('host', 'unknown'),
-            "context": eventtracker.get_tracker().resolve_context(),
+            "context": context_override,
         }
 
     log_event(event)
