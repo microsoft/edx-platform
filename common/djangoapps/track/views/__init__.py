@@ -90,9 +90,9 @@ def _get_request_value(request, value_name, default=''):
 
 
 BROWSER_VIDEO_EVENT_TYPES = ['load_video', 'play_video', 'pause_video', 'seek_video', 'do_not_show_again_video',
-    'skip_video', 'edx.video.language_menu.shown', 'edx.video.language_menu.hidden',
-    'speed_change_video', 'edx.video.closed_captions.shown', 'show_transcript',
-    'edx.video.closed_captions.hidden', 'hide_transcript', 'stop_video']
+                             'skip_video', 'edx.video.language_menu.shown', 'edx.video.language_menu.hidden',
+                             'speed_change_video', 'edx.video.closed_captions.shown', 'show_transcript',
+                             'edx.video.closed_captions.hidden', 'hide_transcript', 'stop_video']
 
 SERVER_VIDEO_EVENT_IDENTIFIERS = ['+type@azure_media_services+block@', '+type@video+block@']
 
