@@ -110,21 +110,11 @@ class LoginRequiredMiddleware:
             if not any(m.match(path) for m in EXEMPT_URLS):
                 return login_required(view_func)(request, view_args, view_kwargs)
 
-class AccountLinkingMiddleware:
+class AccountLinkingMiddleware(object):
     """
     Middleware that requires to enable users to linked their account with edx user account
     other than ACCOUNT_LINK if user is authenticated.
     """
-
-    def __init__(self):
-        self.ACCOUNT_LINK_URL = '/account/link'
-        self.DEFAULT_ACCOUNT_LINK_EXEMPT_URLS = [
-            r'^account/link.*$',
-            r'^account/settings.*$',
-            r'^auth/.*$',
-            r'^admin.*$',
-            r'^logout.*$'
-        ]
 
     def process_view(self, request, view_func, view_args, view_kwargs):
         """
@@ -132,7 +122,7 @@ class AccountLinkingMiddleware:
         from accessing pages, wrap the next view with the django login_required middleware
         """
 
-        enable_msa_migration = configuration_helpers.get_value("ENABLE_MSA_MIGRATION")
+        enable_msa_migration = configuration_helpers.get_value("ENABLE_MSA_MIGRATION", settings.ENABLE_MSA_MIGRATION)
         if request.user.is_authenticated() and enable_msa_migration:
             is_redirection = None
             try:
@@ -141,7 +131,8 @@ class AccountLinkingMiddleware:
             except UserSocialAuth.DoesNotExist:
                 is_redirection = True
             if is_redirection:
+                account_linking_redirect_urls = configuration_helpers.get_value("DEFAULT_ACCOUNT_LINK_REDIRECT_URLS", settings.DEFAULT_ACCOUNT_LINK_REDIRECT_URLS)
                 path = request.path_info.lstrip('/')
-                EXEMPT_URLS = [compile(expr) for expr in self.DEFAULT_ACCOUNT_LINK_EXEMPT_URLS]
-                if not any(m.match(path) for m in EXEMPT_URLS):
-                    return redirect(self.ACCOUNT_LINK_URL)
+                REDIRECT_URLS = [compile(expr) for expr in account_linking_redirect_urls]
+                if any(m.match(path) for m in REDIRECT_URLS):
+                    return redirect(settings.ACCOUNT_LINK_URL)
