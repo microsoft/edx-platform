@@ -596,8 +596,8 @@ def dashboard(request):
 
     """
     user = request.user
-    provider_id = request.GET.get('provider', '')
-    if provider_id == configuration_helpers.get_value('SOCIAL_OAUTH_MSA_PROVIDER'):
+    enable_msa_migration = configuration_helpers.get_value("ENABLE_MSA_MIGRATION")
+    if enable_msa_migration:
         is_redirection = None
         try:
             # Check to see user social entry for this user

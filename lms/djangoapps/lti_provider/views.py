@@ -3,7 +3,7 @@ LTI Provider view functions
 """
 
 from django.conf import settings
-from django.http import HttpResponseBadRequest, HttpResponseForbidden, Http404, HttpResponse
+from django.http import HttpResponseBadRequest, HttpResponseForbidden, Http404, HttpResponse, HttpResponseNotAllowed
 from django.views.decorators.csrf import csrf_exempt
 import logging
 
@@ -15,6 +15,8 @@ from opaque_keys.edx.keys import CourseKey, UsageKey
 from opaque_keys import InvalidKeyError
 from openedx.core.lib.url_utils import unquote_slashes
 from util.views import add_p3p_header
+from social.apps.django_app.default.models import UserSocialAuth
+from third_party_auth.models import UserSocialAuthMapping
 
 log = logging.getLogger("edx.lti_provider")
 
@@ -219,15 +221,16 @@ def users_social_auth_mapping(request):
     if not SignatureValidator(lti_consumer).verify(request):
         return HttpResponseForbidden()
 
+    provider = params["provider"]
+    uid = params["uid"]
+    puid = params["puid"]
+
     # First verify the mapping is already exist sanity check
     try:
         usersocialauth_mapping = UserSocialAuthMapping.objects.get(uid=uid, puid=puid)
         return HttpResponse(status=200)
     except UserSocialAuthMapping.DoesNotExist:
         pass
-    provider = params["provider"]
-    uid = params["uid"]
-    puid = params["puid"]
 
     # Check user social auth entry for uid and provider i.e. live
     try:
