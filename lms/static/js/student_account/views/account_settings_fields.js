@@ -335,9 +335,43 @@
                     this.delegateEvents();
                     return this;
                 }
-            })
-        };
+            }),
 
+            DeleteUserAccountField: FieldViews.LinkFieldView.extend({
+                fieldType: 'button',
+                fieldTemplate: field_link_account_template,
+                events: {
+                    'click button': 'confirmDelete'
+                },
+                confirmDelete: function(options) {
+                    var view = this;
+                    $("#accessibile-confirm-modal #confirm_open_button").click();
+                    $("#accessibile-confirm-modal .message").text(
+                        "This is an irreversible action. " +
+                         "After confirming deletion your " + 
+                         "access to the account will be revoked permanently. " +
+                         "Are you sure you want to proceed?");
+                    $("#accessibile-confirm-modal .ok-button").click(function(){
+                        $.ajax({
+                            type: 'POST',
+                            url: "/account/delete_account",
+                            data: "{}",
+                           dataType: "json",
+                            success: function(data, status) {
+                                window.location.href = "/logout";
+                            },
+                            error: function(xhr) {
+                                view.showErrorMessage(xhr);
+                            }
+                        });
+                    });
+                    $("#accessibile-confirm-modal .cancel-button").click(function(){
+                        $("#accessibile-confirm-modal .close-modal").click();
+                    });
+                    return this;
+                }
+            }),
+        };
         return AccountSettingsFieldViews;
     });
 }).call(this, define || RequireJS.define);

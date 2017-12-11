@@ -30,6 +30,8 @@ from openedx.core.djangolib.js_utils import dump_js_escaped_json, js_escaped_str
     <%static:css group='style-course'/>
 </%block>
 
+<%include file='/modal/accessible_confirm.html' />
+
 <%block name="js_extra">
 <%static:require_module module_name="js/student_account/views/account_settings_factory" class_name="AccountSettingsFactory">
     var fieldsData = ${ fields | n, dump_js_escaped_json },
@@ -48,3 +50,4 @@ from openedx.core.djangolib.js_utils import dump_js_escaped_json, js_escaped_str
     );
 </%static:require_module>
 </%block>
+

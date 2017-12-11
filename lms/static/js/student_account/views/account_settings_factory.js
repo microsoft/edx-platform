@@ -164,6 +164,20 @@
                                 options: fieldsData.preferred_language.options,
                                 persistChanges: true
                             })
+                        },
+                    ]
+                },
+                {
+                    title: gettext('Critical Account Settings'),
+                    fields: [
+                        {
+                            view: new AccountSettingsFieldViews.DeleteUserAccountField({
+                                model: userAccountModel,
+                                title: gettext('Delete Account'),
+                                valueAttribute: 'delete_account',
+                                linkTitle: gettext('Delete My Account'),
+                                helpMessage: gettext('Caution : This will terminate your access and progress for all courses. You will no longer be able to login to the platform after deletion of account.')
+                            })
                         }
                     ]
                 }

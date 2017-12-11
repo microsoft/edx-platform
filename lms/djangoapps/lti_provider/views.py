@@ -14,6 +14,7 @@ from lti_provider.users import authenticate_lti_user
 from opaque_keys.edx.keys import CourseKey, UsageKey
 from opaque_keys import InvalidKeyError
 from openedx.core.lib.url_utils import unquote_slashes
+from openedx.core.djangoapps.user_api.accounts.api import delete_user_account
 from util.views import add_p3p_header
 from social.apps.django_app.default.models import UserSocialAuth
 from third_party_auth.models import UserSocialAuthMapping
@@ -242,6 +243,59 @@ def users_social_auth_mapping(request):
     try:
         usersocialauth_mapping = UserSocialAuthMapping(uid=uid, puid=puid, user_id=user_id)
         usersocialauth_mapping.save()
+    except Exception:
+        raise Http404
+    return HttpResponse(status=204)
+
+@csrf_exempt
+def users_delete(request):
+    """
+    Endpoint for all requests to embed edX content via the LTI protocol. This
+    endpoint will be called by a POST message that contains the parameters for
+    an LTI launch (we support version 1.2 of the LTI specification):
+        http://www.imsglobal.org/lti/ltiv1p2/ltiIMGv1p2.html
+
+    An LTI launch is successful if:
+        - The launch contains all the required parameters
+        - The launch data is correctly signed using a known client key/secret
+          pair
+    """
+    if request.method != 'POST':
+        return HttpResponseNotAllowed('POST')
+
+    # Check the LTI parameters, and return 400 if any required parameters are
+    # missing
+    params = get_required_social_auth_parameters(request.POST)
+    if not params:
+        return HttpResponseBadRequest()
+
+    # Get the consumer information from either the instance GUID or the consumer key
+    try:
+        lti_consumer = LtiConsumer.get_or_supplement(None, params["oauth_consumer_key"])
+    except LtiConsumer.DoesNotExist:
+        return HttpResponseForbidden()
+
+    # Check the OAuth signature on the message
+    if not SignatureValidator(lti_consumer).verify(request):
+        return HttpResponseForbidden()
+
+    # First verify the mapping is already exist sanity check
+    try:
+        usersocialauth_mapping = UserSocialAuthMapping.objects.get(uid=uid, puid=puid)
+        return HttpResponse(status=200)
+    except UserSocialAuthMapping.DoesNotExist:
+        pass
+    uid = params["uid"]
+
+    # Check user social auth entry for uid and provider i.e. live
+    try:
+        usersocialauth = UserSocialAuth.objects.get(uid=uid, provider=provider)
+    except UserSocialAuth.DoesNotExist:
+        raise Http404
+
+    user_id = usersocialauth.user_id
+    try:
+        delete_user_account(user_id)
     except Exception:
         raise Http404
     return HttpResponse(status=204)

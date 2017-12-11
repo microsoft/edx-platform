@@ -34,7 +34,7 @@ from openedx.core.djangoapps.lang_pref.api import released_languages, all_langua
 from openedx.core.djangoapps.programs.models import ProgramsApiConfig
 from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 from openedx.core.djangoapps.theming.helpers import is_request_in_themed_site
-from openedx.core.djangoapps.user_api.accounts.api import request_password_change
+from openedx.core.djangoapps.user_api.accounts.api import request_password_change, delete_user_account
 from openedx.core.djangoapps.user_api.errors import UserNotFound
 from openedx.core.lib.time_zone_utils import TIME_ZONE_CHOICES
 from openedx.core.lib.edx_api_utils import get_edx_api_data
@@ -385,6 +385,30 @@ def account_settings(request):
 
     """
     return render_to_response('student_account/account_settings.html', account_settings_context(request))
+
+@login_required
+@require_http_methods(['POST'])
+@ensure_csrf_cookie
+def delete_account(request):
+    """Deletes the current user's account.
+
+    Args:
+        request (HttpRequest)
+
+    Returns:
+        HttpResponse: 200 if the user was deleted successfully
+        HttpResponse: 405 if using an unsupported HTTP method
+
+    Example usage:
+
+        POST /account/delete_account/
+
+    """
+    del_status = json.dumps({
+        "del_user":delete_user_account(request.user.id)
+    })
+
+    return HttpResponse(del_status, content_type="application/json")
 
 
 @login_required
