@@ -12,7 +12,7 @@ urlpatterns = (
     url(r'^t/(?P<template>[^/]*)$', 'index'),
 
     # Semi-static views (these need to be rendered and have the login bar, but don't change)
-    url(r'^404$', 'render', {'template': '404.html'}, name="404"),
+    url(r'^404$', 'render', {'template': 'static_templates/404.html'}, name="404"),
     # display error page templates, for testing purposes
     url(r'^404$', 'render_404'),  # Can this be deleted? Test test_404_microsites fails with this.
     url(r'^500$', 'render_500'),
