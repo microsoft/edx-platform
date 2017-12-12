@@ -48,7 +48,7 @@ def render(request, template):
     try:
         return render_to_response('static_templates/' + template, {}, content_type=content_type)
     except TopLevelLookupException:
-        raise Http404
+        return HttpResponseNotFound(render_to_string('static_templates/404.html', {}, request=request))
 
 
 @ensure_csrf_cookie
@@ -71,7 +71,7 @@ def render_press_release(request, slug):
 
 
 def render_404(request):
-    return HttpResponseNotFound(render_to_string('static_templates/404.html', {}, request=request))
+    return redirect('/404')
 
 
 def render_500(request):
