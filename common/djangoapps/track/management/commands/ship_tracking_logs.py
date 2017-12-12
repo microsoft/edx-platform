@@ -5,6 +5,7 @@ from os.path import isfile, join
 
 from optparse import make_option
 
+from django.conf import settings
 from django.core.management.base import BaseCommand
 
 from openedx.core.storage import get_storage
@@ -57,6 +58,11 @@ class Command(BaseCommand):
     basis, e.g. daily, hourly, etc. After the system managed logrotation, this
     django command can be trigger to upload rotated out files to remote storage.
     """
+
+    # Default to the Azure backend
+    config = settings.VERIFY_STUDENT["SOFTWARE_SECURE"]
+    storage_class = config.get("STORAGE_CLASS", "openedx.core.storage.AzureStorageExtended")
+
     option_list = BaseCommand.option_list + (
         make_option('-p', '--path',
                     metavar='PATH',
@@ -76,8 +82,8 @@ class Command(BaseCommand):
         make_option('-s', '--storage',
                     metavar='STORAGE',
                     dest='storage',
-                    # default to Azure blob storage
-                    default='openedx.core.storage.AzureStorageExtended',
+                    # Azure blob storage for STAMP and local file system for onebox
+                    default=storage_class,
                     help='Which storage class to use'),
         make_option('-o', '--overwrite',
                     metavar='OVERWRITE',
