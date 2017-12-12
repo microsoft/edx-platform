@@ -1,9 +1,15 @@
 """
 Programmatic integration point for User API Accounts sub-application
 """
+import os
+import random
+import pymongo
+from pymongo import MongoClient
+from pymongo.operations import UpdateOne
 from django.utils.translation import ugettext as _
 from django.db import transaction, IntegrityError
 import datetime
+import hashlib
 from pytz import UTC
 from django.core.exceptions import ObjectDoesNotExist
 from django.conf import settings
@@ -404,6 +410,129 @@ def request_password_change(email, is_secure):
     else:
         # No user with the provided email address exists.
         raise UserNotFound
+
+
+@intercept_errors(UserAPIInternalError, ignore_errors=[UserAPIRequestError])
+def delete_user_account(userid):
+    """Delete an account for a particular user with GDPR norms.
+
+    Keyword Arguments:
+        username (unicode)
+
+    Returns:
+        True for deletion.
+
+    Raises:
+        UserNotAuthorized
+        UserNotFound
+
+    Example Usage:
+        >>>delete_user_account('staff')
+
+    """
+
+    # User anonymizing
+    try:
+        username = User.objects.get(id=userid).username
+    except Exception:
+        raise UserNotFound()
+    existing_user, existing_user_profile = _get_user_and_profile(username)
+    if not existing_user:
+        raise UserNotFound()
+    if not existing_user.is_active:
+        raise UserNotAuthorized()
+    username_mask = str(random.randint(1, 9999)) + username
+    existing_user.username = hashlib.md5(username_mask).hexdigest()
+    existing_user.email = existing_user.username + "@deleteduser.com"
+    existing_user.is_active = False
+    existing_user.is_staff = False
+    existing_user.save()
+
+    # User profile deletion
+    try:
+        existing_user_profile.delete()
+    except Exception as err:
+        raise UserNotFound()
+
+    # forum anonymizer
+    try:
+        anonymize_user_discussions(username, existing_user.username)
+    except Exception:
+        pass
+
+    return True
+
+
+@intercept_errors(UserAPIInternalError, ignore_errors=[UserAPIRequestError])
+def anonymize_user_discussions(username, enc_username, **kwargs):
+    """Anonymize user's comments for a particular user with GDPR norms.
+
+    Keyword Arguments:
+        username (unicode)
+
+    Returns:
+        True for deletion.
+
+    Raises:
+        UserNotAuthorized
+        UserNotFound
+
+    Example Usage:
+        >>>anonymize_user_discussions('staff')
+
+    """
+
+    port = int(os.environ.get('EDXAPP_TEST_MONGO_PORT', '27017'))
+    host = os.environ.get('EDXAPP_TEST_MONGO_HOST', 'localhost')
+
+    user = kwargs.get('user', '')
+    password = kwargs.get('password', '')
+    db_name = kwargs.get('database', 'cs_comments_service_development')
+    content_collection_name = kwargs.get('collection', 'contents')
+    users_collection_name = kwargs.get('collection', 'users')
+    # Other mongo connection arguments
+    extra = kwargs.get('extra', {})
+    # By default disable write acknowledgments, reducing the time
+    # blocking during an insert
+    extra['w'] = extra.get('w', 0)
+    # Make timezone aware by default
+    extra['tz_aware'] = extra.get('tz_aware', True)
+
+    # Connect to database and get collection
+    connection = MongoClient(
+        host=host,
+        port=port,
+        **extra
+    )
+    database = connection[db_name]
+
+    if user or password:
+        database.authenticate(user, password)
+
+    content_collection = database[content_collection_name]
+
+    # Anonymizing content collection
+    content_collection.bulk_write([
+        UpdateOne(filter={'author_username': username},
+                  update={'$set': {
+                      'author_username': enc_username,
+                      'anonymous': True
+                  }
+                  }
+                  ) for each in content_collection.find({})
+    ]
+    )
+
+    # Anonymizing users collection
+    users_collection = database[users_collection_name]
+    users_collection.update(
+        {'username': username},
+        {'$set': {
+            'username': enc_username
+        }
+        }, upsert=False, multi=False
+    )
+    return True
 
 
 def _validate_username(username):

@@ -6,7 +6,7 @@ from django.conf import settings
 from django.http import HttpResponseBadRequest, HttpResponseForbidden, Http404, HttpResponse, HttpResponseNotAllowed
 from django.views.decorators.csrf import csrf_exempt
 import logging
-
+import json
 from lti_provider.outcomes import store_outcome_parameters
 from lti_provider.models import LtiConsumer
 from lti_provider.signature_validator import SignatureValidator
@@ -17,6 +17,7 @@ from openedx.core.lib.url_utils import unquote_slashes
 from util.views import add_p3p_header
 from social.apps.django_app.default.models import UserSocialAuth
 from third_party_auth.models import UserSocialAuthMapping
+from openedx.core.djangoapps.user_api.accounts.api import delete_user_account
 
 log = logging.getLogger("edx.lti_provider")
 
@@ -34,10 +35,10 @@ OPTIONAL_PARAMETERS = [
 ]
 
 # Required parameters that must be present to map the social auth msa login with rps
-SOCIAL_AUTH_MAPPING_REQUIRED_PARAMETERS = [
+LTI_REQUIRED_PARAMETERS = [
     'oauth_version', 'oauth_consumer_key',
     'oauth_signature', 'oauth_signature_method', 'oauth_timestamp',
-    'oauth_nonce', 'uid', 'puid', 'provider'
+    'oauth_nonce'
 ]
 
 
@@ -127,7 +128,7 @@ def get_required_parameters(dictionary, additional_params=None):
     return params
 
 
-def get_required_social_auth_parameters(dictionary, additional_params=None):
+def get_required_lti_parameters(dictionary, additional_params=None):
     """
     Extract all required LTI parameters from a dictionary and verify that none
     are missing.
@@ -142,7 +143,7 @@ def get_required_social_auth_parameters(dictionary, additional_params=None):
     """
     params = {}
     additional_params = additional_params or []
-    for key in SOCIAL_AUTH_MAPPING_REQUIRED_PARAMETERS + additional_params:
+    for key in LTI_REQUIRED_PARAMETERS + additional_params:
         if key not in dictionary:
             return None
         params[key] = dictionary[key]
@@ -207,7 +208,8 @@ def users_social_auth_mapping(request):
 
     # Check the LTI parameters, and return 400 if any required parameters are
     # missing
-    params = get_required_social_auth_parameters(request.POST)
+    additional_params = ['uid', 'puid', 'provider']
+    params = get_required_lti_parameters(request.POST, additional_params)
     if not params:
         return HttpResponseBadRequest()
 
@@ -245,3 +247,62 @@ def users_social_auth_mapping(request):
     except Exception:
         raise Http404
     return HttpResponse(status=204)
+
+
+@csrf_exempt
+def users_delete(request):
+    """
+    Endpoint for all requests to embed edX content via the LTI protocol. This
+    endpoint will be called by a POST message that contains the parameters for
+    an LTI launch (we support version 1.2 of the LTI specification):
+        http://www.imsglobal.org/lti/ltiv1p2/ltiIMGv1p2.html
+
+    An LTI launch is successful if:
+        - The launch contains all the required parameters
+        - The launch data is correctly signed using a known client key/secret pair
+    LTI delete user response code 0 user not exists, 1 exists deleted, 2 exists failed to delete
+    """
+
+    if request.method != 'POST':
+        return HttpResponseNotAllowed('POST')
+
+    # Check the LTI parameters, and return 400 if any required parameters are
+    # missing
+
+    additional_params = ['puid']
+    params = get_required_lti_parameters(request.POST, additional_params)
+    if not params:
+        return HttpResponseBadRequest()
+
+    # Get the consumer information from either the instance GUID or the consumer key
+    try:
+        lti_consumer = LtiConsumer.get_or_supplement(None, params["oauth_consumer_key"])
+    except LtiConsumer.DoesNotExist:
+        return HttpResponseForbidden()
+
+    # Check the OAuth signature on the message
+    if not SignatureValidator(lti_consumer).verify(request):
+        return HttpResponseForbidden()
+
+    puid = params["puid"]
+    # First verify the mapping is already exist sanity check
+    try:
+        usersocialauth_mapping = UserSocialAuthMapping.objects.filter(puid=puid)
+    except UserSocialAuthMapping.DoesNotExist:
+        data = {
+            'response_code': 0,
+        }
+        return HttpResponse(json.dumps(data), content_type='application/json')
+
+    user_id = usersocialauth_mapping[0].user_id
+    try:
+        delete_user_account(user_id)
+    except Exception:
+        data = {
+            'response_code': 2,
+        }
+        return HttpResponse(json.dumps(data), content_type='application/json')
+    data = {
+        'response_code': 1,
+    }
+    return HttpResponse(json.dumps(data), content_type='application/json')
