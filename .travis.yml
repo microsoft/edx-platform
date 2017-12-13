@@ -78,3 +78,4 @@ after_success:
   - ./scripts/docker-report.sh
 
 dist: trusty
+
