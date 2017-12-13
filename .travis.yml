@@ -53,6 +53,7 @@ branches:
   - master
   - oxa/master.fic
   - oxa/release.fic
+  - oxa/dev.fic_msa
   - oxa/dev.fic
   - oxa/ci
 
