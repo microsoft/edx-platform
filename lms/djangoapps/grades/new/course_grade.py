@@ -386,6 +386,24 @@ class CourseGradeFactory(object):
 
         return CourseGrade.get_persisted_grade(student, course)
 
+    def bulk_read(self, user=None, org_filter=None, start_date=None, end_date=None):
+        """
+        Returns an array of CourseGrade objects from stored grade information
+        :param username: username to filter on
+        :param modified_gt_string: datestring in ISO 8061 format (e.g. 2017-01-31)
+        """
+        # if not should_persist_grades(None):
+        filter = {}
+        if user:
+            filter['user_id'] = user.id
+        if start_date:
+            filter['modified__gte'] = start_date
+        if end_date:
+            filter['modified__lte'] = end_date
+
+        persistent_grades = PersistentCourseGrade.objects.filter(**filter)
+        return persistent_grades
+
     def _get_saved_grade(self, student, course, course_structure):
         """
         Returns the saved grade for the given course and student.
