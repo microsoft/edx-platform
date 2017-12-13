@@ -17,6 +17,8 @@ from enrollment.errors import (
     UserNotFoundError, CourseEnrollmentClosedError,
     CourseEnrollmentFullError, CourseEnrollmentExistsError,
 )
+from enrollment.serializers import CourseEnrollmentSerializer
+
 from openedx.core.lib.exceptions import CourseNotFoundError
 from student.tests.factories import UserFactory, CourseModeFactory
 from student.models import CourseEnrollment, EnrollmentClosedError, CourseFullError, AlreadyEnrolledError
@@ -175,6 +177,48 @@ class EnrollmentDataTest(ModuleStoreTestCase):
         result = data.get_course_enrollment(self.user.username, unicode(self.course.id))
         self.assertEqual(self.user.username, result['user'])
         self.assertEqual(enrollment, result)
+
+    @ddt.data(
+        # Default (no course modes in the database)
+        # Expect that users are automatically enrolled as "honor".
+        ([],),
+
+        # Audit / Verified / Honor
+        # We should always go to the "choose your course" page.
+        # We should also be enrolled as "honor" by default.
+        (['honor', 'verified', 'audit'],),
+    )
+    @ddt.unpack
+    def test_get_user_enrollments(self, course_modes):
+        self._create_course_modes(course_modes)
+
+        # Try to get enrollments before they exist.
+        result = data.get_user_enrollments(unicode(self.course.id))
+        self.assertEqual(result, [])
+
+        # Create 10 test users to enroll in the course
+        users = []
+        for i in xrange(10):
+            users.append(UserFactory.create(
+                username=self.USERNAME + str(i), email=self.EMAIL + str(i), password=self.PASSWORD + str(i)
+            ))
+
+        # Create the original enrollments.
+        created_enrollments = []
+        for user in users:
+            created_enrollments.append(data.create_course_enrollment(
+                user.username,
+                unicode(self.course.id),
+                'honor',
+                True
+            ))
+
+        # Compare the created enrollments with the results
+        # from the get user enrollments request.
+        results = data.get_user_enrollments(unicode(self.course.id), serialize=True)
+        results_unserialized = data.get_user_enrollments(unicode(self.course.id))
+        # self.assertEqual(results, CourseEnrollmentSerializer(results_unserialized, many=True).data)
+        self.assertEqual(results, created_enrollments)
 
     @ddt.data(
         # Default (no course modes in the database)

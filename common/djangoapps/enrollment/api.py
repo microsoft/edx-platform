@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 DEFAULT_DATA_API = 'enrollment.data'
 
 
-def get_enrollments(user_id):
+def get_enrollments(user_id, org_filter=None):
     """Retrieves all the courses a user is enrolled in.
 
     Takes a user and retrieves all relative enrollments. Includes information regarding how the user is enrolled
