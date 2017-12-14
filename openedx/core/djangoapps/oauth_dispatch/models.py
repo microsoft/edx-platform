@@ -43,7 +43,7 @@ class RestrictedApplication(models.Model):
     # so that clients of a specific OAuth2 Application will only be
     # able retrieve datasets that the OAuth2 Application is allowed to retrieve.
     # OPTIONAL field if no filtering on users required
-    _allowed_users = models.TextField(null=True,blank=True)
+    _allowed_users = models.TextField(null=True, blank=True)
 
     def __unicode__(self):
         """

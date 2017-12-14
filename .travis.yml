@@ -31,22 +31,24 @@ env:
   - TEST_SUITE="bok-choy" SHARD=10
   - TEST_SUITE="bok-choy" SHARD=11
 
-matrix:
-  fast_finish: true
-  allow_failures:
-    - env: TEST_SUITE="lms-acceptance"
-    - env: TEST_SUITE="cms-acceptance"
-    - env: TEST_SUITE="bok-choy" SHARD=1
-    - env: TEST_SUITE="bok-choy" SHARD=2
-    - env: TEST_SUITE="bok-choy" SHARD=3
-    - env: TEST_SUITE="bok-choy" SHARD=4
-    - env: TEST_SUITE="bok-choy" SHARD=5
-    - env: TEST_SUITE="bok-choy" SHARD=6
-    - env: TEST_SUITE="bok-choy" SHARD=7
-    - env: TEST_SUITE="bok-choy" SHARD=8
-    - env: TEST_SUITE="bok-choy" SHARD=9
-    - env: TEST_SUITE="bok-choy" SHARD=10
-    - env: TEST_SUITE="bok-choy" SHARD=11
+# TODO: Fix and re-enable acceptance testing
+# Removing from build for now to free up Travis queue
+#matrix:
+#  fast_finish: true
+#  allow_failures:
+#    - env: TEST_SUITE="lms-acceptance"
+#    - env: TEST_SUITE="cms-acceptance"
+#    - env: TEST_SUITE="bok-choy" SHARD=1
+#    - env: TEST_SUITE="bok-choy" SHARD=2
+#    - env: TEST_SUITE="bok-choy" SHARD=3
+#    - env: TEST_SUITE="bok-choy" SHARD=4
+#    - env: TEST_SUITE="bok-choy" SHARD=5
+#    - env: TEST_SUITE="bok-choy" SHARD=6
+#    - env: TEST_SUITE="bok-choy" SHARD=7
+#    - env: TEST_SUITE="bok-choy" SHARD=8
+#    - env: TEST_SUITE="bok-choy" SHARD=9
+#    - env: TEST_SUITE="bok-choy" SHARD=10
+#    - env: TEST_SUITE="bok-choy" SHARD=11
 
 branches:
   only:

@@ -335,28 +335,6 @@ class CurrentGradeViewTest(GradeViewTestMixin, APITestCase):
         }]
         self.assertEqual(resp.data, expected_data)  # pylint: disable=no-member
 
-    def test_username_all_as_student(self):
-        """
-        Test requesting with username == 'all' and no staff access
-        returns 403 forbidden
-        """
-        resp = self.client.get(self.get_url('all'))
-        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertIn('error_code', resp.data)  # pylint: disable=no-member
-        self.assertEqual(resp.data['error_code'], 'user_mismatch')  # pylint: disable=no-member
-
-    @ddt.data('staff', 'global_staff')
-    def test_username_all_as_staff(self, staff_user):
-        """
-        Test requesting with username == 'all' and staff access
-        returns all user grades for course
-        """
-        self.client.logout()
-        self.client.login(username=getattr(self, staff_user).username, password=self.password)
-        resp = self.client.get(self.get_url('all'))
-
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-
 
 @ddt.ddt
 class CourseGradeAllUsersViewTest(GradeViewTestMixin, APITestCase):
@@ -389,9 +367,18 @@ class CourseGradeAllUsersViewTest(GradeViewTestMixin, APITestCase):
     def test_anonymous(self):
         self.client.logout()
         resp = self.client.get(self.get_url())
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_student_forbidden(self):
+        resp = self.client.get(self.get_url())
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_self_get_grade(self):
+    @ddt.data(
+        'staff', 'global_staff'
+    )
+    def test_staff_forbidden(self, staff_user):
+        self.client.logout()
+        self.client.login(username=getattr(self, staff_user).username, password=self.password)
         resp = self.client.get(self.get_url())
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
@@ -638,7 +625,7 @@ class CourseGradingPolicyMissingFieldsTests(GradingPolicyTestMixin, SharedModule
         self.assertListEqual(response.data, expected)
 
 
-class OAuth2RestrictedAppTests(_DispatchingViewTestCase, SharedModuleStoreTestCase):
+class OAuth2RestrictedAppMixin(_DispatchingViewTestCase, SharedModuleStoreTestCase):
     """
     Tests specifically around RestrictedApplications for OAuth2 clients
     We separated this out from other OAuth tests above, because those
@@ -646,7 +633,7 @@ class OAuth2RestrictedAppTests(_DispatchingViewTestCase, SharedModuleStoreTestCa
     """
 
     def setUp(self):
-        super(OAuth2RestrictedAppTests, self).setUp()
+        super(OAuth2RestrictedAppMixin, self).setUp()
         self.url = reverse('access_token')
         self.course = CourseFactory.create()
         self.second_org_course = CourseFactory.create(
@@ -690,51 +677,63 @@ class OAuth2RestrictedAppTests(_DispatchingViewTestCase, SharedModuleStoreTestCa
 
         return body
 
-    def _do_grades_call(self, dot_application, scopes, course_key=None):
+    def _get_api_url(self, course_key=None, username=None):
+        """
+        Helper method to get the current API url
+        """
+        base_url = reverse(
+            'grades_api:user_grade_detail',
+            kwargs={
+                'course_id': course_key if course_key else self.course.id,
+            }
+        )
+        if username is not None:
+            url = '{}?username={}'.format(base_url, username)
+        else:
+            url = '{}all_users'.format(base_url, username)
+        return url
+
+    def _do_grades_call(self, dot_application, scopes, course_key=None, username=None):
         """
         Helper method to consolidate code
         """
-
         response = self._post_request(
             self.user,
             dot_application,
             scopes=scopes,
         )
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = json.loads(response.content)
 
         self.assertIn('access_token', data)
 
-        # call into Enrollments API endpoint
-        url = "{0}?username={1}".format(
-            reverse(
-                'grades_api:user_grade_detail',
-                kwargs={
-                    'course_id': course_key if course_key else self.course.id,
-                }
-            ),
-            self.user.username
-        )
+        # call into Grades API endpoint
         response = self.client.get(
-            url,
+            self._get_api_url(course_key, username),
             HTTP_AUTHORIZATION="Bearer {0}".format(data['access_token'])
         )
         return response
 
+
+class OAuth2RestrictedAppCurrentCourseTests(OAuth2RestrictedAppMixin):
+    """
+    OAuth2 Restricted App tests for the CurrentCourseView (single user in a course)
+    """
     def test_wrong_scope(self):
         """
         assert that a RestrictedApplication client which DOES NOT have the
         grades:read scope CANNOT access the Grade API
         """
 
-        # call into Enrollments API endpoint with a 'profile' scoped access_token
+        # call into Grades API endpoint with a 'profile' scoped access_token
         response = self._do_grades_call(
             self.restricted_dot_app_limited_scopes,
-            'profile'
+            'profile',
+            username=self.restricted_dot_app.user
         )
 
         # this should NOT have permission to access this API
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_correct_scope_with_correct_org(self):
         """
@@ -749,11 +748,12 @@ class OAuth2RestrictedAppTests(_DispatchingViewTestCase, SharedModuleStoreTestCa
         # call into Enrollments API endpoint with a 'enrollments:read' scoped access_token
         response = self._do_grades_call(
             self.restricted_dot_app,
-            'grades:read'
+            'grades:read',
+            username=self.restricted_dot_app.user
         )
 
         # this should have permission to access this API endpoint
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_correct_scope_with_wrong_org(self):
         """
@@ -770,10 +770,11 @@ class OAuth2RestrictedAppTests(_DispatchingViewTestCase, SharedModuleStoreTestCa
         # call into Enrollments API endpoint with a 'enrollments:read' scoped access_token
         response = self._do_grades_call(
             self.restricted_dot_app,
-            'grades:read'
+            'grades:read',
+            username=self.restricted_dot_app.user
         )
 
         # this should have permission to access this API endpoint
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         data = json.loads(response.content)
         self.assertEqual(data['error_code'], 'course_org_not_associated_with_calling_application')

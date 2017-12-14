@@ -60,7 +60,7 @@ class GradeViewMixin(DeveloperErrorViewMixin):
                 )
 
         try:
-            course_org_filter = configuration_helpers.get_current_site_orgs()
+            course_org_filter = configuration_helpers.get_value('course_org_filter')
             if course_org_filter and course_key.org not in course_org_filter:
                 raise Http404
             return courses.get_course_with_access(
