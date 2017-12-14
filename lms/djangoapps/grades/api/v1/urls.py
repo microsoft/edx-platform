@@ -11,7 +11,7 @@ urlpatterns = patterns(
         r'^course_grade/{course_id}/users/$'.format(
             course_id=settings.COURSE_ID_PATTERN,
         ),
-        views.CourseGradeView.as_view(), name='course_grades'
+        views.CourseGradeView.as_view(), name='user_grade_detail'
     ),
     url(
         r'^course_grade/{course_id}/all_users/$'.format(

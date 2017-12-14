@@ -165,7 +165,7 @@ class CurrentGradeViewTest(GradeViewTestMixin, APITestCase):
     @classmethod
     def setUpClass(cls):
         super(CurrentGradeViewTest, cls).setUpClass()
-        cls.namespaced_url = 'grades_api:v1:course_grades'
+        cls.namespaced_url = 'grades_api:v1:user_grade_detail'
 
     def setUp(self):
         super(CurrentGradeViewTest, self).setUp()
@@ -681,16 +681,19 @@ class OAuth2RestrictedAppMixin(_DispatchingViewTestCase, SharedModuleStoreTestCa
         """
         Helper method to get the current API url
         """
-        base_url = reverse(
-            'grades_api:user_grade_detail',
+        namespaced_url = 'grades_api:v1:user_grade_detail'
+        if not username:
+            namespaced_url = 'grades_api:v1:course_grades_all'
+
+        url = reverse(
+            namespaced_url,
             kwargs={
                 'course_id': course_key if course_key else self.course.id,
             }
         )
         if username is not None:
-            url = '{}?username={}'.format(base_url, username)
-        else:
-            url = '{}all_users'.format(base_url, username)
+            url = '{}?username={}'.format(url, username)
+
         return url
 
     def _do_grades_call(self, dot_application, scopes, course_key=None, username=None):
@@ -717,7 +720,7 @@ class OAuth2RestrictedAppMixin(_DispatchingViewTestCase, SharedModuleStoreTestCa
 
 class OAuth2RestrictedAppCurrentCourseTests(OAuth2RestrictedAppMixin):
     """
-    OAuth2 Restricted App tests for the CurrentCourseView (single user in a course)
+    OAuth2 Restricted App tests for a single user in a course
     """
     def test_wrong_scope(self):
         """
@@ -745,7 +748,7 @@ class OAuth2RestrictedAppCurrentCourseTests(OAuth2RestrictedAppMixin):
         restricted_application.org_associations = [self.course.id.org]
         restricted_application.save()
 
-        # call into Enrollments API endpoint with a 'enrollments:read' scoped access_token
+        # call into Grades API endpoint with a 'grades:read' scoped access_token
         response = self._do_grades_call(
             self.restricted_dot_app,
             'grades:read',
@@ -772,6 +775,76 @@ class OAuth2RestrictedAppCurrentCourseTests(OAuth2RestrictedAppMixin):
             self.restricted_dot_app,
             'grades:read',
             username=self.restricted_dot_app.user
+        )
+
+        # this should have permission to access this API endpoint
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        data = json.loads(response.content)
+        self.assertEqual(data['error_code'], 'course_org_not_associated_with_calling_application')
+
+
+class OAuth2RestrictedAppCourseAllUsersTests(OAuth2RestrictedAppMixin):
+    """
+    OAuth2 Restricted App tests for grades of all users in a course
+    """
+    def test_wrong_scope(self):
+        """
+        assert that a RestrictedApplication client which DOES NOT have the
+        grades:read scope CANNOT access the Grade API
+        """
+
+        # call into Grades API endpoint with a 'profile' scoped access_token
+        response = self._do_grades_call(
+            self.restricted_dot_app_limited_scopes,
+            'profile'
+        )
+
+        # this should NOT have permission to access this API
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_correct_scope_with_correct_org(self):
+        """
+        assert that a RestrictedApplication client which DOES have the
+        grade:read scope as well as being associated with the org CAN access the Grade API
+        """
+
+        restricted_application = RestrictedApplication.objects.get(application=self.restricted_dot_app)
+        restricted_application.org_associations = [self.course.id.org]
+        restricted_application.save()
+
+        # call into Grades API endpoint with a 'grades:statistics' scoped access_token
+        response = self._do_grades_call(
+            self.restricted_dot_app,
+            'grades:statistics'
+        )
+
+        # this should have permission to access this API endpoint
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        expected_data = [{
+            'user': self.restricted_dot_app.user.username,
+            'course_key': str(self.course.id),
+            'passed': False,
+            'percent': 0.0,
+            'letter_grade': None
+        }]
+
+        self.assertEqual(response.data, expected_data)
+
+    def test_correct_scope_with_wrong_org(self):
+        """
+        assert that a RestrictedApplication client which
+             - DOES have the grade:read scope as well
+             - IS NOT associated with requested org
+        CANNOT access the Grade API
+        """
+        restricted_application = RestrictedApplication.objects.get(application=self.restricted_dot_app)
+        restricted_application.org_associations = ['badorg']
+        restricted_application.save()
+
+        # call into Grades API endpoint with a 'grades:statistics' scoped access_token
+        response = self._do_grades_call(
+            self.restricted_dot_app,
+            'grades:statistics'
         )
 
         # this should have permission to access this API endpoint

@@ -12,7 +12,6 @@ from openedx.core.lib.api.authentication import (
     SessionAuthenticationAllowInactiveUser
 )
 from openedx.core.djangoapps.xmodule_django.models import CourseKeyField
-from openedx.core.lib.api.permissions import OAuth2RestrictedApplicatonPermission
 
 from badges.models import BadgeAssertion
 from .serializers import BadgeAssertionSerializer
@@ -97,10 +96,6 @@ class UserBadgeAssertions(generics.ListAPIView):
     authentication_classes = (
         OAuth2AuthenticationAllowInactiveUser,
         SessionAuthenticationAllowInactiveUser
-    )
-    permission_classes = (
-        is_field_shared_factory("accomplishments_shared"),
-        OAuth2RestrictedApplicatonPermission
     )
 
     def filter_queryset(self, queryset):

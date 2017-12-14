@@ -29,6 +29,7 @@ log = logging.getLogger(__name__)
 USER_MODEL = get_user_model()
 
 
+@view_auth_classes()
 class GradeViewMixin(DeveloperErrorViewMixin):
     """
     Mixin class for Grades related views.
@@ -200,7 +201,6 @@ class GradeViewMixin(DeveloperErrorViewMixin):
             raise AuthenticationFailed
 
 
-@view_auth_classes()
 class CourseGradeView(GradeViewMixin, GenericAPIView):
     """
     **Use Case**
@@ -360,7 +360,6 @@ class CourseGradeAllUsersView(GradeViewMixin, GenericAPIView):
     # scope
     required_scopes = ['grades:statistics']
     restricted_oauth_required = True
-    permission_classes = (OAuth2RestrictedApplicatonPermission, )
 
     def get(self, request, course_id):
         """
