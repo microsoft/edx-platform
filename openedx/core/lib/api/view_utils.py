@@ -17,7 +17,7 @@ from openedx.core.lib.api.authentication import (
     OAuth2AuthenticationAllowInactiveUser,
     SessionAuthenticationAllowInactiveUser
 )
-from openedx.core.lib.api.permissions import IsUserInUrl
+from openedx.core.lib.api.permissions import IsUserInUrl, OAuth2RestrictedApplicatonPermission
 
 
 class DeveloperErrorViewMixin(object):
@@ -102,6 +102,9 @@ def view_auth_classes(is_user=False, is_authenticated=True):
             func_or_class.permission_classes += (IsAuthenticated,)
         if is_user:
             func_or_class.permission_classes += (IsUserInUrl,)
+
+        # always check access by restricted OAuth2 applications
+        func_or_class.permission_classes += (OAuth2RestrictedApplicatonPermission, )
         return func_or_class
     return _decorator
 

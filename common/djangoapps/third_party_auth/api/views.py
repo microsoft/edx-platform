@@ -15,7 +15,17 @@ from openedx.core.lib.api.authentication import (
     OAuth2AuthenticationAllowInactiveUser,
     SessionAuthenticationAllowInactiveUser
 )
+<<<<<<< HEAD
 from openedx.core.lib.api.permissions import ApiKeyHeaderPermission
+=======
+from openedx.core.lib.api.permissions import (
+    ApiKeyHeaderPermission,
+    OAuth2RestrictedApplicatonPermission
+)
+from rest_framework import status, exceptions
+from rest_framework.response import Response
+from rest_framework.views import APIView
+>>>>>>> b65bdea... OAuth Restricted Application APIs (#174)
 from third_party_auth import pipeline
 from third_party_auth.api import serializers
 from third_party_auth.api.permissions import ThirdPartyAuthProviderApiPermission
@@ -53,6 +63,7 @@ class UserView(APIView):
         OAuth2AuthenticationAllowInactiveUser,
         SessionAuthenticationAllowInactiveUser,
     )
+    permission_classes = (OAuth2RestrictedApplicatonPermission, )
 
     def get(self, request, username):
         """Create, read, or update enrollment information for a user.
@@ -172,6 +183,8 @@ class UserMappingView(ListAPIView):
     authentication_classes = (
         OAuth2Authentication,
     )
+
+    permission_classes = (OAuth2RestrictedApplicatonPermission, )
 
     serializer_class = serializers.UserMappingSerializer
     provider = None

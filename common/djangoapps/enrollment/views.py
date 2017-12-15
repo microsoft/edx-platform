@@ -9,7 +9,18 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.utils.decorators import method_decorator
 from edx_rest_framework_extensions.authentication import JwtAuthentication
 from opaque_keys import InvalidKeyError
+<<<<<<< HEAD
 from opaque_keys.edx.keys import CourseKey
+=======
+from course_modes.models import CourseMode
+from openedx.core.lib.log_utils import audit_log
+from openedx.core.djangoapps.user_api.preferences.api import update_email_opt_in
+from openedx.core.lib.api.permissions import (
+    ApiKeyHeaderPermission,
+    ApiKeyHeaderPermissionIsAuthenticated,
+    OAuth2RestrictedApplicatonPermission
+)
+>>>>>>> b65bdea... OAuth Restricted Application APIs (#174)
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
@@ -153,9 +164,14 @@ class EnrollmentView(APIView, ApiKeyPermissionMixIn):
             * user: The ID of the user.
    """
 
+<<<<<<< HEAD
     authentication_classes = (JwtAuthentication, OAuth2AuthenticationAllowInactiveUser,
                               SessionAuthenticationAllowInactiveUser,)
     permission_classes = ApiKeyHeaderPermissionIsAuthenticated,
+=======
+    authentication_classes = OAuth2AuthenticationAllowInactiveUser, SessionAuthenticationAllowInactiveUser
+    permission_classes = (ApiKeyHeaderPermissionIsAuthenticated, OAuth2RestrictedApplicatonPermission, )
+>>>>>>> b65bdea... OAuth Restricted Application APIs (#174)
     throttle_classes = EnrollmentUserThrottle,
 
     # Since the course about page on the marketing site uses this API to auto-enroll users,
@@ -471,10 +487,21 @@ class EnrollmentListView(APIView, ApiKeyPermissionMixIn):
 
              * user: The username of the user.
     """
+<<<<<<< HEAD
     authentication_classes = (JwtAuthentication, OAuth2AuthenticationAllowInactiveUser,
                               EnrollmentCrossDomainSessionAuth,)
     permission_classes = ApiKeyHeaderPermissionIsAuthenticated,
+=======
+    authentication_classes = OAuth2AuthenticationAllowInactiveUser, EnrollmentCrossDomainSessionAuth
+    permission_classes = (ApiKeyHeaderPermissionIsAuthenticated, OAuth2RestrictedApplicatonPermission, )
+>>>>>>> b65bdea... OAuth Restricted Application APIs (#174)
     throttle_classes = EnrollmentUserThrottle,
+
+    # needed for passing OAuth2RestrictedApplicatonPermission checks
+    # for RestrictedApplications (only). A RestriectedApplication can
+    # only call this method if it is allowed to receive a 'enrollments:read'
+    # scope
+    required_scopes = ['enrollments:read']
 
     # Since the course about page on the marketing site
     # uses this API to auto-enroll users, we need to support
@@ -499,7 +526,19 @@ class EnrollmentListView(APIView, ApiKeyPermissionMixIn):
         """
         username = request.GET.get('user', request.user.username)
         try:
-            enrollment_data = api.get_enrollments(username)
+            org_filter = None
+
+            # See if the request has an explicit ORG filter on the request
+            # which limits which OAuth2 clients can see what courses
+            # based on the association with a RestrictedApplication
+            #
+            # For more information on RestrictedApplications and the
+            # permissions model, see openedx/core/lib/api/permissions.py
+
+            if hasattr(request, 'auth') and hasattr(request.auth, 'org_associations'):
+                org_filter = request.auth.org_associations
+
+            enrollment_data = api.get_enrollments(username, org_filter=org_filter)
         except CourseEnrollmentError:
             return Response(
                 status=status.HTTP_400_BAD_REQUEST,

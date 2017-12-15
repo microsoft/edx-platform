@@ -5,6 +5,11 @@ Tests for DOT Adapter
 import unittest
 from datetime import timedelta
 
+<<<<<<< HEAD
+=======
+import ddt
+from mock import patch
+>>>>>>> b65bdea... OAuth Restricted Application APIs (#174)
 from django.conf import settings
 from django.test import TestCase
 from django.utils.timezone import now
@@ -101,6 +106,7 @@ class DOTAdapterTestCase(TestCase):
         )
         self.assertEqual(self.adapter.get_access_token(token_string='token-id'), token)
 
+    @patch.dict('django.conf.settings.FEATURES', {'AUTO_EXPIRE_RESTRICTED_ACCESS_TOKENS': True})
     def test_get_restricted_access_token(self):
         """
         Make sure when generating an access_token for a restricted client

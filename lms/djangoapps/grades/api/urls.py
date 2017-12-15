@@ -3,7 +3,15 @@ Grades API URLs.
 """
 
 from django.conf import settings
+<<<<<<< HEAD
 from django.conf.urls import url
+=======
+from django.conf.urls import (
+    include,
+    patterns,
+    url,
+)
+>>>>>>> b65bdea... OAuth Restricted Application APIs (#174)
 
 from lms.djangoapps.grades.api import views
 
@@ -20,4 +28,9 @@ urlpatterns = [
         ),
         views.CourseGradingPolicy.as_view(), name='course_grading_policy'
     ),
+<<<<<<< HEAD
 ]
+=======
+    url(r'^v1/', include('grades.api.v1.urls', namespace='v1'))
+)
+>>>>>>> b65bdea... OAuth Restricted Application APIs (#174)
