@@ -2,41 +2,40 @@
 Base test classes for LMS instructor-initiated background tasks
 
 """
+import json
 # pylint: disable=attribute-defined-outside-init
 import os
-import json
-from mock import Mock, patch
 import shutil
 from tempfile import mkdtemp
-import unicodecsv
 from uuid import uuid4
 
-from celery.states import SUCCESS, FAILURE
-from django.core.urlresolvers import reverse
+import unicodecsv
+from celery.states import FAILURE, SUCCESS
 from django.contrib.auth.models import User
+from django.core.urlresolvers import reverse
+from mock import Mock, patch
+from opaque_keys.edx.locations import Location
+from opaque_keys.edx.keys import CourseKey
 
 from capa.tests.response_xml_factory import OptionResponseXMLFactory
 from courseware.model_data import StudentModule
 from courseware.tests.tests import LoginEnrollmentTestCase
-from opaque_keys.edx.locations import Location, SlashSeparatedCourseKey
+from lms.djangoapps.instructor_task.api_helper import encode_problem_and_student_input
+from lms.djangoapps.instructor_task.models import PROGRESS, QUEUING, ReportStore
+from lms.djangoapps.instructor_task.tests.factories import InstructorTaskFactory
+from lms.djangoapps.instructor_task.views import instructor_task_status
 from openedx.core.djangolib.testing.utils import CacheIsolationTestCase
 from openedx.core.lib.url_utils import quote_slashes
 from student.tests.factories import CourseEnrollmentFactory, UserFactory
 from xmodule.modulestore import ModuleStoreEnum
 from xmodule.modulestore.django import modulestore
-from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
-
-from lms.djangoapps.instructor_task.api_helper import encode_problem_and_student_input
-from lms.djangoapps.instructor_task.models import PROGRESS, QUEUING, ReportStore
-from lms.djangoapps.instructor_task.tests.factories import InstructorTaskFactory
-from lms.djangoapps.instructor_task.views import instructor_task_status
-
+from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
 
 TEST_COURSE_ORG = 'edx'
 TEST_COURSE_NAME = 'test_course'
 TEST_COURSE_NUMBER = '1.23x'
-TEST_COURSE_KEY = SlashSeparatedCourseKey(TEST_COURSE_ORG, TEST_COURSE_NUMBER, TEST_COURSE_NAME)
+TEST_COURSE_KEY = CourseKey.from_string('/'.join([TEST_COURSE_ORG, TEST_COURSE_NUMBER, TEST_COURSE_NAME]))
 TEST_CHAPTER_NAME = "Section"
 TEST_SECTION_NAME = "Subsection"
 
@@ -208,7 +207,7 @@ class InstructorTaskModuleTestCase(InstructorTaskCourseTestCase):
         Create an internal location for a test problem.
         """
         if "i4x:" in problem_url_name:
-            return Location.from_deprecated_string(problem_url_name)
+            return Location.from_string(problem_url_name)
         elif course_key:
             return course_key.make_usage_key('problem', problem_url_name)
         else:

@@ -47,9 +47,10 @@ Eligibility:
 """
 import json
 import logging
+import os
 import uuid
 
-import os
+from config_models.models import ConfigurationModel
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
@@ -57,18 +58,16 @@ from django.db import models, transaction
 from django.db.models import Count
 from django.dispatch import receiver
 from django.utils.translation import ugettext_lazy as _
-from django_extensions.db.fields import CreationDateTimeField
 from model_utils import Choices
+from model_utils.fields import AutoCreatedField
 from model_utils.models import TimeStampedModel
-from openedx.core.djangoapps.signals.signals import COURSE_CERT_AWARDED
-
 
 from badges.events.course_complete import course_badge_check
 from badges.events.course_meta import completion_check, course_group_check
-from config_models.models import ConfigurationModel
 from lms.djangoapps.instructor_task.models import InstructorTask
-from util.milestones_helpers import fulfill_course_milestone, is_prerequisite_courses_enabled
+from openedx.core.djangoapps.signals.signals import COURSE_CERT_AWARDED
 from openedx.core.djangoapps.xmodule_django.models import CourseKeyField, NoneToEmptyManager
+from util.milestones_helpers import fulfill_course_milestone, is_prerequisite_courses_enabled
 
 LOGGER = logging.getLogger(__name__)
 
@@ -136,7 +135,7 @@ class CertificateWhitelist(models.Model):
     user = models.ForeignKey(User)
     course_id = CourseKeyField(max_length=255, blank=True, default=None)
     whitelist = models.BooleanField(default=0)
-    created = CreationDateTimeField(_('created'))
+    created = AutoCreatedField(_('created'))
     notes = models.TextField(default=None, null=True)
 
     @classmethod
@@ -514,8 +513,6 @@ def certificate_status(generated_certificate):
                    certificate generation yet.
     generating   - A request has been made to generate a certificate,
                    but it has not been generated yet.
-    regenerating - A request has been made to regenerate a certificate,
-                   but it has not been generated yet.
     deleting     - A request has been made to delete a certificate.
 
     deleted      - The certificate has been deleted.
@@ -845,26 +842,67 @@ class ExampleCertificate(TimeStampedModel):
 class CertificateGenerationCourseSetting(TimeStampedModel):
     """Enable or disable certificate generation for a particular course.
 
-    This controls whether students are allowed to "self-generate"
-    certificates for a course.  It does NOT prevent us from
-    batch-generating certificates for a course using management
-    commands.
-
     In general, we should only enable self-generated certificates
     for a course once we successfully generate example certificates
     for the course.  This is enforced in the UI layer, but
     not in the data layer.
-
     """
     course_key = CourseKeyField(max_length=255, db_index=True)
-    enabled = models.BooleanField(default=False)
+    enabled = models.BooleanField(
+        default=False,
+        help_text=u"DEPRECATED, please use self_generation_enabled instead."
+    )
+    # TODO: Learner-2549 remove deprecated enabled field
+
+    self_generation_enabled = models.BooleanField(
+        default=False,
+        help_text=(
+            u"Allow students to generate their own certificates for the course. "
+            u"Enabling this does NOT affect usage of the management command used "
+            u"for batch certificate generation."
+        )
+    )
+    language_specific_templates_enabled = models.BooleanField(
+        default=False,
+        help_text=(
+            u"Render translated certificates rather than using the platform's "
+            u"default language. Available translations are controlled by the "
+            u"certificate template."
+        )
+    )
+    include_hours_of_effort = models.NullBooleanField(
+        default=None,
+        help_text=(
+            u"Display estimated time to complete the course, which is equal to the maximum hours of effort per week "
+            u"times the length of the course in weeks. This attribute will only be displayed in a certificate when the "
+            u"attributes 'Weeks to complete' and 'Max effort' have been provided for the course run and its certificate "
+            u"template includes Hours of Effort."
+        )
+    )
 
     class Meta(object):
         get_latest_by = 'created'
         app_label = "certificates"
 
     @classmethod
-    def is_enabled_for_course(cls, course_key):
+    def get(cls, course_key):
+        """ Retrieve certificate generation settings for a course.
+
+        Arguments:
+            course_key (CourseKey): The identifier for the course.
+
+        Returns:
+            CertificateGenerationCourseSetting
+        """
+        try:
+            latest = cls.objects.filter(course_key=course_key).latest()
+        except cls.DoesNotExist:
+            return None
+        else:
+            return latest
+
+    @classmethod
+    def is_self_generation_enabled_for_course(cls, course_key):
         """Check whether self-generated certificates are enabled for a course.
 
         Arguments:
@@ -879,10 +917,10 @@ class CertificateGenerationCourseSetting(TimeStampedModel):
         except cls.DoesNotExist:
             return False
         else:
-            return latest.enabled
+            return latest.self_generation_enabled
 
     @classmethod
-    def set_enabled_for_course(cls, course_key, is_enabled):
+    def set_self_generatation_enabled_for_course(cls, course_key, is_enabled):
         """Enable or disable self-generated certificates for a course.
 
         Arguments:
@@ -890,9 +928,12 @@ class CertificateGenerationCourseSetting(TimeStampedModel):
             is_enabled (boolean): Whether to enable or disable self-generated certificates.
 
         """
-        CertificateGenerationCourseSetting.objects.create(
+        default = {
+            'self_generation_enabled': is_enabled
+        }
+        CertificateGenerationCourseSetting.objects.update_or_create(
             course_key=course_key,
-            enabled=is_enabled
+            defaults=default
         )
 
 
@@ -1001,13 +1042,19 @@ class CertificateTemplate(TimeStampedModel):
         help_text=_(u'On/Off switch.'),
         default=False,
     )
+    language = models.CharField(
+        max_length=2,
+        blank=True,
+        null=True,
+        help_text=u'Only certificates for courses in the selected language will be rendered using this template. Course language is determined by the first two letters of the language code.'
+    )
 
     def __unicode__(self):
         return u'%s' % (self.name, )
 
     class Meta(object):
         get_latest_by = 'created'
-        unique_together = (('organization_id', 'course_key', 'mode'),)
+        unique_together = (('organization_id', 'course_key', 'mode', 'language'),)
         app_label = "certificates"
 
 

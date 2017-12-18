@@ -1,43 +1,40 @@
 """
 Unittests for creating a course in an chosen modulestore
 """
-import unittest
 import ddt
 from django.core.management import CommandError, call_command
+from django.test import TestCase
 
-from contentstore.management.commands.create_course import Command
 from xmodule.modulestore import ModuleStoreEnum
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.django import modulestore
 
 
-class TestArgParsing(unittest.TestCase):
+class TestArgParsing(TestCase):
     """
     Tests for parsing arguments for the `create_course` management command
     """
     def setUp(self):
         super(TestArgParsing, self).setUp()
 
-        self.command = Command()
-
     def test_no_args(self):
-        errstring = "create_course requires 5 arguments"
+        errstring = "Error: too few arguments"
         with self.assertRaisesRegexp(CommandError, errstring):
-            self.command.handle('create_course')
+            call_command('create_course')
 
     def test_invalid_store(self):
         with self.assertRaises(CommandError):
-            self.command.handle("foo", "user@foo.org", "org", "course", "run")
+            call_command('create_course', "foo", "user@foo.org", "org", "course", "run")
 
     def test_nonexistent_user_id(self):
         errstring = "No user 99 found"
         with self.assertRaisesRegexp(CommandError, errstring):
-            self.command.handle("split", "99", "org", "course", "run")
+            call_command('create_course', "split", "99", "org", "course", "run")
 
     def test_nonexistent_user_email(self):
         errstring = "No user fake@example.com found"
         with self.assertRaisesRegexp(CommandError, errstring):
-            self.command.handle("mongo", "fake@example.com", "org", "course", "run")
+            call_command('create_course', "mongo", "fake@example.com", "org", "course", "run")
 
 
 @ddt.ddt

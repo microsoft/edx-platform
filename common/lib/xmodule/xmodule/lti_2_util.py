@@ -3,17 +3,17 @@
 A mixin class for LTI 2.0 functionality.  This is really just done to refactor the code to
 keep the LTIModule class from getting too big
 """
-import json
-import re
-import mock
-import urllib
-import hashlib
 import base64
+import hashlib
+import json
 import logging
+import re
+import urllib
 
+import mock
+from oauthlib.oauth1 import Client
 from webob import Response
 from xblock.core import XBlock
-from oauthlib.oauth1 import Client
 
 log = logging.getLogger(__name__)
 
@@ -231,9 +231,9 @@ class LTI20ModuleMixin(object):
         Returns:
             nothing
         """
-        self.set_user_module_score(user, None, None)
+        self.set_user_module_score(user, None, None, score_deleted=True)
 
-    def set_user_module_score(self, user, score, max_score, comment=u""):
+    def set_user_module_score(self, user, score, max_score, comment=u"", score_deleted=False):
         """
         Sets the module user state, including grades and comments, and also scoring in db's courseware_studentmodule
 
@@ -261,6 +261,7 @@ class LTI20ModuleMixin(object):
                 'value': scaled_score,
                 'max_value': max_score,
                 'user_id': user.id,
+                'score_deleted': score_deleted,
             },
         )
         self.module_score = scaled_score

@@ -3,23 +3,24 @@ Utilities for contentstore tests
 '''
 import json
 import textwrap
-from mock import Mock
 
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.test.client import Client
-from opaque_keys.edx.locations import SlashSeparatedCourseKey, AssetLocation
+from mock import Mock
+from opaque_keys.edx.keys import CourseKey
+from opaque_keys.edx.locations import AssetLocation
 
 from contentstore.utils import reverse_url
 from student.models import Registration
-from xmodule.modulestore.split_mongo.split import SplitMongoModuleStore
 from xmodule.contentstore.django import contentstore
 from xmodule.modulestore import ModuleStoreEnum
 from xmodule.modulestore.inheritance import own_metadata
+from xmodule.modulestore.split_mongo.split import SplitMongoModuleStore
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
-from xmodule.modulestore.xml_importer import import_course_from_xml
 from xmodule.modulestore.tests.utils import ProceduralCourseTestMixin
+from xmodule.modulestore.xml_importer import import_course_from_xml
 
 TEST_DATA_DIR = settings.COMMON_TEST_DATA_ROOT
 
@@ -129,7 +130,7 @@ class CourseTestCase(ProceduralCourseTestMixin, ModuleStoreTestCase):
         """
         content_store = contentstore()
         import_course_from_xml(self.store, self.user.id, TEST_DATA_DIR, ['toy'], static_content_store=content_store)
-        course_id = SlashSeparatedCourseKey('edX', 'toy', '2012_Fall')
+        course_id = CourseKey.from_string('/'.join(['edX', 'toy', '2012_Fall']))
 
         # create an Orphan
         # We had a bug where orphaned draft nodes caused export to fail. This is here to cover that case.

@@ -1,4 +1,10 @@
+"""
+Tests for course wiki
+"""
+
+import pytest
 from django.core.urlresolvers import reverse
+from mock import patch
 from nose.plugins.attrib import attr
 
 from courseware.tests.tests import LoginEnrollmentTestCase
@@ -6,10 +12,9 @@ from openedx.features.enterprise_support.tests.mixins.enterprise import Enterpri
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
 
-from mock import patch
-
 
 @attr(shard=1)
+@pytest.mark.django111_expected_failure
 class WikiRedirectTestCase(EnterpriseTestConsentRequired, LoginEnrollmentTestCase, ModuleStoreTestCase):
     """
     Tests for wiki course redirection.
@@ -218,4 +223,4 @@ class WikiRedirectTestCase(EnterpriseTestConsentRequired, LoginEnrollmentTestCas
                 (reverse('course_wiki', kwargs={'course_id': course_id}), 302),
                 ('/courses/{}/wiki/'.format(course_id), 200),
         ):
-            self.verify_consent_required(self.client, url, status_code)
+            self.verify_consent_required(self.client, url, status_code=status_code)

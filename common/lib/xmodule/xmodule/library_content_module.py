@@ -3,24 +3,26 @@
 LibraryContent: The XBlock used to include blocks from a library in a course.
 """
 import json
-from lxml import etree
-from copy import copy
-from capa.responsetypes import registry
-from gettext import ngettext
-from lazy import lazy
-
-from .mako_module import MakoModuleDescriptor
-from opaque_keys.edx.locator import LibraryLocator
 import random
+from copy import copy
+from gettext import ngettext
+
+from lazy import lazy
+from lxml import etree
+from opaque_keys.edx.locator import LibraryLocator
+from pkg_resources import resource_string
 from webob import Response
 from xblock.core import XBlock
-from xblock.fields import Scope, String, List, Integer, Boolean
+from xblock.fields import Integer, List, Scope, String
 from xblock.fragment import Fragment
-from xmodule.validation import StudioValidationMessage, StudioValidation
-from xmodule.x_module import XModule, STUDENT_VIEW
-from xmodule.studio_editable import StudioEditableModule, StudioEditableDescriptor
+
+from capa.responsetypes import registry
+from xmodule.studio_editable import StudioEditableDescriptor, StudioEditableModule
+from xmodule.validation import StudioValidation, StudioValidationMessage
+from xmodule.x_module import STUDENT_VIEW, XModule
+
+from .mako_module import MakoModuleDescriptor
 from .xml_module import XmlDescriptor
-from pkg_resources import resource_string
 
 # Make '_' a no-op so we can scrape strings. Using lambda instead of
 #  `django.utils.translation.ugettext_noop` because Django cannot be imported in this file
@@ -311,6 +313,7 @@ class LibraryContentModule(LibraryContentFields, XModule, StudioEditableModule):
             'items': contents,
             'xblock_context': context,
             'show_bookmark_button': False,
+            'watched_completable_blocks': set(),
         }))
         return fragment
 
@@ -622,7 +625,7 @@ class LibraryContentDescriptor(LibraryContentFields, MakoModuleDescriptor, XmlDe
         ]
         definition = {
             attr_name: json.loads(attr_value)
-            for attr_name, attr_value in xml_object.attrib
+            for attr_name, attr_value in xml_object.attrib.items()
         }
         return definition, children
 
@@ -638,3 +641,39 @@ class LibraryContentDescriptor(LibraryContentFields, MakoModuleDescriptor, XmlDe
             if field.is_set_on(self):
                 xml_object.set(field_name, unicode(field.read_from(self)))
         return xml_object
+
+
+class LibrarySummary(object):
+    """
+    A library summary object which contains the fields required for library listing on studio.
+    """
+
+    def __init__(self, library_locator, display_name):
+        """
+        Initialize LibrarySummary
+
+        Arguments:
+        library_locator (LibraryLocator):  LibraryLocator object of the library.
+
+        display_name (unicode): display name of the library.
+        """
+        self.display_name = display_name if display_name else _(u"Empty")
+
+        self.id = library_locator  # pylint: disable=invalid-name
+        self.location = library_locator.make_usage_key('library', 'library')
+
+    @property
+    def display_org_with_default(self):
+        """
+        Org display names are not implemented. This just provides API compatibility with CourseDescriptor.
+        Always returns the raw 'org' field from the key.
+        """
+        return self.location.library_key.org
+
+    @property
+    def display_number_with_default(self):
+        """
+        Display numbers are not implemented. This just provides API compatibility with CourseDescriptor.
+        Always returns the raw 'library' field from the key.
+        """
+        return self.location.library_key.library

@@ -8,7 +8,7 @@ from fs.memoryfs import MemoryFS
 from lxml import etree
 from mock import Mock, patch
 
-from django.utils.timezone import UTC
+from pytz import UTC
 
 from xmodule.xml_module import is_pointer_tag
 from opaque_keys.edx.locations import Location
@@ -19,7 +19,7 @@ from xmodule.x_module import XModuleMixin
 from xmodule.fields import Date
 from xmodule.tests import DATA_DIR
 from xmodule.modulestore.inheritance import InheritanceMixin
-from opaque_keys.edx.locations import SlashSeparatedCourseKey
+from opaque_keys.edx.keys import CourseKey
 
 from xblock.core import XBlock
 from xblock.fields import Scope, String, Integer
@@ -39,7 +39,7 @@ class DummySystem(ImportSystem):
             xmlstore = LibraryXMLModuleStore("data_dir", source_dirs=[], load_error_modules=load_error_modules)
         else:
             xmlstore = XMLModuleStore("data_dir", source_dirs=[], load_error_modules=load_error_modules)
-        course_id = SlashSeparatedCourseKey(ORG, COURSE, 'test_run')
+        course_id = CourseKey.from_string('/'.join([ORG, COURSE, 'test_run']))
         course_dir = "test_dir"
         error_tracker = Mock()
 
@@ -346,7 +346,7 @@ class ImportTestCase(BaseCourseTestCase):
 
         # Check that the child hasn't started yet
         self.assertLessEqual(
-            datetime.datetime.now(UTC()),
+            datetime.datetime.now(UTC),
             child.start
         )
 
@@ -576,7 +576,7 @@ class ImportTestCase(BaseCourseTestCase):
 
         modulestore = XMLModuleStore(DATA_DIR, source_dirs=['toy'])
 
-        toy_id = SlashSeparatedCourseKey('edX', 'toy', '2012_Fall')
+        toy_id = CourseKey.from_string('edX/toy/2012_Fall')
 
         course = modulestore.get_course(toy_id)
         chapters = course.get_children()
@@ -654,7 +654,7 @@ class ImportTestCase(BaseCourseTestCase):
         """
         modulestore = XMLModuleStore(DATA_DIR, source_dirs=['toy'])
 
-        toy_id = SlashSeparatedCourseKey('edX', 'toy', '2012_Fall')
+        toy_id = CourseKey.from_string('edX/toy/2012_Fall')
 
         course = modulestore.get_course(toy_id)
 

@@ -13,11 +13,6 @@ from tempfile import NamedTemporaryFile, mkdtemp
 
 from celery.task import task
 from celery.utils.log import get_task_logger
-from organizations.models import OrganizationCourse
-from path import Path as path
-from pytz import UTC
-from six import iteritems, text_type
-
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.exceptions import SuspiciousOperation
@@ -25,8 +20,13 @@ from django.core.files import File
 from django.test import RequestFactory
 from django.utils.text import get_valid_filename
 from django.utils.translation import ugettext as _
-
 from djcelery.common import respect_language
+from opaque_keys.edx.keys import CourseKey
+from opaque_keys.edx.locator import LibraryLocator
+from organizations.models import OrganizationCourse
+from path import Path as path
+from pytz import UTC
+from six import iteritems, text_type
 from user_tasks.models import UserTaskArtifact, UserTaskStatus
 from user_tasks.tasks import UserTask
 
@@ -36,9 +36,7 @@ from contentstore.storage import course_import_export_storage
 from contentstore.utils import initialize_permissions, reverse_usage_url
 from course_action_state.models import CourseRerunState
 from models.settings.course_metadata import CourseMetadata
-from opaque_keys.edx.keys import CourseKey
-from opaque_keys.edx.locator import LibraryLocator
-from openedx.core.djangoapps.embargo.models import RestrictedCourse, CountryAccessRule
+from openedx.core.djangoapps.embargo.models import CountryAccessRule, RestrictedCourse
 from openedx.core.lib.extract_tar import safetar_extractall
 from student.auth import has_course_author_access
 from xmodule.contentstore.django import contentstore
@@ -49,7 +47,6 @@ from xmodule.modulestore.django import modulestore
 from xmodule.modulestore.exceptions import DuplicateCourseError, ItemNotFoundError
 from xmodule.modulestore.xml_exporter import export_course_to_xml, export_library_to_xml
 from xmodule.modulestore.xml_importer import import_course_from_xml, import_library_from_xml
-
 
 LOGGER = get_task_logger(__name__)
 FILE_READ_CHUNK = 1024  # bytes
@@ -261,7 +258,7 @@ def export_olx(self, user_id, course_key_string, language):
         artifact.save()
     # catch all exceptions so we can record useful error messages
     except Exception as exception:  # pylint: disable=broad-except
-        LOGGER.exception(u'Error exporting course %s', courselike_key)
+        LOGGER.exception(u'Error exporting course %s', courselike_key, exc_info=True)
         if self.status.state != UserTaskStatus.FAILED:
             self.status.fail({'raw_error_msg': text_type(exception)})
         return
@@ -291,7 +288,7 @@ def create_export_tarball(course_module, course_key, context, status=None):
             tar_file.add(root_dir / name, arcname=name)
 
     except SerializationError as exc:
-        LOGGER.exception(u'There was an error exporting %s', course_key)
+        LOGGER.exception(u'There was an error exporting %s', course_key, exc_info=True)
         parent = None
         try:
             failed_item = modulestore().get_item(exc.location)
@@ -313,7 +310,7 @@ def create_export_tarball(course_module, course_key, context, status=None):
                                     'edit_unit_url': context['edit_unit_url']}))
         raise
     except Exception as exc:
-        LOGGER.exception('There was an error exporting %s', course_key)
+        LOGGER.exception('There was an error exporting %s', course_key, exc_info=True)
         context.update({
             'in_err': True,
             'edit_unit_url': None,
@@ -447,7 +444,7 @@ def import_olx(self, user_id, course_key_string, archive_path, archive_name, lan
             shutil.rmtree(course_dir)
             LOGGER.info(u'Course import %s: Temp data cleared', courselike_key)
 
-        LOGGER.exception(u'Error importing course %s', courselike_key)
+        LOGGER.exception(u'Error importing course %s', courselike_key, exc_info=True)
         self.status.fail(text_type(exception))
         return
 
@@ -519,7 +516,7 @@ def import_olx(self, user_id, course_key_string, archive_path, archive_name, lan
 
         LOGGER.info(u'Course import %s: Course import successful', courselike_key)
     except Exception as exception:   # pylint: disable=broad-except
-        LOGGER.exception(u'error importing course')
+        LOGGER.exception(u'error importing course', exc_info=True)
         self.status.fail(text_type(exception))
     finally:
         if course_dir.isdir():  # pylint: disable=no-value-for-parameter

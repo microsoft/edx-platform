@@ -1,20 +1,20 @@
 """Implements basics of Capa, including class CapaModule."""
 import json
 import logging
-import sys
 import re
-from lxml import etree
+import sys
 
+from lxml import etree
 from pkg_resources import resource_string
 
 import dogstats_wrapper as dog_stats_api
-from .capa_base import CapaMixin, CapaFields, ComplexEncoder
 from capa import responsetypes
-from .progress import Progress
-from xmodule.util.misc import escape_html_characters
-from xmodule.x_module import XModule, module_attr, DEPRECATION_VSCOMPAT_EVENT
-from xmodule.raw_module import RawDescriptor
 from xmodule.exceptions import NotFoundError, ProcessingError
+from xmodule.raw_module import RawDescriptor
+from xmodule.util.misc import escape_html_characters
+from xmodule.x_module import DEPRECATION_VSCOMPAT_EVENT, XModule, module_attr
+
+from .capa_base import CapaFields, CapaMixin, ComplexEncoder
 
 log = logging.getLogger("edx.courseware")
 
@@ -330,6 +330,7 @@ class CapaDescriptor(CapaFields, RawDescriptor):
     rescore = module_attr('rescore')
     reset_problem = module_attr('reset_problem')
     save_problem = module_attr('save_problem')
+    set_score = module_attr('set_score')
     set_state_from_lcp = module_attr('set_state_from_lcp')
     should_show_submit_button = module_attr('should_show_submit_button')
     should_show_reset_button = module_attr('should_show_reset_button')

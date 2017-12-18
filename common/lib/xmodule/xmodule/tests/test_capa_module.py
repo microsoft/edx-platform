@@ -14,6 +14,7 @@ import textwrap
 import unittest
 
 import ddt
+from django.utils.encoding import smart_text
 from lxml import etree
 from mock import Mock, patch, DEFAULT
 import webob
@@ -34,7 +35,7 @@ from xblock.scorable import Score
 from . import get_test_system
 from pytz import UTC
 from capa.correctmap import CorrectMap
-from ..capa_base_constants import RANDOMIZATION
+from ..capa_base_constants import RANDOMIZATION, SHOWANSWER
 
 
 class CapaFactory(object):
@@ -457,6 +458,31 @@ class CapaModuleTest(unittest.TestCase):
                                             graceperiod=self.two_day_delta_str)
         self.assertTrue(still_in_grace.answer_available())
 
+    def test_showanswer_answered(self):
+        """
+        Tests that with showanswer="answered" should show answer after the problem is correctly answered.
+        It should *NOT* show answer if the answer is incorrect.
+        """
+        # Can not see "Show Answer" when student answer is wrong
+        answer_wrong = CapaFactory.create(
+            showanswer=SHOWANSWER.ANSWERED,
+            max_attempts="1",
+            attempts="0",
+            due=self.tomorrow_str,
+            correct=False
+        )
+        self.assertFalse(answer_wrong.answer_available())
+
+        # Expect to see "Show Answer" when answer is correct
+        answer_correct = CapaFactory.create(
+            showanswer=SHOWANSWER.ANSWERED,
+            max_attempts="1",
+            attempts="0",
+            due=self.tomorrow_str,
+            correct=True
+        )
+        self.assertTrue(answer_correct.answer_available())
+
     @ddt.data('', 'other-value')
     def test_show_correctness_other(self, show_correctness):
         """
@@ -828,6 +854,42 @@ class CapaModuleTest(unittest.TestCase):
             # Expect that the number of attempts is NOT incremented
             self.assertEqual(module.attempts, 1)
 
+    def test_submit_problem_error_with_codejail_exception(self):
+
+        # Try each exception that capa_module should handle
+        exception_classes = [StudentInputError,
+                             LoncapaProblemError,
+                             ResponseError]
+        for exception_class in exception_classes:
+
+            # Create the module
+            module = CapaFactory.create(attempts=1)
+
+            # Ensure that the user is NOT staff
+            module.system.user_is_staff = False
+
+            # Simulate a codejail exception 'Exception: test error'
+            with patch('capa.capa_problem.LoncapaProblem.grade_answers') as mock_grade:
+                try:
+                    raise ResponseError(
+                        'Couldn\'t execute jailed code: stdout: \'\', '
+                        'stderr: \'Traceback (most recent call last):\\n'
+                        '  File "jailed_code", line 15, in <module>\\n'
+                        '    exec code in g_dict\\n  File "<string>", line 67, in <module>\\n'
+                        '  File "<string>", line 65, in check_func\\n'
+                        'Exception: test error\\n\' with status code: 1',)
+                except ResponseError as err:
+                    mock_grade.side_effect = exception_class(err.message)
+                get_request_dict = {CapaFactory.input_key(): '3.14'}
+                result = module.submit_problem(get_request_dict)
+
+            # Expect an AJAX alert message in 'success' without the text of the stack trace
+            expected_msg = 'test error'
+            self.assertEqual(expected_msg, result['success'])
+
+            # Expect that the number of attempts is NOT incremented
+            self.assertEqual(module.attempts, 1)
+
     def test_submit_problem_other_errors(self):
         """
         Test that errors other than the expected kinds give an appropriate message.
@@ -1007,7 +1069,7 @@ class CapaModuleTest(unittest.TestCase):
 
     def test_rescore_problem_correct(self):
 
-        module = CapaFactory.create(attempts=1, done=True)
+        module = CapaFactory.create(attempts=0, done=True)
 
         # Simulate that all answers are marked correct, no matter
         # what the input is, by patching LoncapaResponse.evaluate_answers()
@@ -1017,10 +1079,47 @@ class CapaModuleTest(unittest.TestCase):
                 correctness='correct',
                 npoints=1,
             )
+            with patch('capa.correctmap.CorrectMap.is_correct') as mock_is_correct:
+                mock_is_correct.return_value = True
+
+                # Check the problem
+                get_request_dict = {CapaFactory.input_key(): '1'}
+                module.submit_problem(get_request_dict)
             module.rescore(only_if_higher=False)
 
         # Expect that the problem is marked correct
         self.assertEqual(module.is_correct(), True)
+
+        # Expect that the number of attempts is not incremented
+        self.assertEqual(module.attempts, 1)
+
+    def test_rescore_problem_additional_correct(self):
+        # make sure it also works when new correct answer has been added
+        module = CapaFactory.create(attempts=0)
+
+        # Simulate that all answers are marked correct, no matter
+        # what the input is, by patching CorrectMap.is_correct()
+        with patch('capa.correctmap.CorrectMap.is_correct') as mock_is_correct:
+                mock_is_correct.return_value = True
+
+                # Check the problem
+                get_request_dict = {CapaFactory.input_key(): '1'}
+                result = module.submit_problem(get_request_dict)
+
+        # Expect that the problem is marked correct
+        self.assertEqual(result['success'], 'correct')
+        # Expect that the number of attempts is incremented
+        self.assertEqual(module.attempts, 1)
+        self.assertEqual(module.get_score(), (1, 1))
+
+        # Simulate that after adding a new correct answer the new calculated score is (0,1)
+        # by patching CapaMixin.calculate_score()
+        # In case of rescore with only_if_higher=True it should not update score of module
+        # if previous score was higher
+        with patch('xmodule.capa_base.CapaMixin.calculate_score') as mock_calculate_score:
+            mock_calculate_score.return_value = Score(raw_earned=0, raw_possible=1)
+            module.rescore(only_if_higher=True)
+        self.assertEqual(module.get_score(), (1, 1))
 
         # Expect that the number of attempts is not incremented
         self.assertEqual(module.attempts, 1)
@@ -2492,6 +2591,22 @@ class CapaDescriptorTest(unittest.TestCase):
                     'capa_content': capa_content.replace("\n", " ")
                 }
             }
+        )
+
+    def test_indexing_non_latin_problem(self):
+        sample_text_input_problem_xml = textwrap.dedent("""
+            <problem>
+                <script type="text/python">FX1_VAL='Καλημέρα'</script>
+                <p>Δοκιμή με μεταβλητές με Ελληνικούς χαρακτήρες μέσα σε python: $FX1_VAL</p>
+            </problem>
+        """)
+        name = "Non latin Input"
+        descriptor = self._create_descriptor(sample_text_input_problem_xml, name=name)
+        capa_content = " FX1_VAL='Καλημέρα' Δοκιμή με μεταβλητές με Ελληνικούς χαρακτήρες μέσα σε python: $FX1_VAL "
+
+        descriptor_dict = descriptor.index_dictionary()
+        self.assertEquals(
+            descriptor_dict['content']['capa_content'], smart_text(capa_content)
         )
 
     def test_indexing_checkboxes_with_hints_and_feedback(self):

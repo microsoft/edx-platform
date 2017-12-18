@@ -2,38 +2,39 @@
 Test the Studio help links.
 """
 
-from nose.plugins.attrib import attr
 from unittest import skip
 
+from nose.plugins.attrib import attr
+
 from common.test.acceptance.fixtures.course import XBlockFixtureDesc
-from common.test.acceptance.tests.studio.base_studio_test import StudioCourseTest, ContainerBase
-from common.test.acceptance.pages.studio.index import DashboardPage
-from common.test.acceptance.pages.studio.utils import click_studio_help, studio_help_links
-from common.test.acceptance.pages.studio.index import IndexPage, HomePage
-from common.test.acceptance.tests.studio.base_studio_test import StudioLibraryTest
-from common.test.acceptance.pages.studio.course_info import CourseUpdatesPage
-from common.test.acceptance.pages.studio.utils import click_css
-from common.test.acceptance.pages.studio.library import LibraryPage
-from common.test.acceptance.pages.studio.users import LibraryUsersPage
-from common.test.acceptance.pages.studio.overview import CourseOutlinePage
+from common.test.acceptance.pages.common.auto_auth import AutoAuthPage
 from common.test.acceptance.pages.studio.asset_index import AssetIndexPage
+from common.test.acceptance.pages.studio.course_info import CourseUpdatesPage
 from common.test.acceptance.pages.studio.edit_tabs import PagesPage
-from common.test.acceptance.pages.studio.textbook_upload import TextbookUploadPage
+from common.test.acceptance.pages.studio.import_export import (
+    ExportCoursePage,
+    ExportLibraryPage,
+    ImportCoursePage,
+    ImportLibraryPage
+)
+from common.test.acceptance.pages.studio.index import DashboardPage, HomePage, IndexPage
+from common.test.acceptance.pages.studio.library import LibraryPage
+from common.test.acceptance.pages.studio.overview import CourseOutlinePage
 from common.test.acceptance.pages.studio.settings import SettingsPage
-from common.test.acceptance.pages.studio.settings_graders import GradingPage
-from common.test.acceptance.pages.studio.settings_group_configurations import GroupConfigurationsPage
 from common.test.acceptance.pages.studio.settings_advanced import AdvancedSettingsPage
 from common.test.acceptance.pages.studio.settings_certificates import CertificatesPage
-from common.test.acceptance.pages.studio.import_export import ExportCoursePage, ImportCoursePage
-from common.test.acceptance.pages.studio.users import CourseTeamPage
+from common.test.acceptance.pages.studio.settings_graders import GradingPage
+from common.test.acceptance.pages.studio.settings_group_configurations import GroupConfigurationsPage
+from common.test.acceptance.pages.studio.textbook_upload import TextbookUploadPage
+from common.test.acceptance.pages.studio.users import CourseTeamPage, LibraryUsersPage
+from common.test.acceptance.pages.studio.utils import click_css, click_studio_help, studio_help_links
 from common.test.acceptance.tests.helpers import (
     AcceptanceTest,
     assert_nav_help_link,
     assert_side_bar_help_link,
-    url_for_help,
+    url_for_help
 )
-from common.test.acceptance.pages.studio.import_export import ExportLibraryPage, ImportLibraryPage
-from common.test.acceptance.pages.studio.auto_auth import AutoAuthPage
+from common.test.acceptance.tests.studio.base_studio_test import ContainerBase, StudioCourseTest, StudioLibraryTest
 
 
 def _get_expected_documentation_url(path):
@@ -178,7 +179,7 @@ class HomeHelpTest(StudioCourseTest):
         Scenario: Help link in sidebar links is working on 'Home'(Courses tab) page.
         Given that I am on the 'Home'(Courses tab) page.
         And I want help about the courses
-        And I click the 'Getting Started with edX Studio' in the sidebar links
+        And I click the 'Getting Started with Your Platform Studio' in the sidebar links
         Then Help link should open.
         And help url should be correct
         """
@@ -189,7 +190,7 @@ class HomeHelpTest(StudioCourseTest):
             test=self,
             page=self.home_page,
             href=expected_url,
-            help_text='Getting Started with edX Studio',
+            help_text='Getting Started with Your Platform Studio',
             as_list_item=True
         )
 
@@ -231,7 +232,7 @@ class NewCourseHelpTest(AcceptanceTest):
         Scenario: Help link in sidebar links is working on 'Create a New Course' page in the dashboard.
         Given that I am on the 'Create a New Course' page in the dashboard.
         And I want help about the process
-        And I click the 'Getting Started with edX Studio' in the sidebar links
+        And I click the 'Getting Started with Your Platform Studio' in the sidebar links
         Then Help link should open.
         And help url should be correct
         """
@@ -242,7 +243,7 @@ class NewCourseHelpTest(AcceptanceTest):
             test=self,
             page=self.dashboard_page,
             href=expected_url,
-            help_text='Getting Started with edX Studio',
+            help_text='Getting Started with Your Platform Studio',
             as_list_item=True
         )
 
@@ -284,7 +285,7 @@ class NewLibraryHelpTest(AcceptanceTest):
         Scenario: Help link in sidebar links is working on 'Create a New Library' page in the dashboard.
         Given that I am on the 'Create a New Library' page in the dashboard.
         And I want help about the process
-        And I click the 'Getting Started with edX Studio' in the sidebar links
+        And I click the 'Getting Started with Your Platform Studio' in the sidebar links
         Then Help link should open.
         And help url should be correct
         """
@@ -295,7 +296,7 @@ class NewLibraryHelpTest(AcceptanceTest):
             test=self,
             page=self.dashboard_page,
             href=expected_url,
-            help_text='Getting Started with edX Studio',
+            help_text='Getting Started with Your Platform Studio',
             as_list_item=True
         )
 
@@ -807,7 +808,7 @@ class SettingsHelpTest(StudioCourseTest):
         Then Help link should open.
         And help url should be correct
         """
-        expected_url = _get_expected_documentation_url('/set_up_course/setting_up_student_view.html')
+        expected_url = _get_expected_documentation_url('/set_up_course/studio_add_course_information/index.html')
 
         # Assert that help link is correct.
         assert_nav_help_link(
@@ -879,7 +880,7 @@ class CourseTeamSettingsHelpTest(StudioCourseTest):
         Then Help link should open.
         And help url should be correct
         """
-        expected_url = _get_expected_documentation_url('/set_up_course/course_staffing.html#add-course-team-members')
+        expected_url = _get_expected_documentation_url('/set_up_course/studio_add_course_information/studio_course_staffing.html')
 
         # Assert that help link is correct.
         assert_nav_help_link(
@@ -1008,7 +1009,7 @@ class CertificatePageHelpTest(StudioCourseTest):
         Then Help link should open.
         And help url should be correct
         """
-        expected_url = _get_expected_documentation_url('/set_up_course/creating_course_certificates.html')
+        expected_url = _get_expected_documentation_url('/set_up_course/studio_add_course_information/studio_creating_certificates.html')
 
         # Assert that help link is correct.
         assert_nav_help_link(
@@ -1026,7 +1027,7 @@ class CertificatePageHelpTest(StudioCourseTest):
         Then Help link should open.
         And help url should be correct
         """
-        expected_url = _get_expected_documentation_url('/set_up_course/creating_course_certificates.html')
+        expected_url = _get_expected_documentation_url('/set_up_course/studio_add_course_information/studio_creating_certificates.html')
 
         # Assert that help link is correct.
         assert_side_bar_help_link(

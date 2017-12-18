@@ -4,17 +4,18 @@ This module has utility functions for gathering up the static content
 that is defined by XModules and XModuleDescriptors (javascript and css)
 """
 
-import logging
-import hashlib
-import os
 import errno
+import hashlib
+import logging
+import os
 import sys
 from collections import defaultdict
+
+import django
 from docopt import docopt
 from path import Path as path
 
 from xmodule.x_module import XModuleDescriptor
-
 
 LOG = logging.getLogger(__name__)
 
@@ -97,7 +98,7 @@ def _write_styles(selector, output_root, classes):
 
     module_styles_lines = [
         "@import 'bourbon/bourbon';",
-        "@import 'base/variables';",
+        "@import 'lms/theme/variables';",
     ]
     for class_, fragment_names in css_imports.items():
         module_styles_lines.append("""{selector}.xmodule_{class_} {{""".format(
@@ -187,7 +188,23 @@ def main():
     Usage: static_content.py <output_root>
     """
     from django.conf import settings
-    settings.configure()
+    # Install only the apps whose models are imported when this runs
+    installed_apps = (
+        'django.contrib.auth',
+        'django.contrib.contenttypes',
+        'config_models',
+        'openedx.core.djangoapps.video_config',
+        'openedx.core.djangoapps.video_pipeline',
+    )
+    try:
+        import edxval
+        installed_apps += ('edxval',)
+    except ImportError:
+        pass
+    settings.configure(
+        INSTALLED_APPS=installed_apps,
+    )
+    django.setup()
 
     args = docopt(main.__doc__)
     root = path(args['<output_root>'])

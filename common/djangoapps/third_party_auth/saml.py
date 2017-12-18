@@ -2,13 +2,17 @@
 Slightly customized python-social-auth backend for SAML 2.0 support
 """
 import logging
+from copy import deepcopy
+
+import requests
 from django.contrib.sites.models import Site
 from django.http import Http404
 from django.utils.functional import cached_property
+from django_countries import countries
+from social_core.backends.saml import OID_EDU_PERSON_ENTITLEMENT, SAMLAuth, SAMLIdentityProvider
+from social_core.exceptions import AuthForbidden
+
 from openedx.core.djangoapps.theming.helpers import get_current_request
-import requests
-from social.backends.saml import SAMLAuth, SAMLIdentityProvider, OID_EDU_PERSON_ENTITLEMENT
-from social.exceptions import AuthForbidden, AuthMissingParameter
 
 STANDARD_SAML_PROVIDER_KEY = 'standard_saml_provider'
 SAP_SUCCESSFACTORS_SAML_KEY = 'sap_success_factors'
@@ -41,7 +45,6 @@ class SAMLAuthBackend(SAMLAuth):  # pylint: disable=abstract-method
         authenticate the user.
 
         raise Http404 if SAML authentication is disabled.
-        raise AuthMissingParameter if the 'idp' parameter is missing.
         """
         if not self._config.enabled:
             log.error('SAML authentication is not enabled')
@@ -68,7 +71,7 @@ class SAMLAuthBackend(SAMLAuth):  # pylint: disable=abstract-method
         """
         Get an instance of OneLogin_Saml2_Auth
 
-        idp: The Identity Provider - a social.backends.saml.SAMLIdentityProvider instance
+        idp: The Identity Provider - a social_core.backends.saml.SAMLIdentityProvider instance
         """
         # We only override this method so that we can add extra debugging when debug_mode is True
         # Note that auth_inst is instantiated just for the current HTTP request, then is destroyed
@@ -98,9 +101,29 @@ class SAMLAuthBackend(SAMLAuth):  # pylint: disable=abstract-method
         return SAMLConfiguration.current(Site.objects.get_current(get_current_request()))
 
 
-class SapSuccessFactorsIdentityProvider(SAMLIdentityProvider):
+class EdXSAMLIdentityProvider(SAMLIdentityProvider):
     """
-    Customized version of SAMLIdentityProvider that knows how to retrieve user details
+    Customized version of SAMLIdentityProvider that can retrieve details beyond the standard
+    details supported by the canonical upstream version.
+    """
+
+    def get_user_details(self, attributes):
+        """
+        Overrides `get_user_details` from the base class; retrieves those details,
+        then updates the dict with values from whatever additional fields are desired.
+        """
+        details = super(EdXSAMLIdentityProvider, self).get_user_details(attributes)
+        extra_field_definitions = self.conf.get('extra_field_definitions', [])
+        details.update({
+            field['name']: attributes[field['urn']][0] if field['urn'] in attributes else None
+            for field in extra_field_definitions
+        })
+        return details
+
+
+class SapSuccessFactorsIdentityProvider(EdXSAMLIdentityProvider):
+    """
+    Customized version of EdXSAMLIdentityProvider that knows how to retrieve user details
     from the SAPSuccessFactors OData API, rather than parse them directly off the
     SAML assertion that we get in response to a login attempt.
     """
@@ -112,6 +135,76 @@ class SapSuccessFactorsIdentityProvider(SAMLIdentityProvider):
         'odata_company_id',
         'odata_client_id',
     )
+
+    # Define the relationships between SAPSF record fields and Open edX logistration fields.
+    default_field_mapping = {
+        'username': 'username',
+        'firstName': 'first_name',
+        'lastName': 'last_name',
+        'defaultFullName': 'fullname',
+        'email': 'email',
+        'country': 'country',
+    }
+
+    # Define a simple mapping to relate SAPSF values to Open edX-compatible values for
+    # any given field. By default, this only contains the Country field, as SAPSF supplies
+    # a country name, which has to be translated to a country code.
+    default_value_mapping = {
+        'country': {name: code for code, name in countries}
+    }
+
+    # Unfortunately, not everything has a 1:1 name mapping between Open edX and SAPSF, so
+    # we need some overrides. TODO: Fill in necessary mappings
+    default_value_mapping.update({
+        'United States': 'US',
+    })
+
+    def get_registration_fields(self, response):
+        """
+        Get a dictionary mapping registration field names to default values.
+        """
+        field_mapping = self.field_mappings
+        registration_fields = {edx_name: response['d'].get(odata_name, '') for odata_name, edx_name in field_mapping.items()}
+        value_mapping = self.value_mappings
+        for field, value in registration_fields.items():
+            if field in value_mapping and value in value_mapping[field]:
+                registration_fields[field] = value_mapping[field][value]
+        return registration_fields
+
+    @property
+    def field_mappings(self):
+        """
+        Get a dictionary mapping the field names returned in an SAP SuccessFactors
+        user entity to the field names with which those values should be used in
+        the Open edX registration form.
+        """
+        overrides = self.conf.get('sapsf_field_mappings', {})
+        base = self.default_field_mapping.copy()
+        base.update(overrides)
+        return base
+
+    @property
+    def value_mappings(self):
+        """
+        Get a dictionary mapping of field names to override objects which each
+        map values received from SAP SuccessFactors to values expected in the
+        Open edX platform registration form.
+        """
+        overrides = self.conf.get('sapsf_value_mappings', {})
+        base = deepcopy(self.default_value_mapping)
+        for field, override in overrides.items():
+            if field in base:
+                base[field].update(override)
+            else:
+                base[field] = override[field]
+        return base
+
+    @property
+    def timeout(self):
+        """
+        The number of seconds OData API requests should wait for a response before failing.
+        """
+        return self.conf.get('odata_api_request_timeout', 10)
 
     @property
     def sapsf_idp_url(self):
@@ -137,10 +230,14 @@ class SapSuccessFactorsIdentityProvider(SAMLIdentityProvider):
     def odata_client_id(self):
         return self.conf['odata_client_id']
 
-    def missing_variables(self):
+    @property
+    def oauth_user_id(self):
+        return self.conf.get('oauth_user_id')
+
+    def invalid_configuration(self):
         """
         Check that we have all the details we need to properly retrieve rich data from the
-        SAP SuccessFactors OData API. If we don't, then we should log a warning indicating
+        SAP SuccessFactors BizX OData API. If we don't, then we should log a warning indicating
         the specific variables that are missing.
         """
         if not all(var in self.conf for var in self.required_variables):
@@ -152,77 +249,150 @@ class SapSuccessFactorsIdentityProvider(SAMLIdentityProvider):
             )
             return missing
 
-    def get_odata_api_client(self, user_id):
+    def log_bizx_api_exception(self, transaction_data, err):
+        try:
+            sys_msg = err.response.content
+        except AttributeError:
+            sys_msg = 'Not available'
+        try:
+            headers = err.response.headers
+        except AttributeError:
+            headers = 'Not available'
+        token_data = transaction_data.get('token_data')
+        token_data = token_data if token_data else 'Not available'
+        log_msg_template = (
+            'SAPSuccessFactors exception received for {operation_name} request.  ' +
+            'URL: {url}  ' +
+            'Company ID: {company_id}.  ' +
+            'User ID: {user_id}.  ' +
+            'Error message: {err_msg}.  ' +
+            'System message: {sys_msg}.  ' +
+            'Headers: {headers}.  ' +
+            'Token Data: {token_data}.'
+        )
+        log_msg = log_msg_template.format(
+            operation_name=transaction_data['operation_name'],
+            url=transaction_data['endpoint_url'],
+            company_id=transaction_data['company_id'],
+            user_id=transaction_data['user_id'],
+            err_msg=err.message,
+            sys_msg=sys_msg,
+            headers=headers,
+            token_data=token_data,
+        )
+        log.warning(log_msg, exc_info=True)
+
+    def generate_bizx_oauth_api_saml_assertion(self, user_id):
         """
-        Get a Requests session with the headers needed to properly authenticate it with
-        the SAP SuccessFactors OData API.
+        Obtain a SAML assertion from the SAP SuccessFactors BizX OAuth2 identity provider service using
+        information specified in the third party authentication configuration "Advanced Settings" section.
+        Utilizes the OAuth user_id if defined in Advanced Settings in order to generate the SAML assertion,
+        otherwise utilizes the user_id for the current user in context.
         """
         session = requests.Session()
-        assertion = session.post(
-            self.sapsf_idp_url,
-            data={
-                'client_id': self.odata_client_id,
-                'user_id': user_id,
-                'token_url': self.sapsf_token_url,
-                'private_key': self.sapsf_private_key,
-            },
-            timeout=10,
-        )
-        assertion.raise_for_status()
-        assertion = assertion.text
-        token = session.post(
-            self.sapsf_token_url,
-            data={
-                'client_id': self.odata_client_id,
-                'company_id': self.odata_company_id,
-                'grant_type': 'urn:ietf:params:oauth:grant-type:saml2-bearer',
-                'assertion': assertion,
-            },
-            timeout=10,
-        )
-        token.raise_for_status()
-        token = token.json()['access_token']
-        session.headers.update({'Authorization': 'Bearer {}'.format(token), 'Accept': 'application/json'})
+        oauth_user_id = self.oauth_user_id if self.oauth_user_id else user_id
+        transaction_data = {
+            'token_url': self.sapsf_token_url,
+            'client_id': self.odata_client_id,
+            'user_id': oauth_user_id,
+            'private_key': self.sapsf_private_key,
+        }
+        try:
+            assertion = session.post(
+                self.sapsf_idp_url,
+                data=transaction_data,
+                timeout=self.timeout,
+            )
+            assertion.raise_for_status()
+        except requests.RequestException as err:
+            transaction_data['operation_name'] = 'generate_bizx_oauth_api_saml_assertion'
+            transaction_data['endpoint_url'] = self.sapsf_idp_url
+            transaction_data['company_id'] = self.odata_company_id
+            self.log_bizx_api_exception(transaction_data, err)
+            return None
+        return assertion.text
+
+    def generate_bizx_oauth_api_access_token(self, user_id):
+        """
+        Request a new access token from the SuccessFactors BizX OAuth2 identity provider service
+        using a valid SAML assertion (see generate_bizx_api_saml_assertion) and the infomration specified
+        in the third party authentication configuration "Advanced Settings" section.
+        """
+        session = requests.Session()
+        transaction_data = {
+            'client_id': self.odata_client_id,
+            'company_id': self.odata_company_id,
+            'grant_type': 'urn:ietf:params:oauth:grant-type:saml2-bearer',
+        }
+        assertion = self.generate_bizx_oauth_api_saml_assertion(user_id)
+        if not assertion:
+            return None
+        try:
+            transaction_data['assertion'] = assertion
+            token_response = session.post(
+                self.sapsf_token_url,
+                data=transaction_data,
+                timeout=self.timeout,
+            )
+            token_response.raise_for_status()
+        except requests.RequestException as err:
+            transaction_data['operation_name'] = 'generate_bizx_oauth_api_access_token'
+            transaction_data['endpoint_url'] = self.sapsf_token_url
+            transaction_data['user_id'] = user_id
+            self.log_bizx_api_exception(transaction_data, err)
+            return None
+        return token_response.json()
+
+    def get_bizx_odata_api_client(self, user_id):
+        session = requests.Session()
+        access_token_data = self.generate_bizx_oauth_api_access_token(user_id)
+        if not access_token_data:
+            return None
+        token_string = access_token_data['access_token']
+        session.headers.update({'Authorization': 'Bearer {}'.format(token_string), 'Accept': 'application/json'})
+        session.token_data = access_token_data
         return session
 
     def get_user_details(self, attributes):
         """
         Attempt to get rich user details from the SAP SuccessFactors OData API. If we're missing any
-        of the details we need to do that, fail nicely by returning the details we're able to extract
-        from just the SAML response and log a warning.
+        of the info we need to do that, or if the request triggers an exception, then fail nicely by
+        returning the basic user details we're able to extract from just the SAML response.
         """
-        details = super(SapSuccessFactorsIdentityProvider, self).get_user_details(attributes)
-        if self.missing_variables():
-            # If there aren't enough details to make the request, log a warning and return the details
-            # from the SAML assertion.
-            return details
-        username = details['username']
+        basic_details = super(SapSuccessFactorsIdentityProvider, self).get_user_details(attributes)
+        if self.invalid_configuration():
+            return basic_details
+        user_id = basic_details['username']
+        fields = ','.join(self.field_mappings)
+        endpoint_url = '{root_url}User(userId=\'{user_id}\')?$select={fields}'.format(
+            root_url=self.odata_api_root_url,
+            user_id=user_id,
+            fields=fields,
+        )
+        client = self.get_bizx_odata_api_client(user_id=user_id)
+        if not client:
+            return basic_details
+        transaction_data = {
+            'token_data': client.token_data
+        }
         try:
-            client = self.get_odata_api_client(user_id=username)
             response = client.get(
-                '{root_url}User(userId=\'{user_id}\')?$select=username,firstName,lastName,defaultFullName,email'.format(
-                    root_url=self.odata_api_root_url,
-                    user_id=username
-                ),
-                timeout=10,
+                endpoint_url,
+                timeout=self.timeout,
             )
             response.raise_for_status()
             response = response.json()
-        except requests.RequestException:
-            # If there was an HTTP level error, log the error and return the details from the SAML assertion.
-            log.warning(
-                'Unable to retrieve user details with username %s from SAPSuccessFactors with company ID %s.',
-                username,
-                self.odata_company_id,
-            )
-            return details
-        return {
-            'username': response['d']['username'],
-            'first_name': response['d']['firstName'],
-            'last_name': response['d']['lastName'],
-            'fullname': response['d']['defaultFullName'],
-            'email': response['d']['email'],
-        }
+        except requests.RequestException as err:
+            transaction_data = {
+                'operation_name': 'get_user_details',
+                'endpoint_url': endpoint_url,
+                'user_id': user_id,
+                'company_id': self.odata_company_id,
+                'token_data': client.token_data,
+            }
+            self.log_bizx_api_exception(transaction_data, err)
+            return basic_details
+        return self.get_registration_fields(response)
 
 
 def get_saml_idp_choices():
@@ -242,12 +412,12 @@ def get_saml_idp_class(idp_identifier_string):
     the SAMLIdentityProvider subclass able to handle requests for that type of identity provider.
     """
     choices = {
-        STANDARD_SAML_PROVIDER_KEY: SAMLIdentityProvider,
+        STANDARD_SAML_PROVIDER_KEY: EdXSAMLIdentityProvider,
         SAP_SUCCESSFACTORS_SAML_KEY: SapSuccessFactorsIdentityProvider,
     }
     if idp_identifier_string not in choices:
         log.error(
-            '%s is not a valid SAMLIdentityProvider subclass; using SAMLIdentityProvider base class.',
+            '%s is not a valid EdXSAMLIdentityProvider subclass; using EdXSAMLIdentityProvider base class.',
             idp_identifier_string
         )
-    return choices.get(idp_identifier_string, SAMLIdentityProvider)
+    return choices.get(idp_identifier_string, EdXSAMLIdentityProvider)

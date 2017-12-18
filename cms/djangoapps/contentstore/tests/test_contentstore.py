@@ -1,63 +1,55 @@
 # -*- coding: utf-8 -*-
 
 import copy
-import mock
 import shutil
-import lxml.html
-from lxml import etree
-import ddt
-
 from datetime import timedelta
-from fs.osfs import OSFS
-from json import loads
-from path import Path as path
-from textwrap import dedent
-from uuid import uuid4
 from functools import wraps
+from json import loads
+from textwrap import dedent
 from unittest import SkipTest
+from uuid import uuid4
 
+import ddt
+import lxml.html
+import mock
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.test import TestCase
 from django.test.utils import override_settings
-
-from openedx.core.lib.tempdir import mkdtemp_clean
-from common.test.utils import XssTestMixin
-from contentstore.tests.utils import parse_json, AjaxEnabledTestClient, CourseTestCase
-from contentstore.views.component import ADVANCED_COMPONENT_TYPES
-
 from edxval.api import create_video, get_videos_for_course
-
-from xmodule.contentstore.django import contentstore
-from xmodule.contentstore.utils import restore_asset_from_trashcan, empty_asset_trashcan
-from xmodule.exceptions import InvalidVersionError
-from xmodule.modulestore import ModuleStoreEnum
-from xmodule.modulestore.exceptions import ItemNotFoundError
-from xmodule.modulestore.inheritance import own_metadata
-from opaque_keys.edx.keys import UsageKey, CourseKey
+from fs.osfs import OSFS
+from lxml import etree
+from opaque_keys import InvalidKeyError
+from opaque_keys.edx.keys import CourseKey, UsageKey
 from opaque_keys.edx.locations import AssetLocation, CourseLocator
-from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory, LibraryFactory, check_mongo_calls
-from xmodule.modulestore.xml_exporter import export_course_to_xml
-from xmodule.modulestore.xml_importer import import_course_from_xml, perform_xlint
+from path import Path as path
+from waffle.testutils import override_switch
 
-from xmodule.capa_module import CapaDescriptor
-from xmodule.course_module import CourseDescriptor, Textbook
-from xmodule.seq_module import SequenceDescriptor
-
-from contentstore.utils import delete_course_and_groups, reverse_url, reverse_course_url
+from contentstore.tests.utils import AjaxEnabledTestClient, CourseTestCase, get_url, parse_json
+from contentstore.utils import delete_course, reverse_course_url, reverse_url
+from contentstore.views.component import ADVANCED_COMPONENT_TYPES
+from contentstore.config import waffle
+from course_action_state.managers import CourseActionStateItemNotFoundError
+from course_action_state.models import CourseRerunState, CourseRerunUIStateManager
 from django_comment_common.utils import are_permissions_roles_seeded
-
+from openedx.core.lib.tempdir import mkdtemp_clean
 from student import auth
 from student.models import CourseEnrollment
 from student.roles import CourseCreatorRole, CourseInstructorRole
-from opaque_keys import InvalidKeyError
-from contentstore.tests.utils import get_url
-from course_action_state.models import CourseRerunState, CourseRerunUIStateManager
-
-from course_action_state.managers import CourseActionStateItemNotFoundError
+from xmodule.capa_module import CapaDescriptor
 from xmodule.contentstore.content import StaticContent
+from xmodule.contentstore.django import contentstore
+from xmodule.contentstore.utils import empty_asset_trashcan, restore_asset_from_trashcan
+from xmodule.course_module import CourseDescriptor, Textbook
+from xmodule.exceptions import InvalidVersionError
+from xmodule.modulestore import ModuleStoreEnum
 from xmodule.modulestore.django import modulestore
-
+from xmodule.modulestore.exceptions import ItemNotFoundError
+from xmodule.modulestore.inheritance import own_metadata
+from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory, check_mongo_calls
+from xmodule.modulestore.xml_exporter import export_course_to_xml
+from xmodule.modulestore.xml_importer import import_course_from_xml, perform_xlint
+from xmodule.seq_module import SequenceDescriptor
 
 TEST_DATA_CONTENTSTORE = copy.deepcopy(settings.CONTENTSTORE)
 TEST_DATA_CONTENTSTORE['DOC_STORE_CONFIG']['db'] = 'test_xcontent_%s' % uuid4().hex
@@ -1064,6 +1056,16 @@ class MiscCourseTests(ContentStoreTestCase):
             resp = self.client.get_html('/c4x/InvalidOrg/InvalidCourse/asset/invalid.png')
             self.assertEqual(resp.status_code, 404)
 
+    @override_switch(
+        '{}.{}'.format(waffle.WAFFLE_NAMESPACE, waffle.ENABLE_ACCESSIBILITY_POLICY_PAGE),
+        active=False)
+    def test_disabled_accessibility_page(self):
+        """
+        Test that accessibility page returns 404 when waffle switch is disabled
+        """
+        resp = self.client.get_html('/accessibility')
+        self.assertEqual(resp.status_code, 404)
+
     def test_delete_course(self):
         """
         This test creates a course, makes a draft item, and deletes the course. This will also assert that the
@@ -1147,7 +1149,7 @@ class MiscCourseTests(ContentStoreTestCase):
 
 
 @ddt.ddt
-class ContentStoreTest(ContentStoreTestCase, XssTestMixin):
+class ContentStoreTest(ContentStoreTestCase):
     """
     Tests for the CMS ContentStore application.
     """
@@ -1232,7 +1234,7 @@ class ContentStoreTest(ContentStoreTestCase, XssTestMixin):
         test_course_data = self.assert_created_course(number_suffix=uuid4().hex)
         course_id = _get_course_id(self.store, test_course_data)
         self.assertTrue(are_permissions_roles_seeded(course_id))
-        delete_course_and_groups(course_id, self.user.id)
+        delete_course(course_id, self.user.id)
         # should raise an exception for checking permissions on deleted course
         with self.assertRaises(ItemNotFoundError):
             are_permissions_roles_seeded(course_id)
@@ -1244,7 +1246,7 @@ class ContentStoreTest(ContentStoreTestCase, XssTestMixin):
 
         # unseed the forums for the first course
         course_id = _get_course_id(self.store, test_course_data)
-        delete_course_and_groups(course_id, self.user.id)
+        delete_course(course_id, self.user.id)
         # should raise an exception for checking permissions on deleted course
         with self.assertRaises(ItemNotFoundError):
             are_permissions_roles_seeded(course_id)
@@ -1264,7 +1266,7 @@ class ContentStoreTest(ContentStoreTestCase, XssTestMixin):
         self.assertTrue(CourseEnrollment.is_enrolled(self.user, course_id))
         self.assertTrue(self.user.roles.filter(name="Student", course_id=course_id))
 
-        delete_course_and_groups(course_id, self.user.id)
+        delete_course(course_id, self.user.id)
         # check that user's enrollment for this course is not deleted
         self.assertTrue(CourseEnrollment.is_enrolled(self.user, course_id))
         # check that user has form role "Student" for this course even after deleting it
@@ -1286,13 +1288,33 @@ class ContentStoreTest(ContentStoreTestCase, XssTestMixin):
         self.assertGreater(len(instructor_role.users_with_role()), 0)
 
         # Now delete course and check that user not in instructor groups of this course
-        delete_course_and_groups(course_id, self.user.id)
+        delete_course(course_id, self.user.id)
 
         # Update our cached user since its roles have changed
         self.user = User.objects.get_by_natural_key(self.user.natural_key()[0])
 
         self.assertFalse(instructor_role.has_user(self.user))
         self.assertEqual(len(instructor_role.users_with_role()), 0)
+
+    def test_delete_course_with_keep_instructors(self):
+        """
+        Tests that when you delete a course with 'keep_instructors',
+        it does not remove any permissions of users/groups from the course
+        """
+        test_course_data = self.assert_created_course(number_suffix=uuid4().hex)
+        course_id = _get_course_id(self.store, test_course_data)
+
+        # Add and verify instructor role for the course
+        instructor_role = CourseInstructorRole(course_id)
+        instructor_role.add_users(self.user)
+        self.assertTrue(instructor_role.has_user(self.user))
+
+        delete_course(course_id, self.user.id, keep_instructors=True)
+
+        # Update our cached user so if any change in roles can be captured
+        self.user = User.objects.get_by_natural_key(self.user.natural_key()[0])
+
+        self.assertTrue(instructor_role.has_user(self.user))
 
     def test_create_course_after_delete(self):
         """
@@ -1301,7 +1323,7 @@ class ContentStoreTest(ContentStoreTestCase, XssTestMixin):
         test_course_data = self.assert_created_course()
         course_id = _get_course_id(self.store, test_course_data)
 
-        delete_course_and_groups(course_id, self.user.id)
+        delete_course(course_id, self.user.id)
 
         self.assert_created_course()
 
@@ -1461,33 +1483,6 @@ class ContentStoreTest(ContentStoreTestCase, XssTestMixin):
         course = CourseFactory.create()
         item = ItemFactory.create(parent_location=course.location)
         self.assertIsInstance(item, SequenceDescriptor)
-
-    def test_course_index_view_with_course(self):
-        """Test viewing the index page with an existing course"""
-        CourseFactory.create(display_name='Robot Super Educational Course')
-        resp = self.client.get_html('/home/')
-        self.assertContains(
-            resp,
-            '<h3 class="course-title">Robot Super Educational Course</h3>',
-            status_code=200,
-            html=True
-        )
-
-    def test_course_index_view_xss(self):
-        """Test that the index page correctly escapes course names with script
-        tags."""
-        CourseFactory.create(
-            display_name='<script>alert("course XSS")</script>'
-        )
-
-        LibraryFactory.create(display_name='<script>alert("library XSS")</script>')
-
-        resp = self.client.get_html('/home/')
-        for xss in ('course', 'library'):
-            html = '<script>alert("{name} XSS")</script>'.format(
-                name=xss
-            )
-            self.assert_no_xss(resp, html)
 
     def test_course_overview_view_with_course(self):
         """Test viewing the course overview page with an existing course"""
@@ -1900,30 +1895,22 @@ class RerunCourseTest(ContentStoreTestCase):
             destination_course_key = CourseKey.from_string(json_resp['destination_course_key'])
         return destination_course_key
 
-    def get_course_listing_elements(self, html, course_key):
-        """Returns the elements in the course listing section of html that have the given course_key"""
-        return html.cssselect('.course-item[data-course-key="{}"]'.format(unicode(course_key)))
-
     def get_unsucceeded_course_action_elements(self, html, course_key):
         """Returns the elements in the unsucceeded course action section that have the given course_key"""
         return html.cssselect('.courses-processing li[data-course-key="{}"]'.format(unicode(course_key)))
 
     def assertInCourseListing(self, course_key):
         """
-        Asserts that the given course key is in the accessible course listing section of the html
-        and NOT in the unsucceeded course action section of the html.
+        Asserts that the given course key is NOT in the unsucceeded course action section of the html.
         """
         course_listing = lxml.html.fromstring(self.client.get_html('/home/').content)
-        self.assertEqual(len(self.get_course_listing_elements(course_listing, course_key)), 1)
         self.assertEqual(len(self.get_unsucceeded_course_action_elements(course_listing, course_key)), 0)
 
     def assertInUnsucceededCourseActions(self, course_key):
         """
-        Asserts that the given course key is in the unsucceeded course action section of the html
-        and NOT in the accessible course listing section of the html.
+        Asserts that the given course key is in the unsucceeded course action section of the html.
         """
         course_listing = lxml.html.fromstring(self.client.get_html('/home/').content)
-        self.assertEqual(len(self.get_course_listing_elements(course_listing, course_key)), 0)
         self.assertEqual(len(self.get_unsucceeded_course_action_elements(course_listing, course_key)), 1)
 
     def verify_rerun_course(self, source_course_key, destination_course_key, destination_display_name):
@@ -1955,7 +1942,7 @@ class RerunCourseTest(ContentStoreTestCase):
         source_course = CourseFactory.create()
         destination_course_key = self.post_rerun_request(source_course.id)
         self.verify_rerun_course(source_course.id, destination_course_key, self.destination_course_data['display_name'])
-        videos = list(get_videos_for_course(destination_course_key))
+        videos = list(get_videos_for_course(unicode(destination_course_key)))
         self.assertEqual(0, len(videos))
         self.assertInCourseListing(destination_course_key)
 
@@ -1964,7 +1951,7 @@ class RerunCourseTest(ContentStoreTestCase):
         create_video(
             dict(
                 edx_video_id="tree-hugger",
-                courses=[source_course.id],
+                courses=[unicode(source_course.id)],
                 status='test',
                 duration=2,
                 encoded_videos=[]
@@ -1974,8 +1961,8 @@ class RerunCourseTest(ContentStoreTestCase):
         self.verify_rerun_course(source_course.id, destination_course_key, self.destination_course_data['display_name'])
 
         # Verify that the VAL copies videos to the rerun
-        source_videos = list(get_videos_for_course(source_course.id))
-        target_videos = list(get_videos_for_course(destination_course_key))
+        source_videos = list(get_videos_for_course(unicode(source_course.id)))
+        target_videos = list(get_videos_for_course(unicode(destination_course_key)))
         self.assertEqual(1, len(source_videos))
         self.assertEqual(source_videos, target_videos)
 
@@ -2175,6 +2162,12 @@ class EntryPageTestCase(TestCase):
     def test_logout(self):
         # Logout redirects.
         self._test_page("/logout", 302)
+
+    @override_switch(
+        '{}.{}'.format(waffle.WAFFLE_NAMESPACE, waffle.ENABLE_ACCESSIBILITY_POLICY_PAGE),
+        active=True)
+    def test_accessibility(self):
+        self._test_page('/accessibility')
 
 
 class SigninPageTestCase(TestCase):

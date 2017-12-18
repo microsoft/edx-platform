@@ -7,23 +7,22 @@ import json
 from datetime import datetime, timedelta
 
 import ddt
-from flaky import flaky
 from nose.plugins.attrib import attr
 
-from ..helpers import UniqueCourseTest, EventsTestMixin, auto_auth, create_multiple_choice_problem
 from ...fixtures.course import CourseFixture, XBlockFixtureDesc
+from ...pages.common.auto_auth import AutoAuthPage
 from ...pages.common.logout import LogoutPage
 from ...pages.lms.course_home import CourseHomePage
 from ...pages.lms.courseware import CoursewarePage, CoursewareSequentialTabPage
 from ...pages.lms.create_mode import ModeCreationPage
 from ...pages.lms.dashboard import DashboardPage
-from ...pages.lms.pay_and_verify import PaymentAndVerificationFlow, FakePaymentPage, FakeSoftwareSecureVerificationPage
+from ...pages.lms.pay_and_verify import FakePaymentPage, FakeSoftwareSecureVerificationPage, PaymentAndVerificationFlow
 from ...pages.lms.problem import ProblemPage
 from ...pages.lms.progress import ProgressPage
 from ...pages.lms.staff_view import StaffCoursewarePage
 from ...pages.lms.track_selection import TrackSelectionPage
-from ...pages.studio.auto_auth import AutoAuthPage
 from ...pages.studio.overview import CourseOutlinePage as StudioCourseOutlinePage
+from ..helpers import EventsTestMixin, UniqueCourseTest, auto_auth, create_multiple_choice_problem
 
 
 @attr(shard=9)
@@ -77,10 +76,6 @@ class CoursewareTest(UniqueCourseTest):
         self.problem_page = ProblemPage(self.browser)  # pylint: disable=attribute-defined-outside-init
         self.assertEqual(self.problem_page.problem_name, 'Test Problem 1')
 
-    def _create_breadcrumb(self, index):
-        """ Create breadcrumb """
-        return ['Test Section {}'.format(index), 'Test Subsection {}'.format(index), 'Test Problem {}'.format(index)]
-
     def test_courseware(self):
         """
         Test courseware if recent visited subsection become unpublished.
@@ -118,11 +113,15 @@ class CoursewareTest(UniqueCourseTest):
         """
         xblocks = self.course_fix.get_nested_xblocks(category="problem")
         for index in range(1, len(xblocks) + 1):
+            test_section_title = 'Test Section {}'.format(index)
+            test_subsection_title = 'Test Subsection {}'.format(index)
+            test_unit_title = 'Test Problem {}'.format(index)
             self.course_home_page.visit()
-            self.course_home_page.outline.go_to_section('Test Section {}'.format(index), 'Test Subsection {}'.format(index))
-            courseware_page_breadcrumb = self.courseware_page.breadcrumb
-            expected_breadcrumb = self._create_breadcrumb(index)  # pylint: disable=no-member
-            self.assertEqual(courseware_page_breadcrumb, expected_breadcrumb)
+            self.course_home_page.outline.go_to_section(test_section_title, test_subsection_title)
+            course_nav = self.courseware_page.nav
+            self.assertEqual(course_nav.breadcrumb_section_title, test_section_title)
+            self.assertEqual(course_nav.breadcrumb_subsection_title, test_subsection_title)
+            self.assertEqual(course_nav.breadcrumb_unit_title, test_unit_title)
 
 
 @attr(shard=9)
@@ -238,32 +237,6 @@ class ProctoredExamTest(UniqueCourseTest):
         self.studio_course_outline.open_subsection_settings_dialog()
         self.assertTrue(self.studio_course_outline.proctoring_items_are_displayed())
 
-    def test_proctored_exam_flow(self):
-        """
-        Given that I am a staff member on the exam settings section
-        select advanced settings tab
-        When I Make the exam proctored.
-        And I login as a verified student.
-        And I verify the user's ID.
-        And visit the courseware as a verified student.
-        Then I can see an option to take the exam as a proctored exam.
-        """
-        LogoutPage(self.browser).visit()
-        auto_auth(self.browser, "STAFF_TESTER", "staff101@example.com", True, self.course_id)
-        self.studio_course_outline.visit()
-        self.studio_course_outline.open_subsection_settings_dialog()
-
-        self.studio_course_outline.select_advanced_tab()
-        self.studio_course_outline.make_exam_proctored()
-
-        LogoutPage(self.browser).visit()
-        self._login_as_a_verified_user()
-
-        self._verify_user()
-
-        self.courseware_page.visit()
-        self.assertTrue(self.courseware_page.can_start_proctored_exam)
-
     def _setup_and_take_timed_exam(self, hide_after_due=False):
         """
         Helper to perform the common action "set up a timed exam as staff,
@@ -285,6 +258,7 @@ class ProctoredExamTest(UniqueCourseTest):
         self.assertTrue(self.courseware_page.is_timer_bar_present)
 
         self.courseware_page.stop_timed_exam()
+        self.courseware_page.wait_for_page()
         self.assertTrue(self.courseware_page.has_submitted_exam_message())
 
         LogoutPage(self.browser).visit()
@@ -439,7 +413,6 @@ class CoursewareMultipleVerticalsTest(CoursewareMultipleVerticalsTestBase):
     Test courseware with multiple verticals
     """
 
-    @flaky  # PLAT-1198; should be fixed, but verify that failures stop before removing
     def test_navigation_buttons(self):
         self.courseware_page.visit()
 
@@ -806,42 +779,6 @@ class ProblemStateOnNavigationTest(UniqueCourseTest):
         after_meta = self.problem_page.problem_meta
 
         self.assertIn(problem1_content_after_coming_back, problem1_content_before_switch)
-        self.assertEqual(before_meta, after_meta)
-
-    def test_perform_problem_reset_and_navigate(self):
-        """
-        Scenario:
-        I go to sequential position 1
-        Facing problem1, I select 'choice_1'
-        Then perform the action – check and reset
-        Then I go to sequential position 2
-        Then I came back to sequential position 1 again
-        Facing problem1, I observe the problem1 content is not
-        outdated before and after sequence navigation
-        """
-        # Go to sequential position 1 and assert that we are on problem 1.
-        self.go_to_tab_and_assert_problem(1, self.problem1_name)
-
-        # Update problem 1's content state – by performing reset operation.
-        self.problem_page.click_choice('choice_choice_1')
-        self.problem_page.click_submit()
-        self.problem_page.wait_for_expected_status('label.choicegroup_incorrect', 'incorrect')
-        self.problem_page.click_reset()
-        self.problem_page.wait_for_expected_status('span.unanswered', 'unanswered')
-
-        # Save problem 1's content state as we're about to switch units in the sequence.
-        problem1_content_before_switch = self.problem_page.problem_content
-        before_meta = self.problem_page.problem_meta
-
-        # Go to sequential position 2 and assert that we are on problem 2.
-        self.go_to_tab_and_assert_problem(2, self.problem2_name)
-
-        # Come back to our original unit in the sequence and assert that the content hasn't changed.
-        self.go_to_tab_and_assert_problem(1, self.problem1_name)
-        problem1_content_after_coming_back = self.problem_page.problem_content
-        after_meta = self.problem_page.problem_meta
-
-        self.assertEqual(problem1_content_before_switch, problem1_content_after_coming_back)
         self.assertEqual(before_meta, after_meta)
 
 

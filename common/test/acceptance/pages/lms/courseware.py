@@ -2,9 +2,10 @@
 Courseware page.
 """
 
+import re
+
 from bok_choy.page_object import PageObject, unguarded
 from bok_choy.promise import EmptyPromise
-import re
 from selenium.webdriver.common.action_chains import ActionChains
 
 from common.test.acceptance.pages.lms.bookmarks import BookmarksPage
@@ -290,11 +291,6 @@ class CoursewarePage(CoursePage):
         attribute_value = lambda el: el.get_attribute('data-id')
         return self.q(css='#sequence-list .nav-item').filter(get_active).map(attribute_value).results[0]
 
-    @property
-    def breadcrumb(self):
-        """ Return the course tree breadcrumb shown above the sequential bar """
-        return [part.strip() for part in self.q(css='.path .position').text[0].split('>')]
-
     def unit_title_visible(self):
         """ Check if unit title is visible """
         return self.q(css='.unit-title').visible
@@ -359,10 +355,34 @@ class CourseNavPage(PageObject):
         super(CourseNavPage, self).__init__(browser)
         self.parent_page = parent_page
         # TODO: TNL-6546: Remove the following
-        self.unified_course_view = False
+        self.course_outline_page = False
 
     def is_browser_on_page(self):
         return self.parent_page.is_browser_on_page
+
+    @property
+    def breadcrumb_section_title(self):
+        """
+        Returns the section's title from the breadcrumb, or None if one is not found.
+        """
+        label = self.q(css='.breadcrumbs .nav-item-chapter').text
+        return label[0].strip() if label else None
+
+    @property
+    def breadcrumb_subsection_title(self):
+        """
+        Returns the subsection's title from the breadcrumb, or None if one is not found
+        """
+        label = self.q(css='.breadcrumbs .nav-item-section').text
+        return label[0].strip() if label else None
+
+    @property
+    def breadcrumb_unit_title(self):
+        """
+        Returns the unit's title from the breadcrumb, or None if one is not found
+        """
+        label = self.q(css='.breadcrumbs .nav-item-sequence').text
+        return label[0].strip() if label else None
 
     # TODO: TNL-6546: Remove method, outline no longer on courseware page
     @property
@@ -530,7 +550,7 @@ class CourseNavPage(PageObject):
         from common.test.acceptance.pages.lms.course_home import CourseHomePage
 
         course_home_page = CourseHomePage(self.browser, self.parent_page.course_id)
-        self.q(css='.path a').click()
+        self.q(css='.nav-item-course').click()
         course_home_page.wait_for_page()
         return course_home_page
 
@@ -539,38 +559,8 @@ class CourseNavPage(PageObject):
         """
         Return a boolean indicating whether the user is on the section and subsection
         with the specified titles.
-
         """
-        # TODO: TNL-6546: Remove if/else; always use unified_course_view version (if)
-        if self.unified_course_view:
-            # breadcrumb location of form: "SECTION_TITLE > SUBSECTION_TITLE > SEQUENTIAL_TITLE"
-            bread_crumb_current = self.q(css='.position').text
-            if len(bread_crumb_current) != 1:
-                self.warning("Could not find the current bread crumb with section and subsection.")
-                return False
-
-            return bread_crumb_current[0].strip().startswith(section_title + ' > ' + subsection_title + ' > ')
-
-        else:
-            # This assumes that the currently expanded section is the one we're on
-            # That's true right after we click the section/subsection, but not true in general
-            # (the user could go to a section, then expand another tab).
-            current_section_list = self.q(css='.course-navigation .chapter.is-open .group-heading').text
-            current_subsection_list = self.q(css='.course-navigation .chapter-content-container .menu-item.active a p').text
-
-            if len(current_section_list) == 0:
-                self.warning("Could not find the current section")
-                return False
-
-            elif len(current_subsection_list) == 0:
-                self.warning("Could not find current subsection")
-                return False
-
-            else:
-                return (
-                    current_section_list[0].strip() == section_title and
-                    current_subsection_list[0].strip().split('\n')[0] == subsection_title
-                )
+        return self.breadcrumb_section_title == section_title and self.breadcrumb_subsection_title == subsection_title
 
     # Regular expression to remove HTML span tags from a string
     REMOVE_SPAN_TAG_RE = re.compile(r'</span>(.+)<span')
@@ -589,11 +579,11 @@ class CourseNavPage(PageObject):
         """
         return self.q(css='.chapter-content-container .menu-item.active a').attrs('href')[0]
 
-    # TODO: TNL-6546: Remove all references to self.unified_course_view
+    # TODO: TNL-6546: Remove all references to self.course_outline_page
     # TODO: TNL-6546: Remove the following function
-    def visit_unified_course_view(self):
-        # use unified_course_view version of the nav
-        self.unified_course_view = True
-        # reload the same page with the unified course view
-        self.browser.get(self.browser.current_url + "&unified_course_view=1")
+    def visit_course_outline_page(self):
+        # use course_outline_page version of the nav
+        self.course_outline_page = True
+        # reload the same page with the course_outline_page flag
+        self.browser.get(self.browser.current_url + "&course_experience.course_outline_page=1")
         self.wait_for_page()

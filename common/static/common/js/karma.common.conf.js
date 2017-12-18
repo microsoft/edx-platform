@@ -34,15 +34,30 @@
 //
 
 /* eslint-env node */
+/* globals process */
 
 'use strict';
 
 var path = require('path');
 var _ = require('underscore');
 var appRoot = path.join(__dirname, '../../../../');
-var webpackConfig = require(path.join(appRoot, 'webpack.config.js'));
+var webdriver = require('selenium-webdriver');
+var firefox = require('selenium-webdriver/firefox');
+var webpackConfig = require(path.join(appRoot, 'webpack.dev.config.js'));
 
 delete webpackConfig.entry;
+
+// The following crazy bit is to work around the webpack.optimize.CommonsChunkPlugin
+// plugin. The problem is that it it factors out the code that defines webpackJsonp
+// and puts in in the commons JS, which Karma doesn't know to load first. This is a
+// workaround recommended in the karma-webpack bug report that basically just removes
+// the plugin for the purposes of Karma testing (the plugin is meant to be an
+// optimization only).
+//     https://github.com/webpack-contrib/karma-webpack/issues/24#issuecomment-257613167
+//
+// This should be fixed in v3 of karma-webpack
+const commonsChunkPluginIndex = webpackConfig.plugins.findIndex(plugin => plugin.chunkNames);
+webpackConfig.plugins.splice(commonsChunkPluginIndex, 1);
 
 // Files which are needed by all lms/cms suites.
 var commonFiles = {
@@ -255,6 +270,18 @@ function getBaseConfig(config, useRequireJs) {
         });
     };
 
+    var hostname = 'localhost';
+    var port = 9876;
+    if (process.env.hasOwnProperty('BOK_CHOY_HOSTNAME')) {
+        hostname = process.env.BOK_CHOY_HOSTNAME;
+        if (hostname === 'edx.devstack.lms') {
+            port = 19876;
+        }
+        else {
+            port = 19877;
+        }
+    }
+
     initFrameworks.$inject = ['config.files'];
 
     var customPlugin = {
@@ -278,6 +305,7 @@ function getBaseConfig(config, useRequireJs) {
             'karma-chrome-launcher',
             'karma-firefox-launcher',
             'karma-spec-reporter',
+            'karma-selenium-webdriver-launcher',
             'karma-webpack',
             'karma-sourcemap-loader',
             customPlugin
@@ -303,8 +331,9 @@ function getBaseConfig(config, useRequireJs) {
         junitReporter: junitSettings(config),
 
 
-        // web server port
-        port: 9876,
+        // web server hostname and port
+        hostname: hostname,
+        port: port,
 
 
         // enable / disable colors in the output (reporters and logs)
@@ -332,6 +361,31 @@ function getBaseConfig(config, useRequireJs) {
                 prefs: {
                     'app.update.auto': false,
                     'app.update.enabled': false
+                }
+            },
+            ChromeDocker: {
+                base: 'SeleniumWebdriver',
+                browserName: 'chrome',
+                getDriver: function () {
+                    return new webdriver.Builder()
+                        .forBrowser('chrome')
+                        .usingServer('http://edx.devstack.chrome:4444/wd/hub')
+                        .build();
+                }
+            },
+            FirefoxDocker: {
+                base: 'SeleniumWebdriver',
+                browserName: 'firefox',
+                getDriver: function () {
+                    var options = new firefox.Options(),
+                        profile = new firefox.Profile();
+                    profile.setPreference('focusmanager.testmode', true);
+                    options.setProfile(profile);
+                    return new webdriver.Builder()
+                        .forBrowser('firefox')
+                        .usingServer('http://edx.devstack.firefox:4444/wd/hub')
+                        .setFirefoxOptions(options)
+                        .build();
                 }
             }
         },

@@ -3,23 +3,21 @@ Provides a function for importing a git repository into the lms
 instance when using a mongo modulestore
 """
 
+import logging
 import os
 import re
 import StringIO
 import subprocess
-import logging
 
+import mongoengine
 from django.conf import settings
 from django.core import management
 from django.core.management.base import CommandError
 from django.utils import timezone
 from django.utils.translation import ugettext_lazy as _
-import mongoengine
+from opaque_keys.edx.keys import CourseKey
 
 from dashboard.models import CourseImportLog
-from opaque_keys import InvalidKeyError
-from opaque_keys.edx.keys import CourseKey
-from opaque_keys.edx.locations import SlashSeparatedCourseKey
 
 log = logging.getLogger(__name__)
 
@@ -295,10 +293,7 @@ def add_repo(repo, rdir_in, branch=None):
     match = re.search(r'(?ms)===> IMPORTING courselike (\S+)', ret_import)
     if match:
         course_id = match.group(1)
-        try:
-            course_key = CourseKey.from_string(course_id)
-        except InvalidKeyError:
-            course_key = SlashSeparatedCourseKey.from_deprecated_string(course_id)
+        course_key = CourseKey.from_string(course_id)
         cdir = '{0}/{1}'.format(git_repo_dir, course_key.course)
         log.debug('Studio course dir = %s', cdir)
 

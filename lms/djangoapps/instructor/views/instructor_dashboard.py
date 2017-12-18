@@ -2,61 +2,60 @@
 Instructor Dashboard Views
 """
 
-import logging
 import datetime
+import logging
+import uuid
+
+import pytz
+from django.conf import settings
+from django.contrib.auth.decorators import login_required
+from django.core.urlresolvers import reverse
+from django.http import Http404, HttpResponseServerError
+from django.utils.html import escape
+from django.utils.translation import ugettext as _
+from django.utils.translation import ugettext_noop
+from django.views.decorators.cache import cache_control
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.http import require_POST
+from mock import patch
 from opaque_keys import InvalidKeyError
 from opaque_keys.edx.keys import CourseKey
-import uuid
-import pytz
+from xblock.field_data import DictFieldData
+from xblock.fields import ScopeIds
 
-from django.contrib.auth.decorators import login_required
-from django.views.decorators.http import require_POST
-from django.utils.translation import ugettext as _, ugettext_noop
-from django.views.decorators.csrf import ensure_csrf_cookie
-from django.views.decorators.cache import cache_control
+from bulk_email.models import BulkEmailFlag
+from certificates import api as certs_api
+from certificates.models import (
+    CertificateGenerationConfiguration,
+    CertificateGenerationHistory,
+    CertificateInvalidation,
+    CertificateStatuses,
+    CertificateWhitelist,
+    GeneratedCertificate
+)
+from class_dashboard.dashboard_data import get_array_section_has_problem, get_section_display_name
+from course_modes.models import CourseMode, CourseModesArchive
+from courseware.access import has_access
+from courseware.courses import get_course_by_id, get_studio_url
+from django_comment_client.utils import available_division_schemes, has_forum_access
+from django_comment_common.models import FORUM_ROLE_ADMINISTRATOR, CourseDiscussionSettings
 from edxmako.shortcuts import render_to_response
-from django.core.urlresolvers import reverse
-from django.utils.html import escape
-from django.http import Http404, HttpResponseServerError
-from django.conf import settings
-from util.json_request import JsonResponse
-from mock import patch
-
-from openedx.core.lib.xblock_utils import wrap_xblock
+from lms.djangoapps.courseware.module_render import get_module_by_usage_id
+from openedx.core.djangoapps.course_groups.cohorts import DEFAULT_COHORT_NAME, get_course_cohorts, is_course_cohorted
+from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
+from openedx.core.djangoapps.verified_track_content.models import VerifiedTrackCohortedCourse
+from openedx.core.djangolib.markup import HTML, Text
 from openedx.core.lib.url_utils import quote_slashes
+from openedx.core.lib.xblock_utils import wrap_xblock
+from shoppingcart.models import Coupon, CourseRegCodeItem, PaidCourseRegistration
+from student.models import CourseEnrollment
+from student.roles import CourseFinanceAdminRole, CourseSalesAdminRole, CourseStaffRole, CourseInstructorRole
+from util.json_request import JsonResponse
 from xmodule.html_module import HtmlDescriptor
 from xmodule.modulestore.django import modulestore
 from xmodule.tabs import CourseTab
-from xblock.field_data import DictFieldData
-from xblock.fields import ScopeIds
-from courseware.access import has_access
-from courseware.courses import get_course_by_id, get_studio_url
-from django_comment_client.utils import has_forum_access
-from django_comment_common.models import FORUM_ROLE_ADMINISTRATOR
-from openedx.core.djangoapps.course_groups.cohorts import get_course_cohorts, is_course_cohorted, DEFAULT_COHORT_NAME
-from student.models import CourseEnrollment
-from shoppingcart.models import Coupon, PaidCourseRegistration, CourseRegCodeItem
-from course_modes.models import CourseMode, CourseModesArchive
-from student.roles import CourseFinanceAdminRole, CourseSalesAdminRole
-from lms.djangoapps.courseware.module_render import get_module_by_usage_id
-from certificates.models import (
-    CertificateGenerationConfiguration,
-    CertificateWhitelist,
-    GeneratedCertificate,
-    CertificateStatuses,
-    CertificateGenerationHistory,
-    CertificateInvalidation,
-)
-from certificates import api as certs_api
-from bulk_email.models import BulkEmailFlag
 
-from class_dashboard.dashboard_data import get_section_display_name, get_array_section_has_problem
 from .tools import get_units_with_due_date, title_or_url
-from opaque_keys.edx.locations import SlashSeparatedCourseKey
-from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
-from openedx.core.djangoapps.verified_track_content.models import VerifiedTrackCohortedCourse
-
-from openedx.core.djangolib.markup import HTML, Text
 
 log = logging.getLogger(__name__)
 
@@ -125,6 +124,7 @@ def instructor_dashboard_2(request, course_id):
         _section_course_info(course, access),
         _section_membership(course, access, is_white_label),
         _section_cohort_management(course, access),
+        _section_discussions_management(course, access),
         _section_student_admin(course, access),
         _section_data_download(course, access),
     ]
@@ -174,13 +174,15 @@ def instructor_dashboard_2(request, course_id):
     # Gate access to Special Exam tab depending if either timed exams or proctored exams
     # are enabled in the course
 
-    # NOTE: For now, if we only have procotred exams enabled, then only platform Staff
-    # (user.is_staff) will be able to view the special exams tab. This may
-    # change in the future
-    can_see_special_exams = (
-        ((course.enable_proctored_exams and request.user.is_staff) or course.enable_timed_exams) and
-        settings.FEATURES.get('ENABLE_SPECIAL_EXAMS', False)
-    )
+    user_has_access = any([
+        request.user.is_staff,
+        CourseStaffRole(course_key).has_user(request.user),
+        CourseInstructorRole(course_key).has_user(request.user)
+    ])
+    course_has_special_exams = course.enable_proctored_exams or course.enable_timed_exams
+    can_see_special_exams = course_has_special_exams and user_has_access and settings.FEATURES.get(
+        'ENABLE_SPECIAL_EXAMS', False)
+
     if can_see_special_exams:
         sections.append(_section_special_exams(course, access))
 
@@ -331,7 +333,7 @@ def _section_certificates(course):
 
     """
     example_cert_status = None
-    html_cert_enabled = certs_api.has_html_certificates_enabled(course.id, course)
+    html_cert_enabled = certs_api.has_html_certificates_enabled(course)
     if html_cert_enabled:
         can_enable_for_course = True
     else:
@@ -410,7 +412,7 @@ def set_course_mode_price(request, course_id):
             status=400)  # status code 400: Bad Request
 
     currency = request.POST['currency']
-    course_key = SlashSeparatedCourseKey.from_deprecated_string(course_id)
+    course_key = CourseKey.from_string(course_id)
 
     course_honor_mode = CourseMode.objects.filter(mode_slug='honor', course_id=course_key)
     if not course_honor_mode:
@@ -513,9 +515,26 @@ def _section_cohort_management(course, access):
         ),
         'cohorts_url': reverse('cohorts', kwargs={'course_key_string': unicode(course_key)}),
         'upload_cohorts_csv_url': reverse('add_users_to_cohorts', kwargs={'course_id': unicode(course_key)}),
-        'discussion_topics_url': reverse('cohort_discussion_topics', kwargs={'course_key_string': unicode(course_key)}),
         'verified_track_cohorting_url': reverse(
             'verified_track_cohorting', kwargs={'course_key_string': unicode(course_key)}
+        ),
+    }
+    return section_data
+
+
+def _section_discussions_management(course, access):
+    """ Provide data for the corresponding discussion management section """
+    course_key = course.id
+    enrollment_track_schemes = available_division_schemes(course_key)
+    section_data = {
+        'section_key': 'discussions_management',
+        'section_display_name': _('Discussions'),
+        'is_hidden': (not is_course_cohorted(course_key) and
+                      CourseDiscussionSettings.ENROLLMENT_TRACK not in enrollment_track_schemes),
+        'discussion_topics_url': reverse('discussion_topics', kwargs={'course_key_string': unicode(course_key)}),
+        'course_discussion_settings': reverse(
+            'course_discussions_settings',
+            kwargs={'course_key_string': unicode(course_key)}
         ),
     }
     return section_data
@@ -549,6 +568,7 @@ def _section_student_admin(course, access):
             kwargs={'course_id': unicode(course_key)},
         ),
         'rescore_problem_url': reverse('rescore_problem', kwargs={'course_id': unicode(course_key)}),
+        'override_problem_score_url': reverse('override_problem_score', kwargs={'course_id': unicode(course_key)}),
         'rescore_entrance_exam_url': reverse('rescore_entrance_exam', kwargs={'course_id': unicode(course_key)}),
         'student_can_skip_entrance_exam_url': reverse(
             'mark_student_can_skip_entrance_exam',

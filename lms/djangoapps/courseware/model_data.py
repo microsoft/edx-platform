@@ -22,29 +22,24 @@ DjangoOrmFieldCache: A base-class for single-row-per-field caches.
 """
 
 import json
-from abc import abstractmethod, ABCMeta
-from collections import defaultdict, namedtuple
-from .models import (
-    StudentModule,
-    XModuleUserStateSummaryField,
-    XModuleStudentPrefsField,
-    XModuleStudentInfoField
-)
 import logging
-from opaque_keys.edx.keys import CourseKey, UsageKey
-from opaque_keys.edx.block_types import BlockTypeKeyV1
-from opaque_keys.edx.asides import AsideUsageKeyV1, AsideUsageKeyV2
+from abc import ABCMeta, abstractmethod
+from collections import defaultdict, namedtuple
+
 from contracts import contract, new_contract
-
-from django.db import DatabaseError
-
-from xblock.runtime import KeyValueStore
-from xblock.exceptions import KeyValueMultiSaveError, InvalidScopeError
-from xblock.fields import Scope, UserScope
-from xmodule.modulestore.django import modulestore
+from django.db import DatabaseError, IntegrityError, transaction
+from opaque_keys.edx.asides import AsideUsageKeyV1, AsideUsageKeyV2
+from opaque_keys.edx.block_types import BlockTypeKeyV1
+from opaque_keys.edx.keys import CourseKey
 from xblock.core import XBlockAside
-from courseware.user_state_client import DjangoXBlockUserStateClient
+from xblock.exceptions import InvalidScopeError, KeyValueMultiSaveError
+from xblock.fields import Scope, UserScope
+from xblock.runtime import KeyValueStore
 
+from courseware.user_state_client import DjangoXBlockUserStateClient
+from xmodule.modulestore.django import modulestore
+
+from .models import StudentModule, XModuleStudentInfoField, XModuleStudentPrefsField, XModuleUserStateSummaryField
 
 log = logging.getLogger(__name__)
 
@@ -965,7 +960,7 @@ class ScoresClient(object):
         # attached to them (since old mongo identifiers don't include runs).
         # So we have to add that info back in before we put it into our lookup.
         self._locations_to_scores.update({
-            UsageKey.from_string(location).map_into_course(self.course_key): self.Score(correct, total, created)
+            location.map_into_course(self.course_key): self.Score(correct, total, created)
             for location, correct, total, created
             in scores_qset.values_list('module_state_key', 'grade', 'max_grade', 'created')
         })
@@ -999,15 +994,27 @@ def set_score(user_id, usage_key, score, max_score):
     """
     Set the score and max_score for the specified user and xblock usage.
     """
-    student_module, created = StudentModule.objects.get_or_create(
-        student_id=user_id,
-        module_state_key=usage_key,
-        course_id=usage_key.course_key,
-        defaults={
-            'grade': score,
-            'max_grade': max_score,
-        }
-    )
+    created = False
+    kwargs = {"student_id": user_id, "module_state_key": usage_key, "course_id": usage_key.course_key}
+    try:
+        with transaction.atomic():
+            student_module, created = StudentModule.objects.get_or_create(
+                defaults={
+                    'grade': score,
+                    'max_grade': max_score,
+                },
+                **kwargs
+            )
+    except IntegrityError:
+        # log information for duplicate entry and get the record as above command failed.
+        student_module = StudentModule.objects.get(**kwargs)
+        log.warning(
+            'set_score: IntegrityError for student %d - course_id %s - usage_key %s having '
+            'score %d and max_score %d same as request score %d and max_score %d',
+            user_id, usage_key.course_key, usage_key, student_module.grade, student_module.max_grade,
+            score, max_score
+        )
+
     if not created:
         student_module.grade = score
         student_module.max_grade = max_score

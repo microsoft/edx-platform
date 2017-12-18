@@ -2,23 +2,23 @@
 """
 Admin site configuration for third party authentication
 """
+from config_models.admin import KeyedConfigurationModelAdmin
 from django import forms
-
 from django.contrib import admin
 
-from config_models.admin import ConfigurationModelAdmin, KeyedConfigurationModelAdmin
+from third_party_auth.provider import Registry
+
 from .models import (
-    OAuth2ProviderConfig,
-    SAMLProviderConfig,
-    SAMLConfiguration,
-    SAMLProviderData,
-    LTIProviderConfig,
-    ProviderApiPermissions,
     _PSA_OAUTH2_BACKENDS,
-    _PSA_SAML_BACKENDS
+    _PSA_SAML_BACKENDS,
+    LTIProviderConfig,
+    OAuth2ProviderConfig,
+    ProviderApiPermissions,
+    SAMLConfiguration,
+    SAMLProviderConfig,
+    SAMLProviderData
 )
 from .tasks import fetch_saml_metadata
-from third_party_auth.provider import Registry
 
 
 class OAuth2ProviderConfigForm(forms.ModelForm):
@@ -116,8 +116,9 @@ class SAMLProviderDataAdmin(admin.ModelAdmin):
 
     def get_readonly_fields(self, request, obj=None):
         if obj:  # editing an existing object
-            return self.model._meta.get_all_field_names()  # pylint: disable=protected-access
+            return [field.name for field in self.model._meta.get_fields()]  # pylint: disable=protected-access
         return self.readonly_fields
+
 
 admin.site.register(SAMLProviderData, SAMLProviderDataAdmin)
 

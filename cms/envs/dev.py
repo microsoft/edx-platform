@@ -6,13 +6,13 @@ This config file runs the simplest dev environment"""
 # pylint: disable=wildcard-import, unused-wildcard-import
 
 from .common import *
+from openedx.core.lib.derived import derive_settings
 from openedx.core.lib.logsettings import get_logger_config
 
 # import settings from LMS for consistent behavior with CMS
 from lms.envs.dev import (WIKI_ENABLED)
 
 DEBUG = True
-TEMPLATE_DEBUG = DEBUG
 HTTPS = 'off'
 
 LOGGING = get_logger_config(ENV_ROOT / "log",
@@ -141,8 +141,9 @@ PIPELINE_SASS_ARGUMENTS = '--debug-info'
 CELERY_ALWAYS_EAGER = True
 
 ################################ DEBUG TOOLBAR #################################
-INSTALLED_APPS += ('debug_toolbar', 'debug_toolbar_mongo', 'djpyfs')
-MIDDLEWARE_CLASSES += ('debug_toolbar.middleware.DebugToolbarMiddleware',)
+INSTALLED_APPS += ['debug_toolbar', 'debug_toolbar_mongo', 'djpyfs']
+
+MIDDLEWARE_CLASSES.append('debug_toolbar.middleware.DebugToolbarMiddleware')
 INTERNAL_IPS = ('127.0.0.1',)
 
 DEBUG_TOOLBAR_PANELS = (
@@ -178,3 +179,7 @@ try:
     from .private import *  # pylint: disable=import-error
 except ImportError:
     pass
+
+########################## Derive Any Derived Settings  #######################
+
+derive_settings(__name__)

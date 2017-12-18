@@ -3,18 +3,18 @@ Test courseware search
 """
 import json
 
-from flaky import flaky
 from nose.plugins.attrib import attr
 
-from common.test.acceptance.tests.helpers import UniqueCourseTest, remove_file
+from common.test.acceptance.fixtures.course import CourseFixture, XBlockFixtureDesc
+from common.test.acceptance.pages.common.auto_auth import AutoAuthPage
 from common.test.acceptance.pages.common.logout import LogoutPage
 from common.test.acceptance.pages.common.utils import click_css
-from common.test.acceptance.pages.studio.utils import add_html_component, type_in_codemirror
-from common.test.acceptance.pages.studio.auto_auth import AutoAuthPage
-from common.test.acceptance.pages.studio.overview import CourseOutlinePage as StudioCourseOutlinePage
-from common.test.acceptance.pages.studio.container import ContainerPage
+from common.test.acceptance.pages.lms.course_home import CourseHomePage
 from common.test.acceptance.pages.lms.courseware_search import CoursewareSearchPage
-from common.test.acceptance.fixtures.course import CourseFixture, XBlockFixtureDesc
+from common.test.acceptance.pages.studio.container import ContainerPage
+from common.test.acceptance.pages.studio.overview import CourseOutlinePage as StudioCourseOutlinePage
+from common.test.acceptance.pages.studio.utils import add_html_component, type_in_codemirror
+from common.test.acceptance.tests.helpers import UniqueCourseTest, remove_file
 
 
 @attr(shard=5)
@@ -52,7 +52,8 @@ class CoursewareSearchTest(UniqueCourseTest):
         self.addCleanup(remove_file, self.TEST_INDEX_FILENAME)
 
         super(CoursewareSearchTest, self).setUp()
-        self.courseware_search_page = CoursewareSearchPage(self.browser, self.course_id)
+
+        self.course_home_page = CourseHomePage(self.browser, self.course_id)
 
         self.studio_course_outline = StudioCourseOutlinePage(
             self.browser,
@@ -149,16 +150,30 @@ class CoursewareSearchTest(UniqueCourseTest):
             (bool) True if search term is found in resulting content; False if not found
         """
         self._auto_auth(self.USERNAME, self.EMAIL, False)
+        self.course_home_page.visit()
+        course_search_results_page = self.course_home_page.search_for_term(search_term)
+        if len(course_search_results_page.search_results.html) > 0:
+            search_string = course_search_results_page.search_results.html[0]
+        else:
+            search_string = ""
+        return search_term in search_string
+
+    # TODO: TNL-6546: Remove usages of sidebar search
+    def _search_for_content_in_sidebar(self, search_term, perform_auto_auth=True):
+        """
+        Login and search for specific content in the legacy sidebar search
+        Arguments:
+            search_term - term to be searched for
+            perform_auto_auth - if False, skip auto_auth call.
+        Returns:
+            (bool) True if search term is found in resulting content; False if not found
+        """
+        if perform_auto_auth:
+            self._auto_auth(self.USERNAME, self.EMAIL, False)
+        self.courseware_search_page = CoursewareSearchPage(self.browser, self.course_id)
         self.courseware_search_page.visit()
         self.courseware_search_page.search_for_term(search_term)
         return search_term in self.courseware_search_page.search_results.html[0]
-
-    def test_page_existence(self):
-        """
-        Make sure that the page is accessible.
-        """
-        self._auto_auth(self.USERNAME, self.EMAIL, False)
-        self.courseware_search_page.visit()
 
     def test_search(self):
         """
@@ -171,37 +186,14 @@ class CoursewareSearchTest(UniqueCourseTest):
         # Do a search, there should be no results shown.
         self.assertFalse(self._search_for_content(self.SEARCH_STRING))
 
+        # Do a search in the legacy sidebar, there should be no results shown.
+        self.assertFalse(self._search_for_content_in_sidebar(self.SEARCH_STRING, False))
+
         # Publish in studio to trigger indexing.
         self._studio_publish_content(0)
 
         # Do the search again, this time we expect results.
         self.assertTrue(self._search_for_content(self.SEARCH_STRING))
 
-    @flaky  # TNL-5771
-    def test_reindex(self):
-        """
-        Make sure new content gets reindexed on button press.
-        """
-
-        # Create content in studio without publishing.
-        self._studio_add_content(1)
-
-        # Do a search, there should be no results shown.
-        self.assertFalse(self._search_for_content(self.EDITED_SEARCH_STRING))
-
-        # Publish in studio to trigger indexing, and edit chapter name afterwards.
-        self._studio_publish_content(1)
-
-        # Do a ReIndex from studio to ensure that our stuff is updated before the next stage of the test
-        self._studio_reindex()
-
-        # Search after publish, there should still be no results shown.
-        self.assertFalse(self._search_for_content(self.EDITED_SEARCH_STRING))
-
-        self._studio_edit_chapter_name(1)
-
-        # Do a ReIndex from studio to ensure that our stuff is updated before the next stage of the test
-        self._studio_reindex()
-
-        # Do the search again, this time we expect results.
-        self.assertTrue(self._search_for_content(self.EDITED_SEARCH_STRING))
+        # Do the search again in the legacy sidebar, this time we expect results.
+        self.assertTrue(self._search_for_content_in_sidebar(self.SEARCH_STRING, False))

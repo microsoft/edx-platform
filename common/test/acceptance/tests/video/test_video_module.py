@@ -4,24 +4,26 @@
 Acceptance tests for Video.
 """
 import os
-from ddt import ddt, unpack, data
+from unittest import skipIf
 
+from ddt import data, ddt, unpack
 from mock import patch
 from nose.plugins.attrib import attr
-from unittest import skipIf, skip
-from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
-from common.test.acceptance.tests.helpers import UniqueCourseTest, is_youtube_available, YouTubeStubConfig
-from common.test.acceptance.pages.lms.video.video import VideoPage
-from common.test.acceptance.pages.lms.tab_nav import TabNavPage
-from common.test.acceptance.pages.lms.courseware import CoursewarePage
-from common.test.acceptance.pages.lms.auto_auth import AutoAuthPage
-from common.test.acceptance.pages.lms.course_info import CourseInfoPage
+from selenium.webdriver.common.by import By
+
 from common.test.acceptance.fixtures.course import CourseFixture, XBlockFixtureDesc
-from common.test.acceptance.tests.helpers import skip_if_browser
-
-from flaky import flaky
-
+from common.test.acceptance.pages.common.auto_auth import AutoAuthPage
+from common.test.acceptance.pages.lms.course_info import CourseInfoPage
+from common.test.acceptance.pages.lms.courseware import CoursewarePage
+from common.test.acceptance.pages.lms.tab_nav import TabNavPage
+from common.test.acceptance.pages.lms.video.video import VideoPage
+from common.test.acceptance.tests.helpers import (
+    UniqueCourseTest,
+    YouTubeStubConfig,
+    is_youtube_available,
+    skip_if_browser
+)
 
 VIDEO_SOURCE_PORT = 8777
 
@@ -632,45 +634,6 @@ class YouTubeVideoTest(VideoBaseTest):
         self.video.click_transcript_line(line_no=1)
         self._verify_closed_caption_text(unicode_text)
 
-    def test_multiple_videos_in_sequentials_load_and_work(self):
-        """
-        Scenario: Multiple videos in sequentials all load and work, switching between sequentials
-        Given it has videos "A,B" in "Youtube" mode in position "1" of sequential
-        And videos "C,D" in "Youtube" mode in position "2" of sequential
-        """
-        self.contents_of_verticals = [
-            [{'display_name': 'A'}, {'display_name': 'B'}],
-            [{'display_name': 'C'}, {'display_name': 'D'}]
-        ]
-
-        tab1_video_names = ['A', 'B']
-        tab2_video_names = ['C', 'D']
-
-        def execute_video_steps(video_names):
-            """
-            Execute video steps
-            """
-            for video_name in video_names:
-                self.video.use_video(video_name)
-                self.video.click_player_button('play')
-                self.assertIn(self.video.state, ['playing', 'buffering'])
-                self.video.click_player_button('pause')
-
-        # go to video
-        self.navigate_to_video()
-        execute_video_steps(tab1_video_names)
-
-        # go to second sequential position
-        # import ipdb; ipdb.set_trace()
-        self.go_to_sequential_position(2)
-        execute_video_steps(tab2_video_names)
-
-        # go back to first sequential position
-        # we are again playing tab 1 videos to ensure that switching didn't broke some video functionality.
-        # import ipdb; ipdb.set_trace()
-        self.go_to_sequential_position(1)
-        execute_video_steps(tab1_video_names)
-
     def test_video_component_stores_speed_correctly_for_multiple_videos(self):
         """
         Scenario: Video component stores speed correctly when each video is in separate sequential
@@ -798,36 +761,6 @@ class YouTubeVideoTest(VideoBaseTest):
 
         self.assertGreaterEqual(self.video.seconds, 3)
 
-    @skip("Intermittently fails 03 June 2014")
-    def test_video_position_stored_correctly_with_seek(self):
-        """
-        Scenario: Video component stores position correctly when page is reloaded
-        Given the course has a Video component in "Youtube" mode
-        Then the video has rendered in "Youtube" mode
-        And I click video button "play""
-        And I click video button "pause"
-        Then I seek video to "0:10" position
-        And I click video button "play""
-        And I click video button "pause"
-        And I reload the page with video
-        Then video slider should be Equal or Greater than "0:10"
-
-        """
-        self.navigate_to_video()
-
-        self.video.click_player_button('play')
-
-        self.video.seek('0:10')
-
-        self.video.click_player_button('pause')
-
-        self.video.reload_page()
-
-        self.video.click_player_button('play')
-        self.video.click_player_button('pause')
-
-        self.assertGreaterEqual(self.video.seconds, 10)
-
     def test_simplified_and_traditional_chinese_transcripts(self):
         """
         Scenario: Simplified and Traditional Chinese transcripts work as expected in Youtube mode
@@ -941,7 +874,6 @@ class YouTubeVideoTest(VideoBaseTest):
 class YouTubeHtml5VideoTest(VideoBaseTest):
     """ Test YouTube HTML5 Video Player """
 
-    @flaky  # TODO fix this, see TNL-1642
     def test_youtube_video_rendering_with_unsupported_sources(self):
         """
         Scenario: Video component is rendered in the LMS in Youtube mode
@@ -1349,27 +1281,6 @@ class HLSVideoTest(VideoBaseTest):
         self.video.click_player_button('pause')
         self.video.seek('0:05')
         self.assertEqual(self.video.position, '0:05')
-
-    def test_video_position_save_state(self):
-        """
-        Scenario: Video position save state functionality is working as expected for hls video
-
-        Given the course has a Video component with only HLS source available.
-        When I view the Video component
-        Then I can see video save state is working as expected
-        """
-        self.metadata = self.metadata_for_mode('hls')
-        self.navigate_to_video()
-
-        self.video.click_player_button('play')
-        self.video.wait_for_position('0:04')
-        self.video.click_player_button('pause')
-        self.assertEqual(self.video.position, '0:04')
-        self.video.reload_page()
-        self.assertEqual(self.video.duration, '0:09')
-        self.assertEqual(self.video.position, '0:04')
-        self.video.click_player_button('play')
-        self.assertGreaterEqual(self.video.seconds, 4)
 
     def test_video_download_link(self):
         """

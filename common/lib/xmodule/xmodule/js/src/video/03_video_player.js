@@ -162,6 +162,7 @@ function(HTML5Video, HTML5HLSVideo, Resizer, HLS, _) {
         commonPlayerConfig = {
             playerVars: state.videoPlayer.playerVars,
             videoSources: state.config.sources,
+            poster: state.config.poster,
             browserIsSafari: state.browserIsSafari,
             events: {
                 onReady: state.videoPlayer.onReady,
@@ -651,6 +652,9 @@ function(HTML5Video, HTML5HLSVideo, Resizer, HLS, _) {
 
         var duration = this.videoPlayer.duration(),
             time = this.videoPlayer.figureOutStartingTime(duration);
+
+        // this.duration will be set initially only if duration is coming from edx-val
+        this.duration = this.duration || duration;
 
         if (time > 0 && this.videoPlayer.goToStartTime) {
             this.videoPlayer.seekTo(time);

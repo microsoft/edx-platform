@@ -1,19 +1,20 @@
 """
 Test LMS Notes
 """
-from unittest import skip
 import random
-from uuid import uuid4
 from datetime import datetime
+from unittest import skip
+from uuid import uuid4
+
 from nose.plugins.attrib import attr
-from common.test.acceptance.tests.helpers import UniqueCourseTest, EventsTestMixin
+
 from common.test.acceptance.fixtures.course import CourseFixture, XBlockFixtureDesc
-from common.test.acceptance.pages.lms.auto_auth import AutoAuthPage
+from common.test.acceptance.fixtures.edxnotes import EdxNotesFixture, Note, Range
+from common.test.acceptance.pages.common.auto_auth import AutoAuthPage
 from common.test.acceptance.pages.lms.course_home import CourseHomePage
 from common.test.acceptance.pages.lms.courseware import CoursewarePage
-from common.test.acceptance.pages.lms.edxnotes import EdxNotesUnitPage, EdxNotesPage, EdxNotesPageNoContent
-from common.test.acceptance.fixtures.edxnotes import EdxNotesFixture, Note, Range
-from flaky import flaky
+from common.test.acceptance.pages.lms.edxnotes import EdxNotesPage, EdxNotesPageNoContent, EdxNotesUnitPage
+from common.test.acceptance.tests.helpers import EventsTestMixin, UniqueCourseTest
 
 
 class EdxNotesTestMixin(UniqueCourseTest):
@@ -274,7 +275,6 @@ class EdxNotesDefaultInteractionsTest(EdxNotesTestMixin):
         components = self.note_unit_page.components
         self.assert_notes_are_removed(components)
 
-    @flaky  # TODO: fix this, see TNL-6494
     def test_can_create_note_with_tags(self):
         """
         Scenario: a user of notes can define one with tags
@@ -1062,7 +1062,6 @@ class EdxNotesPageTest(EventsTestMixin, EdxNotesTestMixin):
         self.assertNotIn(u"Search Results", self.notes_page.tabs)
         self.assertEqual(len(self.notes_page.notes), 5)
 
-    @flaky  # TODO: fix this, see TNL-6493
     def test_open_note_when_accessed_from_notes_page(self):
         """
         Scenario: Ensure that the link to the Unit opens a note only once.

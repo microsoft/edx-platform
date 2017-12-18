@@ -1,15 +1,17 @@
 """
 Discussion API test utilities
 """
-from contextlib import closing
-from datetime import datetime
-import json
-import re
+from __future__ import unicode_literals
 
 import hashlib
+import json
+import re
+from contextlib import closing
+from datetime import datetime
+
 import httpretty
-from pytz import UTC
 from PIL import Image
+from pytz import UTC
 
 from openedx.core.djangoapps.profile_images.images import create_profile_images
 from openedx.core.djangoapps.profile_images.tests.helpers import make_image_file

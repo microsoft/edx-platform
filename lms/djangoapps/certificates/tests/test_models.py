@@ -1,31 +1,30 @@
 """Tests for certificate Django models. """
+import json
+
 import ddt
+import pytest
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.test.utils import override_settings
-from nose.plugins.attrib import attr
-import json
 from mock import Mock
+from nose.plugins.attrib import attr
+from opaque_keys.edx.locator import CourseLocator
 from path import Path as path
 
 from certificates.models import (
+    CertificateGenerationHistory,
+    CertificateHtmlViewConfiguration,
+    CertificateInvalidation,
+    CertificateStatuses,
+    CertificateTemplateAsset,
     ExampleCertificate,
     ExampleCertificateSet,
-    CertificateHtmlViewConfiguration,
-    CertificateTemplateAsset,
-    CertificateInvalidation,
-    GeneratedCertificate,
-    CertificateStatuses,
-    CertificateGenerationHistory,
+    GeneratedCertificate
 )
-from certificates.tests.factories import (
-    CertificateInvalidationFactory,
-    GeneratedCertificateFactory
-)
+from certificates.tests.factories import CertificateInvalidationFactory, GeneratedCertificateFactory
 from lms.djangoapps.instructor_task.tests.factories import InstructorTaskFactory
-from opaque_keys.edx.locator import CourseLocator
 from student.tests.factories import AdminFactory, UserFactory
 from xmodule.modulestore.tests.django_utils import SharedModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
@@ -265,6 +264,7 @@ class TestCertificateGenerationHistory(TestCase):
         ({"statuses_to_regenerate": ['downloadable', 'not_readable']}, 'already received', False),
     )
     @ddt.unpack
+    @pytest.mark.django111_expected_failure
     def test_get_certificate_generation_candidates(self, task_input, expected, is_regeneration):
         staff = AdminFactory.create()
         instructor_task = InstructorTaskFactory.create(
@@ -286,6 +286,7 @@ class TestCertificateGenerationHistory(TestCase):
 
     @ddt.data((True, "regenerated"), (False, "generated"))
     @ddt.unpack
+    @pytest.mark.django111_expected_failure
     def test_get_task_name(self, is_regeneration, expected):
         staff = AdminFactory.create()
         instructor_task = InstructorTaskFactory.create(

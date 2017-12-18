@@ -10,13 +10,13 @@ between dev machines and AWS machines.
 from .aws import *
 
 DEBUG = True
-TEMPLATE_DEBUG = True
 
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 ################################ DEBUG TOOLBAR #################################
-INSTALLED_APPS += ('debug_toolbar',)
-MIDDLEWARE_CLASSES += ('debug_toolbar.middleware.DebugToolbarMiddleware',)
+INSTALLED_APPS.append('debug_toolbar')
+
+MIDDLEWARE_CLASSES.append('debug_toolbar.middleware.DebugToolbarMiddleware')
 
 DEBUG_TOOLBAR_PANELS = (
     'debug_toolbar.panels.versions.VersionsPanel',

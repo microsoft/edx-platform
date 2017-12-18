@@ -1,16 +1,13 @@
 """
 Celery task for Automatic Verifed Track Cohorting MVP feature.
 """
-from django.contrib.auth.models import User
-
 from celery.task import task
 from celery.utils.log import get_task_logger
-
+from django.contrib.auth.models import User
 from opaque_keys.edx.keys import CourseKey
+
+from openedx.core.djangoapps.course_groups.cohorts import add_user_to_cohort, get_cohort, get_cohort_by_name
 from student.models import CourseEnrollment, CourseMode
-from openedx.core.djangoapps.course_groups.cohorts import (
-    get_cohort_by_name, get_cohort, add_user_to_cohort
-)
 
 LOGGER = get_task_logger(__name__)
 
@@ -34,13 +31,14 @@ def sync_cohort_with_mode(self, course_id, user_id, verified_cohort_name, defaul
 
         verified_cohort = get_cohort_by_name(course_key, verified_cohort_name)
 
-        if enrollment.mode == CourseMode.VERIFIED and (current_cohort.id != verified_cohort.id):
+        acceptable_modes = {CourseMode.VERIFIED, CourseMode.CREDIT_MODE}
+        if enrollment.mode in acceptable_modes and (current_cohort.id != verified_cohort.id):
             LOGGER.info(
                 "MOVING_TO_VERIFIED: Moving user '%s' to the verified cohort '%s' for course '%s'",
                 user.id, verified_cohort.name, course_id
             )
             add_user_to_cohort(verified_cohort, user.username)
-        elif enrollment.mode != CourseMode.VERIFIED and current_cohort.id == verified_cohort.id:
+        elif enrollment.mode not in acceptable_modes and current_cohort.id == verified_cohort.id:
             default_cohort = get_cohort_by_name(course_key, default_cohort_name)
             LOGGER.info(
                 "MOVING_TO_DEFAULT: Moving user '%s' to the default cohort '%s' for course '%s'",

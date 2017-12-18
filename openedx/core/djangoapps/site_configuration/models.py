@@ -2,17 +2,15 @@
 Django models for site configurations.
 """
 import collections
+from logging import getLogger
 
-from django.db import models
 from django.contrib.sites.models import Site
+from django.db import models
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-
-from django_extensions.db.models import TimeStampedModel
 from jsonfield.fields import JSONField
+from model_utils.models import TimeStampedModel
 
-
-from logging import getLogger
 logger = getLogger(__name__)  # pylint: disable=invalid-name
 
 
@@ -131,6 +129,10 @@ class SiteConfigurationHistory(TimeStampedModel):
         blank=True,
         load_kwargs={'object_pairs_hook': collections.OrderedDict}
     )
+
+    class Meta:
+        get_latest_by = 'modified'
+        ordering = ('-modified', '-created',)
 
     def __unicode__(self):
         return u"<SiteConfigurationHistory: {site}, Last Modified: {modified} >".format(

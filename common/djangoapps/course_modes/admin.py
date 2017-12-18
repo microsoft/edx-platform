@@ -1,21 +1,12 @@
-"""
-Django admin page for course modes
-"""
-from django.conf import settings
 from django import forms
-from django.utils.translation import ugettext_lazy as _
+from django.conf import settings
 from django.contrib import admin
-
-from pytz import timezone, UTC
-
-from opaque_keys.edx.keys import CourseKey
-from opaque_keys.edx.locations import SlashSeparatedCourseKey
+from django.utils.translation import ugettext_lazy as _
 from opaque_keys import InvalidKeyError
+from opaque_keys.edx.keys import CourseKey
+from pytz import UTC, timezone
 
-from util.date_utils import get_time_display
-from xmodule.modulestore.django import modulestore
 from course_modes.models import CourseMode, CourseModeExpirationConfig
-
 # Technically, we shouldn't be doing this, since verify_student is defined
 # in LMS, and course_modes is defined in common.
 #
@@ -27,6 +18,8 @@ from course_modes.models import CourseMode, CourseModeExpirationConfig
 # but the test suite for Studio will fail because
 # the verification deadline table won't exist.
 from lms.djangoapps.verify_student import models as verification_models
+from util.date_utils import get_time_display
+from xmodule.modulestore.django import modulestore
 
 COURSE_MODE_SLUG_CHOICES = [(mode_slug, mode_slug) for mode_slug in settings.COURSE_ENROLLMENT_MODES]
 
@@ -60,6 +53,9 @@ class CourseModeForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super(CourseModeForm, self).__init__(*args, **kwargs)
 
+        if self.data.get('course'):
+            self.data['course'] = CourseKey.from_string(self.data['course'])
+
         default_tz = timezone(settings.TIME_ZONE)
 
         if self.instance._expiration_datetime:  # pylint: disable=protected-access
@@ -82,14 +78,11 @@ class CourseModeForm(forms.ModelForm):
             )
 
     def clean_course_id(self):
-        course_id = self.cleaned_data['course_id']
+        course_id = self.cleaned_data['course']
         try:
             course_key = CourseKey.from_string(course_id)
         except InvalidKeyError:
-            try:
-                course_key = SlashSeparatedCourseKey.from_deprecated_string(course_id)
-            except InvalidKeyError:
-                raise forms.ValidationError("Cannot make a valid CourseKey from id {}!".format(course_id))
+            raise forms.ValidationError("Cannot make a valid CourseKey from id {}!".format(course_id))
 
         if not modulestore().has_course(course_key):
             raise forms.ValidationError("Cannot find course with id {} in the modulestore".format(course_id))
@@ -154,7 +147,7 @@ class CourseModeForm(forms.ModelForm):
         """
         # Trigger validation so we can access cleaned data
         if self.is_valid():
-            course_key = self.cleaned_data.get("course_id")
+            course = self.cleaned_data.get("course")
             verification_deadline = self.cleaned_data.get("verification_deadline")
             mode_slug = self.cleaned_data.get("mode_slug")
 
@@ -162,18 +155,22 @@ class CourseModeForm(forms.ModelForm):
             # we need to handle saving this ourselves.
             # Note that verification deadline can be `None` here if
             # the deadline is being disabled.
-            if course_key is not None and mode_slug in CourseMode.VERIFIED_MODES:
-                verification_models.VerificationDeadline.set_deadline(course_key, verification_deadline)
+            if course is not None and mode_slug in CourseMode.VERIFIED_MODES:
+                verification_models.VerificationDeadline.set_deadline(
+                    course.id,
+                    verification_deadline
+                )
 
         return super(CourseModeForm, self).save(commit=commit)
 
 
+@admin.register(CourseMode)
 class CourseModeAdmin(admin.ModelAdmin):
     """Admin for course modes"""
     form = CourseModeForm
 
     fields = (
-        'course_id',
+        'course',
         'mode_slug',
         'mode_display_name',
         'min_price',
@@ -184,11 +181,11 @@ class CourseModeAdmin(admin.ModelAdmin):
         'bulk_sku'
     )
 
-    search_fields = ('course_id',)
+    search_fields = ('course__id',)
 
     list_display = (
         'id',
-        'course_id',
+        'course',
         'mode_slug',
         'min_price',
         'expiration_datetime_custom',
@@ -206,11 +203,4 @@ class CourseModeAdmin(admin.ModelAdmin):
     expiration_datetime_custom.short_description = "Upgrade Deadline"
 
 
-class CourseModeExpirationConfigAdmin(admin.ModelAdmin):
-    """Admin interface for the course mode auto expiration configuration. """
-
-    class Meta(object):
-        model = CourseModeExpirationConfig
-
-admin.site.register(CourseMode, CourseModeAdmin)
-admin.site.register(CourseModeExpirationConfig, CourseModeExpirationConfigAdmin)
+admin.site.register(CourseModeExpirationConfig)

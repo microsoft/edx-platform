@@ -32,7 +32,7 @@ from django.utils.http import urlquote_plus
 <script>
     ## This JavaScript is being HTML-escaped because it historically has, and it is not clear what
     ## the correct syntax is. For safety, maintain the previous behavior.
-    ## safe-lint: disable=mako-invalid-js-filter
+    ## xss-lint: disable=mako-invalid-js-filter
     ${progress_graph.body(grade_summary, course.grade_cutoffs, "grade-detail-graph", not course.no_grade, not course.no_grade)}
 </script>
 </%block>
@@ -42,7 +42,11 @@ from django.utils.http import urlquote_plus
 <main id="main" aria-label="Content" tabindex="-1">
     <div class="container">
         <div class="profile-wrapper">
-            <section class="course-info" id="course-info-progress">
+            <section class="course-info" id="course-info-progress"
+              % if getattr(course, 'language'):
+                lang="${course.language}"
+              % endif
+              >
                 % if staff_access and studio_url is not None:
                 <div class="wrap-instructor-info">
                     <a class="instructor-info-action studio-view" href="${studio_url}">${_("View Grading in studio")}</a>
@@ -52,10 +56,9 @@ from django.utils.http import urlquote_plus
                     ${_("Course Progress for Student '{username}' ({email})").format(username=student.username, email=student.email)}
                 </h2>
 
-                %if certificate_data:
                 <div class="wrapper-msg wrapper-auto-cert">
                     <div id="errors-info" class="errors-info"></div>
-                    %if passed:
+                    %if certificate_data:
                     <div class="auto-cert-message" id="course-success">
                         <div class="has-actions">
                             <% post_url = reverse('generate_user_cert', args=[unicode(course.id)]) %>
@@ -76,7 +79,6 @@ from django.utils.http import urlquote_plus
                     </div>
                     %endif
                 </div>
-                %endif
 
                 %if not course.disable_progress_graph:
                 <div class="grade-detail-graph" id="grade-detail-graph"></div>
@@ -179,13 +181,40 @@ from django.utils.http import urlquote_plus
                                                 <em class="localized-datetime" data-datetime="${section.due}" data-string="${_('due {date}')}" data-timezone="${user_timezone}" data-language="${user_language}"></em>
                                             %endif
                                         </p>
+                                        <p class="override-notice">
+                                            %if section.override is not None:
+                                                %if section.format is not None and section.format == "Exam":
+                                                    ${_("Suspicious activity detected during proctored exam review. Exam score 0.")}
+                                                %else:
+                                                    ${_("Section grade has been overridden.")}
+                                                %endif
+                                            %endif
+                                        </p>
                                         %if len(section.problem_scores.values()) > 0:
-                                        <dl class="scores">
-                                            <dt class="hd hd-6">${ _("Problem Scores: ") if section.graded else _("Practice Scores: ")}</dt>
-                                            %for score in section.problem_scores.values():
-                                            <dd>${"{0:.3n}/{1:.3n}".format(float(score.earned),float(score.possible))}</dd>
-                                            %endfor
-                                        </dl>
+                                          %if section.show_grades(staff_access):
+                                          <dl class="scores">
+                                              <dt class="hd hd-6">${ _("Problem Scores: ") if section.graded else _("Practice Scores: ")}</dt>
+                                              %for score in section.problem_scores.values():
+                                              <dd>${"{0:.3n}/{1:.3n}".format(float(score.earned),float(score.possible))}</dd>
+                                              %endfor
+                                          </dl>
+                                          %else:
+                                            <p class="hide-scores">
+                                            %if section.show_correctness == 'past_due':
+                                                %if section.graded:
+                                                  ${_("Problem scores are hidden until the due date.")}
+                                                %else:
+                                                  ${_("Practice scores are hidden until the due date.")}
+                                                %endif
+                                            %else:
+                                                %if section.graded:
+                                                  ${_("Problem scores are hidden.")}
+                                                %else:
+                                                  ${_("Practice scores are hidden.")}
+                                                %endif
+                                            %endif
+                                            </p>
+                                          %endif
                                         %else:
                                         <p class="no-scores">${_("No problem scores in this section")}</p>
                                         %endif

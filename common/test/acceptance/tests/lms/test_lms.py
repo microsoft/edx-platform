@@ -2,46 +2,45 @@
 """
 End-to-end tests for the LMS.
 """
-from datetime import datetime, timedelta
-from flaky import flaky
-from textwrap import dedent
-from unittest import skip
-from nose.plugins.attrib import attr
-import pytz
 import urllib
+from datetime import datetime, timedelta
+from textwrap import dedent
 
-from bok_choy.promise import EmptyPromise
-from common.test.acceptance.tests.helpers import (
-    UniqueCourseTest,
-    EventsTestMixin,
-    load_data_str,
-    generate_course_key,
-    select_option_by_value,
-    element_has_text,
-    select_option_by_text,
-    get_selected_option_text
-)
+import pytz
+from nose.plugins.attrib import attr
+
+from common.test.acceptance.fixtures.course import CourseFixture, CourseUpdateDesc, XBlockFixtureDesc
+from common.test.acceptance.pages.common.auto_auth import AutoAuthPage
 from common.test.acceptance.pages.common.logout import LogoutPage
+from common.test.acceptance.pages.common.utils import enroll_user_track
 from common.test.acceptance.pages.lms import BASE_URL
 from common.test.acceptance.pages.lms.account_settings import AccountSettingsPage
-from common.test.acceptance.pages.lms.auto_auth import AutoAuthPage
-from common.test.acceptance.pages.lms.create_mode import ModeCreationPage
 from common.test.acceptance.pages.lms.course_home import CourseHomePage
 from common.test.acceptance.pages.lms.course_info import CourseInfoPage
 from common.test.acceptance.pages.lms.course_wiki import (
-    CourseWikiPage, CourseWikiEditPage, CourseWikiHistoryPage, CourseWikiChildrenPage
+    CourseWikiChildrenPage,
+    CourseWikiEditPage,
+    CourseWikiHistoryPage,
+    CourseWikiPage
 )
 from common.test.acceptance.pages.lms.courseware import CoursewarePage
+from common.test.acceptance.pages.lms.create_mode import ModeCreationPage
 from common.test.acceptance.pages.lms.dashboard import DashboardPage
 from common.test.acceptance.pages.lms.login_and_register import CombinedLoginAndRegisterPage, ResetPasswordPage
-from common.test.acceptance.pages.lms.pay_and_verify import PaymentAndVerificationFlow, FakePaymentPage
-from common.test.acceptance.pages.lms.progress import ProgressPage
+from common.test.acceptance.pages.lms.pay_and_verify import FakePaymentPage, PaymentAndVerificationFlow
 from common.test.acceptance.pages.lms.problem import ProblemPage
+from common.test.acceptance.pages.lms.progress import ProgressPage
 from common.test.acceptance.pages.lms.tab_nav import TabNavPage
 from common.test.acceptance.pages.lms.video.video import VideoPage
-from common.test.acceptance.pages.common.utils import enroll_user_track
 from common.test.acceptance.pages.studio.settings import SettingsPage
-from common.test.acceptance.fixtures.course import CourseFixture, XBlockFixtureDesc, CourseUpdateDesc
+from common.test.acceptance.tests.helpers import (
+    EventsTestMixin,
+    UniqueCourseTest,
+    element_has_text,
+    get_selected_option_text,
+    load_data_str,
+    select_option_by_text,
+)
 
 
 @attr(shard=8)
@@ -136,7 +135,6 @@ class LoginFromCombinedPageTest(UniqueCourseTest):
         self.login_page.visit().toggle_form()
         self.assertEqual(self.login_page.current_form, "register")
 
-    @flaky  # ECOM-1165
     def test_password_reset_success(self):
         # Create a user account
         email, password = self._create_unique_user()  # pylint: disable=unused-variable
@@ -342,11 +340,8 @@ class RegisterFromCombinedPageTest(UniqueCourseTest):
         # Verify that the expected errors are displayed.
         errors = self.register_page.wait_for_errors()
         self.assertIn(u'Please enter your Public Username.', errors)
-        self.assertIn(
-            u'You must agree to the édX Terms of Service and Honor Code',
-            errors
-        )
-        self.assertIn(u'Please select your Country.', errors)
+        self.assertIn(u'You must agree to the édX Terms of Service and Honor Code', errors)
+        self.assertIn(u'Select your country or region of residence.', errors)
         self.assertIn(u'Please tell us your favorite movie.', errors)
 
     def test_toggle_to_login_form(self):
@@ -437,7 +432,6 @@ class PayAndVerifyTest(EventsTestMixin, UniqueCourseTest):
         # Add a verified mode to the course
         ModeCreationPage(self.browser, self.course_id, mode_slug=u'verified', mode_display_name=u'Verified Certificate', min_price=10, suggested_prices='10,20').visit()
 
-    @skip("Flaky 02/02/2015")
     def test_immediate_verification_enrollment(self):
         # Create a user and log them in
         student_id = AutoAuthPage(self.browser).visit().get_user_id()
@@ -524,7 +518,8 @@ class PayAndVerifyTest(EventsTestMixin, UniqueCourseTest):
         self.assertEqual(enrollment_mode, 'verified')
 
 
-class CourseWikiTest(UniqueCourseTest):
+@attr('a11y')
+class CourseWikiA11yTest(UniqueCourseTest):
     """
     Tests that verify the course wiki.
     """
@@ -533,7 +528,7 @@ class CourseWikiTest(UniqueCourseTest):
         """
         Initialize pages and install a course fixture.
         """
-        super(CourseWikiTest, self).setUp()
+        super(CourseWikiA11yTest, self).setUp()
 
         # self.course_info['number'] must be shorter since we are accessing the wiki. See TNL-1751
         self.course_info['number'] = self.unique_id[0:6]
@@ -560,40 +555,20 @@ class CourseWikiTest(UniqueCourseTest):
         self.course_wiki_page.open_editor()
         self.course_wiki_edit_page.wait_for_page()
 
-    @attr(shard=1)
-    def test_edit_course_wiki(self):
-        """
-        Wiki page by default is editable for students.
-
-        After accessing the course wiki,
-        Replace the content of the default page
-        Confirm new content has been saved
-
-        """
-        content = "hello"
-        self._open_editor()
-        self.course_wiki_edit_page.replace_wiki_content(content)
-        self.course_wiki_edit_page.save_wiki_content()
-        actual_content = unicode(self.course_wiki_page.q(css='.wiki-article p').text[0])
-        self.assertEqual(content, actual_content)
-
-    @attr('a11y')
-    def test_view_a11y(self):
+    def test_view(self):
         """
         Verify the basic accessibility of the wiki page as initially displayed.
         """
         self.course_wiki_page.a11y_audit.check_for_accessibility_errors()
 
-    @attr('a11y')
-    def test_edit_a11y(self):
+    def test_edit(self):
         """
         Verify the basic accessibility of edit wiki page.
         """
         self._open_editor()
         self.course_wiki_edit_page.a11y_audit.check_for_accessibility_errors()
 
-    @attr('a11y')
-    def test_changes_a11y(self):
+    def test_changes(self):
         """
         Verify the basic accessibility of changes wiki page.
         """
@@ -602,8 +577,7 @@ class CourseWikiTest(UniqueCourseTest):
         history_page.wait_for_page()
         history_page.a11y_audit.check_for_accessibility_errors()
 
-    @attr('a11y')
-    def test_children_a11y(self):
+    def test_children(self):
         """
         Verify the basic accessibility of changes wiki page.
         """
@@ -787,9 +761,9 @@ class HighLevelTabTest(UniqueCourseTest):
         #self.tab_nav.go_to_tab('Course')
         self.course_home_page.visit()
 
-        # TODO: TNL-6546: Remove unified_course_view.
-        self.course_home_page.unified_course_view = True
-        self.courseware_page.nav.unified_course_view = True
+        # TODO: TNL-6546: Remove course_outline_page.
+        self.course_home_page.course_outline_page = True
+        self.courseware_page.nav.course_outline_page = True
 
         # Check that the tab lands on the course home page.
         self.assertTrue(self.course_home_page.is_browser_on_page())
@@ -971,91 +945,6 @@ class TooltipTest(UniqueCourseTest):
         self.courseware_page.visit()
 
         self.courseware_page.verify_tooltips_displayed()
-
-
-@attr(shard=1)
-class PreRequisiteCourseTest(UniqueCourseTest):
-    """
-    Tests that pre-requisite course messages are displayed
-    """
-
-    def setUp(self):
-        """
-        Initialize pages and install a course fixture.
-        """
-        super(PreRequisiteCourseTest, self).setUp()
-
-        CourseFixture(
-            self.course_info['org'], self.course_info['number'],
-            self.course_info['run'], self.course_info['display_name']
-        ).install()
-
-        self.prc_info = {
-            'org': 'test_org',
-            'number': self.unique_id,
-            'run': 'prc_test_run',
-            'display_name': 'PR Test Course' + self.unique_id
-        }
-
-        CourseFixture(
-            self.prc_info['org'], self.prc_info['number'],
-            self.prc_info['run'], self.prc_info['display_name']
-        ).install()
-
-        pre_requisite_course_key = generate_course_key(
-            self.prc_info['org'],
-            self.prc_info['number'],
-            self.prc_info['run']
-        )
-        self.pre_requisite_course_id = unicode(pre_requisite_course_key)
-
-        self.dashboard_page = DashboardPage(self.browser)
-        self.settings_page = SettingsPage(
-            self.browser,
-            self.course_info['org'],
-            self.course_info['number'],
-            self.course_info['run']
-
-        )
-        # Auto-auth register for the course
-        AutoAuthPage(self.browser, course_id=self.course_id).visit()
-
-    def test_dashboard_message(self):
-        """
-         Scenario: Any course where there is a Pre-Requisite course Student dashboard should have
-         appropriate messaging.
-            Given that I am on the Student dashboard
-            When I view a course with a pre-requisite course set
-            Then At the bottom of course I should see course requirements message.'
-        """
-
-        # visit dashboard page and make sure there is not pre-requisite course message
-        self.dashboard_page.visit()
-        self.assertFalse(self.dashboard_page.pre_requisite_message_displayed())
-
-        # Logout and login as a staff.
-        LogoutPage(self.browser).visit()
-        AutoAuthPage(self.browser, course_id=self.course_id, staff=True).visit()
-
-        # visit course settings page and set pre-requisite course
-        self.settings_page.visit()
-        self._set_pre_requisite_course()
-
-        # Logout and login as a student.
-        LogoutPage(self.browser).visit()
-        AutoAuthPage(self.browser, course_id=self.course_id, staff=False).visit()
-
-        # visit dashboard page again now it should have pre-requisite course message
-        self.dashboard_page.visit()
-        EmptyPromise(lambda: self.dashboard_page.available_courses > 0, 'Dashboard page loaded').fulfill()
-        self.assertTrue(self.dashboard_page.pre_requisite_message_displayed())
-
-    def _set_pre_requisite_course(self):
-        """
-        set pre-requisite course
-        """
-        select_option_by_value(self.settings_page.pre_requisite_course_options, self.pre_requisite_course_id)
-        self.settings_page.save_changes()
 
 
 @attr(shard=1)

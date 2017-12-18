@@ -24,6 +24,7 @@ from path import Path as path
 from warnings import filterwarnings, simplefilter
 from uuid import uuid4
 from util.db import NoOpMigrationModules
+from openedx.core.lib.derived import derive_settings
 
 # import settings from LMS for consistent behavior with CMS
 # pylint: disable=unused-import
@@ -36,7 +37,17 @@ from lms.envs.test import (
     MEDIA_URL,
     COMPREHENSIVE_THEME_DIRS,
     JWT_AUTH,
+    REGISTRATION_EXTRA_FIELDS,
 )
+
+# Add some host names used in assorted tests
+ALLOWED_HOSTS = [
+    'localhost',
+    'logistration.testserver',
+    '.testserver.fake',
+    'test-site.testserver',
+    'testserver.fakeother',
+]
 
 # mongo connection settings
 MONGO_PORT_NUM = int(os.environ.get('EDXAPP_TEST_MONGO_PORT', '27017'))
@@ -44,28 +55,12 @@ MONGO_HOST = os.environ.get('EDXAPP_TEST_MONGO_HOST', 'localhost')
 
 THIS_UUID = uuid4().hex[:5]
 
-# Nose Test Runner
-TEST_RUNNER = 'openedx.core.djangolib.nose.NoseTestSuiteRunner'
-
-_SYSTEM = 'cms'
-
-_REPORT_DIR = REPO_ROOT / 'reports' / _SYSTEM
-_REPORT_DIR.makedirs_p()
-_NOSEID_DIR = REPO_ROOT / '.testids' / _SYSTEM
-_NOSEID_DIR.makedirs_p()
-
-NOSE_ARGS = [
-    '--id-file', _NOSEID_DIR / 'noseids',
-]
-
-NOSE_PLUGINS = [
-    'openedx.core.djangolib.testing.utils.NoseDatabaseIsolation'
-]
-
 TEST_ROOT = path('test_root')
 
 # Want static files in the same dir for running on jenkins.
 STATIC_ROOT = TEST_ROOT / "staticfiles"
+INSTALLED_APPS = [app for app in INSTALLED_APPS if app != 'webpack_loader']
+INSTALLED_APPS.append('openedx.tests.util.webpack_loader')
 WEBPACK_LOADER['DEFAULT']['STATS_FILE'] = STATIC_ROOT / "webpack-stats.json"
 
 GITHUB_REPO_ROOT = TEST_ROOT / "data"
@@ -75,9 +70,6 @@ COMMON_TEST_DATA_ROOT = COMMON_ROOT / "test" / "data"
 # For testing "push to lms"
 FEATURES['ENABLE_EXPORT_GIT'] = True
 GIT_REPO_EXPORT_DIR = TEST_ROOT / "export_course_repos"
-
-# Makes the tests run much faster...
-SOUTH_TESTS_MIGRATE = False  # To disable migrations and use syncdb instead
 
 # TODO (cpennington): We need to figure out how envs/test.py can inject things into common.py so that we don't have to repeat this sort of thing
 STATICFILES_DIRS = [
@@ -212,10 +204,10 @@ VIDEO_SOURCE_PORT = 8777
 
 ################### Make tests faster
 # http://slacy.com/blog/2012/04/make-your-tests-faster-in-django-1-4/
-PASSWORD_HASHERS = (
+PASSWORD_HASHERS = [
     'django.contrib.auth.hashers.SHA1PasswordHasher',
     'django.contrib.auth.hashers.MD5PasswordHasher',
-)
+]
 
 # No segment key
 CMS_SEGMENT_KEY = None
@@ -323,6 +315,9 @@ SEARCH_ENGINE = "search.tests.mock_search_engine.MockSearchEngine"
 
 FEATURES['ENABLE_ENROLLMENT_TRACK_USER_PARTITION'] = True
 
+########################## AUTHOR PERMISSION #######################
+FEATURES['ENABLE_CREATOR_GROUP'] = False
+
 # teams feature
 FEATURES['ENABLE_TEAMS'] = True
 
@@ -330,8 +325,34 @@ FEATURES['ENABLE_TEAMS'] = True
 SECRET_KEY = '85920908f28904ed733fe576320db18cabd7b6cd'
 
 ######### custom courses #########
-INSTALLED_APPS += ('openedx.core.djangoapps.ccxcon',)
+INSTALLED_APPS.append('openedx.core.djangoapps.ccxcon.apps.CCXConnectorConfig')
 FEATURES['CUSTOM_COURSES_EDX'] = True
 
 # API access management -- needed for simple-history to run.
-INSTALLED_APPS += ('openedx.core.djangoapps.api_admin',)
+INSTALLED_APPS.append('openedx.core.djangoapps.api_admin')
+
+########################## VIDEO IMAGE STORAGE ############################
+VIDEO_IMAGE_SETTINGS = dict(
+    VIDEO_IMAGE_MAX_BYTES=2 * 1024 * 1024,    # 2 MB
+    VIDEO_IMAGE_MIN_BYTES=2 * 1024,       # 2 KB
+    STORAGE_KWARGS=dict(
+        location=MEDIA_ROOT,
+        base_url=MEDIA_URL,
+    ),
+    DIRECTORY_PREFIX='video-images/',
+)
+VIDEO_IMAGE_DEFAULT_FILENAME = 'default_video_image.png'
+
+########################## VIDEO TRANSCRIPTS STORAGE ############################
+VIDEO_TRANSCRIPTS_SETTINGS = dict(
+    VIDEO_TRANSCRIPTS_MAX_BYTES=3 * 1024 * 1024,    # 3 MB
+    STORAGE_KWARGS=dict(
+        location=MEDIA_ROOT,
+        base_url=MEDIA_URL,
+    ),
+    DIRECTORY_PREFIX='video-transcripts/',
+)
+
+########################## Derive Any Derived Settings  #######################
+
+derive_settings(__name__)

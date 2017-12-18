@@ -10,7 +10,6 @@ from .aws import *  # pylint: disable=wildcard-import, unused-wildcard-import
 del DEFAULT_FILE_STORAGE
 COURSE_IMPORT_EXPORT_STORAGE = 'django.core.files.storage.FileSystemStorage'
 USER_TASKS_ARTIFACT_STORAGE = COURSE_IMPORT_EXPORT_STORAGE
-MEDIA_ROOT = "/edx/var/edxapp/uploads"
 
 DEBUG = True
 USE_I18N = True
@@ -49,6 +48,9 @@ STATICFILES_FINDERS = [
     'django.contrib.staticfiles.finders.AppDirectoriesFinder',
 ]
 
+# Load development webpack donfiguration
+WEBPACK_CONFIG_PATH = 'webpack.dev.config.js'
+
 ############################ PYFS XBLOCKS SERVICE #############################
 # Set configuration for Django pyfilesystem
 
@@ -64,8 +66,10 @@ DJFS = {
 CELERY_ALWAYS_EAGER = True
 
 ################################ DEBUG TOOLBAR ################################
-INSTALLED_APPS += ('debug_toolbar', 'debug_toolbar_mongo')
-MIDDLEWARE_CLASSES += ('debug_toolbar.middleware.DebugToolbarMiddleware',)
+
+INSTALLED_APPS += ['debug_toolbar', 'debug_toolbar_mongo']
+
+MIDDLEWARE_CLASSES.append('debug_toolbar.middleware.DebugToolbarMiddleware')
 INTERNAL_IPS = ('127.0.0.1',)
 
 DEBUG_TOOLBAR_PANELS = (
@@ -90,8 +94,11 @@ DEBUG_TOOLBAR_CONFIG = {
 }
 
 
-def should_show_debug_toolbar(_):
-    return True  # We always want the toolbar on devstack regardless of IP, auth, etc.
+def should_show_debug_toolbar(request):
+    # We always want the toolbar on devstack unless running tests from another Docker container
+    if request.get_host().startswith('edx.devstack.studio:'):
+        return False
+    return True
 
 
 # To see stacktraces for MongoDB queries, set this to True.
@@ -118,6 +125,9 @@ SEARCH_ENGINE = "search.elastic.ElasticSearchEngine"
 
 ########################## Certificates Web/HTML View #######################
 FEATURES['CERTIFICATES_HTML_VIEW'] = True
+
+########################## AUTHOR PERMISSION #######################
+FEATURES['ENABLE_CREATOR_GROUP'] = False
 
 ################################# DJANGO-REQUIRE ###############################
 

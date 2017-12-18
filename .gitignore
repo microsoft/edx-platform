@@ -55,6 +55,7 @@ codekit-config.json
 !djangojs.po
 !djangojs.mo
 conf/locale/en/LC_MESSAGES/*.mo
+!conf/locale/en/LC_MESSAGES/*.po
 conf/locale/fake*/LC_MESSAGES/*.po
 conf/locale/fake*/LC_MESSAGES/*.mo
 # this was a mistake in i18n_tools, now fixed.
@@ -64,6 +65,7 @@ conf/locale/messages.mo
 .testids/
 .noseids
 nosetests.xml
+.cache/
 .coverage
 .coverage.*
 coverage.xml
@@ -80,6 +82,7 @@ test_root/export_course_repos/
 test_root/paver_logs/
 test_root/uploads/
 django-pyfs
+.tox/
 
 ### Installation artifacts
 *.egg-info
@@ -95,6 +98,7 @@ lms/static/css/
 lms/static/certificates/css/
 cms/static/css/
 common/static/common/js/vendor/
+common/static/common/css/vendor/
 common/static/bundles
 webpack-stats.json
 
@@ -107,8 +111,7 @@ cms/static/css/
 cms/static/sass/*.css
 cms/static/sass/*.css.map
 cms/static/themed_sass/
-themes/**/css/*.css
-themes/**/css/discussion/*.css
+themes/**/css
 
 ### Logging artifacts
 log/
@@ -131,3 +134,6 @@ lms/lib/comment_client/python
 autodeploy.properties
 .ws_migrations_complete
 dist
+
+# Visual Studio Code
+.vscode

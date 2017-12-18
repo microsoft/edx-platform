@@ -2,24 +2,22 @@
 Comprehensive Theming support for Django's collectstatic functionality.
 See https://docs.djangoproject.com/en/1.8/ref/contrib/staticfiles/
 """
-import posixpath
 import os.path
-from django.conf import settings
-from django.utils._os import safe_join
-from django.contrib.staticfiles.storage import StaticFilesStorage, CachedFilesMixin
-from django.contrib.staticfiles.finders import find
-from django.utils.six.moves.urllib.parse import (  # pylint: disable=no-name-in-module, import-error
-    unquote, urlsplit,
-)
+import posixpath
 
+from django.conf import settings
+from django.contrib.staticfiles.finders import find
+from django.contrib.staticfiles.storage import CachedFilesMixin, StaticFilesStorage
+from django.utils._os import safe_join
+from django.utils.six.moves.urllib.parse import unquote, urlsplit  # pylint: disable=no-name-in-module, import-error
 from pipeline.storage import PipelineMixin
 
 from openedx.core.djangoapps.theming.helpers import (
-    get_theme_base_dir,
-    get_project_root_name,
     get_current_theme,
+    get_project_root_name,
+    get_theme_base_dir,
     get_themes,
-    is_comprehensive_theming_enabled,
+    is_comprehensive_theming_enabled
 )
 
 
@@ -253,22 +251,14 @@ class ThemePipelineMixin(PipelineMixin):
 
         for theme in themes:
             css_packages = self.get_themed_packages(theme.theme_dir_name, settings.PIPELINE_CSS)
-            js_packages = self.get_themed_packages(theme.theme_dir_name, settings.PIPELINE_JS)
 
             from pipeline.packager import Packager
-            packager = Packager(storage=self, css_packages=css_packages, js_packages=js_packages)
+            packager = Packager(storage=self, css_packages=css_packages)
             for package_name in packager.packages['css']:
                 package = packager.package_for('css', package_name)
                 output_file = package.output_filename
                 if self.packing:
                     packager.pack_stylesheets(package)
-                paths[output_file] = (self, output_file)
-                yield output_file, output_file, True
-            for package_name in packager.packages['js']:
-                package = packager.package_for('js', package_name)
-                output_file = package.output_filename
-                if self.packing:
-                    packager.pack_javascripts(package)
                 paths[output_file] = (self, output_file)
                 yield output_file, output_file, True
 

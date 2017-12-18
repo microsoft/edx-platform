@@ -1,30 +1,54 @@
 """
 This module contains signals needed for email integration
 """
-import crum
 import datetime
 import logging
 
+import crum
 from django.conf import settings
 from django.dispatch import receiver
-
-from student.cookies import CREATE_LOGON_COOKIE
-from student.views import REGISTER_USER
-from email_marketing.models import EmailMarketingConfiguration
-from util.model_utils import USER_FIELD_CHANGED
-from lms.djangoapps.email_marketing.tasks import (
-    update_user, update_user_email
-)
-
-from sailthru.sailthru_client import SailthruClient
 from sailthru.sailthru_error import SailthruClientError
+from celery.exceptions import TimeoutError
+
+from course_modes.models import CourseMode
+from email_marketing.models import EmailMarketingConfiguration
+from openedx.core.djangoapps.waffle_utils import WaffleSwitchNamespace
+from lms.djangoapps.email_marketing.tasks import update_user, update_user_email, get_email_cookies_via_sailthru
+from openedx.core.djangoapps.lang_pref import LANGUAGE_KEY
+from student.cookies import CREATE_LOGON_COOKIE
+from student.signals import ENROLL_STATUS_CHANGE
+from student.views import REGISTER_USER
+from util.model_utils import USER_FIELD_CHANGED
+from .tasks import update_course_enrollment
 
 log = logging.getLogger(__name__)
 
 # list of changed fields to pass to Sailthru
 CHANGED_FIELDNAMES = ['username', 'is_active', 'name', 'gender', 'education',
                       'age', 'level_of_education', 'year_of_birth',
-                      'country']
+                      'country', LANGUAGE_KEY]
+
+WAFFLE_NAMESPACE = 'sailthru'
+WAFFLE_SWITCHES = WaffleSwitchNamespace(name=WAFFLE_NAMESPACE)
+
+SAILTHRU_AUDIT_PURCHASE_ENABLED = 'audit_purchase_enabled'
+
+
+@receiver(ENROLL_STATUS_CHANGE)
+def update_sailthru(sender, event, user, mode, course_id, **kwargs):
+    """
+    Receives signal and calls a celery task to update the
+    enrollment track
+    Arguments:
+        user: current user
+        course_id: course key of a course
+    Returns:
+        None
+    """
+    if WAFFLE_SWITCHES.is_enabled(SAILTHRU_AUDIT_PURCHASE_ENABLED) and mode in CourseMode.AUDIT_MODES:
+        course_key = str(course_id)
+        email = str(user.email)
+        update_course_enrollment.delay(email, course_key, mode)
 
 
 @receiver(CREATE_LOGON_COOKIE)
@@ -57,47 +81,41 @@ def add_email_marketing_cookies(sender, response=None, user=None,
         if sailthru_content:
             post_parms['cookies'] = {'anonymous_interest': sailthru_content}
 
+    time_before_call = datetime.datetime.now()
+    sailthru_response = get_email_cookies_via_sailthru.delay(user.email, post_parms)
+
     try:
-        sailthru_client = SailthruClient(email_config.sailthru_key, email_config.sailthru_secret)
-        log.info(
-            'Sending to Sailthru the user interest cookie [%s] for user [%s]',
-            post_parms.get('cookies', ''),
-            user.email
-        )
-        time_before_call = datetime.datetime.now()
+        # synchronous call to get result of an asynchronous celery task, with timeout
+        sailthru_response.get(timeout=email_config.user_registration_cookie_timeout_delay,
+                              propagate=True)
+        cookie = sailthru_response.result
+        _log_sailthru_api_call_time(time_before_call)
 
-        sailthru_response = \
-            sailthru_client.api_post("user", post_parms)
-
+    except TimeoutError as exc:
+        log.error("Timeout error while attempting to obtain cookie from Sailthru: %s", unicode(exc))
+        return response
     except SailthruClientError as exc:
         log.error("Exception attempting to obtain cookie from Sailthru: %s", unicode(exc))
-
         return response
 
-    if sailthru_response.is_ok():
-        if 'keys' in sailthru_response.json and 'cookie' in sailthru_response.json['keys']:
-            cookie = sailthru_response.json['keys']['cookie']
-
-            response.set_cookie(
-                'sailthru_hid',
-                cookie,
-                max_age=365 * 24 * 60 * 60,  # set for 1 year
-                domain=settings.SESSION_COOKIE_DOMAIN,
-                path='/',
-            )
-            _log_sailthru_api_call_time(time_before_call)
-        else:
-            log.error("No cookie returned attempting to obtain cookie from Sailthru for %s", user.email)
+    if not cookie:
+        log.error("No cookie returned attempting to obtain cookie from Sailthru for %s", user.email)
+        return response
     else:
-        error = sailthru_response.get_error()
-        # generally invalid email address
-        log.info("Error attempting to obtain cookie from Sailthru: %s", error.get_message())
+        response.set_cookie(
+            'sailthru_hid',
+            cookie,
+            max_age=365 * 24 * 60 * 60,  # set for 1 year
+            domain=settings.SESSION_COOKIE_DOMAIN,
+            path='/',
+        )
+        log.info("sailthru_hid cookie:%s successfully retrieved for user %s", cookie, user.email)
 
     return response
 
 
 @receiver(REGISTER_USER)
-def email_marketing_register_user(sender, user=None, profile=None,
+def email_marketing_register_user(sender, user, registration,
                                   **kwargs):  # pylint: disable=unused-argument
     """
     Called after user created and saved
@@ -105,7 +123,7 @@ def email_marketing_register_user(sender, user=None, profile=None,
     Args:
         sender: Not used
         user: The user object for the user being changed
-        profile: The user profile for the user being changed
+        registration: The user registration profile to activate user account
         kwargs: Not used
     """
     email_config = EmailMarketingConfiguration.current()
@@ -117,9 +135,8 @@ def email_marketing_register_user(sender, user=None, profile=None,
         return
 
     # perform update asynchronously
-    update_user.delay(
-        _create_sailthru_user_vars(user, user.profile), user.email, site=_get_current_site(), new_user=True
-    )
+    update_user.delay(_create_sailthru_user_vars(user, user.profile, registration=registration), user.email,
+                      site=_get_current_site(), new_user=True)
 
 
 @receiver(USER_FIELD_CHANGED)
@@ -143,8 +160,8 @@ def email_marketing_user_field_changed(sender, user=None, table=None, setting=No
     if user.is_anonymous():
         return
 
-    # ignore anything but User or Profile table
-    if table != 'auth_user' and table != 'auth_userprofile':
+    # ignore anything but User, Profile or UserPreference tables
+    if table not in {'auth_user', 'auth_userprofile', 'user_api_userpreference'}:
         return
 
     # ignore anything not in list of fields to handle
@@ -156,7 +173,7 @@ def email_marketing_user_field_changed(sender, user=None, table=None, setting=No
         if not email_config.enabled:
             return
 
-        # perform update asynchronously, flag if activation
+        # set the activation flag when the user is marked as activated
         update_user.delay(_create_sailthru_user_vars(user, user.profile), user.email, site=_get_current_site(),
                           new_user=False, activation=(setting == 'is_active') and new_value is True)
 
@@ -168,13 +185,16 @@ def email_marketing_user_field_changed(sender, user=None, table=None, setting=No
         update_user_email.delay(user.email, old_value)
 
 
-def _create_sailthru_user_vars(user, profile):
+def _create_sailthru_user_vars(user, profile, registration=None):
     """
     Create sailthru user create/update vars from user + profile.
     """
     sailthru_vars = {'username': user.username,
                      'activated': int(user.is_active),
                      'joined_date': user.date_joined.strftime("%Y-%m-%d")}
+
+    # Set the ui_lang to the User's prefered language, if specified. Otherwise use the application's default language.
+    sailthru_vars['ui_lang'] = user.preferences.model.get_value(user, LANGUAGE_KEY, default=settings.LANGUAGE_CODE)
 
     if profile:
         sailthru_vars['fullname'] = profile.name
@@ -184,6 +204,9 @@ def _create_sailthru_user_vars(user, profile):
         if profile.year_of_birth:
             sailthru_vars['year_of_birth'] = profile.year_of_birth
         sailthru_vars['country'] = unicode(profile.country.code)
+
+    if registration:
+        sailthru_vars['activation_key'] = registration.activation_key
 
     return sailthru_vars
 

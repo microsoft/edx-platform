@@ -1,24 +1,24 @@
 # -*- coding: utf-8 -*-
 """ Tests for transcripts_utils. """
+import copy
+import ddt
+import textwrap
 import unittest
 from uuid import uuid4
-import copy
-import textwrap
-from mock import patch, Mock
 
-from django.test.utils import override_settings
 from django.conf import settings
+from django.test.utils import override_settings
 from django.utils import translation
-
+from mock import Mock, patch
 from nose.plugins.skip import SkipTest
 
-from xmodule.modulestore.tests.factories import CourseFactory
-from xmodule.contentstore.content import StaticContent
-from xmodule.modulestore.tests.django_utils import SharedModuleStoreTestCase
-from xmodule.exceptions import NotFoundError
-from xmodule.contentstore.django import contentstore
-from xmodule.video_module import transcripts_utils
 from contentstore.tests.utils import mock_requests_get
+from xmodule.contentstore.content import StaticContent
+from xmodule.contentstore.django import contentstore
+from xmodule.exceptions import NotFoundError
+from xmodule.modulestore.tests.django_utils import SharedModuleStoreTestCase
+from xmodule.modulestore.tests.factories import CourseFactory
+from xmodule.video_module import transcripts_utils
 
 TEST_DATA_CONTENTSTORE = copy.deepcopy(settings.CONTENTSTORE)
 TEST_DATA_CONTENTSTORE['DOC_STORE_CONFIG']['db'] = 'test_xcontent_%s' % uuid4().hex
@@ -157,7 +157,7 @@ class TestSaveSubsToStore(SharedModuleStoreTestCase):
 
     def test_save_unjsonable_subs_to_store(self):
         """
-        Assures that subs, that can't be dumped, can't be found later.
+        Ensures that subs, that can't be dumped, can't be found later.
         """
         with self.assertRaises(NotFoundError):
             contentstore().find(self.content_location_unjsonable)
@@ -172,8 +172,21 @@ class TestSaveSubsToStore(SharedModuleStoreTestCase):
             contentstore().find(self.content_location_unjsonable)
 
 
+class TestYoutubeSubsBase(SharedModuleStoreTestCase):
+    """
+    Base class for tests of Youtube subs.  Using override_settings and
+    a setUpClass() override in a test class which is inherited by another
+    test class doesn't work well with pytest-django.
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(TestYoutubeSubsBase, cls).setUpClass()
+        cls.course = CourseFactory.create(
+            org=cls.org, number=cls.number, display_name=cls.display_name)
+
+
 @override_settings(CONTENTSTORE=TEST_DATA_CONTENTSTORE)
-class TestDownloadYoutubeSubs(SharedModuleStoreTestCase):
+class TestDownloadYoutubeSubs(TestYoutubeSubsBase):
     """Tests for `download_youtube_subs` function."""
 
     org = 'MITx'
@@ -200,12 +213,6 @@ class TestDownloadYoutubeSubs(SharedModuleStoreTestCase):
         """
         for subs_id in youtube_subs.values():
             self.clear_sub_content(subs_id)
-
-    @classmethod
-    def setUpClass(cls):
-        super(TestDownloadYoutubeSubs, cls).setUpClass()
-        cls.course = CourseFactory.create(
-            org=cls.org, number=cls.number, display_name=cls.display_name)
 
     def test_success_downloading_subs(self):
 
@@ -626,6 +633,16 @@ class TestTranscript(unittest.TestCase):
         with self.assertRaises(NotImplementedError):
             transcripts_utils.Transcript.convert(self.srt_transcript, 'srt', 'sjson')
 
+    def test_dummy_non_existent_transcript(self):
+        """
+        Test `Transcript.asset` raises `NotFoundError` for dummy non-existent transcript.
+        """
+        with self.assertRaises(NotFoundError):
+            transcripts_utils.Transcript.asset(None, transcripts_utils.NON_EXISTENT_TRANSCRIPT)
+
+        with self.assertRaises(NotFoundError):
+            transcripts_utils.Transcript.asset(None, None, filename=transcripts_utils.NON_EXISTENT_TRANSCRIPT)
+
 
 class TestSubsFilename(unittest.TestCase):
     """
@@ -637,3 +654,43 @@ class TestSubsFilename(unittest.TestCase):
         self.assertEqual(name, u'subs_˙∆©ƒƒƒ.srt.sjson')
         name = transcripts_utils.subs_filename(u"˙∆©ƒƒƒ", 'uk')
         self.assertEqual(name, u'uk_subs_˙∆©ƒƒƒ.srt.sjson')
+
+
+@ddt.ddt
+class TestVideoIdsInfo(unittest.TestCase):
+    """
+    Tests for `get_video_ids_info`.
+    """
+    @ddt.data(
+        {
+            'edx_video_id': '000-000-000',
+            'youtube_id_1_0': '12as34',
+            'html5_sources': [
+                'www.abc.com/foo.mp4', 'www.abc.com/bar.webm', 'foo/bar/baz.m3u8'
+            ],
+            'expected_result': (False, ['000-000-000', '12as34', 'foo', 'bar', 'baz'])
+        },
+        {
+            'edx_video_id': '',
+            'youtube_id_1_0': '12as34',
+            'html5_sources': [
+                'www.abc.com/foo.mp4', 'www.abc.com/bar.webm', 'foo/bar/baz.m3u8'
+            ],
+            'expected_result': (True, ['12as34', 'foo', 'bar', 'baz'])
+        },
+        {
+            'edx_video_id': '',
+            'youtube_id_1_0': '',
+            'html5_sources': [
+                'www.abc.com/foo.mp4', 'www.abc.com/bar.webm',
+            ],
+            'expected_result': (True, ['foo', 'bar'])
+        },
+    )
+    @ddt.unpack
+    def test_get_video_ids_info(self, edx_video_id, youtube_id_1_0, html5_sources, expected_result):
+        """
+        Verify that `get_video_ids_info` works as expected.
+        """
+        actual_result = transcripts_utils.get_video_ids_info(edx_video_id, youtube_id_1_0, html5_sources)
+        self.assertEqual(actual_result, expected_result)

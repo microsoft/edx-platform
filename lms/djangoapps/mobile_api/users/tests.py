@@ -5,39 +5,35 @@ Tests for users API
 import datetime
 
 import ddt
-from mock import patch
-from nose.plugins.attrib import attr
 import pytz
 from django.conf import settings
-from django.utils import timezone
 from django.template import defaultfilters
 from django.test import RequestFactory, override_settings
+from django.utils import timezone
 from milestones.tests.utils import MilestonesTestCaseMixin
-from xmodule.course_module import DEFAULT_START_DATE
-from xmodule.modulestore.tests.factories import ItemFactory, CourseFactory
+from mock import patch
+from nose.plugins.attrib import attr
 
 from certificates.api import generate_user_certificates
 from certificates.models import CertificateStatuses
 from certificates.tests.factories import GeneratedCertificateFactory
-from courseware.access_response import (
-    MilestoneError,
-    StartDateError,
-    VisibilityError,
-)
 from course_modes.models import CourseMode
+from courseware.access_response import MilestoneAccessError, StartDateError, VisibilityError
 from lms.djangoapps.grades.tests.utils import mock_passing_grade
-from openedx.core.lib.courses import course_image_url
-from student.models import CourseEnrollment
-from util.milestones_helpers import set_prerequisite_courses
-from util.testing import UrlResetMixin
-from .. import errors
 from mobile_api.testutils import (
     MobileAPITestCase,
     MobileAuthTestMixin,
     MobileAuthUserTestMixin,
-    MobileCourseAccessTestMixin,
+    MobileCourseAccessTestMixin
 )
+from openedx.core.lib.courses import course_image_url
+from student.models import CourseEnrollment
+from util.milestones_helpers import set_prerequisite_courses
+from util.testing import UrlResetMixin
+from xmodule.course_module import DEFAULT_START_DATE
+from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
 
+from .. import errors
 from .serializers import CourseEnrollmentSerializer
 
 
@@ -88,6 +84,11 @@ class TestUserEnrollmentApi(UrlResetMixin, MobileAPITestCase, MobileAuthUserTest
     LAST_WEEK = datetime.datetime.now(pytz.UTC) - datetime.timedelta(days=7)
     ADVERTISED_START = "Spring 2016"
     ENABLED_SIGNALS = ['course_published']
+    DATES = {
+        'next_week': NEXT_WEEK,
+        'last_week': LAST_WEEK,
+        'default_start_date': DEFAULT_START_DATE,
+    }
 
     @patch.dict(settings.FEATURES, {"ENABLE_DISCUSSION_SERVICE": True})
     def setUp(self, *args, **kwargs):
@@ -159,7 +160,7 @@ class TestUserEnrollmentApi(UrlResetMixin, MobileAPITestCase, MobileAuthUserTest
         ]
 
         expected_error_codes = [
-            MilestoneError().error_code,  # 'unfulfilled_milestones'
+            MilestoneAccessError().error_code,  # 'unfulfilled_milestones'
             StartDateError(self.NEXT_WEEK).error_code,  # 'course_not_started'
             VisibilityError().error_code,  # 'not_visible_to_user'
             None,
@@ -179,12 +180,12 @@ class TestUserEnrollmentApi(UrlResetMixin, MobileAPITestCase, MobileAuthUserTest
                 self.assertFalse(result['has_access'])
 
     @ddt.data(
-        (NEXT_WEEK, ADVERTISED_START, ADVERTISED_START, "string"),
-        (NEXT_WEEK, None, defaultfilters.date(NEXT_WEEK, "DATE_FORMAT"), "timestamp"),
-        (NEXT_WEEK, '', defaultfilters.date(NEXT_WEEK, "DATE_FORMAT"), "timestamp"),
-        (DEFAULT_START_DATE, ADVERTISED_START, ADVERTISED_START, "string"),
-        (DEFAULT_START_DATE, '', None, "empty"),
-        (DEFAULT_START_DATE, None, None, "empty"),
+        ('next_week', ADVERTISED_START, ADVERTISED_START, "string"),
+        ('next_week', None, defaultfilters.date(NEXT_WEEK, "DATE_FORMAT"), "timestamp"),
+        ('next_week', '', defaultfilters.date(NEXT_WEEK, "DATE_FORMAT"), "timestamp"),
+        ('default_start_date', ADVERTISED_START, ADVERTISED_START, "string"),
+        ('default_start_date', '', None, "empty"),
+        ('default_start_date', None, None, "empty"),
     )
     @ddt.unpack
     @patch.dict(settings.FEATURES, {'DISABLE_START_DATES': False, 'ENABLE_MKTG_SITE': True})
@@ -194,7 +195,7 @@ class TestUserEnrollmentApi(UrlResetMixin, MobileAPITestCase, MobileAuthUserTest
         case the course has not started
         """
         self.login()
-        course = CourseFactory.create(start=start, advertised_start=advertised_start, mobile_available=True)
+        course = CourseFactory.create(start=self.DATES[start], advertised_start=advertised_start, mobile_available=True)
         self.enroll(course.id)
 
         response = self.api_response()

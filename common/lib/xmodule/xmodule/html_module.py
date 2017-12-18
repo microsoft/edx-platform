@@ -1,27 +1,29 @@
 import copy
-from datetime import datetime
-from fs.errors import ResourceNotFoundError
 import logging
-from lxml import etree
 import os
-from path import Path as path
-from pkg_resources import resource_string
 import re
 import sys
 import textwrap
+from datetime import datetime
+
+from django.conf import settings
+from fs.errors import ResourceNotFoundError
+from lxml import etree
+from path import Path as path
+from pkg_resources import resource_string
+from xblock.core import XBlock
+from xblock.fields import Boolean, List, Scope, String
+from xblock.fragment import Fragment
 
 import dogstats_wrapper as dog_stats_api
-from xmodule.util.misc import escape_html_characters
 from xmodule.contentstore.content import StaticContent
 from xmodule.editing_module import EditingDescriptor
 from xmodule.edxnotes_utils import edxnotes
 from xmodule.html_checker import check_html
 from xmodule.stringify import stringify_children
-from xmodule.x_module import XModule, DEPRECATION_VSCOMPAT_EVENT
+from xmodule.util.misc import escape_html_characters
+from xmodule.x_module import DEPRECATION_VSCOMPAT_EVENT, XModule
 from xmodule.xml_module import XmlDescriptor, name_to_pathname
-from xblock.core import XBlock
-from xblock.fields import Scope, String, Boolean, List
-from xblock.fragment import Fragment
 
 log = logging.getLogger("edx.courseware")
 
@@ -68,6 +70,8 @@ class HtmlBlock(object):
         scope=Scope.settings
     )
 
+    ENABLE_HTML_XBLOCK_STUDENT_VIEW_DATA = 'ENABLE_HTML_XBLOCK_STUDENT_VIEW_DATA'
+
     @XBlock.supports("multi_device")
     def student_view(self, _context):
         """
@@ -75,13 +79,25 @@ class HtmlBlock(object):
         """
         return Fragment(self.get_html())
 
+    def student_view_data(self, context=None):  # pylint: disable=unused-argument
+        """
+        Return a JSON representation of the student_view of this XBlock.
+        """
+        if getattr(settings, 'FEATURES', {}).get(self.ENABLE_HTML_XBLOCK_STUDENT_VIEW_DATA, False):
+            return {'enabled': True, 'html': self.get_html()}
+        else:
+            return {
+                'enabled': False,
+                'message': 'To enable, set FEATURES["{}"]'.format(self.ENABLE_HTML_XBLOCK_STUDENT_VIEW_DATA)
+            }
+
     def get_html(self):
         """ Returns html required for rendering XModule. """
 
         # When we switch this to an XBlock, we can merge this with student_view,
         # but for now the XModule mixin requires that this method be defined.
         # pylint: disable=no-member
-        if self.system.anonymous_student_id:
+        if self.data is not None and getattr(self.system, 'anonymous_student_id', None) is not None:
             return self.data.replace("%%USER_ID%%", self.system.anonymous_student_id)
         return self.data
 
@@ -446,23 +462,26 @@ class CourseInfoModule(CourseInfoFields, HtmlModuleMixin):
                 return self.data.replace("%%USER_ID%%", self.system.anonymous_student_id)
             return self.data
         else:
-            course_updates = self.ordered_updates()
+            # This should no longer be called on production now that we are using a separate updates page
+            # and using a fragment HTML file - it will be called in tests until those are removed.
+            course_updates = self.order_updates(self.items)
             context = {
                 'visible_updates': course_updates[:3],
                 'hidden_updates': course_updates[3:],
             }
             return self.system.render_template("{0}/course_updates.html".format(self.TEMPLATE_DIR), context)
 
-    def ordered_updates(self):
+    @classmethod
+    def order_updates(self, updates):
         """
         Returns any course updates in reverse chronological order.
         """
-        course_updates = [item for item in self.items if item.get('status') == self.STATUS_VISIBLE]
-        course_updates.sort(
-            key=lambda item: (CourseInfoModule.safe_parse_date(item['date']), item['id']),
+        sorted_updates = [update for update in updates if update.get('status') == self.STATUS_VISIBLE]
+        sorted_updates.sort(
+            key=lambda item: (self.safe_parse_date(item['date']), item['id']),
             reverse=True
         )
-        return course_updates
+        return sorted_updates
 
     @staticmethod
     def safe_parse_date(date):

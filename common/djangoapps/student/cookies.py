@@ -8,7 +8,7 @@ import time
 
 import six
 from django.conf import settings
-from django.core.urlresolvers import reverse, NoReverseMatch
+from django.core.urlresolvers import NoReverseMatch, reverse
 from django.dispatch import Signal
 from django.utils.http import cookie_date
 
@@ -114,6 +114,32 @@ def set_user_info_cookie(response, request):
         settings.EDXMKTG_USER_INFO_COOKIE_NAME.encode('utf-8'),
         json.dumps(user_info),
         secure=user_info_cookie_is_secure,
+        **cookie_settings
+    )
+
+
+def set_experiments_is_enterprise_cookie(request, response, experiments_is_enterprise):
+    """ Sets the experiments_is_enterprise cookie on the response.
+    This cookie can be used for tests or minor features,
+    but should not be used for payment related or other critical work
+    since users can edit their cookies
+    """
+    cookie_settings = standard_cookie_settings(request)
+    # In production, TLS should be enabled so that this cookie is encrypted
+    # when we send it.  We also need to set "secure" to True so that the browser
+    # will transmit it only over secure connections.
+    #
+    # In non-production environments (acceptance tests, devstack, and sandboxes),
+    # we still want to set this cookie.  However, we do NOT want to set it to "secure"
+    # because the browser won't send it back to us.  This can cause an infinite redirect
+    # loop in the third-party auth flow, which calls `is_logged_in_cookie_set` to determine
+    # whether it needs to set the cookie or continue to the next pipeline stage.
+    cookie_is_secure = request.is_secure()
+
+    response.set_cookie(
+        'experiments_is_enterprise',
+        json.dumps(experiments_is_enterprise),
+        secure=cookie_is_secure,
         **cookie_settings
     )
 

@@ -13,12 +13,14 @@
 <%namespace name='static' file='static_content.html'/>
 <% online_help_token = self.online_help_token() if hasattr(self, 'online_help_token') else None %>
 <%!
+from branding import api as branding_api
 from django.core.urlresolvers import reverse
 from django.utils.http import urlquote_plus
 from django.utils.translation import ugettext as _
 from django.utils.translation import get_language_bidi
-from branding import api as branding_api
+from openedx.core.djangolib.js_utils import dump_js_escaped_json, js_escaped_string
 from pipeline_mako import render_require_js_path_overrides
+
 %>
 <!DOCTYPE html>
 <!--[if lte IE 9]><html class="ie ie9 lte9" lang="${LANGUAGE_CODE}"><![endif]-->
@@ -61,25 +63,36 @@ from pipeline_mako import render_require_js_path_overrides
   <link rel="icon" type="image/x-icon" href="${static.url(static.get_value('favicon_path', settings.FAVICON_PATH))}" />
 
   <%static:css group='style-vendor'/>
-  <%static:css group='${self.attr.main_css}'/>
-
-  % if not uses_pattern_library:
-    % if disable_courseware_js:
-      <%static:js group='base_vendor'/>
-      <%static:js group='base_application'/>
+  % if '/' in self.attr.main_css:
+    % if get_language_bidi():
+      <%
+      rtl_css_file = self.attr.main_css.replace('.css', '-rtl.css')
+      %>
+      <link rel="stylesheet" href="${unicode(static.url(rtl_css_file))}" type="text/css" media="all" />
     % else:
-      <%static:js group='main_vendor'/>
-      <%static:js group='application'/>
+      <link rel="stylesheet" href="${static.url(self.attr.main_css)}" type="text/css" media="all" />
     % endif
   % else:
-    ## TODO: Update to only bring in RequireJS
-    ## https://openedx.atlassian.net/browse/FEDX-140
+    <%static:css group='${self.attr.main_css}'/>
+  % endif
+
+  % if disable_courseware_js or uses_pattern_library:
     <%static:js group='base_vendor'/>
     <%static:js group='base_application'/>
+  % else:
+    <%static:js group='main_vendor'/>
+    <%static:js group='application'/>
+  % endif
+
+  <%static:webpack entry="commons"/>
+
+  % if uses_bootstrap:
+    ## xss-lint: disable=mako-invalid-js-filter
+    <script type="text/javascript" src="${static.url('common/js/vendor/bootstrap.bundle.js')}"></script>
   % endif
 
   <script>
-    window.baseUrl = "${settings.STATIC_URL}";
+    window.baseUrl = "${settings.STATIC_URL | n, js_escaped_string}";
     (function (require) {
       require.config({
           baseUrl: window.baseUrl
@@ -88,7 +101,7 @@ from pipeline_mako import render_require_js_path_overrides
   </script>
   <script type="text/javascript" src="${static.url("lms/js/require-config.js")}"></script>
   <%block name="js_overrides">
-    ${render_require_js_path_overrides(settings.REQUIRE_JS_PATH_OVERRIDES)}
+    ${render_require_js_path_overrides(settings.REQUIRE_JS_PATH_OVERRIDES) | n, decode.utf8}
   </%block>
 
   % if not disable_courseware_js:
@@ -98,6 +111,8 @@ from pipeline_mako import render_require_js_path_overrides
   <%block name="headextra"/>
   <%block name="head_extra"/>
 
+  <%include file="/courseware/experiments.html"/>
+  <%include file="user_metadata.html"/>
   <%static:optional_include_mako file="head-extra.html" is_theming_enabled="True" />
 
   <%include file="widgets/optimizely.html" />
@@ -110,7 +125,7 @@ from pipeline_mako import render_require_js_path_overrides
 % if ga_acct:
     <script type="text/javascript">
     var _gaq = _gaq || [];
-    _gaq.push(['_setAccount', '${ga_acct}']);
+    _gaq.push(['_setAccount', '${ga_acct | n, js_escaped_string}']);
     _gaq.push(['_trackPageview']);
 
     (function() {
@@ -118,6 +133,14 @@ from pipeline_mako import render_require_js_path_overrides
       ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
       var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
     })();
+    </script>
+% endif
+
+<% branch_key = static.get_value("BRANCH_IO_KEY", settings.BRANCH_IO_KEY) %>
+% if branch_key:
+    <script type="text/javascript">
+        (function(b,r,a,n,c,h,_,s,d,k){if(!b[n]||!b[n]._q){for(;s<_.length;)c(h,_[s++]);d=r.createElement(a);d.async=1;d.src="https://cdn.branch.io/branch-latest.min.js";k=r.getElementsByTagName(a)[0];k.parentNode.insertBefore(d,k);b[n]=h}})(window,document,"script","branch",function(b,r){b[r]=function(){b._q.push([r,arguments])}},{_q:[],_v:1},"addListener applyCode banner closeBanner creditHistory credits data deepview deepviewCta first getCode init link logout redeem referrals removeListener sendSMS setBranchViewData setIdentity track validateCode".split(" "), 0);
+        branch.init('${branch_key | n, js_escaped_string}');
     </script>
 % endif
 
@@ -130,14 +153,18 @@ from pipeline_mako import render_require_js_path_overrides
 % if not disable_window_wrap:
   <div class="window-wrap" dir="${static.dir_rtl()}">
 % endif
-    <a class="nav-skip" href="#main">${_("Skip to main content")}</a>
+    <a class="nav-skip sr-only sr-only-focusable" href="#main">${_("Skip to main content")}</a>
 
     % if not disable_header:
         <%include file="${static.get_template_path('header.html')}" args="online_help_token=online_help_token" />
         <%include file="/preview_menu.html" />
     % endif
 
-    <div class="content-wrapper" id="content">
+    <%include file="/page_banner.html" />
+    
+    <div class="marketing-hero"><%block name="marketing_hero"></%block></div>
+
+    <div class="content-wrapper main-container" id="content">
       ${self.body()}
       <%block name="bodyextra"/>
     </div>
@@ -156,19 +183,22 @@ from pipeline_mako import render_require_js_path_overrides
   <%include file="widgets/segment-io-footer.html" />
   <script type="text/javascript" src="${static.url('js/vendor/noreferrer.js')}" charset="utf-8"></script>
   <script type="text/javascript" src="${static.url('js/utils/navigation.js')}" charset="utf-8"></script>
+  <script type="text/javascript" src="${static.url('js/header/header.js')}"></script>
   <%static:optional_include_mako file="body-extra.html" is_theming_enabled="True" />
 </body>
 </html>
 
 <%def name="login_query()">${
-  u"?next={0}".format(urlquote_plus(login_redirect_url)) if login_redirect_url else ""
+  u"?next={next}".format(
+    next=urlquote_plus(login_redirect_url if login_redirect_url else request.path)
+  ) if (login_redirect_url or request) else ""
 }</%def>
 
 <!-- Performance beacon for onload times -->
 % if settings.FEATURES.get('ENABLE_ONLOAD_BEACON', False):
 <script>
   (function () {
-    var sample_rate = ${settings.ONLOAD_BEACON_SAMPLE_RATE};
+    var sample_rate = ${settings.ONLOAD_BEACON_SAMPLE_RATE | n, dump_js_escaped_json};
     var roll = Math.floor(Math.random() * 100)/100;
     var onloadBeaconSent = false;
 

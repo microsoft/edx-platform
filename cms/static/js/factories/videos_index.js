@@ -5,20 +5,32 @@ define([
     'use strict';
     var VideosIndexFactory = function(
         $contentWrapper,
+        videoImageUploadURL,
         videoHandlerUrl,
         encodingsDownloadUrl,
+        defaultVideoImageURL,
         concurrentUploadLimit,
-        uploadButton,
+        courseVideoSettingsButton,
         previousUploads,
         videoSupportedFileFormats,
-        videoUploadMaxFileSizeInGB
+        videoUploadMaxFileSizeInGB,
+        activeTranscriptPreferences,
+        transcriptOrganizationCredentials,
+        videoTranscriptSettings,
+        isVideoTranscriptEnabled,
+        videoImageSettings
     ) {
         var activeView = new ActiveVideoUploadListView({
                 postUrl: videoHandlerUrl,
                 concurrentUploadLimit: concurrentUploadLimit,
-                uploadButton: uploadButton,
+                courseVideoSettingsButton: courseVideoSettingsButton,
                 videoSupportedFileFormats: videoSupportedFileFormats,
                 videoUploadMaxFileSizeInGB: videoUploadMaxFileSizeInGB,
+                videoImageSettings: videoImageSettings,
+                activeTranscriptPreferences: activeTranscriptPreferences,
+                transcriptOrganizationCredentials: transcriptOrganizationCredentials,
+                videoTranscriptSettings: videoTranscriptSettings,
+                isVideoTranscriptEnabled: isVideoTranscriptEnabled,
                 onFileUploadDone: function(activeVideos) {
                     $.ajax({
                         url: videoHandlerUrl,
@@ -34,18 +46,24 @@ define([
                                        isActive[0].get('status') === ActiveVideoUpload.STATUS_COMPLETE;
                             }),
                             updatedView = new PreviousVideoUploadListView({
+                                videoImageUploadURL: videoImageUploadURL,
+                                defaultVideoImageURL: defaultVideoImageURL,
                                 videoHandlerUrl: videoHandlerUrl,
                                 collection: updatedCollection,
-                                encodingsDownloadUrl: encodingsDownloadUrl
+                                encodingsDownloadUrl: encodingsDownloadUrl,
+                                videoImageSettings: videoImageSettings
                             });
                         $contentWrapper.find('.wrapper-assets').replaceWith(updatedView.render().$el);
                     });
                 }
             }),
             previousView = new PreviousVideoUploadListView({
+                videoImageUploadURL: videoImageUploadURL,
+                defaultVideoImageURL: defaultVideoImageURL,
                 videoHandlerUrl: videoHandlerUrl,
                 collection: new Backbone.Collection(previousUploads),
-                encodingsDownloadUrl: encodingsDownloadUrl
+                encodingsDownloadUrl: encodingsDownloadUrl,
+                videoImageSettings: videoImageSettings
             });
         $contentWrapper.append(activeView.render().$el);
         $contentWrapper.append(previousView.render().$el);

@@ -2,14 +2,15 @@
 """Tests of Branding API views. """
 import json
 import urllib
-from django.test import TestCase
+
+import ddt
+import mock
+from config_models.models import cache
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.urlresolvers import reverse
-from django.conf import settings
+from django.test import TestCase
 
-import mock
-import ddt
-from config_models.models import cache
 from branding.models import BrandingApiConfig
 from openedx.core.djangoapps.dark_lang.models import DarkLangConfig
 from openedx.core.djangoapps.lang_pref.api import released_languages
@@ -317,12 +318,3 @@ class TestIndex(SiteMixin, TestCase):
         self.client.login(username=self.user.username, password="password")
         response = self.client.get(reverse("dashboard"))
         self.assertIn(self.site_configuration_other.values["MKTG_URLS"]["ROOT"], response.content)
-
-    def test_index_with_enabled_program_types(self):
-        """ Test index view with Enabled Program Types."""
-        self.site_configuration.values.update({'ENABLED_PROGRAM_TYPES': ['TestProgramType']})
-        self.site_configuration.save()
-        with mock.patch('student.views.get_programs_with_type') as patched_get_programs_with_type:
-            patched_get_programs_with_type.return_value = []
-            response = self.client.get(reverse("root"))
-            self.assertEqual(response.status_code, 200)

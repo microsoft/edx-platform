@@ -76,12 +76,12 @@ define([
         expect(view.$('.delete')).toHaveClass('is-disabled');
         expect(view.$(SELECTORS.usageText)).not.toExist();
         expect(view.$(SELECTORS.usageUnit)).not.toExist();
-        expect(view.$(SELECTORS.usageCount)).toContainText('Used in 2 units');
+        expect(view.$(SELECTORS.usageCount)).toContainText('Used in 2 locations');
     };
     var setUsageInfo = function(model) {
         model.set('usage', [
-            {'label': 'label1', 'url': 'url1'},
-            {'label': 'label2', 'url': 'url2'}
+            {label: 'label1', url: 'url1'},
+            {label: 'label2', url: 'url2'}
         ]);
     };
     var assertHideValidationContent = function(view) {
@@ -193,7 +193,7 @@ define([
                     compare: function(actual, values) {
                         var passed = _.every(values, function(value, key) {
                             return actual.get(key) === value;
-                        }.bind(this));
+                        });
 
                         return {
                             pass: passed
@@ -314,11 +314,11 @@ define([
         it('should show validation warning icon and message appropriately', function() {
             this.model.set('usage', [
                 {
-                    'label': 'label1',
-                    'url': 'url1',
-                    'validation': {
-                        'text': 'Warning message',
-                        'type': 'warning'
+                    label: 'label1',
+                    url: 'url1',
+                    validation: {
+                        text: 'Warning message',
+                        type: 'warning'
                     }
                 }
             ]);
@@ -332,11 +332,11 @@ define([
         it('should show validation error icon and message appropriately', function() {
             this.model.set('usage', [
                 {
-                    'label': 'label1',
-                    'url': 'url1',
-                    'validation': {
-                        'text': 'Error message',
-                        'type': 'error'
+                    label: 'label1',
+                    url: 'url1',
+                    validation: {
+                        text: 'Error message',
+                        type: 'error'
                     }
                 }
             ]);
@@ -901,7 +901,7 @@ define([
 
         it('should show empty usage appropriately', function() {
             this.view.$('.show-groups').click();
-            assertShowEmptyUsages(this.view, "Use this group to control a component's visibility in the ");
+            assertShowEmptyUsages(this.view, 'use this group to control access to a component');
         });
 
         it('should hide empty usage appropriately', function() {
@@ -915,7 +915,7 @@ define([
 
             assertShowNonEmptyUsages(
                 this.view,
-                'This group controls visibility of:',
+                'This group controls access to:',
                 'Cannot delete when in use by a unit'
             );
         });

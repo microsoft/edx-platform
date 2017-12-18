@@ -25,7 +25,7 @@ TEST_ROOT = CONFIG_ROOT.dirname().dirname() / "test_root"
 # Unlike in prod, we use the JSON files stored in this repo.
 # This is a convenience for ensuring (a) that we can consistently find the files
 # and (b) that the files are the same in Jenkins as in local dev.
-os.environ['SERVICE_VARIANT'] = 'bok_choy'
+os.environ['SERVICE_VARIANT'] = 'bok_choy_docker' if 'BOK_CHOY_HOSTNAME' in os.environ else 'bok_choy'
 os.environ['CONFIG_ROOT'] = CONFIG_ROOT
 
 from .aws import *  # pylint: disable=wildcard-import, unused-wildcard-import
@@ -57,9 +57,7 @@ DEBUG = True
 # Serve static files at /static directly from the staticfiles directory under test root
 # Note: optimized files for testing are generated with settings from test_static_optimized
 STATIC_URL = "/static/"
-STATICFILES_FINDERS = (
-    'django.contrib.staticfiles.finders.FileSystemFinder',
-)
+STATICFILES_FINDERS = ['django.contrib.staticfiles.finders.FileSystemFinder']
 STATICFILES_DIRS = [
     (TEST_ROOT / "staticfiles" / "lms").abspath(),
 ]
@@ -89,12 +87,16 @@ BLOCK_STRUCTURES_SETTINGS = dict(
     TASK_DEFAULT_RETRY_DELAY=0,
 )
 
-###################### Grade Downloads ######################
+###################### Grades ######################
 GRADES_DOWNLOAD = {
     'STORAGE_TYPE': 'localfs',
     'BUCKET': 'edx-grades',
     'ROOT_PATH': os.path.join(mkdtemp(), 'edx-s3', 'grades'),
 }
+
+FEATURES['PERSISTENT_GRADES_ENABLED_FOR_ALL_TESTS'] = True
+FEATURES['ASSUME_ZERO_GRADE_IF_ABSENT_FOR_ALL_TESTS'] = True
+
 
 # Configure the LMS to use our stub XQueue implementation
 XQUEUE_INTERFACE['url'] = 'http://localhost:8040'
@@ -217,7 +219,7 @@ PROFILE_IMAGE_BACKEND = {
 
 # Make sure we test with the extended history table
 FEATURES['ENABLE_CSMH_EXTENDED'] = True
-INSTALLED_APPS += ('coursewarehistoryextended',)
+INSTALLED_APPS.append('coursewarehistoryextended')
 
 BADGING_BACKEND = 'lms.djangoapps.badges.backends.tests.dummy_backend.DummyBackend'
 
@@ -232,15 +234,7 @@ if RELEASE_LINE == "master":
         'course_author': 'http://edx.readthedocs.io/projects/edx-partner-course-staff',
     }
 
-# TODO: TNL-6546: Remove this waffle and flag code.
-from django.db.utils import ProgrammingError
-from waffle.models import Flag
-try:
-    flag, created = Flag.objects.get_or_create(name='unified_course_view')
-    WAFFLE_OVERRIDE = True
-except ProgrammingError:
-    # during initial reset_db, the table for the flag doesn't yet exist.
-    pass
+WAFFLE_OVERRIDE = True
 
 #####################################################################
 # Lastly, see if the developer has any local overrides.

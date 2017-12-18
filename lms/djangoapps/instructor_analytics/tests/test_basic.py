@@ -4,32 +4,49 @@ Tests for instructor.basic
 
 import datetime
 import json
+
 import pytz
-from mock import MagicMock, Mock, patch
-from nose.plugins.attrib import attr
 from django.core.urlresolvers import reverse
 from django.db.models import Q
-
-from course_modes.models import CourseMode
-from courseware.tests.factories import InstructorFactory
-from instructor_analytics.basic import (
-    StudentModule, sale_record_features, sale_order_record_features, enrolled_students_features,
-    course_registration_features, coupon_codes_features, get_proctored_exam_results, list_may_enroll,
-    list_problem_responses, AVAILABLE_FEATURES, STUDENT_FEATURES, PROFILE_FEATURES
-)
-from opaque_keys.edx.locator import UsageKey
-from openedx.core.djangoapps.course_groups.tests.helpers import CohortFactory
-from student.models import CourseEnrollment, CourseEnrollmentAllowed
-from student.roles import CourseSalesAdminRole
-from student.tests.factories import UserFactory, CourseModeFactory
-from shoppingcart.models import (
-    CourseRegistrationCode, RegistrationCodeRedemption, Order,
-    Invoice, Coupon, CourseRegCodeItem, CouponRedemption, CourseRegistrationCodeInvoiceItem
-)
-from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
-from xmodule.modulestore.tests.factories import CourseFactory
 from edx_proctoring.api import create_exam
 from edx_proctoring.models import ProctoredExamStudentAttempt
+from mock import MagicMock, Mock, patch
+from nose.plugins.attrib import attr
+from opaque_keys.edx.locator import UsageKey
+
+from course_modes.models import CourseMode
+from course_modes.tests.factories import CourseModeFactory
+from courseware.tests.factories import InstructorFactory
+from instructor_analytics.basic import (
+    AVAILABLE_FEATURES,
+    PROFILE_FEATURES,
+    STUDENT_FEATURES,
+    StudentModule,
+    coupon_codes_features,
+    course_registration_features,
+    enrolled_students_features,
+    get_proctored_exam_results,
+    list_may_enroll,
+    list_problem_responses,
+    sale_order_record_features,
+    sale_record_features
+)
+from openedx.core.djangoapps.course_groups.tests.helpers import CohortFactory
+from shoppingcart.models import (
+    Coupon,
+    CouponRedemption,
+    CourseRegCodeItem,
+    CourseRegistrationCode,
+    CourseRegistrationCodeInvoiceItem,
+    Invoice,
+    Order,
+    RegistrationCodeRedemption
+)
+from student.models import CourseEnrollment, CourseEnrollmentAllowed
+from student.roles import CourseSalesAdminRole
+from student.tests.factories import UserFactory
+from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
+from xmodule.modulestore.tests.factories import CourseFactory
 
 
 @attr(shard=3)
@@ -222,13 +239,17 @@ class TestAnalyticsBasic(ModuleStoreTestCase):
 
     def test_get_student_exam_attempt_features(self):
         query_features = [
-            'user_email',
+            'email',
             'exam_name',
             'allowed_time_limit_mins',
             'is_sample_attempt',
             'started_at',
             'completed_at',
             'status',
+            'Suspicious Count',
+            'Suspicious Comments',
+            'Rules Violation Count',
+            'Rules Violation Comments',
         ]
 
         proctored_exam_id = create_exam(self.course_key, 'Test Content', 'Test Exam', 1)

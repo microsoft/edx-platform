@@ -56,7 +56,7 @@
             'squire': 'common/js/vendor/Squire',
             'jasmine-imagediff': 'xmodule_js/common_static/js/vendor/jasmine-imagediff',
             'domReady': 'xmodule_js/common_static/js/vendor/domReady',
-            mathjax: '//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-MML-AM_SVG&delayStartupUntil=configured',  // eslint-disable-line max-len
+            mathjax: '//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_SVG&delayStartupUntil=configured',  // eslint-disable-line max-len
             'youtube': '//www.youtube.com/player_api?noext',
             'coffee/src/ajax_prefix': 'xmodule_js/common_static/coffee/src/ajax_prefix',
             'js/instructor_dashboard/student_admin': 'js/instructor_dashboard/student_admin',
@@ -74,6 +74,7 @@
             'mathjax_delay_renderer': 'coffee/src/mathjax_delay_renderer',
             'MathJaxProcessor': 'coffee/src/customwmd',
             'picturefill': 'common/js/vendor/picturefill',
+            'bootstrap': 'common/js/vendor/bootstrap.bundle',
             'draggabilly': 'xmodule_js/common_static/js/vendor/draggabilly',
 
             // Manually specify LMS files that are not converted to RequireJS
@@ -88,9 +89,6 @@
             'js/views/file_uploader': 'js/views/file_uploader',
             'js/views/notification': 'js/views/notification',
             'js/student_account/account': 'js/student_account/account',
-            'js/student_profile/views/learner_profile_fields': 'js/student_profile/views/learner_profile_fields',
-            'js/student_profile/views/learner_profile_factory': 'js/student_profile/views/learner_profile_factory',
-            'js/student_profile/views/learner_profile_view': 'js/student_profile/views/learner_profile_view',
             'js/ccx/schedule': 'js/ccx/schedule',
             'js/views/message_banner': 'js/views/message_banner',
 
@@ -188,6 +186,9 @@
             'backbone': {
                 deps: ['underscore', 'jquery'],
                 exports: 'Backbone'
+            },
+            'bootstrap': {
+                deps: ['jquery']
             },
             'backbone.associations': {
                 deps: ['backbone'],
@@ -306,6 +307,21 @@
                 exports: 'js/instructor_dashboard/certificates',
                 deps: ['jquery', 'gettext', 'underscore']
             },
+            'js/instructor_dashboard/membership': {
+                exports: 'js/instructor_dashboard/membership',
+                deps: ['jquery', 'underscore'],
+                init: function() {
+                    // Set global variables that the util code is expecting to be defined
+                    require([  // eslint-disable-line global-require
+                        'edx-ui-toolkit/js/utils/html-utils',
+                        'edx-ui-toolkit/js/utils/string-utils'
+                    ], function(HtmlUtils, StringUtils) {
+                        window.edx = window.edx || {};
+                        window.edx.HtmlUtils = HtmlUtils;
+                        window.edx.StringUtils = StringUtils;
+                    });
+                }
+            },
             // LMS class loaded explicitly until they are converted to use RequireJS
             'js/student_account/account': {
                 exports: 'js/student_account/account',
@@ -341,6 +357,7 @@
                 exports: 'edx.instructor_dashboard.ecommerce.ExpiryCouponView',
                 deps: ['backbone', 'jquery', 'underscore']
             },
+
             'js/models/notification': {
                 exports: 'NotificationModel',
                 deps: ['backbone']
@@ -676,6 +693,7 @@
         'course_bookmarks/js/spec/bookmark_button_view_spec.js',
         'course_bookmarks/js/spec/bookmarks_list_view_spec.js',
         'course_bookmarks/js/spec/course_bookmarks_factory_spec.js',
+        'course_search/js/spec/course_search_spec.js',
         'discussion/js/spec/discussion_board_factory_spec.js',
         'discussion/js/spec/discussion_profile_page_factory_spec.js',
         'discussion/js/spec/discussion_board_view_spec.js',
@@ -687,7 +705,7 @@
         'js/spec/components/card/card_spec.js',
         'js/spec/components/header/header_spec.js',
         'js/spec/course_sharing/course_sharing_events_spec.js',
-        'js/spec/courseware/course_home_events_spec.js',
+        'js/spec/courseware/course_info_events_spec.js',
         'js/spec/courseware/link_clicked_events_spec.js',
         'js/spec/courseware/updates_visibility_spec.js',
         'js/spec/dashboard/donation.js',
@@ -731,11 +749,13 @@
         'js/spec/edxnotes/views/visibility_decorator_spec.js',
         'js/spec/financial-assistance/financial_assistance_form_view_spec.js',
         'js/spec/groups/views/cohorts_spec.js',
+        'js/spec/groups/views/discussions_spec.js',
         'js/spec/instructor_dashboard/certificates_bulk_exception_spec.js',
         'js/spec/instructor_dashboard/certificates_exception_spec.js',
         'js/spec/instructor_dashboard/certificates_invalidation_spec.js',
         'js/spec/instructor_dashboard/certificates_spec.js',
         'js/spec/instructor_dashboard/ecommerce_spec.js',
+        'js/spec/instructor_dashboard/membership_auth_spec.js',
         'js/spec/instructor_dashboard/student_admin_spec.js',
         'js/spec/learner_dashboard/collection_list_view_spec.js',
         'js/spec/learner_dashboard/program_card_view_spec.js',
@@ -743,12 +763,14 @@
         'js/spec/learner_dashboard/program_details_header_spec.js',
         'js/spec/learner_dashboard/program_details_view_spec.js',
         'js/spec/learner_dashboard/program_details_sidebar_view_spec.js',
+        'js/spec/learner_dashboard/unenroll_view_spec.js',
+        'js/spec/learner_dashboard/entitlement_unenrollment_view_spec.js',
         'js/spec/learner_dashboard/course_card_view_spec.js',
         'js/spec/learner_dashboard/course_enroll_view_spec.js',
+        'js/spec/learner_dashboard/course_entitlement_view_spec.js',
         'js/spec/markdown_editor_spec.js',
         'js/spec/dateutil_factory_spec.js',
         'js/spec/navigation_spec.js',
-        'js/spec/search/search_spec.js',
         'js/spec/shoppingcart/shoppingcart_spec.js',
         'js/spec/staff_debug_actions_spec.js',
         'js/spec/student_account/access_spec.js',
@@ -766,14 +788,6 @@
         'js/spec/student_account/password_reset_spec.js',
         'js/spec/student_account/register_spec.js',
         'js/spec/student_account/shoppingcart_spec.js',
-        'js/spec/student_profile/badge_list_container_spec.js',
-        'js/spec/student_profile/badge_list_view_spec.js',
-        'js/spec/student_profile/badge_view_spec.js',
-        'js/spec/student_profile/learner_profile_factory_spec.js',
-        'js/spec/student_profile/learner_profile_fields_spec.js',
-        'js/spec/student_profile/learner_profile_view_spec.js',
-        'js/spec/student_profile/section_two_tab_spec.js',
-        'js/spec/student_profile/share_modal_view_spec.js',
         'js/spec/verify_student/image_input_spec.js',
         'js/spec/verify_student/make_payment_step_view_ab_testing_spec.js',
         'js/spec/verify_student/make_payment_step_view_spec.js',
@@ -785,6 +799,14 @@
         'js/spec/views/file_uploader_spec.js',
         'js/spec/views/message_banner_spec.js',
         'js/spec/views/notification_spec.js',
+        'learner_profile/js/spec/learner_profile_factory_spec.js',
+        'learner_profile/js/spec/views/badge_list_container_spec.js',
+        'learner_profile/js/spec/views/badge_list_view_spec.js',
+        'learner_profile/js/spec/views/badge_view_spec.js',
+        'learner_profile/js/spec/views/learner_profile_fields_spec.js',
+        'learner_profile/js/spec/views/learner_profile_view_spec.js',
+        'learner_profile/js/spec/views/section_two_tab_spec.js',
+        'learner_profile/js/spec/views/share_modal_view_spec.js',
         'support/js/spec/collections/enrollment_spec.js',
         'support/js/spec/models/enrollment_spec.js',
         'support/js/spec/views/certificates_spec.js',

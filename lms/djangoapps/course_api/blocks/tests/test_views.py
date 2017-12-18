@@ -2,13 +2,13 @@
 Tests for Blocks Views
 """
 from datetime import datetime
-
-from django.core.urlresolvers import reverse
 from string import join
 from urllib import urlencode
 from urlparse import urlunparse
 
+from django.core.urlresolvers import reverse
 from opaque_keys.edx.locator import CourseLocator
+
 from student.models import CourseEnrollment
 from student.tests.factories import AdminFactory, CourseEnrollmentFactory, UserFactory
 from xmodule.modulestore.tests.django_utils import SharedModuleStoreTestCase
@@ -22,7 +22,7 @@ class TestBlocksView(SharedModuleStoreTestCase):
     Test class for BlocksView
     """
     requested_fields = ['graded', 'format', 'student_view_multi_device', 'children', 'not_a_field', 'due']
-    BLOCK_TYPES_WITH_STUDENT_VIEW_DATA = ['video', 'discussion']
+    BLOCK_TYPES_WITH_STUDENT_VIEW_DATA = ['video', 'discussion', 'html']
 
     @classmethod
     def setUpClass(cls):

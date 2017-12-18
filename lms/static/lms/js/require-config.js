@@ -1,5 +1,5 @@
 /* globals _, requirejs */
-/* eslint-disable quote-props */
+/* eslint-disable quote-props, no-console, no-plusplus */
 
 (function(require, define) {
     'use strict';
@@ -100,6 +100,7 @@
             'string_utils': 'js/src/string_utils',
             'utility': 'js/src/utility',
             'draggabilly': 'js/vendor/draggabilly',
+            'bootstrap': 'common/js/vendor/bootstrap.bundle',
 
             // Files needed by OVA
             'annotator': 'js/vendor/ova/annotator-full',
@@ -164,6 +165,9 @@
             },
             'backbone-super': {
                 deps: ['backbone']
+            },
+            'bootstrap': {
+                deps: ['jquery']
             },
             'string_utils': {
                 deps: ['underscore'],

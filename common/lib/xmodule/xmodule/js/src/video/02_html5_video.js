@@ -44,8 +44,11 @@ function(_) {
          *                            // video format of the source. Supported
          *                            // video formats are: 'mp4', 'webm', and
          *                            // 'ogg'.
+         *        poster:             Video poster URL
          *
-         *          events: {         // Object's properties identify the
+         *        browserIsSafari:    Flag to tell if current browser is Safari
+         *
+         *        events: {           // Object's properties identify the
          *                            // events that the API fires, and the
          *                            // functions (event listeners) that the
          *                            // API will call when those events occur.
@@ -212,22 +215,26 @@ function(_) {
             this.playerState = HTML5Video.PlayerState.PAUSED;
             if ($.isFunction(this.config.events.onReady)) {
                 this.config.events.onReady(null);
+                this.videoOverlayEl.removeClass('is-hidden');
             }
         };
 
         Player.prototype.onPlay = function() {
             this.playerState = HTML5Video.PlayerState.BUFFERING;
             this.callStateChangeCallback();
+            this.videoOverlayEl.addClass('is-hidden');
         };
 
         Player.prototype.onPlaying = function() {
             this.playerState = HTML5Video.PlayerState.PLAYING;
             this.callStateChangeCallback();
+            this.videoOverlayEl.addClass('is-hidden');
         };
 
         Player.prototype.onPause = function() {
             this.playerState = HTML5Video.PlayerState.PAUSED;
             this.callStateChangeCallback();
+            this.videoOverlayEl.removeClass('is-hidden');
         };
 
         Player.prototype.onEnded = function() {
@@ -244,7 +251,7 @@ function(_) {
                     'durationchange', 'volumechange'
                 ],
                 self = this,
-                errorMessage;
+                callback;
 
             this.config = config;
             this.logs = [];
@@ -257,6 +264,9 @@ function(_) {
             // Get the jQuery object and set error event handlers
             this.videoEl = $(this.video);
 
+            // Video player overlay play button
+            this.videoOverlayEl = this.el.find('.video-wrapper .btn-play');
+
             // The player state is used by other parts of the VideoPlayer to
             // determine what the video is currently doing.
             this.playerState = HTML5Video.PlayerState.UNSTARTED;
@@ -265,7 +275,7 @@ function(_) {
 
             // Attach a 'click' event on the <video> element. It will cause the
             // video to pause/play.
-            this.videoEl.on('click', function() {
+            callback = function() {
                 var PlayerState = HTML5Video.PlayerState;
 
                 if (self.playerState === PlayerState.PLAYING) {
@@ -275,7 +285,9 @@ function(_) {
                     self.playerState = PlayerState.PLAYING;
                     self.playVideo();
                 }
-            });
+            };
+            this.videoEl.on('click', callback);
+            this.videoOverlayEl.on('click', callback);
 
             this.debug = false;
             $.each(events, function(index, eventName) {
@@ -309,6 +321,11 @@ function(_) {
 
             if (/iP(hone|od)/i.test(isTouch[0])) {
                 this.videoEl.prop('controls', true);
+            }
+
+            // Set video poster
+            if (this.config.poster) {
+                this.videoEl.prop('poster', this.config.poster);
             }
 
             // Place the <video> element on the page.

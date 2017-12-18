@@ -1,27 +1,27 @@
 """ Commerce API v1 view tests. """
-from datetime import datetime, timedelta
 import itertools
 import json
+from datetime import datetime, timedelta
 
 import ddt
+import pytz
 from django.conf import settings
 from django.contrib.auth.models import Permission
-from django.core.urlresolvers import reverse
+from django.core.urlresolvers import reverse, reverse_lazy
 from django.test import TestCase
 from django.test.utils import override_settings
 from edx_rest_api_client import exceptions
-from flaky import flaky
 from nose.plugins.attrib import attr
-import pytz
 from rest_framework.utils.encoders import JSONEncoder
+
+from course_modes.models import CourseMode
+from lms.djangoapps.verify_student.models import VerificationDeadline
+from student.tests.factories import UserFactory
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
 
-from commerce.tests.mocks import mock_order_endpoint
-from commerce.tests.test_views import UserMixin
-from course_modes.models import CourseMode
-from student.tests.factories import UserFactory
-from lms.djangoapps.verify_student.models import VerificationDeadline
+from ....tests.mocks import mock_order_endpoint
+from ....tests.test_views import UserMixin
 
 PASSWORD = 'test'
 JSON_CONTENT_TYPE = 'application/json'
@@ -83,7 +83,7 @@ class CourseApiViewTestMixin(object):
 
 class CourseListViewTests(CourseApiViewTestMixin, ModuleStoreTestCase):
     """ Tests for CourseListView. """
-    path = reverse('commerce_api:v1:courses:list')
+    path = reverse_lazy('commerce_api:v1:courses:list')
 
     def test_authentication_required(self):
         """ Verify only authenticated users can access the view. """
@@ -107,6 +107,11 @@ class CourseListViewTests(CourseApiViewTestMixin, ModuleStoreTestCase):
 @ddt.ddt
 class CourseRetrieveUpdateViewTests(CourseApiViewTestMixin, ModuleStoreTestCase):
     """ Tests for CourseRetrieveUpdateView. """
+    NOW = 'now'
+    DATES = {
+        NOW: datetime.now(),
+        None: None,
+    }
 
     def setUp(self):
         super(CourseRetrieveUpdateViewTests, self).setUp()
@@ -163,7 +168,6 @@ class CourseRetrieveUpdateViewTests(CourseApiViewTestMixin, ModuleStoreTestCase)
 
         return response, expected
 
-    @flaky  # TODO This test will fail if one of the timestamps (in actual or expected) ends in .000
     def test_update(self):
         """ Verify the view supports updating a course. """
         # Sanity check: Ensure no verification deadline is set
@@ -278,12 +282,13 @@ class CourseRetrieveUpdateViewTests(CourseApiViewTestMixin, ModuleStoreTestCase)
 
     @ddt.data(*itertools.product(
         ('honor', 'audit', 'verified', 'professional', 'no-id-professional'),
-        (datetime.now(), None),
+        (NOW, None),
     ))
     @ddt.unpack
-    def test_update_professional_expiration(self, mode_slug, expiration_datetime):
+    def test_update_professional_expiration(self, mode_slug, expiration_datetime_name):
         """ Verify that pushing a mode with a professional certificate and an expiration datetime
         will be rejected (this is not allowed). """
+        expiration_datetime = self.DATES[expiration_datetime_name]
         mode = self._serialize_course_mode(
             CourseMode(
                 mode_slug=mode_slug,
@@ -395,7 +400,7 @@ class OrderViewTests(UserMixin, TestCase):
     view_name = 'commerce_api:v1:orders:detail'
     ORDER_NUMBER = 'EDX-100001'
     MOCK_ORDER = {'number': ORDER_NUMBER}
-    path = reverse(view_name, kwargs={'number': ORDER_NUMBER})
+    path = reverse_lazy(view_name, kwargs={'number': ORDER_NUMBER})
 
     def setUp(self):
         super(OrderViewTests, self).setUp()
@@ -417,7 +422,7 @@ class OrderViewTests(UserMixin, TestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_login_required(self):
-        """ The view should return 403 if the user is not logged in. """
+        """ The view should return 401 if the user is not logged in. """
         self.client.logout()
         response = self.client.get(self.path)
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 401)

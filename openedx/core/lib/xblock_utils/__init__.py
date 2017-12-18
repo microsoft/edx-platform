@@ -15,13 +15,14 @@ from contracts import contract
 from django.conf import settings
 from django.contrib.staticfiles.storage import staticfiles_storage
 from django.core.urlresolvers import reverse
-from django.utils.timezone import UTC
+from pytz import UTC
 from django.utils.html import escape
 from django.contrib.auth.models import User
 from edxmako.shortcuts import render_to_string
 from xblock.core import XBlock
 from xblock.exceptions import InvalidScopeError
 from xblock.fragment import Fragment
+from xblock.scorable import ScorableXBlockMixin
 
 from xmodule.seq_module import SequenceModule
 from xmodule.vertical_block import VerticalBlock
@@ -349,7 +350,7 @@ def add_staff_markup(user, has_instructor_access, disable_staff_debug_info, bloc
     # Useful to indicate to staff if problem has been released or not.
     # TODO (ichuang): use _has_access_descriptor.can_load in lms.courseware.access,
     # instead of now>mstart comparison here.
-    now = datetime.datetime.now(UTC())
+    now = datetime.datetime.now(UTC)
     is_released = "unknown"
     mstart = block.start
 
@@ -383,9 +384,13 @@ def add_staff_markup(user, has_instructor_access, disable_staff_debug_info, bloc
         'is_released': is_released,
         'has_instructor_access': has_instructor_access,
         'can_reset_attempts': 'attempts' in block.fields,
-        'can_rescore_problem': any(hasattr(block, rescore) for rescore in ['rescore_problem', 'rescore']),
+        'can_rescore_problem': hasattr(block, 'rescore'),
+        'can_override_problem_score': isinstance(block, ScorableXBlockMixin),
         'disable_staff_debug_info': disable_staff_debug_info,
     }
+    if isinstance(block, ScorableXBlockMixin):
+        staff_context['max_problem_score'] = block.max_score()
+
     return wrap_fragment(frag, render_to_string("staff_problem_info.html", staff_context))
 
 
@@ -459,7 +464,7 @@ def xblock_local_resource_url(block, uri):
     xblock_class = getattr(block.__class__, 'unmixed_class', block.__class__)
     if settings.PIPELINE_ENABLED or not settings.REQUIRE_DEBUG:
         return staticfiles_storage.url('xblock/resources/{package_name}/{path}'.format(
-            package_name=xblock_class.__module__,
+            package_name=xblock_resource_pkg(xblock_class),
             path=uri
         ))
     else:
@@ -467,3 +472,30 @@ def xblock_local_resource_url(block, uri):
             'block_type': block.scope_ids.block_type,
             'uri': uri,
         })
+
+
+def xblock_resource_pkg(block):
+    """
+    Return the module name needed to find an XBlock's shared static assets.
+
+    This method will return the full module name that is one level higher than
+    the one the block is in. For instance, problem_builder.answer.AnswerBlock
+    has a __module__ value of 'problem_builder.answer'. This method will return
+    'problem_builder' instead. However, for edx-ora2's
+    openassessment.xblock.openassessmentblock.OpenAssessmentBlock, the value
+    returned is 'openassessment.xblock'.
+
+    XModules are special cased because they're local to this repo and they
+    actually don't share their resource files when compiled out as part of the
+    XBlock asset pipeline. This only covers XBlocks and XModules using the
+    XBlock-style of asset specification. If they use the XModule bundling part
+    of the asset pipeline (xmodule_assets), their assets are compiled through an
+    entirely separate mechanism and put into lms-modules.js/css.
+    """
+    # XModules are a special case because they map to different dirs for
+    # sub-modules.
+    module_name = block.__module__
+    if module_name.startswith('xmodule.'):
+        return module_name
+
+    return module_name.rsplit('.', 1)[0]

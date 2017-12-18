@@ -1,31 +1,73 @@
+# -*- coding: utf-8 -*-
 """Tests for account creation"""
-from datetime import datetime
 import json
 import unittest
+from datetime import datetime
+from importlib import import_module
 
 import ddt
-from mock import patch
+import mock
+import pytz
 from django.conf import settings
-from django.contrib.auth.models import User, AnonymousUser
+from django.contrib.auth.models import AnonymousUser, User
 from django.core.urlresolvers import reverse
 from django.test import TestCase, TransactionTestCase
 from django.test.client import RequestFactory
 from django.test.utils import override_settings
-from django.utils.importlib import import_module
-import mock
-import pytz
+from mock import patch
 
-from openedx.core.djangoapps.user_api.preferences.api import get_user_preference
-from openedx.core.djangoapps.lang_pref import LANGUAGE_KEY
-from openedx.core.djangoapps.site_configuration.tests.mixins import SiteMixin
+import student
+from django_comment_common.models import ForumsConfig
 from notification_prefs import NOTIFICATION_PREF_KEY
 from openedx.core.djangoapps.external_auth.models import ExternalAuthMap
-import student
+from openedx.core.djangoapps.lang_pref import LANGUAGE_KEY
+from openedx.core.djangoapps.site_configuration.tests.mixins import SiteMixin
+from openedx.core.djangoapps.user_api.accounts import (
+    USERNAME_BAD_LENGTH_MSG, USERNAME_INVALID_CHARS_ASCII, USERNAME_INVALID_CHARS_UNICODE
+)
+from openedx.core.djangoapps.user_api.preferences.api import get_user_preference
 from student.models import UserAttribute
-from student.views import REGISTRATION_AFFILIATE_ID, REGISTRATION_UTM_PARAMETERS, REGISTRATION_UTM_CREATED_AT
-from django_comment_common.models import ForumsConfig
+from student.views import REGISTRATION_AFFILIATE_ID, REGISTRATION_UTM_CREATED_AT, REGISTRATION_UTM_PARAMETERS, \
+    skip_activation_email
+from student.tests.factories import UserFactory
+from third_party_auth.tests import factories as third_party_auth_factory
 
 TEST_CS_URL = 'https://comments.service.test:123/'
+
+TEST_USERNAME = 'test_user'
+TEST_EMAIL = 'test@test.com'
+
+
+def get_mock_pipeline_data(username=TEST_USERNAME, email=TEST_EMAIL):
+    """
+    Return mock pipeline data.
+    """
+    return {
+        'backend': 'tpa-saml',
+        'kwargs': {
+            'username': username,
+            'auth_entry': 'register',
+            'request': {
+                'SAMLResponse': [],
+                'RelayState': [
+                    'testshib-openedx'
+                ]
+            },
+            'is_new': True,
+            'new_association': True,
+            'user': None,
+            'social': None,
+            'details': {
+                'username': username,
+                'fullname': 'Test Test',
+                'last_name': 'Test',
+                'first_name': 'Test',
+                'email': email,
+            },
+            'response': {},
+            'uid': 'testshib-openedx:{}'.format(username)
+        }
+    }
 
 
 @ddt.ddt
@@ -148,9 +190,9 @@ class TestCreateAccount(SiteMixin, TestCase):
             'country': self.params['country'],
         }
 
-        self.create_account_and_fetch_profile()
+        profile = self.create_account_and_fetch_profile()
 
-        mock_segment_identify.assert_called_with(1, expected_payload)
+        mock_segment_identify.assert_called_with(profile.user.id, expected_payload)
 
     @unittest.skipUnless(
         "microsite_configuration.middleware.MicrositeMiddleware" in settings.MIDDLEWARE_CLASSES,
@@ -419,6 +461,88 @@ class TestCreateAccount(SiteMixin, TestCase):
         profile = self.create_account_and_fetch_profile(host=self.site.domain)
         self.assertEqual(UserAttribute.get_user_attribute(profile.user, 'created_on_site'), self.site.domain)
 
+    @ddt.data(
+        (
+            False, False, get_mock_pipeline_data(),
+            {
+                'SKIP_EMAIL_VALIDATION': False, 'AUTOMATIC_AUTH_FOR_TESTING': False,
+                'BYPASS_ACTIVATION_EMAIL_FOR_EXTAUTH': False,
+            },
+            False  # Do not skip activation email for normal scenario.
+        ),
+        (
+            False, False, get_mock_pipeline_data(),
+            {
+                'SKIP_EMAIL_VALIDATION': True, 'AUTOMATIC_AUTH_FOR_TESTING': False,
+                'BYPASS_ACTIVATION_EMAIL_FOR_EXTAUTH': False,
+            },
+            True  # Skip activation email when `SKIP_EMAIL_VALIDATION` FEATURE flag is active.
+        ),
+        (
+            False, False, get_mock_pipeline_data(),
+            {
+                'SKIP_EMAIL_VALIDATION': False, 'AUTOMATIC_AUTH_FOR_TESTING': True,
+                'BYPASS_ACTIVATION_EMAIL_FOR_EXTAUTH': False,
+            },
+            True  # Skip activation email when `AUTOMATIC_AUTH_FOR_TESTING` FEATURE flag is active.
+        ),
+        (
+            True, False, get_mock_pipeline_data(),
+            {
+                'SKIP_EMAIL_VALIDATION': False, 'AUTOMATIC_AUTH_FOR_TESTING': False,
+                'BYPASS_ACTIVATION_EMAIL_FOR_EXTAUTH': True,
+            },
+            True  # Skip activation email for external auth scenario.
+        ),
+        (
+            False, False, get_mock_pipeline_data(),
+            {
+                'SKIP_EMAIL_VALIDATION': False, 'AUTOMATIC_AUTH_FOR_TESTING': False,
+                'BYPASS_ACTIVATION_EMAIL_FOR_EXTAUTH': True,
+            },
+            False  # Do not skip activation email when `BYPASS_ACTIVATION_EMAIL_FOR_EXTAUTH` feature flag is set
+                   # but it is not external auth scenario.
+        ),
+        (
+            False, True, get_mock_pipeline_data(),
+            {
+                'SKIP_EMAIL_VALIDATION': False, 'AUTOMATIC_AUTH_FOR_TESTING': False,
+                'BYPASS_ACTIVATION_EMAIL_FOR_EXTAUTH': False,
+            },
+            True  # Skip activation email if `skip_email_verification` is set for third party authentication.
+        ),
+        (
+            False, False, get_mock_pipeline_data(email='invalid@yopmail.com'),
+            {
+                'SKIP_EMAIL_VALIDATION': False, 'AUTOMATIC_AUTH_FOR_TESTING': False,
+                'BYPASS_ACTIVATION_EMAIL_FOR_EXTAUTH': False,
+            },
+            False  # Send activation email when `skip_email_verification` is not set.
+        )
+    )
+    @ddt.unpack
+    @unittest.skipUnless(settings.ROOT_URLCONF == 'lms.urls', 'Test only valid in lms')
+    def test_should_skip_activation_email(
+            self, do_external_auth, skip_email_verification, running_pipeline, feature_overrides, expected,
+    ):
+        """
+        Test `skip_activation_email` works as expected.
+        """
+        third_party_provider = third_party_auth_factory.SAMLProviderConfigFactory(
+            skip_email_verification=skip_email_verification,
+        )
+        user = UserFactory(username=TEST_USERNAME, email=TEST_EMAIL)
+
+        with override_settings(FEATURES=dict(settings.FEATURES, **feature_overrides)):
+            result = skip_activation_email(
+                user=user,
+                do_external_auth=do_external_auth,
+                running_pipeline=running_pipeline,
+                third_party_provider=third_party_provider
+            )
+
+            assert result == expected
+
 
 @ddt.ddt
 class TestCreateAccountValidation(TestCase):
@@ -474,21 +598,20 @@ class TestCreateAccountValidation(TestCase):
 
         # Missing
         del params["username"]
-        assert_username_error("Username must be minimum of two characters long")
+        assert_username_error(USERNAME_BAD_LENGTH_MSG)
 
         # Empty, too short
         for username in ["", "a"]:
             params["username"] = username
-            assert_username_error("Username must be minimum of two characters long")
+            assert_username_error(USERNAME_BAD_LENGTH_MSG)
 
         # Too long
         params["username"] = "this_username_has_31_characters"
-        assert_username_error("Username cannot be more than 30 characters long")
+        assert_username_error(USERNAME_BAD_LENGTH_MSG)
 
         # Invalid
         params["username"] = "invalid username"
-        assert_username_error("Usernames can only contain Roman letters, western numerals (0-9), underscores (_), and "
-                              "hyphens (-).")
+        assert_username_error(str(USERNAME_INVALID_CHARS_ASCII))
 
     def test_email(self):
         params = dict(self.minimal_params)
@@ -735,3 +858,66 @@ class TestCreateCommentsServiceUser(TransactionTestCase):
             User.objects.get(username=self.username)
         self.assertTrue(register.called)
         self.assertFalse(request.called)
+
+
+class TestUnicodeUsername(TestCase):
+    """
+    Test for Unicode usernames which is an optional feature.
+    """
+
+    def setUp(self):
+        super(TestUnicodeUsername, self).setUp()
+        self.url = reverse('create_account')
+
+        # The word below reads "Omar II", in Arabic. It also contains a space and
+        # an Eastern Arabic Number another option is to use the Esperanto fake
+        # language but this was used instead to test non-western letters.
+        self.username = u'عمر ٢'
+
+        self.url_params = {
+            'username': self.username,
+            'email': 'unicode_user@example.com',
+            "password": "testpass",
+            'name': 'unicode_user',
+            'terms_of_service': 'true',
+            'honor_code': 'true',
+        }
+
+    @patch.dict(settings.FEATURES, {'ENABLE_UNICODE_USERNAME': False})
+    def test_with_feature_disabled(self):
+        """
+        Ensures backward-compatible defaults.
+        """
+        response = self.client.post(self.url, self.url_params)
+
+        self.assertEquals(response.status_code, 400)
+        obj = json.loads(response.content)
+        self.assertEquals(USERNAME_INVALID_CHARS_ASCII, obj['value'])
+
+        with self.assertRaises(User.DoesNotExist):
+            User.objects.get(email=self.url_params['email'])
+
+    @patch.dict(settings.FEATURES, {'ENABLE_UNICODE_USERNAME': True})
+    def test_with_feature_enabled(self):
+        response = self.client.post(self.url, self.url_params)
+        self.assertEquals(response.status_code, 200)
+
+        self.assertTrue(User.objects.get(email=self.url_params['email']))
+
+    @patch.dict(settings.FEATURES, {'ENABLE_UNICODE_USERNAME': True})
+    def test_special_chars_with_feature_enabled(self):
+        """
+        Ensures that special chars are still prevented.
+        """
+
+        invalid_params = self.url_params.copy()
+        invalid_params['username'] = '**john**'
+
+        response = self.client.post(self.url, invalid_params)
+        self.assertEquals(response.status_code, 400)
+
+        obj = json.loads(response.content)
+        self.assertEquals(USERNAME_INVALID_CHARS_UNICODE, obj['value'])
+
+        with self.assertRaises(User.DoesNotExist):
+            User.objects.get(email=self.url_params['email'])

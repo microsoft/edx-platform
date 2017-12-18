@@ -1,20 +1,19 @@
 """
 This file contains view functions for wrapping the django-wiki.
 """
+import cgi
 import logging
 import re
-import cgi
 
 from django.conf import settings
 from django.shortcuts import redirect
 from django.utils.translation import ugettext as _
-
+from opaque_keys.edx.keys import CourseKey
 from wiki.core.exceptions import NoRootURL
-from wiki.models import URLPath, Article
+from wiki.models import Article, URLPath
 
-from courseware.courses import get_course_by_id
 from course_wiki.utils import course_wiki_slug
-from opaque_keys.edx.locations import SlashSeparatedCourseKey
+from courseware.courses import get_course_by_id
 from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 from openedx.features.enterprise_support.api import data_sharing_consent_required
 
@@ -37,7 +36,7 @@ def course_wiki_redirect(request, course_id, wiki_path=""):  # pylint: disable=u
     as it's home page. A course's wiki must be an article on the root (for
     example, "/6.002x") to keep things simple.
     """
-    course = get_course_by_id(SlashSeparatedCourseKey.from_deprecated_string(course_id))
+    course = get_course_by_id(CourseKey.from_string(course_id))
     course_slug = course_wiki_slug(course)
 
     valid_slug = True

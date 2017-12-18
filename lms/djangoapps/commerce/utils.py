@@ -1,11 +1,15 @@
 """Utilities to assist with commerce tasks."""
+from urllib import urlencode
 from urlparse import urljoin
 
-from django.conf import settings
 import waffle
+from django.conf import settings
+from django.core.urlresolvers import reverse
 
-from commerce.models import CommerceConfiguration
 from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
+from student.models import CourseEnrollment
+
+from .models import CommerceConfiguration
 
 
 def is_account_activation_requirement_disabled():
@@ -76,10 +80,32 @@ class EcommerceService(object):
         """
         return self.get_absolute_ecommerce_url(self.config.single_course_checkout_page)
 
-    def checkout_page_url(self, sku):
-        """ Construct the URL to the ecommerce checkout page and include a product.
+    def get_checkout_page_url(self, *skus):
+        """ Construct the URL to the ecommerce checkout page and include products.
+
+        Args:
+            skus (list): List of SKUs associated with products to be added to basket
+
+        Returns:
+            Absolute path to the ecommerce checkout page showing basket that contains specified products.
 
         Example:
-            http://localhost:8002/basket/single_item/?sku=5H3HG5
+            http://localhost:8002/basket/add/?sku=5H3HG5&sku=57FHHD
         """
-        return "{}?sku={}".format(self.get_absolute_ecommerce_url(self.config.single_course_checkout_page), sku)
+        return '{checkout_page_path}?{skus}'.format(
+            checkout_page_path=self.get_absolute_ecommerce_url(self.config.MULTIPLE_ITEMS_BASKET_PAGE_URL),
+            skus=urlencode({'sku': skus}, doseq=True),
+        )
+
+    def upgrade_url(self, user, course_key):
+        """
+        Returns the URL for the user to upgrade, or None if not applicable.
+        """
+        enrollment = CourseEnrollment.get_enrollment(user, course_key)
+        verified_mode = enrollment.verified_mode if enrollment else None
+        if verified_mode:
+            if self.is_enabled(user):
+                return self.get_checkout_page_url(verified_mode.sku)
+            else:
+                return reverse('verify_student_upgrade_and_verify', args=(course_key,))
+        return None

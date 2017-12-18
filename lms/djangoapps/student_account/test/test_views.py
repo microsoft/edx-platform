@@ -6,50 +6,47 @@ import re
 from unittest import skipUnless
 from urllib import urlencode
 
-import mock
 import ddt
+import mock
+import pytest
 from django.conf import settings
-from django.core import mail
-from django.core.files.uploadedfile import SimpleUploadedFile
-from django.core.urlresolvers import reverse
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.messages.middleware import MessageMiddleware
+from django.core import mail
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.urlresolvers import reverse
+from django.http import HttpRequest
 from django.test import TestCase
 from django.test.utils import override_settings
-from django.http import HttpRequest
-from edx_oauth2_provider.tests.factories import ClientFactory, AccessTokenFactory, RefreshTokenFactory
+from edx_oauth2_provider.tests.factories import AccessTokenFactory, ClientFactory, RefreshTokenFactory
 from edx_rest_api_client import exceptions
+from http.cookies import SimpleCookie
 from nose.plugins.attrib import attr
-from oauth2_provider.models import (
-    AccessToken as dot_access_token,
-    RefreshToken as dot_refresh_token
-)
-from provider.oauth2.models import (
-    AccessToken as dop_access_token,
-    RefreshToken as dop_refresh_token
-)
+from oauth2_provider.models import AccessToken as dot_access_token
+from oauth2_provider.models import RefreshToken as dot_refresh_token
+from provider.oauth2.models import AccessToken as dop_access_token
+from provider.oauth2.models import RefreshToken as dop_refresh_token
 from testfixtures import LogCapture
 
-from commerce.models import CommerceConfiguration
-from commerce.tests import factories
-from commerce.tests.mocks import mock_get_orders
 from course_modes.models import CourseMode
-from edxmako.shortcuts import render_to_response
+from lms.djangoapps.commerce.models import CommerceConfiguration
+from lms.djangoapps.commerce.tests import factories
+from lms.djangoapps.commerce.tests.mocks import mock_get_orders
 from openedx.core.djangoapps.oauth_dispatch.tests import factories as dot_factories
 from openedx.core.djangoapps.programs.tests.mixins import ProgramsApiConfigMixin
-from openedx.core.djangoapps.user_api.accounts.api import activate_account, create_account
-from openedx.core.djangoapps.user_api.accounts import EMAIL_MAX_LENGTH
-from openedx.core.djangolib.js_utils import dump_js_escaped_json
+from openedx.core.djangoapps.site_configuration.tests.factories import SiteFactory
 from openedx.core.djangoapps.site_configuration.tests.mixins import SiteMixin
+from openedx.core.djangoapps.theming.tests.test_util import with_comprehensive_theme_context
+from openedx.core.djangoapps.user_api.accounts.api import activate_account, create_account
+from openedx.core.djangolib.js_utils import dump_js_escaped_json
 from openedx.core.djangolib.testing.utils import CacheIsolationTestCase
 from student.tests.factories import UserFactory
 from student_account.views import account_settings_context, get_user_orders
-from third_party_auth.tests.testutil import simulate_running_pipeline, ThirdPartyAuthTestMixin
+from third_party_auth.tests.testutil import ThirdPartyAuthTestMixin, simulate_running_pipeline
 from util.testing import UrlResetMixin
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
-from openedx.core.djangoapps.theming.tests.test_util import with_comprehensive_theme_context
-
+from openedx.core.djangoapps.user_api.errors import UserAPIInternalError
 
 LOGGER_NAME = 'audit'
 User = get_user_model()  # pylint:disable=invalid-name
@@ -67,24 +64,6 @@ class StudentAccountUpdateTest(CacheIsolationTestCase, UrlResetMixin):
     NEW_EMAIL = u"walt@savewalterwhite.com"
 
     INVALID_ATTEMPTS = 100
-
-    INVALID_EMAILS = [
-        None,
-        u"",
-        u"a",
-        "no_domain",
-        "no+domain",
-        "@",
-        "@domain.com",
-        "test@no_extension",
-
-        # Long email -- subtract the length of the @domain
-        # except for one character (so we exceed the max length limit)
-        u"{user}@example.com".format(
-            user=(u'e' * (EMAIL_MAX_LENGTH - 11))
-        )
-    ]
-
     INVALID_KEY = u"123abc"
 
     URLCONF_MODULES = ['student_accounts.urls']
@@ -154,6 +133,12 @@ class StudentAccountUpdateTest(CacheIsolationTestCase, UrlResetMixin):
         # Verify that the new password continues to be valid
         result = self.client.login(username=self.USERNAME, password=self.NEW_PASSWORD)
         self.assertTrue(result)
+
+    def test_password_change_failure(self):
+        with mock.patch('openedx.core.djangoapps.user_api.accounts.api.request_password_change',
+                        side_effect=UserAPIInternalError):
+            self._change_password()
+            self.assertRaises(UserAPIInternalError)
 
     @ddt.data(True, False)
     def test_password_change_logged_out(self, send_email):
@@ -333,19 +318,19 @@ class StudentAccountLoginAndRegistrationTest(ThirdPartyAuthTestMixin, UrlResetMi
         ("edx.org", "register_user"),
     )
     @ddt.unpack
-    def test_login_and_registration_form_signin_preserves_params(self, theme, url_name):
+    def test_login_and_registration_form_signin_not_preserves_params(self, theme, url_name):
         params = [
             ('course_id', 'edX/DemoX/Demo_Course'),
             ('enrollment_action', 'enroll'),
         ]
 
-        # The response should have a "Sign In" button with the URL
+        # The response should not have a "Sign In" button with the URL
         # that preserves the querystring params
         with with_comprehensive_theme_context(theme):
             response = self.client.get(reverse(url_name), params, HTTP_ACCEPT="text/html")
 
         expected_url = '/login?{}'.format(self._finish_auth_url_param(params + [('next', '/dashboard')]))
-        self.assertContains(response, expected_url)
+        self.assertNotContains(response, expected_url)
 
         # Add additional parameters:
         params = [
@@ -361,7 +346,7 @@ class StudentAccountLoginAndRegistrationTest(ThirdPartyAuthTestMixin, UrlResetMi
             response = self.client.get(reverse(url_name), params, HTTP_ACCEPT="text/html")
 
         expected_url = '/login?{}'.format(self._finish_auth_url_param(params))
-        self.assertContains(response, expected_url)
+        self.assertNotContains(response, expected_url)
 
     @mock.patch.dict(settings.FEATURES, {"ENABLE_THIRD_PARTY_AUTH": False})
     @ddt.data("signin_user", "register_user")
@@ -482,48 +467,88 @@ class StudentAccountLoginAndRegistrationTest(ThirdPartyAuthTestMixin, UrlResetMi
         response = self.client.get(reverse('signin_user'), params, HTTP_ACCEPT="text/html")
         self.assertNotIn(response.content, tpa_hint)
 
-    def test_hinted_login_dialog_disabled(self):
+    @ddt.data(
+        ('signin_user', 'login'),
+        ('register_user', 'register'),
+    )
+    @ddt.unpack
+    @pytest.mark.django111_expected_failure
+    def test_hinted_login_dialog_disabled(self, url_name, auth_entry):
         """Test that the dialog doesn't show up for hinted logins when disabled. """
         self.google_provider.skip_hinted_login_dialog = True
         self.google_provider.save()
         params = [("next", "/courses/something/?tpa_hint=oa2-google-oauth2")]
-        response = self.client.get(reverse('signin_user'), params, HTTP_ACCEPT="text/html")
+        response = self.client.get(reverse(url_name), params, HTTP_ACCEPT="text/html")
         self.assertRedirects(
             response,
-            'auth/login/google-oauth2/?auth_entry=login&next=%2Fcourses%2Fsomething%2F%3Ftpa_hint%3Doa2-google-oauth2',
+            'auth/login/google-oauth2/?auth_entry={}&next=%2Fcourses%2Fsomething%2F%3Ftpa_hint%3Doa2-google-oauth2'.format(auth_entry),
+            target_status_code=302
+        )
+
+    @override_settings(FEATURES=dict(settings.FEATURES, THIRD_PARTY_AUTH_HINT='oa2-google-oauth2'))
+    @ddt.data(
+        'signin_user',
+        'register_user',
+    )
+    def test_settings_tpa_hinted_login(self, url_name):
+        """
+        Ensure that settings.FEATURES['THIRD_PARTY_AUTH_HINT'] can set third_party_auth_hint.
+        """
+        params = [("next", "/courses/something/")]
+        response = self.client.get(reverse(url_name), params, HTTP_ACCEPT="text/html")
+        self.assertContains(response, '"third_party_auth_hint": "oa2-google-oauth2"')
+
+        # THIRD_PARTY_AUTH_HINT can be overridden via the query string
+        tpa_hint = self.hidden_enabled_provider.provider_id
+        params = [("next", "/courses/something/?tpa_hint={0}".format(tpa_hint))]
+        response = self.client.get(reverse(url_name), params, HTTP_ACCEPT="text/html")
+        self.assertContains(response, '"third_party_auth_hint": "{0}"'.format(tpa_hint))
+
+        # Even disabled providers in the query string will override THIRD_PARTY_AUTH_HINT
+        tpa_hint = self.hidden_disabled_provider.provider_id
+        params = [("next", "/courses/something/?tpa_hint={0}".format(tpa_hint))]
+        response = self.client.get(reverse(url_name), params, HTTP_ACCEPT="text/html")
+        self.assertNotIn(response.content, tpa_hint)
+
+    @override_settings(FEATURES=dict(settings.FEATURES, THIRD_PARTY_AUTH_HINT='oa2-google-oauth2'))
+    @ddt.data(
+        ('signin_user', 'login'),
+        ('register_user', 'register'),
+    )
+    @ddt.unpack
+    @pytest.mark.django111_expected_failure
+    def test_settings_tpa_hinted_login_dialog_disabled(self, url_name, auth_entry):
+        """Test that the dialog doesn't show up for hinted logins when disabled via settings.THIRD_PARTY_AUTH_HINT. """
+        self.google_provider.skip_hinted_login_dialog = True
+        self.google_provider.save()
+        params = [("next", "/courses/something/")]
+        response = self.client.get(reverse(url_name), params, HTTP_ACCEPT="text/html")
+        self.assertRedirects(
+            response,
+            'auth/login/google-oauth2/?auth_entry={}&next=%2Fcourses%2Fsomething%2F%3Ftpa_hint%3Doa2-google-oauth2'.format(auth_entry),
             target_status_code=302
         )
 
     @mock.patch('student_account.views.enterprise_customer_for_request')
     @ddt.data(
-        ('signin_user', False, None, None, None),
-        ('register_user', False, None, None, None),
-        ('signin_user', True, 'Fake EC', 'http://logo.com/logo.jpg', u'{enterprise_name} - {platform_name}'),
-        ('register_user', True, 'Fake EC', 'http://logo.com/logo.jpg', u'{enterprise_name} - {platform_name}'),
-        ('signin_user', True, 'Fake EC', None, u'{enterprise_name} - {platform_name}'),
-        ('register_user', True, 'Fake EC', None, u'{enterprise_name} - {platform_name}'),
-        ('signin_user', True, 'Fake EC', 'http://logo.com/logo.jpg', None),
-        ('register_user', True, 'Fake EC', 'http://logo.com/logo.jpg', None),
-        ('signin_user', True, 'Fake EC', None, None),
-        ('register_user', True, 'Fake EC', None, None),
+        ('signin_user', False, None, None),
+        ('register_user', False, None, None),
+        ('signin_user', True, 'Fake EC', 'http://logo.com/logo.jpg'),
+        ('register_user', True, 'Fake EC', 'http://logo.com/logo.jpg'),
+        ('signin_user', True, 'Fake EC', None),
+        ('register_user', True, 'Fake EC', None),
     )
     @ddt.unpack
-    def test_enterprise_register(self, url_name, ec_present, ec_name, logo_url, welcome_message, mock_get_ec):
+    def test_enterprise_register(self, url_name, ec_present, ec_name, logo_url, mock_get_ec):
         """
         Verify that when an EnterpriseCustomer is received on the login and register views,
         the appropriate sidebar is rendered.
         """
         if ec_present:
-            mock_ec = mock_get_ec.return_value
-            mock_ec.name = ec_name
-            if logo_url:
-                mock_ec.branding_configuration.logo.url = logo_url
-            else:
-                mock_ec.branding_configuration.logo = None
-            if welcome_message:
-                mock_ec.branding_configuration.welcome_message = welcome_message
-            else:
-                del mock_ec.branding_configuration.welcome_message
+            mock_get_ec.return_value = {
+                'name': ec_name,
+                'branding_configuration': {'logo': logo_url}
+            }
         else:
             mock_get_ec.return_value = None
 
@@ -535,8 +560,7 @@ class StudentAccountLoginAndRegistrationTest(ThirdPartyAuthTestMixin, UrlResetMi
             self.assertNotContains(response, text=enterprise_sidebar_div_id)
         else:
             self.assertContains(response, text=enterprise_sidebar_div_id)
-            if not welcome_message:
-                welcome_message = settings.ENTERPRISE_SPECIFIC_BRANDED_WELCOME_TEMPLATE
+            welcome_message = settings.ENTERPRISE_SPECIFIC_BRANDED_WELCOME_TEMPLATE
             expected_message = welcome_message.format(
                 start_bold=u'<b>',
                 end_bold=u'</b>',
@@ -546,6 +570,23 @@ class StudentAccountLoginAndRegistrationTest(ThirdPartyAuthTestMixin, UrlResetMi
             self.assertContains(response, expected_message)
             if logo_url:
                 self.assertContains(response, logo_url)
+
+    def test_enterprise_cookie_delete(self):
+        """
+        Test that enterprise cookies are deleted in login/registration views.
+
+        Cookies must be deleted in login/registration views so that *default* login/registration branding
+        is displayed to subsequent requests from non-enterprise customers.
+        """
+        cookies = SimpleCookie()
+        cookies[settings.ENTERPRISE_CUSTOMER_COOKIE_NAME] = 'test-enterprise-customer'
+        response = self.client.get(reverse('signin_user'), HTTP_ACCEPT="text/html", cookies=cookies)
+
+        self.assertIn(settings.ENTERPRISE_CUSTOMER_COOKIE_NAME, response.cookies)  # pylint:disable=no-member
+        enterprise_cookie = response.cookies[settings.ENTERPRISE_CUSTOMER_COOKIE_NAME]  # pylint:disable=no-member
+
+        self.assertEqual(enterprise_cookie['domain'], settings.BASE_COOKIE_DOMAIN)
+        self.assertEqual(enterprise_cookie.value, '')
 
     @override_settings(SITE_NAME=settings.MICROSITE_TEST_HOSTNAME)
     def test_microsite_uses_old_login_page(self):
@@ -598,6 +639,8 @@ class StudentAccountLoginAndRegistrationTest(ThirdPartyAuthTestMixin, UrlResetMi
             "secondaryProviders": [],
             "finishAuthUrl": finish_auth_url,
             "errorMessage": None,
+            "registerFormSubmitButtonText": "Create Account",
+            "syncLearnerProfileData": False,
         }
         if expected_ec is not None:
             # If we set an EnterpriseCustomer, third-party auth providers ought to be hidden.
@@ -686,8 +729,10 @@ class AccountSettingsViewTest(ThirdPartyAuthTestMixin, TestCase, ProgramsApiConf
         MessageMiddleware().process_request(self.request)
         messages.error(self.request, 'Facebook is already in use.', extra_tags='Auth facebook')
 
-    def test_context(self):
-
+    @mock.patch('student_account.views.get_enterprise_learner_data')
+    def test_context(self, mock_get_enterprise_learner_data):
+        self.request.site = SiteFactory.create()
+        mock_get_enterprise_learner_data.return_value = []
         context = account_settings_context(self.request)
 
         user_accounts_api_url = reverse("accounts_api", kwargs={'username': self.user.username})
@@ -710,6 +755,59 @@ class AccountSettingsViewTest(ThirdPartyAuthTestMixin, TestCase, ProgramsApiConf
         self.assertEqual(context['auth']['providers'][0]['name'], 'Facebook')
         self.assertEqual(context['auth']['providers'][1]['name'], 'Google')
 
+        self.assertEqual(context['sync_learner_profile_data'], False)
+        self.assertEqual(context['edx_support_url'], settings.SUPPORT_SITE_LINK)
+        self.assertEqual(context['enterprise_name'], None)
+        self.assertEqual(
+            context['enterprise_readonly_account_fields'], {'fields': settings.ENTERPRISE_READONLY_ACCOUNT_FIELDS}
+        )
+
+    @mock.patch('student_account.views.get_enterprise_learner_data')
+    @mock.patch('student_account.views.third_party_auth.provider.Registry.get')
+    def test_context_for_enterprise_learner(
+            self, mock_get_auth_provider, mock_get_enterprise_learner_data
+    ):
+        dummy_enterprise_customer = {
+            'uuid': 'real-ent-uuid',
+            'name': 'Dummy Enterprise',
+            'identity_provider': 'saml-ubc'
+        }
+        mock_get_enterprise_learner_data.return_value = [
+            {'enterprise_customer': dummy_enterprise_customer}
+        ]
+        self.request.site = SiteFactory.create()
+        mock_get_auth_provider.return_value.sync_learner_profile_data = True
+        context = account_settings_context(self.request)
+
+        user_accounts_api_url = reverse("accounts_api", kwargs={'username': self.user.username})
+        self.assertEqual(context['user_accounts_api_url'], user_accounts_api_url)
+
+        user_preferences_api_url = reverse('preferences_api', kwargs={'username': self.user.username})
+        self.assertEqual(context['user_preferences_api_url'], user_preferences_api_url)
+
+        for attribute in self.FIELDS:
+            self.assertIn(attribute, context['fields'])
+
+        self.assertEqual(
+            context['user_accounts_api_url'], reverse("accounts_api", kwargs={'username': self.user.username})
+        )
+        self.assertEqual(
+            context['user_preferences_api_url'], reverse('preferences_api', kwargs={'username': self.user.username})
+        )
+
+        self.assertEqual(context['duplicate_provider'], 'facebook')
+        self.assertEqual(context['auth']['providers'][0]['name'], 'Facebook')
+        self.assertEqual(context['auth']['providers'][1]['name'], 'Google')
+
+        self.assertEqual(
+            context['sync_learner_profile_data'], mock_get_auth_provider.return_value.sync_learner_profile_data
+        )
+        self.assertEqual(context['edx_support_url'], settings.SUPPORT_SITE_LINK)
+        self.assertEqual(context['enterprise_name'], dummy_enterprise_customer['name'])
+        self.assertEqual(
+            context['enterprise_readonly_account_fields'], {'fields': settings.ENTERPRISE_READONLY_ACCOUNT_FIELDS}
+        )
+
     def test_view(self):
         """
         Test that all fields are  visible
@@ -728,7 +826,7 @@ class AccountSettingsViewTest(ThirdPartyAuthTestMixin, TestCase, ProgramsApiConf
         view_path = reverse('account_settings')
         response = self.client.get(path=view_path)
 
-        self.assertContains(response, '<li class="tab-nav-item">')
+        self.assertContains(response, 'global-header')
 
     def test_header_with_programs_listing_disabled(self):
         """
@@ -738,7 +836,7 @@ class AccountSettingsViewTest(ThirdPartyAuthTestMixin, TestCase, ProgramsApiConf
         view_path = reverse('account_settings')
         response = self.client.get(path=view_path)
 
-        self.assertContains(response, '<li class="item nav-global-01">')
+        self.assertContains(response, 'global-header')
 
     def test_commerce_order_detail(self):
         """

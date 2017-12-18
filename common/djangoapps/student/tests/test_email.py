@@ -1,29 +1,34 @@
 
 import json
 import unittest
-import mock
 
-from student.tests.factories import UserFactory, RegistrationFactory, PendingEmailChangeFactory
-from student.views import (
-    reactivation_email_for_user, do_email_change_request, confirm_email_change,
-    validate_new_email, SETTING_CHANGE_INITIATED, generate_activation_email_context
-)
-from student.models import UserProfile, PendingEmailChange, Registration
-from third_party_auth.views import inactive_user_view
-from django.core.urlresolvers import reverse
-from django.core import mail
+import mock
+from django.conf import settings
 from django.contrib.auth.models import User
+from django.core import mail
+from django.core.urlresolvers import reverse
 from django.db import transaction
-from django.test import TestCase, TransactionTestCase
+from django.http import HttpResponse
+from django.test import override_settings, TestCase, TransactionTestCase
 from django.test.client import RequestFactory
 from mock import Mock, patch
-from django.http import HttpResponse
-from django.conf import settings
+
 from edxmako.shortcuts import render_to_string
-from util.request import safe_get_host
-from util.testing import EventTestMixin
 from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 from openedx.core.djangoapps.theming.tests.test_util import with_comprehensive_theme
+from student.models import PendingEmailChange, Registration, UserProfile
+from student.tests.factories import PendingEmailChangeFactory, RegistrationFactory, UserFactory
+from student.views import (
+    SETTING_CHANGE_INITIATED,
+    confirm_email_change,
+    do_email_change_request,
+    generate_activation_email_context,
+    reactivation_email_for_user,
+    validate_new_email
+)
+from third_party_auth.views import inactive_user_view
+from util.request import safe_get_host
+from util.testing import EventTestMixin
 
 
 class TestException(Exception):
@@ -431,6 +436,25 @@ class EmailChangeConfirmationTests(EmailTestMixin, TransactionTestCase):
             User.objects.get(username=self.user.username).email
         )
         self.assertEquals(0, PendingEmailChange.objects.count())
+
+    @unittest.skipUnless(settings.ROOT_URLCONF == 'lms.urls', "Test only valid in LMS")
+    @override_settings(MKTG_URLS={'ROOT': 'https://dummy-root', 'CONTACT': '/help/contact-us'})
+    def test_marketing_contact_link(self, _email_user):
+        context = {
+            'site': 'edx.org',
+            'old_email': 'old@example.com',
+            'new_email': 'new@example.com',
+        }
+
+        confirm_email_body = render_to_string('emails/confirm_email_change.txt', context)
+        # With marketing site disabled, should link to the LMS contact static page.
+        # The http(s) part was omitted keep the test focused.
+        self.assertIn('://edx.org/contact', confirm_email_body)
+
+        with patch.dict(settings.FEATURES, {'ENABLE_MKTG_SITE': True}):
+            # Marketing site enabled, should link to the marketing site contact page.
+            confirm_email_body = render_to_string('emails/confirm_email_change.txt', context)
+            self.assertIn('https://dummy-root/help/contact-us', confirm_email_body)
 
     @patch('student.views.PendingEmailChange.objects.get', Mock(side_effect=TestException))
     def test_always_rollback(self, _email_user):

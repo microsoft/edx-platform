@@ -12,36 +12,40 @@ import functools
 import json
 import logging
 import os.path
+import uuid
 from datetime import datetime, timedelta
 from email.utils import formatdate
 
 import pytz
 import requests
-import uuid
-
+import six
+from config_models.models import ConfigurationModel
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.core.urlresolvers import reverse
 from django.core.cache import cache
 from django.core.files.base import ContentFile
-from django.dispatch import receiver
+from django.core.urlresolvers import reverse
 from django.db import models
+from django.dispatch import receiver
 from django.utils.functional import cached_property
-from django.utils.translation import ugettext as _, ugettext_lazy
-
-from openedx.core.storage import get_storage
-from simple_history.models import HistoricalRecords
-from config_models.models import ConfigurationModel
-from course_modes.models import CourseMode
-from model_utils.models import StatusModel, TimeStampedModel
+from django.utils.translation import ugettext as _
+from django.utils.translation import ugettext_lazy
 from model_utils import Choices
+from model_utils.models import StatusModel, TimeStampedModel
+
+from course_modes.models import CourseMode
 from lms.djangoapps.verify_student.ssencrypt import (
-    random_aes_key, encrypt_and_encode,
-    generate_signed_message, rsa_encrypt
+    encrypt_and_encode,
+    generate_signed_message,
+    random_aes_key,
+    rsa_encrypt
 )
-from openedx.core.djangoapps.xmodule_django.models import CourseKeyField
+from openedx.core.djangoapps.signals.signals import LEARNER_NOW_VERIFIED
 from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
+from openedx.core.djangoapps.xmodule_django.models import CourseKeyField
 from openedx.core.djangolib.model_mixins import DeprecatedModelMixin
+from openedx.core.storage import get_storage
+
 
 log = logging.getLogger(__name__)
 
@@ -513,6 +517,11 @@ class PhotoVerification(StatusModel):
         self.reviewing_service = service
         self.status = "approved"
         self.save()
+        # Emit signal to find and generate eligible certificates
+        LEARNER_NOW_VERIFIED.send_robust(
+            sender=PhotoVerification,
+            user=self.user
+        )
 
     @status_before_must_be("must_retry", "submitted", "approved", "denied")
     def deny(self,
@@ -599,7 +608,7 @@ class SoftwareSecurePhotoVerification(PhotoVerification):
        both Software Secure and edx-platform.
 
     2. The snapshot of a user's photo ID is also encrypted using AES-256, but
-       the key is randomly generated using pycrypto's Random. Every verification
+       the key is randomly generated using os.urandom. Every verification
        attempt has a new key. The AES key is then encrypted using a public key
        provided by Software Secure. We store only the RSA-encryped AES key.
        Since edx-platform does not have Software Secure's private RSA key, it
@@ -740,33 +749,43 @@ class SoftwareSecurePhotoVerification(PhotoVerification):
 
             `[{"photoIdReasons": ["Not provided"]}]`
 
-        Returns a list of error messages
+        Returns:
+            str[]: List of error messages.
         """
-        # Translates the category names and messages into something more human readable
-        message_dict = {
-            ("photoIdReasons", "Not provided"): _("No photo ID was provided."),
-            ("photoIdReasons", "Text not clear"): _("We couldn't read your name from your photo ID image."),
-            ("generalReasons", "Name mismatch"): _("The name associated with your account and the name on your ID do not match."),
-            ("userPhotoReasons", "Image not clear"): _("The image of your face was not clear."),
-            ("userPhotoReasons", "Face out of view"): _("Your face was not visible in your self-photo."),
+        parsed_errors = []
+        error_map = {
+            'EdX name not provided': 'name_mismatch',
+            'Name mismatch': 'name_mismatch',
+            'Photo/ID Photo mismatch': 'photos_mismatched',
+            'ID name not provided': 'id_image_missing_name',
+            'Invalid Id': 'id_invalid',
+            'No text': 'id_invalid',
+            'Not provided': 'id_image_missing',
+            'Photo hidden/No photo': 'id_image_not_clear',
+            'Text not clear': 'id_image_not_clear',
+            'Face out of view': 'user_image_not_clear',
+            'Image not clear': 'user_image_not_clear',
+            'Photo not provided': 'user_image_missing',
         }
 
         try:
-            msg_json = json.loads(self.error_msg)
-            msg_dict = msg_json[0]
+            messages = set()
+            message_groups = json.loads(self.error_msg)
 
-            msg = []
-            for category in msg_dict:
-                # find the messages associated with this category
-                category_msgs = msg_dict[category]
-                for category_msg in category_msgs:
-                    msg.append(message_dict[(category, category_msg)])
-            return u", ".join(msg)
-        except (ValueError, KeyError):
-            # if we can't parse the message as JSON or the category doesn't
-            # match one of our known categories, show a generic error
-            log.error('PhotoVerification: Error parsing this error message: %s', self.error_msg)
-            return _("There was an error verifying your ID photos.")
+            for message_group in message_groups:
+                messages = messages.union(set(*six.itervalues(message_group)))
+
+            for message in messages:
+                parsed_error = error_map.get(message)
+
+                if parsed_error:
+                    parsed_errors.append(parsed_error)
+                else:
+                    log.debug('Ignoring photo verification error message: %s', message)
+        except Exception:   # pylint: disable=broad-except
+            log.exception('Failed to parse error message for SoftwareSecurePhotoVerification %d', self.pk)
+
+        return parsed_errors
 
     def image_url(self, name, override_receipt_id=None):
         """
@@ -1022,9 +1041,6 @@ class VerificationDeadline(TimeStampedModel):
     # if the field is set manually we want a way to indicate that so we don't
     # overwrite the manual setting of the field.
     deadline_is_explicit = models.BooleanField(default=False)
-
-    # Maintain a history of changes to deadlines for auditing purposes
-    history = HistoricalRecords()
 
     ALL_DEADLINES_CACHE_KEY = "verify_student.all_verification_deadlines"
 

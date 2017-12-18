@@ -12,20 +12,19 @@ file and check it in at the same time as your model changes. To do that,
 ASSUMPTIONS: modules have unique IDs, even across different module_types
 
 """
-import logging
 import itertools
+import logging
 
-from django.contrib.auth.models import User
+from config_models.models import ConfigurationModel
 from django.conf import settings
+from django.contrib.auth.models import User
 from django.db import models
 from django.db.models.signals import post_save
-
+from django.utils.translation import ugettext_lazy as _
 from model_utils.models import TimeStampedModel
-import coursewarehistoryextended
 
-from openedx.core.djangoapps.xmodule_django.models import (
-    CourseKeyField, LocationKeyField, BlockTypeKeyField
-)
+import coursewarehistoryextended
+from openedx.core.djangoapps.xmodule_django.models import BlockTypeKeyField, CourseKeyField, LocationKeyField
 
 log = logging.getLogger("edx.courseware")
 
@@ -43,6 +42,7 @@ class ChunkingManager(models.Manager):
     :class:`~Manager` that adds an additional method :meth:`chunked_filter` to provide
     the ability to make select queries with specific chunk sizes.
     """
+
     class Meta(object):
         app_label = "courseware"
 
@@ -133,16 +133,17 @@ class StudentModule(models.Model):
             return queryset
 
     def __repr__(self):
-        return 'StudentModule<%r>' % ({
-            'course_id': self.course_id,
-            'module_type': self.module_type,
-            # We use the student_id instead of username to avoid a database hop.
-            # This can actually matter in cases where we're logging many of
-            # these (e.g. on a broken progress page).
-            'student_id': self.student_id,
-            'module_state_key': self.module_state_key,
-            'state': str(self.state)[:20],
-        },)
+        return 'StudentModule<%r>' % (
+            {
+                'course_id': self.course_id,
+                'module_type': self.module_type,
+                # We use the student_id instead of username to avoid a database hop.
+                # This can actually matter in cases where we're logging many of
+                # these (e.g. on a broken progress page).
+                'student_id': self.student_id,
+                'module_state_key': self.module_state_key,
+                'state': str(self.state)[:20],
+            },)
 
     def __unicode__(self):
         return unicode(repr(self))
@@ -256,20 +257,16 @@ class XBlockFieldBase(models.Model):
     modified = models.DateTimeField(auto_now=True, db_index=True)
 
     def __unicode__(self):
-        return u'{}<{!r}'.format(
-            self.__class__.__name__,
-            {
-                key: getattr(self, key)
-                for key in self._meta.get_all_field_names()
-                if key not in ('created', 'modified')
-            }
-        )
+        # pylint: disable=protected-access
+        keys = [field.name for field in self._meta.get_fields() if field.name not in ('created', 'modified')]
+        return u'{}<{!r}'.format(self.__class__.__name__, {key: getattr(self, key) for key in keys})
 
 
 class XModuleUserStateSummaryField(XBlockFieldBase):
     """
     Stores data set in the Scope.user_state_summary scope by an xmodule field
     """
+
     class Meta(object):
         app_label = "courseware"
         unique_together = (('usage_id', 'field_name'),)
@@ -282,6 +279,7 @@ class XModuleStudentPrefsField(XBlockFieldBase):
     """
     Stores data set in the Scope.preferences scope by an xmodule field
     """
+
     class Meta(object):
         app_label = "courseware"
         unique_together = (('student', 'module_type', 'field_name'),)
@@ -296,6 +294,7 @@ class XModuleStudentInfoField(XBlockFieldBase):
     """
     Stores data set in the Scope.preferences scope by an xmodule field
     """
+
     class Meta(object):
         app_label = "courseware"
         unique_together = (('student', 'field_name'),)
@@ -313,11 +312,11 @@ class OfflineComputedGrade(models.Model):
     created = models.DateTimeField(auto_now_add=True, null=True, db_index=True)
     updated = models.DateTimeField(auto_now=True, db_index=True)
 
-    gradeset = models.TextField(null=True, blank=True)		# grades, stored as JSON
+    gradeset = models.TextField(null=True, blank=True)  # grades, stored as JSON
 
     class Meta(object):
         app_label = "courseware"
-        unique_together = (('user', 'course_id'), )
+        unique_together = (('user', 'course_id'),)
 
     def __unicode__(self):
         return "[OfflineComputedGrade] %s: %s (%s) = %s" % (self.user, self.course_id, self.created, self.gradeset)
@@ -328,6 +327,7 @@ class OfflineComputedGradeLog(models.Model):
     Log of when offline grades are computed.
     Use this to be able to show instructor when the last computed grades were done.
     """
+
     class Meta(object):
         app_label = "courseware"
         ordering = ["-created"]
@@ -335,7 +335,7 @@ class OfflineComputedGradeLog(models.Model):
 
     course_id = CourseKeyField(max_length=255, db_index=True)
     created = models.DateTimeField(auto_now_add=True, null=True, db_index=True)
-    seconds = models.IntegerField(default=0)  	# seconds elapsed for computation
+    seconds = models.IntegerField(default=0)  # seconds elapsed for computation
     nstudents = models.IntegerField(default=0)
 
     def __unicode__(self):
@@ -358,3 +358,75 @@ class StudentFieldOverride(TimeStampedModel):
 
     field = models.CharField(max_length=255)
     value = models.TextField(default='null')
+
+
+class DynamicUpgradeDeadlineConfiguration(ConfigurationModel):
+    """ Dynamic upgrade deadline configuration.
+
+    This model controls the behavior of the dynamic upgrade deadline for self-paced courses.
+    """
+    class Meta(object):
+        app_label = 'courseware'
+
+    deadline_days = models.PositiveSmallIntegerField(
+        default=21,
+        help_text=_('Number of days a learner has to upgrade after content is made available')
+    )
+
+
+class OptOutDynamicUpgradeDeadlineMixin(object):
+    """
+    Provides convenience methods for interpreting the enabled and opt out status.
+    """
+
+    def opted_in(self):
+        """Convenience function that returns True if this config model is both enabled and opt_out is False"""
+        return self.enabled and not self.opt_out
+
+    def opted_out(self):
+        """Convenience function that returns True if this config model is both enabled and opt_out is True"""
+        return self.enabled and self.opt_out
+
+
+class CourseDynamicUpgradeDeadlineConfiguration(OptOutDynamicUpgradeDeadlineMixin, ConfigurationModel):
+    """
+    Per-course run configuration for dynamic upgrade deadlines.
+
+    This model controls dynamic upgrade deadlines on a per-course run level, allowing course runs to
+    have different deadlines or opt out of the functionality altogether.
+    """
+    KEY_FIELDS = ('course_id',)
+
+    course_id = CourseKeyField(max_length=255, db_index=True)
+
+    deadline_days = models.PositiveSmallIntegerField(
+        default=21,
+        help_text=_('Number of days a learner has to upgrade after content is made available')
+    )
+
+    opt_out = models.BooleanField(
+        default=False,
+        help_text=_('Disable the dynamic upgrade deadline for this course run.')
+    )
+
+
+class OrgDynamicUpgradeDeadlineConfiguration(OptOutDynamicUpgradeDeadlineMixin, ConfigurationModel):
+    """
+    Per-org configuration for dynamic upgrade deadlines.
+
+    This model controls dynamic upgrade deadlines on a per-org level, allowing organizations to
+    have different deadlines or opt out of the functionality altogether.
+    """
+    KEY_FIELDS = ('org_id',)
+
+    org_id = models.CharField(max_length=255, db_index=True)
+
+    deadline_days = models.PositiveSmallIntegerField(
+        default=21,
+        help_text=_('Number of days a learner has to upgrade after content is made available')
+    )
+
+    opt_out = models.BooleanField(
+        default=False,
+        help_text=_('Disable the dynamic upgrade deadline for this organization.')
+    )

@@ -1,42 +1,43 @@
 """
 Tests for user enrollment.
 """
-import json
-import itertools
-import unittest
 import datetime
+import itertools
+import json
+import unittest
 
 import ddt
+import httpretty
+import pytz
+from django.conf import settings
 from django.core.cache import cache
-from mock import patch
-from nose.plugins.attrib import attr
-from django.test import Client
 from django.core.handlers.wsgi import WSGIRequest
 from django.core.urlresolvers import reverse
-from rest_framework.test import APITestCase
+from django.test import Client
+from django.test.utils import override_settings
+from mock import patch
+from nose.plugins.attrib import attr
 from rest_framework import status
-from django.conf import settings
+from rest_framework.test import APITestCase
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory, check_mongo_calls_range
-from django.test.utils import override_settings
-import pytz
-import httpretty
 
 from course_modes.models import CourseMode
-from enrollment.views import EnrollmentUserThrottle
-from util.models import RateLimitConfiguration
-from util.testing import UrlResetMixin
-from openedx.features.enterprise_support.tests.mixins.enterprise import EnterpriseServiceMockMixin
+from course_modes.tests.factories import CourseModeFactory
 from enrollment import api
 from enrollment.errors import CourseEnrollmentError
+from enrollment.views import EnrollmentUserThrottle
 from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
+from openedx.core.djangoapps.embargo.models import Country, CountryAccessRule, RestrictedCourse
+from openedx.core.djangoapps.embargo.test_utils import restrict_course
 from openedx.core.djangoapps.user_api.models import UserOrgTag
 from openedx.core.lib.django_test_client_utils import get_absolute_url
+from openedx.features.enterprise_support.tests.mixins.enterprise import EnterpriseServiceMockMixin
 from student.models import CourseEnrollment
 from student.roles import CourseStaffRole
-from student.tests.factories import AdminFactory, CourseModeFactory, UserFactory
-from openedx.core.djangoapps.embargo.models import CountryAccessRule, Country, RestrictedCourse
-from openedx.core.djangoapps.embargo.test_utils import restrict_course
+from student.tests.factories import AdminFactory, UserFactory
+from util.models import RateLimitConfiguration
+from util.testing import UrlResetMixin
 
 
 class EnrollmentTestMixin(object):
@@ -55,7 +56,7 @@ class EnrollmentTestMixin(object):
             enrollment_attributes=None,
             min_mongo_calls=0,
             max_mongo_calls=0,
-            enterprise_course_consent=None,
+            linked_enterprise_customer=None,
     ):
         """
         Enroll in the course and verify the response's status code. If the expected status is 200, also validates
@@ -82,8 +83,8 @@ class EnrollmentTestMixin(object):
         if email_opt_in is not None:
             data['email_opt_in'] = email_opt_in
 
-        if enterprise_course_consent is not None:
-            data['enterprise_course_consent'] = enterprise_course_consent
+        if linked_enterprise_customer is not None:
+            data['linked_enterprise_customer'] = linked_enterprise_customer
 
         extra = {}
         if as_server:
@@ -385,7 +386,7 @@ class EnrollmentTest(EnrollmentTestMixin, ModuleStoreTestCase, APITestCase, Ente
     def test_user_does_not_match_param(self):
         """
         The view should return status 404 if the enrollment username does not match the username of the user
-        making the request, unless the request is made by a superuser or with a server API key.
+        making the request, unless the request is made by a staff user or with a server API key.
         """
         CourseModeFactory.create(
             course_id=self.course.id,
@@ -403,9 +404,9 @@ class EnrollmentTest(EnrollmentTestMixin, ModuleStoreTestCase, APITestCase, Ente
         response = self.client.get(url, **{'HTTP_X_EDX_API_KEY': self.API_KEY})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        # Verify superusers have access to this endpoint
-        superuser = UserFactory.create(password=self.PASSWORD, is_superuser=True)
-        self.client.login(username=superuser.username, password=self.PASSWORD)
+        # Verify staff have access to this endpoint
+        staff_user = UserFactory.create(password=self.PASSWORD, is_staff=True)
+        self.client.login(username=staff_user.username, password=self.PASSWORD)
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
@@ -543,22 +544,9 @@ class EnrollmentTest(EnrollmentTestMixin, ModuleStoreTestCase, APITestCase, Ente
             mode_display_name=CourseMode.DEFAULT_MODE_SLUG,
         )
 
-        for attempt in xrange(self.rate_limit + 10):
+        for attempt in xrange(self.rate_limit + 2):
             expected_status = status.HTTP_429_TOO_MANY_REQUESTS if attempt >= self.rate_limit else status.HTTP_200_OK
             self.assert_enrollment_status(expected_status=expected_status)
-
-    def test_enrollment_throttle_for_service(self):
-        """Make sure a service can call the enrollment API as many times as needed. """
-        self.rate_limit_config.enabled = True
-        self.rate_limit_config.save()
-        CourseModeFactory.create(
-            course_id=self.course.id,
-            mode_slug=CourseMode.DEFAULT_MODE_SLUG,
-            mode_display_name=CourseMode.DEFAULT_MODE_SLUG,
-        )
-
-        for __ in xrange(self.rate_limit + 10):
-            self.assert_enrollment_status(as_server=True)
 
     def test_create_enrollment_with_mode(self):
         """With the right API key, create a new enrollment with a mode set other than the default."""
@@ -899,7 +887,12 @@ class EnrollmentTest(EnrollmentTestMixin, ModuleStoreTestCase, APITestCase, Ente
         self.assert_enrollment_status(username='fake-user', expected_status=status.HTTP_406_NOT_ACCEPTABLE,
                                       as_server=True)
 
-    def test_update_enrollment_with_expired_mode_throws_error(self):
+    @ddt.data(
+        (True, CourseMode.VERIFIED),
+        (False, CourseMode.DEFAULT_MODE_SLUG)
+    )
+    @ddt.unpack
+    def test_update_enrollment_with_expired_mode(self, using_api_key, updated_mode):
         """Verify that if verified mode is expired than it's enrollment cannot be updated. """
         for mode in [CourseMode.DEFAULT_MODE_SLUG, CourseMode.VERIFIED]:
             CourseModeFactory.create(
@@ -922,57 +915,18 @@ class EnrollmentTest(EnrollmentTestMixin, ModuleStoreTestCase, APITestCase, Ente
         mode.expiration_datetime = datetime.datetime(year=1970, month=1, day=1, tzinfo=pytz.utc)
         mode.save()
         self.assert_enrollment_status(
-            as_server=True,
+            as_server=using_api_key,
             mode=CourseMode.VERIFIED,
-            expected_status=status.HTTP_400_BAD_REQUEST
+            expected_status=status.HTTP_200_OK if using_api_key else status.HTTP_403_FORBIDDEN
         )
         course_mode, is_active = CourseEnrollment.enrollment_mode_for_user(self.user, self.course.id)
         self.assertTrue(is_active)
-        self.assertEqual(course_mode, CourseMode.DEFAULT_MODE_SLUG)
-
-    def test_enterprise_course_enrollment_invalid_consent(self):
-        """Verify that the enterprise_course_consent must be a boolean. """
-        CourseModeFactory.create(
-            course_id=self.course.id,
-            mode_slug=CourseMode.DEFAULT_MODE_SLUG,
-            mode_display_name=CourseMode.DEFAULT_MODE_SLUG,
-        )
-        self.assert_enrollment_status(
-            expected_status=status.HTTP_400_BAD_REQUEST,
-            enterprise_course_consent='invalid',
-            as_server=True,
-        )
+        self.assertEqual(course_mode, updated_mode)
 
     @httpretty.activate
-    @override_settings(ENTERPRISE_SERVICE_WORKER_USERNAME='enterprise_worker')
-    def test_enterprise_course_enrollment_api_error(self):
-        """Verify that enterprise service errors are handled properly. """
-        UserFactory.create(
-            username='enterprise_worker',
-            email=self.EMAIL,
-            password=self.PASSWORD,
-        )
-        CourseModeFactory.create(
-            course_id=self.course.id,
-            mode_slug=CourseMode.DEFAULT_MODE_SLUG,
-            mode_display_name=CourseMode.DEFAULT_MODE_SLUG,
-        )
-        self.mock_enterprise_course_enrollment_post_api_failure()
-        self.assert_enrollment_status(
-            expected_status=status.HTTP_400_BAD_REQUEST,
-            enterprise_course_consent=True,
-            as_server=True,
-            username='enterprise_worker'
-        )
-        self.assertEqual(
-            httpretty.last_request().path,
-            '/enterprise/api/v1/enterprise-course-enrollment/',
-            'No request was made to the mocked enterprise-course-enrollment API'
-        )
-
-    @httpretty.activate
-    @override_settings(ENTERPRISE_SERVICE_WORKER_USERNAME='enterprise_worker')
-    def test_enterprise_course_enrollment_successful(self):
+    @override_settings(ENTERPRISE_SERVICE_WORKER_USERNAME='enterprise_worker',
+                       FEATURES=dict(ENABLE_ENTERPRISE_INTEGRATION=True))
+    def test_enterprise_course_enrollment_with_ec_uuid(self):
         """Verify that the enrollment completes when the EnterpriseCourseEnrollment creation succeeds. """
         UserFactory.create(
             username='enterprise_worker',
@@ -984,18 +938,77 @@ class EnrollmentTest(EnrollmentTestMixin, ModuleStoreTestCase, APITestCase, Ente
             mode_slug=CourseMode.DEFAULT_MODE_SLUG,
             mode_display_name=CourseMode.DEFAULT_MODE_SLUG,
         )
-        self.mock_enterprise_course_enrollment_post_api(username=self.user.username, course_id=unicode(self.course.id))
+        consent_kwargs = {
+            'username': self.user.username,
+            'course_id': unicode(self.course.id),
+            'ec_uuid': 'this-is-a-real-uuid'
+        }
+        self.mock_enterprise_course_enrollment_post_api()
+        self.mock_consent_missing(**consent_kwargs)
+        self.mock_consent_post(**consent_kwargs)
         self.assert_enrollment_status(
             expected_status=status.HTTP_200_OK,
-            enterprise_course_consent=True,
             as_server=True,
-            username='enterprise_worker'
+            username='enterprise_worker',
+            linked_enterprise_customer='this-is-a-real-uuid',
         )
         self.assertEqual(
             httpretty.last_request().path,
-            '/enterprise/api/v1/enterprise-course-enrollment/',
-            'No request was made to the mocked enterprise-course-enrollment API'
+            '/consent/api/v1/data_sharing_consent',
         )
+        self.assertEqual(
+            httpretty.last_request().method,
+            httpretty.POST
+        )
+
+    def test_enrollment_attributes_always_written(self):
+        """ Enrollment attributes should always be written, regardless of whether
+        the enrollment is being created or updated.
+        """
+        course_key = self.course.id
+        for mode in [CourseMode.DEFAULT_MODE_SLUG, CourseMode.VERIFIED]:
+            CourseModeFactory.create(
+                course_id=course_key,
+                mode_slug=mode,
+                mode_display_name=mode,
+            )
+
+        # Creating a new enrollment should write attributes
+        order_number = 'EDX-1000'
+        enrollment_attributes = [{
+            'namespace': 'order',
+            'name': 'order_number',
+            'value': order_number,
+        }]
+        mode = CourseMode.VERIFIED
+        self.assert_enrollment_status(
+            as_server=True,
+            is_active=True,
+            mode=mode,
+            enrollment_attributes=enrollment_attributes
+        )
+        enrollment = CourseEnrollment.objects.get(user=self.user, course_id=course_key)
+        self.assertTrue(enrollment.is_active)
+        self.assertEqual(enrollment.mode, CourseMode.VERIFIED)
+        self.assertEqual(enrollment.attributes.get(namespace='order', name='order_number').value, order_number)
+
+        # Updating an enrollment should update attributes
+        order_number = 'EDX-2000'
+        enrollment_attributes = [{
+            'namespace': 'order',
+            'name': 'order_number',
+            'value': order_number,
+        }]
+        mode = CourseMode.DEFAULT_MODE_SLUG
+        self.assert_enrollment_status(
+            as_server=True,
+            mode=mode,
+            enrollment_attributes=enrollment_attributes
+        )
+        enrollment.refresh_from_db()
+        self.assertTrue(enrollment.is_active)
+        self.assertEqual(enrollment.mode, mode)
+        self.assertEqual(enrollment.attributes.get(namespace='order', name='order_number').value, order_number)
 
 
 @unittest.skipUnless(settings.ROOT_URLCONF == 'lms.urls', 'Test only valid in lms')
@@ -1084,7 +1097,7 @@ class EnrollmentEmbargoTest(EnrollmentTestMixin, UrlResetMixin, ModuleStoreTestC
         self.user.profile.country = restricted_country.country
         self.user.profile.save()
 
-        path = reverse('embargo_blocked_message', kwargs={'access_point': 'enrollment', 'message_key': 'default'})
+        path = reverse('embargo:blocked_message', kwargs={'access_point': 'enrollment', 'message_key': 'default'})
         self.assert_access_denied(path)
 
     @override_settings(EDX_API_KEY=EnrollmentTestMixin.API_KEY)

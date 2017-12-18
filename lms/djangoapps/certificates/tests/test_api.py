@@ -1,20 +1,33 @@
 """Tests for the certificates Python API. """
-from contextlib import contextmanager
-import ddt
-from functools import wraps
 import uuid
+from contextlib import contextmanager
+from functools import wraps
 
-from django.test import TestCase, RequestFactory
-from django.test.utils import override_settings
+import ddt
+from datetime import datetime
+from datetime import timedelta
+from config_models.models import cache
 from django.conf import settings
 from django.core.urlresolvers import reverse
+from django.test import RequestFactory, TestCase
+from django.test.utils import override_settings
 from django.utils import timezone
 from freezegun import freeze_time
 from mock import patch
 from nose.plugins.attrib import attr
 from opaque_keys.edx.locator import CourseLocator
+import pytz
 
-from config_models.models import cache
+from certificates import api as certs_api
+from certificates.models import (
+    CertificateGenerationConfiguration,
+    CertificateStatuses,
+    ExampleCertificate,
+    GeneratedCertificate,
+    certificate_status_for_student
+)
+from certificates.queue import XQueueAddToQueueError, XQueueCertInterface
+from certificates.tests.factories import CertificateInvalidationFactory, GeneratedCertificateFactory
 from course_modes.models import CourseMode
 from course_modes.tests.factories import CourseModeFactory
 from courseware.tests.factories import GlobalStaffFactory
@@ -23,26 +36,8 @@ from microsite_configuration import microsite
 from student.models import CourseEnrollment
 from student.tests.factories import UserFactory
 from util.testing import EventTestMixin
+from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase, SharedModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
-from xmodule.modulestore.tests.django_utils import (
-    ModuleStoreTestCase,
-    SharedModuleStoreTestCase,
-)
-
-from certificates import api as certs_api
-from certificates.models import (
-    CertificateStatuses,
-    CertificateGenerationConfiguration,
-    ExampleCertificate,
-    GeneratedCertificate,
-    certificate_status_for_student,
-)
-from certificates.queue import XQueueCertInterface, XQueueAddToQueueError
-from certificates.tests.factories import (
-    CertificateInvalidationFactory,
-    GeneratedCertificateFactory
-)
-
 
 FEATURES_WITH_CERTS_ENABLED = settings.FEATURES.copy()
 FEATURES_WITH_CERTS_ENABLED['CERTIFICATES_HTML_VIEW'] = True
@@ -88,6 +83,7 @@ class WebCertificateTestMixin(object):
 
 
 @attr(shard=1)
+@ddt.ddt
 class CertificateDownloadableStatusTests(WebCertificateTestMixin, ModuleStoreTestCase):
     """Tests for the `certificate_downloadable_status` helper function. """
     ENABLED_SIGNALS = ['course_published']
@@ -100,7 +96,10 @@ class CertificateDownloadableStatusTests(WebCertificateTestMixin, ModuleStoreTes
         self.course = CourseFactory.create(
             org='edx',
             number='verified',
-            display_name='Verified Course'
+            display_name='Verified Course',
+            end=datetime.now(pytz.UTC),
+            self_paced=False,
+            certificate_available_date=datetime.now(pytz.UTC) - timedelta(days=2)
         )
 
         self.request_factory = RequestFactory()
@@ -205,6 +204,32 @@ class CertificateDownloadableStatusTests(WebCertificateTestMixin, ModuleStoreTes
                 ),
                 'uuid': cert_status['uuid']
             }
+        )
+
+    @ddt.data(
+        (False, timedelta(days=2), False),
+        (False, -timedelta(days=2), True),
+        (True, timedelta(days=2), True)
+    )
+    @ddt.unpack
+    @patch.dict(settings.FEATURES, {'CERTIFICATES_HTML_VIEW': True})
+    def test_cert_api_return(self, self_paced, cert_avail_delta, cert_downloadable_status):
+        """
+        Test 'downloadable status'
+        """
+        cert_avail_date = datetime.now(pytz.UTC) + cert_avail_delta
+        self.course.self_paced = self_paced
+        self.course.certificate_available_date = cert_avail_date
+        self.course.save()
+
+        CourseEnrollment.enroll(self.student, self.course.id, mode='honor')
+        self._setup_course_certificate()
+        with mock_passing_grade():
+            certs_api.generate_user_certificates(self.student, self.course.id)
+
+        self.assertEqual(
+            certs_api.certificate_downloadable_status(self.student, self.course.id)['is_downloadable'],
+            cert_downloadable_status
         )
 
 
@@ -526,8 +551,11 @@ class GenerateUserCertificatesTest(EventTestMixin, WebCertificateTestMixin, Modu
 
     def test_generate_user_certificates_with_unverified_cert_status(self):
         """
-        Generate user certificate will not raise exception in case of certificate is None.
+        Generate user certificate when the certificate is unverified
+        will trigger an update to the certificate if the user has since
+        verified.
         """
+        self._setup_course_certificate()
         # generate certificate with unverified status.
         GeneratedCertificateFactory.create(
             user=self.student,
@@ -537,9 +565,9 @@ class GenerateUserCertificatesTest(EventTestMixin, WebCertificateTestMixin, Modu
         )
 
         with mock_passing_grade():
-            with self._mock_queue(is_successful=False):
+            with self._mock_queue():
                 status = certs_api.generate_user_certificates(self.student, self.course.id)
-                self.assertEqual(status, None)
+                self.assertEqual(status, 'generating')
 
     @patch.dict(settings.FEATURES, {'CERTIFICATES_HTML_VIEW': True})
     def test_new_cert_requests_returns_generating_for_html_certificate(self):

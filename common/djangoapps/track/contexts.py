@@ -1,9 +1,9 @@
 """Generates common contexts"""
 import logging
 
-from opaque_keys.edx.locations import SlashSeparatedCourseKey
-from opaque_keys.edx.keys import CourseKey
 from opaque_keys import InvalidKeyError
+from opaque_keys.edx.keys import CourseKey
+
 from util.request import COURSE_REGEX
 
 log = logging.getLogger(__name__)
@@ -21,7 +21,7 @@ def course_context_from_url(url):
     if match:
         course_id_string = match.group('course_id')
         try:
-            course_id = SlashSeparatedCourseKey.from_deprecated_string(course_id_string)
+            course_id = CourseKey.from_string(course_id_string)
         except InvalidKeyError:
             log.warning(
                 'unable to parse course_id "{course_id}"'.format(

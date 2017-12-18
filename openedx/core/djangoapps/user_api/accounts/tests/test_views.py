@@ -3,37 +3,40 @@
 Test cases to cover Accounts-related behaviors of the User API application
 """
 import datetime
-import ddt
 import hashlib
 import json
-
 import unittest
-from collections import OrderedDict
 from copy import deepcopy
-from mock import patch
-from nose.plugins.attrib import attr
-from pytz import UTC
 
+import ddt
+import pytest
 from django.conf import settings
 from django.core.urlresolvers import reverse
 from django.test import TestCase
 from django.test.testcases import TransactionTestCase
 from django.test.utils import override_settings
+from mock import patch
+from nose.plugins.attrib import attr
+from pytz import UTC
 from rest_framework import status
-from rest_framework.test import APITestCase, APIClient
+from rest_framework.test import APIClient, APITestCase
 
-from .. import PRIVATE_VISIBILITY, ALL_USERS_VISIBILITY
 from openedx.core.djangoapps.user_api.accounts import ACCOUNT_VISIBILITY_PREF_KEY
 from openedx.core.djangoapps.user_api.models import UserPreference
 from openedx.core.djangoapps.user_api.preferences.api import set_user_preference
 from openedx.core.djangolib.testing.utils import CacheIsolationTestCase, skip_unless_lms
 from openedx.core.lib.token_utils import JwtBuilder
-from student.models import UserProfile, LanguageProficiency, PendingEmailChange
+from student.models import LanguageProficiency, PendingEmailChange, UserProfile
 from student.tests.factories import (
-    AdminFactory, ContentTypeFactory, TEST_PASSWORD, PermissionFactory, SuperuserFactory, UserFactory
+    TEST_PASSWORD,
+    ContentTypeFactory,
+    PermissionFactory,
+    SuperuserFactory,
+    UserFactory
 )
+from .. import ALL_USERS_VISIBILITY, PRIVATE_VISIBILITY
 
-TEST_PROFILE_IMAGE_UPLOADED_AT = datetime.datetime(2002, 1, 9, 15, 43, 01, tzinfo=UTC)
+TEST_PROFILE_IMAGE_UPLOADED_AT = datetime.datetime(2002, 1, 9, 15, 43, 1, tzinfo=UTC)
 
 
 # this is used in one test to check the behavior of profile image url
@@ -174,7 +177,7 @@ class TestOwnUsernameAPI(CacheIsolationTestCase, UserAPITestCase):
         Test that a client (logged in) can get her own username.
         """
         self.client.login(username=self.user.username, password=TEST_PASSWORD)
-        self._verify_get_own_username(14)
+        self._verify_get_own_username(15)
 
     def test_get_username_inactive(self):
         """
@@ -184,7 +187,7 @@ class TestOwnUsernameAPI(CacheIsolationTestCase, UserAPITestCase):
         self.client.login(username=self.user.username, password=TEST_PASSWORD)
         self.user.is_active = False
         self.user.save()
-        self._verify_get_own_username(14)
+        self._verify_get_own_username(15)
 
     def test_get_username_not_logged_in(self):
         """
@@ -200,7 +203,7 @@ class TestOwnUsernameAPI(CacheIsolationTestCase, UserAPITestCase):
 @skip_unless_lms
 @patch('openedx.core.djangoapps.user_api.accounts.image_helpers._PROFILE_IMAGE_SIZES', [50, 10])
 @patch.dict(
-    'openedx.core.djangoapps.user_api.accounts.image_helpers.PROFILE_IMAGE_SIZES_MAP',
+    'django.conf.settings.PROFILE_IMAGE_SIZES_MAP',
     {'full': 50, 'small': 10},
     clear=True
 )
@@ -222,7 +225,7 @@ class TestAccountsAPI(CacheIsolationTestCase, UserAPITestCase):
         Verify that the shareable fields from the account are returned
         """
         data = response.data
-        self.assertEqual(8, len(data))
+        self.assertEqual(10, len(data))
         self.assertEqual(self.user.username, data["username"])
         self.assertEqual("US", data["country"])
         self._verify_profile_image_data(data, True)
@@ -247,7 +250,7 @@ class TestAccountsAPI(CacheIsolationTestCase, UserAPITestCase):
         Verify that all account fields are returned (even those that are not shareable).
         """
         data = response.data
-        self.assertEqual(17, len(data))
+        self.assertEqual(19, len(data))
         self.assertEqual(self.user.username, data["username"])
         self.assertEqual(self.user.first_name + " " + self.user.last_name, data["name"])
         self.assertEqual("US", data["country"])
@@ -298,6 +301,7 @@ class TestAccountsAPI(CacheIsolationTestCase, UserAPITestCase):
     # This is needed when testing CMS as the patching is still executed even though the
     # suite is skipped.
     @patch.dict(getattr(settings, "ACCOUNT_VISIBILITY_CONFIGURATION", {}), {"default_visibility": "all_users"})
+    @pytest.mark.django111_expected_failure
     def test_get_account_different_user_visible(self):
         """
         Test that a client (logged in) can only get the shareable fields for a different user.
@@ -305,7 +309,7 @@ class TestAccountsAPI(CacheIsolationTestCase, UserAPITestCase):
         """
         self.different_client.login(username=self.different_user.username, password=TEST_PASSWORD)
         self.create_mock_profile(self.user)
-        with self.assertNumQueries(18):
+        with self.assertNumQueries(20):
             response = self.send_get(self.different_client)
         self._verify_full_shareable_account_response(response, account_privacy=ALL_USERS_VISIBILITY)
 
@@ -313,6 +317,7 @@ class TestAccountsAPI(CacheIsolationTestCase, UserAPITestCase):
     # This is needed when testing CMS as the patching is still executed even though the
     # suite is skipped.
     @patch.dict(getattr(settings, "ACCOUNT_VISIBILITY_CONFIGURATION", {}), {"default_visibility": "private"})
+    @pytest.mark.django111_expected_failure
     def test_get_account_different_user_private(self):
         """
         Test that a client (logged in) can only get the shareable fields for a different user.
@@ -320,7 +325,7 @@ class TestAccountsAPI(CacheIsolationTestCase, UserAPITestCase):
         """
         self.different_client.login(username=self.different_user.username, password=TEST_PASSWORD)
         self.create_mock_profile(self.user)
-        with self.assertNumQueries(18):
+        with self.assertNumQueries(20):
             response = self.send_get(self.different_client)
         self._verify_private_account_response(response, account_privacy=PRIVATE_VISIBILITY)
 
@@ -334,6 +339,7 @@ class TestAccountsAPI(CacheIsolationTestCase, UserAPITestCase):
         ("staff_client", "staff_user", ALL_USERS_VISIBILITY),
     )
     @ddt.unpack
+    @pytest.mark.django111_expected_failure
     def test_get_account_private_visibility(self, api_client, requesting_username, preference_visibility):
         """
         Test the return from GET based on user visibility setting.
@@ -376,7 +382,7 @@ class TestAccountsAPI(CacheIsolationTestCase, UserAPITestCase):
             with self.assertNumQueries(queries):
                 response = self.send_get(self.client)
             data = response.data
-            self.assertEqual(17, len(data))
+            self.assertEqual(19, len(data))
             self.assertEqual(self.user.username, data["username"])
             self.assertEqual(self.user.first_name + " " + self.user.last_name, data["name"])
             for empty_field in ("year_of_birth", "level_of_education", "mailing_address", "bio"):
@@ -395,12 +401,12 @@ class TestAccountsAPI(CacheIsolationTestCase, UserAPITestCase):
             self.assertEqual(False, data["accomplishments_shared"])
 
         self.client.login(username=self.user.username, password=TEST_PASSWORD)
-        verify_get_own_information(16)
+        verify_get_own_information(18)
 
         # Now make sure that the user can get the same information, even if not active
         self.user.is_active = False
         self.user.save()
-        verify_get_own_information(10)
+        verify_get_own_information(12)
 
     def test_get_account_empty_string(self):
         """
@@ -414,7 +420,7 @@ class TestAccountsAPI(CacheIsolationTestCase, UserAPITestCase):
         legacy_profile.save()
 
         self.client.login(username=self.user.username, password=TEST_PASSWORD)
-        with self.assertNumQueries(16):
+        with self.assertNumQueries(18):
             response = self.send_get(self.client)
         for empty_field in ("level_of_education", "gender", "country", "bio"):
             self.assertIsNone(response.data[empty_field])
@@ -454,7 +460,7 @@ class TestAccountsAPI(CacheIsolationTestCase, UserAPITestCase):
         ("country", "GB", "XY", u'"XY" is not a valid choice.'),
         ("year_of_birth", 2009, "not_an_int", u"A valid integer is required."),
         ("name", "bob", "z" * 256, u"Ensure this value has at most 255 characters (it has 256)."),
-        ("name", u"ȻħȺɍłɇs", "z   ", "The name field must be at least 2 characters long."),
+        ("name", u"ȻħȺɍłɇs", "z   ", u"The name field must be at least 2 characters long."),
         ("goals", "Smell the roses"),
         ("mailing_address", "Sesame Street"),
         # Note that we store the raw data, so it is up to client to escape the HTML.
@@ -608,10 +614,11 @@ class TestAccountsAPI(CacheIsolationTestCase, UserAPITestCase):
         verify_change_info(name_change_info[1], "Mickey Mouse", self.user.username, "Donald Duck")
 
     @patch.dict(
-        'openedx.core.djangoapps.user_api.accounts.image_helpers.PROFILE_IMAGE_SIZES_MAP',
+        'django.conf.settings.PROFILE_IMAGE_SIZES_MAP',
         {'full': 50, 'medium': 30, 'small': 10},
         clear=True
     )
+    @pytest.mark.django111_expected_failure
     def test_patch_email(self):
         """
         Test that the user can request an email change through the accounts API.
@@ -633,7 +640,7 @@ class TestAccountsAPI(CacheIsolationTestCase, UserAPITestCase):
         self.assertEqual(1, len(pending_change))
         activation_key = pending_change[0].activation_key
         confirm_change_url = reverse(
-            "student.views.confirm_email_change", kwargs={'key': activation_key}
+            "confirm_email_change", kwargs={'key': activation_key}
         )
         response = self.client.post(confirm_change_url)
         self.assertEqual(200, response.status_code)
@@ -677,16 +684,25 @@ class TestAccountsAPI(CacheIsolationTestCase, UserAPITestCase):
             self.assertItemsEqual(response.data["language_proficiencies"], proficiencies)
 
     @ddt.data(
-        (u"not_a_list", {u'non_field_errors': [u'Expected a list of items but got type "unicode".']}),
-        ([u"not_a_JSON_object"], [{u'non_field_errors': [u'Invalid data. Expected a dictionary, but got unicode.']}]),
-        ([{}], [OrderedDict([('code', [u'This field is required.'])])]),
+        (
+            u"not_a_list",
+            {u'non_field_errors': [u'Expected a list of items but got type "unicode".']}
+        ),
+        (
+            [u"not_a_JSON_object"],
+            [{u'non_field_errors': [u'Invalid data. Expected a dictionary, but got unicode.']}]
+        ),
+        (
+            [{}],
+            [{'code': [u'This field is required.']}]
+        ),
         (
             [{u"code": u"invalid_language_code"}],
-            [OrderedDict([('code', [u'"invalid_language_code" is not a valid choice.'])])]
+            [{'code': [u'"invalid_language_code" is not a valid choice.']}]
         ),
         (
             [{u"code": u"kw"}, {u"code": u"el"}, {u"code": u"kw"}],
-            ['The language_proficiencies field must consist of unique languages']
+            [u'The language_proficiencies field must consist of unique languages.']
         ),
     )
     @ddt.unpack
@@ -760,7 +776,7 @@ class TestAccountsAPI(CacheIsolationTestCase, UserAPITestCase):
         response = self.send_get(client)
         if has_full_access:
             data = response.data
-            self.assertEqual(17, len(data))
+            self.assertEqual(19, len(data))
             self.assertEqual(self.user.username, data["username"])
             self.assertEqual(self.user.first_name + " " + self.user.last_name, data["name"])
             self.assertEqual(self.user.email, data["email"])

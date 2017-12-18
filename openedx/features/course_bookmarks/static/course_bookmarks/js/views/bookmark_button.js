@@ -1,5 +1,6 @@
 (function(define) {
     'use strict';
+
     define(['gettext', 'jquery', 'underscore', 'backbone', 'js/views/message_banner'],
         function(gettext, $, _, Backbone, MessageBannerView) {
             return Backbone.View.extend({
@@ -57,6 +58,7 @@
                         },
                         complete: function() {
                             view.$el.prop('disabled', false);
+                            view.$el.focus();
                         }
                     });
                 },
@@ -77,6 +79,7 @@
                         },
                         complete: function() {
                             view.$el.prop('disabled', false);
+                            view.$el.focus();
                         }
                     });
                 },
@@ -104,7 +107,7 @@
                     }
                     this.messageView.showMessage(errorMsg);
 
-                // Hide message automatically after some interval
+                    // Hide message automatically after some interval
                     setTimeout(_.bind(function() {
                         this.messageView.hideMessage();
                     }, this), this.showBannerInterval);

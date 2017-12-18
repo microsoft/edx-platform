@@ -4,18 +4,16 @@ Test for LMS courseware app.
 from textwrap import dedent
 from unittest import TestCase
 
-from django.core.urlresolvers import reverse
 import mock
+from django.core.urlresolvers import reverse
 from nose.plugins.attrib import attr
-from opaque_keys.edx.locations import SlashSeparatedCourseKey
+from opaque_keys.edx.keys import CourseKey
 
 from courseware.tests.helpers import LoginEnrollmentTestCase
 from lms.djangoapps.lms_xblock.field_data import LmsFieldData
 from xmodule.error_module import ErrorDescriptor
 from xmodule.modulestore.django import modulestore
-from xmodule.modulestore.tests.django_utils import (
-    ModuleStoreTestCase, TEST_DATA_MIXED_MODULESTORE
-)
+from xmodule.modulestore.tests.django_utils import TEST_DATA_MIXED_MODULESTORE, ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import ToyCourseFactory
 
 
@@ -153,7 +151,7 @@ class TestDraftModuleStore(ModuleStoreTestCase):
         store = modulestore()
 
         # fix was to allow get_items() to take the course_id parameter
-        store.get_items(SlashSeparatedCourseKey('abc', 'def', 'ghi'), qualifiers={'category': 'vertical'})
+        store.get_items(CourseKey.from_string('abc/def/ghi'), qualifiers={'category': 'vertical'})
 
         # test success is just getting through the above statement.
         # The bug was that 'course_id' argument was

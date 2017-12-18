@@ -1,13 +1,13 @@
 """
 Implement CourseTab
 """
-from abc import ABCMeta
 import logging
-
-from xblock.fields import List
-from openedx.core.lib.api.plugins import PluginError
+from abc import ABCMeta
 
 from django.core.files.storage import get_storage_class
+from xblock.fields import List
+
+from openedx.core.lib.api.plugins import PluginError
 
 log = logging.getLogger("edx.courseware")
 
@@ -93,13 +93,10 @@ class CourseTab(object):
     @property
     def link_func(self):
         """
-        Returns a function that will determine a course URL for this tab.
-
-        The returned function takes two arguments:
-            course (Course) - the course in question.
-            view_name (str) - the name of the view.
+        Returns a function that takes a course and reverse function and will
+        compute the course URL for this tab.
         """
-        return self.tab_dict.get('link_func', link_reverse_func(self.view_name))
+        return self.tab_dict.get('link_func', course_reverse_func(self.view_name))
 
     @classmethod
     def is_enabled(cls, course, user=None):
@@ -110,6 +107,13 @@ class CourseTab(object):
             user (User): an optional user interacting with the course (defaults to None)
         """
         raise NotImplementedError()
+
+    @property
+    def uses_bootstrap(self):
+        """
+        Returns true if this tab is rendered with Bootstrap.
+        """
+        return False
 
     def get(self, key, default=None):
         """
@@ -438,13 +442,13 @@ class CourseTabList(List):
         return next((tab for tab in tab_list if tab.tab_id == tab_id), None)
 
     @staticmethod
-    def iterate_displayable(course, user=None, inline_collections=True):
+    def iterate_displayable(course, user=None, inline_collections=True, include_hidden=False):
         """
         Generator method for iterating through all tabs that can be displayed for the given course and
         the given user with the provided access settings.
         """
         for tab in course.tabs:
-            if tab.is_enabled(course, user=user) and not (user and tab.is_hidden):
+            if tab.is_enabled(course, user=user) and (include_hidden or not (user and tab.is_hidden)):
                 if tab.is_collection:
                     # If rendering inline that add each item in the collection,
                     # else just show the tab itself as long as it is not empty.
@@ -570,14 +574,46 @@ def key_checker(expected_keys):
     return check
 
 
-def link_reverse_func(reverse_name):
+def course_reverse_func(reverse_name):
     """
-    Returns a function that takes in a course and reverse_url_func,
-    and calls the reverse_url_func with the given reverse_name and course's ID.
+    Returns a function that will determine a course URL for the provided
+    reverse_name.
 
-    This is used to generate the url for a CourseTab without having access to Django's reverse function.
+    See documentation for course_reverse_func_from_name_func.  This function
+    simply calls course_reverse_func_from_name_func after wrapping reverse_name
+    in a function.
     """
-    return lambda course, reverse_url_func: reverse_url_func(reverse_name, args=[course.id.to_deprecated_string()])
+    return course_reverse_func_from_name_func(lambda course: reverse_name)
+
+
+def course_reverse_func_from_name_func(reverse_name_func):
+    """
+    Returns a function that will determine a course URL for the provided
+    reverse_name_func.
+
+    Use this when the calculation of the reverse_name is dependent on the
+    course. Otherwise, use the simpler course_reverse_func.
+
+    This can be used to generate the url for a CourseTab without having
+    immediate access to Django's reverse function.
+
+    Arguments:
+        reverse_name_func (function): A function that takes a single argument
+            (Course) and returns the name to be used with the reverse function.
+
+    Returns:
+        A function that takes in two arguments:
+            course (Course): the course in question.
+            reverse_url_func (function): a reverse function for a course URL
+                that uses the course ID in the url.
+        When called, the returned function will return the course URL as
+        determined by calling reverse_url_func with the reverse_name and the
+        course's ID.
+    """
+    return lambda course, reverse_url_func: reverse_url_func(
+        reverse_name_func(course),
+        args=[course.id.to_deprecated_string()]
+    )
 
 
 def need_name(dictionary, raise_error=True):

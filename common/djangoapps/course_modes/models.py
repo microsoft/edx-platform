@@ -1,19 +1,23 @@
 """
 Add and create new modes for running courses on this particular LMS
 """
+from collections import defaultdict, namedtuple
 from datetime import datetime, timedelta
-import pytz
 
-from collections import namedtuple, defaultdict
+import pytz
 from config_models.models import ConfigurationModel
+from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import validate_comma_separated_integer_list
 from django.db import models
 from django.db.models import Q
 from django.dispatch import receiver
 from django.utils.translation import ugettext_lazy as _
-from openedx.core.djangoapps.xmodule_django.models import CourseKeyField
-from request_cache.middleware import ns_request_cached, RequestCache
+from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
 
+from opaque_keys.edx.keys import CourseKey
+from openedx.core.djangoapps.xmodule_django.models import CourseKeyField
+from request_cache.middleware import RequestCache, ns_request_cached
 
 Mode = namedtuple('Mode',
                   [
@@ -37,8 +41,25 @@ class CourseMode(models.Model):
     class Meta(object):
         app_label = "course_modes"
 
-    # the course that this mode is attached to
-    course_id = CourseKeyField(max_length=255, db_index=True, verbose_name=_("Course"))
+    course = models.ForeignKey(
+        CourseOverview,
+        db_constraint=False,
+        db_index=True,
+        related_name='modes',
+    )
+
+    # Django sets the `course_id` property in __init__ with the value from the database
+    # This pair of properties converts that into a proper CourseKey
+    @property
+    def course_id(self):
+        return self._course_id
+
+    @course_id.setter
+    def course_id(self, value):
+        if isinstance(value, basestring):
+            self._course_id = CourseKey.from_string(value)
+        else:
+            self._course_id = value
 
     # the reference to this mode that can be used by Enrollments to generate
     # similar behavior for the same slug across courses
@@ -82,7 +103,8 @@ class CourseMode(models.Model):
     # DEPRECATED: the suggested prices for this mode
     # We used to allow users to choose from a set of prices, but we now allow only
     # a single price.  This field has been deprecated by `min_price`
-    suggested_prices = models.CommaSeparatedIntegerField(max_length=255, blank=True, default='')
+    suggested_prices = models.CharField(max_length=255, blank=True, default='',
+                                        validators=[validate_comma_separated_integer_list])
 
     # optional description override
     # WARNING: will not be localized
@@ -114,13 +136,28 @@ class CourseMode(models.Model):
 
     HONOR = 'honor'
     PROFESSIONAL = 'professional'
-    VERIFIED = "verified"
-    AUDIT = "audit"
-    NO_ID_PROFESSIONAL_MODE = "no-id-professional"
-    CREDIT_MODE = "credit"
+    VERIFIED = 'verified'
+    AUDIT = 'audit'
+    NO_ID_PROFESSIONAL_MODE = 'no-id-professional'
+    CREDIT_MODE = 'credit'
 
-    DEFAULT_MODE = Mode(AUDIT, _('Audit'), 0, '', 'usd', None, None, None, None)
-    DEFAULT_MODE_SLUG = AUDIT
+    DEFAULT_MODE = Mode(
+        settings.COURSE_MODE_DEFAULTS['slug'],
+        settings.COURSE_MODE_DEFAULTS['name'],
+        settings.COURSE_MODE_DEFAULTS['min_price'],
+        settings.COURSE_MODE_DEFAULTS['suggested_prices'],
+        settings.COURSE_MODE_DEFAULTS['currency'],
+        settings.COURSE_MODE_DEFAULTS['expiration_datetime'],
+        settings.COURSE_MODE_DEFAULTS['description'],
+        settings.COURSE_MODE_DEFAULTS['sku'],
+        settings.COURSE_MODE_DEFAULTS['bulk_sku'],
+    )
+    DEFAULT_MODE_SLUG = settings.COURSE_MODE_DEFAULTS['slug']
+
+    ALL_MODES = [AUDIT, CREDIT_MODE, HONOR, NO_ID_PROFESSIONAL_MODE, PROFESSIONAL, VERIFIED, ]
+
+    # Modes utilized for audit/free enrollments
+    AUDIT_MODES = [AUDIT, HONOR]
 
     # Modes that allow a student to pursue a verified certificate
     VERIFIED_MODES = [VERIFIED, PROFESSIONAL]
@@ -147,7 +184,7 @@ class CourseMode(models.Model):
     CACHE_NAMESPACE = u"course_modes.CourseMode.cache."
 
     class Meta(object):
-        unique_together = ('course_id', 'mode_slug', 'currency')
+        unique_together = ('course', 'mode_slug', 'currency')
 
     def clean(self):
         """
@@ -379,7 +416,7 @@ class CourseMode(models.Model):
             return None
 
     @classmethod
-    def verified_mode_for_course(cls, course_id, modes=None):
+    def verified_mode_for_course(cls, course_id, modes=None, include_expired=False):
         """Find a verified mode for a particular course.
 
         Since we have multiple modes that can go through the verify flow,
@@ -400,7 +437,7 @@ class CourseMode(models.Model):
             Mode or None
 
         """
-        modes_dict = cls.modes_for_course_dict(course_id, modes=modes)
+        modes_dict = cls.modes_for_course_dict(course_id, modes=modes, include_expired=include_expired)
         verified_mode = modes_dict.get('verified', None)
         professional_mode = modes_dict.get('professional', None)
         # we prefer professional over verify
@@ -473,6 +510,16 @@ class CourseMode(models.Model):
             bool
         """
         return slug in [cls.PROFESSIONAL, cls.NO_ID_PROFESSIONAL_MODE]
+
+    @classmethod
+    def is_mode_upgradeable(cls, mode_slug):
+        """
+        Returns True if the given mode can be upgraded to another.
+
+        Note: Although, in practice, learners "upgrade" from verified to credit,
+        that particular upgrade path is excluded by this method.
+        """
+        return mode_slug in cls.AUDIT_MODES
 
     @classmethod
     def is_verified_mode(cls, course_mode_tuple):
@@ -679,6 +726,66 @@ def invalidate_course_mode_cache(sender, **kwargs):   # pylint: disable=unused-a
     RequestCache.clear_request_cache(name=CourseMode.CACHE_NAMESPACE)
 
 
+def get_cosmetic_verified_display_price(course):
+    """
+    Returns the minimum verified cert course price as a string preceded by correct currency, or 'Free'.
+    """
+    return get_course_prices(course, verified_only=True)[1]
+
+
+def get_cosmetic_display_price(course):
+    """
+    Returns the course price as a string preceded by correct currency, or 'Free'.
+    """
+    return get_course_prices(course)[1]
+
+
+def get_course_prices(course, verified_only=False):
+    """
+    Return registration_price and cosmetic_display_prices.
+    registration_price is the minimum price for the course across all course modes.
+    cosmetic_display_prices is the course price as a string preceded by correct currency, or 'Free'.
+    """
+    # Find the
+    if verified_only:
+        registration_price = CourseMode.min_course_price_for_verified_for_currency(
+            course.id,
+            settings.PAID_COURSE_REGISTRATION_CURRENCY[0]
+        )
+    else:
+        registration_price = CourseMode.min_course_price_for_currency(
+            course.id,
+            settings.PAID_COURSE_REGISTRATION_CURRENCY[0]
+        )
+
+    if registration_price > 0:
+        price = registration_price
+    # Handle course overview objects which have no cosmetic_display_price
+    elif hasattr(course, 'cosmetic_display_price'):
+        price = course.cosmetic_display_price
+    else:
+        price = None
+
+    return registration_price, format_course_price(price)
+
+
+def format_course_price(price):
+    """
+    Return a formatted price for a course (a string preceded by correct currency, or 'Free').
+    """
+    currency_symbol = settings.PAID_COURSE_REGISTRATION_CURRENCY[1]
+
+    if price:
+        # Translators: This will look like '$50', where {currency_symbol} is a symbol such as '$' and {price} is a
+        # numerical amount in that currency. Adjust this display as needed for your language.
+        cosmetic_display_price = _("{currency_symbol}{price}").format(currency_symbol=currency_symbol, price=price)
+    else:
+        # Translators: This refers to the cost of the course. In this case, the course costs nothing so it is free.
+        cosmetic_display_price = _('Free')
+
+    return cosmetic_display_price
+
+
 class CourseModesArchive(models.Model):
     """
     Store the past values of course_mode that a course had in the past. We decided on having
@@ -703,7 +810,8 @@ class CourseModesArchive(models.Model):
     min_price = models.IntegerField(default=0)
 
     # the suggested prices for this mode
-    suggested_prices = models.CommaSeparatedIntegerField(max_length=255, blank=True, default='')
+    suggested_prices = models.CharField(max_length=255, blank=True, default='',
+                                        validators=[validate_comma_separated_integer_list])
 
     # the currency these prices are in, using lower case ISO currency codes
     currency = models.CharField(default="usd", max_length=8)

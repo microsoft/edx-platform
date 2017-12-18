@@ -24,12 +24,10 @@ import django.dispatch
 import django.utils
 from django.utils.translation import get_language, to_locale
 
-from pymongo import ReadPreference
 from xmodule.contentstore.django import contentstore
 from xmodule.modulestore.draft_and_published import BranchSettingMixin
 from xmodule.modulestore.mixed import MixedModuleStore
 from xmodule.util.django import get_current_request_hostname
-import xblock.reference.plugins
 
 try:
     # We may not always have the request_cache module available
@@ -245,6 +243,9 @@ def create_modulestore_instance(
     """
     This will return a new instance of a modulestore given an engine and options
     """
+    # Import is placed here to avoid model import at project startup.
+    import xblock.reference.plugins
+
     class_ = load_function(engine)
 
     _options = {}
@@ -275,9 +276,6 @@ def create_modulestore_instance(
         xb_user_service = DjangoXBlockUserService(get_current_user())
     else:
         xb_user_service = None
-
-    if 'read_preference' in doc_store_config:
-        doc_store_config['read_preference'] = getattr(ReadPreference, doc_store_config['read_preference'])
 
     xblock_field_data_wrappers = [load_function(path) for path in settings.XBLOCK_FIELD_DATA_WRAPPERS]
 

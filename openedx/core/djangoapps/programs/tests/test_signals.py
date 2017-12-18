@@ -12,7 +12,6 @@ from openedx.core.djangoapps.signals.signals import COURSE_CERT_AWARDED
 from openedx.core.djangoapps.programs.signals import handle_course_cert_awarded
 from openedx.core.djangolib.testing.utils import skip_unless_lms
 
-
 TEST_USERNAME = 'test-user'
 
 

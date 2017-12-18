@@ -26,8 +26,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 0.1a\n"
 "Report-Msgid-Bugs-To: openedx-translation@googlegroups.com\n"
-"POT-Creation-Date: 2017-05-11 14:54+0000\n"
-"PO-Revision-Date: 2017-05-11 14:55:07.857599\n"
+"POT-Creation-Date: 2017-12-07 12:08+0000\n"
+"PO-Revision-Date: 2017-12-07 12:14:23.107880\n"
 "Last-Translator: \n"
 "Language-Team: openedx-translation <openedx-translation@googlegroups.com>\n"
 "MIME-Version: 1.0\n"
@@ -124,7 +124,7 @@ msgstr "Çänçél Ⱡ'σяєм ιρѕυ#"
 
 #. Translators: This is the status of an active video upload
 #: cms/static/js/models/active_video_upload.js cms/static/js/views/assets.js
-#: lms/static/js/views/image_field.js
+#: cms/static/js/views/video_thumbnail.js lms/static/js/views/image_field.js
 msgid "Uploading"
 msgstr "Ûplöädïng Ⱡ'σяєм ιρѕυм ∂σł#"
 
@@ -134,16 +134,18 @@ msgstr "Ûplöädïng Ⱡ'σяєм ιρѕυм ∂σł#"
 #: cms/static/js/views/active_video_upload.js
 #: cms/static/js/views/modals/edit_xblock.js
 #: common/lib/xmodule/xmodule/js/src/html/edit.js
+#: lms/static/js/student_account/tos_modal.js
+#: cms/templates/js/course-video-settings.underscore
 #: common/static/common/templates/image-modal.underscore
 #: common/static/common/templates/discussion/alert-popup.underscore
 #: common/static/common/templates/discussion/forum-action-close.underscore
 #: common/static/common/templates/discussion/search-alert.underscore
-#: lms/templates/student_profile/share_modal.underscore
+#: openedx/features/learner_profile/static/learner_profile/templates/share_modal.underscore
 #: test_root/staticfiles/common/templates/image-modal.underscore
 #: test_root/staticfiles/common/templates/discussion/alert-popup.underscore
 #: test_root/staticfiles/common/templates/discussion/forum-action-close.underscore
 #: test_root/staticfiles/common/templates/discussion/search-alert.underscore
-#: test_root/staticfiles/templates/student_profile/share_modal.underscore
+#: test_root/staticfiles/learner_profile/templates/share_modal.underscore
 #: test_root/staticfiles/xmodule_js/common_static/common/templates/image-modal.underscore
 #: test_root/staticfiles/xmodule_js/common_static/common/templates/discussion/alert-popup.underscore
 #: test_root/staticfiles/xmodule_js/common_static/common/templates/discussion/forum-action-close.underscore
@@ -182,6 +184,26 @@ msgstr "Çhöösé Fïlé Ⱡ'σяєм ιρѕυм ∂σłσя #"
 msgid "OK"
 msgstr "ÖK Ⱡ'σя#"
 
+#. #-#-#-#-#  djangojs-partial.po (0.1a)  #-#-#-#-#
+#. Translators: this is a message from the raw HTML editor displayed in the
+#. browser when a user needs to edit HTML
+#: cms/static/js/views/course_video_settings.js
+#: common/lib/xmodule/xmodule/js/src/html/edit.js
+#: cms/templates/js/timed-examination-preference-editor.underscore
+msgid "None"
+msgstr "Nöné Ⱡ'σяєм ι#"
+
+#: cms/static/js/views/course_video_settings.js
+#: cms/static/js/views/metadata.js
+#: cms/static/js/views/previous_video_upload.js
+#: lms/djangoapps/teams/static/teams/js/views/edit_team_members.js
+#: lms/static/js/views/image_field.js
+#: cms/templates/js/video/metadata-translations-item.underscore
+#: lms/djangoapps/teams/static/teams/templates/edit-team-member.underscore
+#: test_root/staticfiles/teams/templates/edit-team-member.underscore
+msgid "Remove"
+msgstr "Rémövé Ⱡ'σяєм ιρѕυ#"
+
 #. Translators: this is a message from the raw HTML editor displayed in the
 #. browser when a user needs to edit HTML
 #: cms/static/js/views/manage_users_and_roles.js
@@ -194,16 +216,6 @@ msgstr "Ök Ⱡ'σя#"
 msgid "Unknown"
 msgstr "Ûnknöwn Ⱡ'σяєм ιρѕυм #"
 
-#: cms/static/js/views/metadata.js
-#: cms/static/js/views/previous_video_upload.js
-#: lms/djangoapps/teams/static/teams/js/views/edit_team_members.js
-#: lms/static/js/views/image_field.js
-#: cms/templates/js/video/metadata-translations-item.underscore
-#: lms/djangoapps/teams/static/teams/templates/edit-team-member.underscore
-#: test_root/staticfiles/teams/templates/edit-team-member.underscore
-msgid "Remove"
-msgstr "Rémövé Ⱡ'σяєм ιρѕυ#"
-
 #: cms/static/js/views/metadata.js lms/static/js/views/file_uploader.js
 msgid "Upload File"
 msgstr "Ûplöäd Fïlé Ⱡ'σяєм ιρѕυм ∂σłσя #"
@@ -212,6 +224,7 @@ msgstr "Ûplöäd Fïlé Ⱡ'σяєм ιρѕυм ∂σłσя #"
 #. Translators: this is a message from the raw HTML editor displayed in the
 #. browser when a user needs to edit HTML
 #: cms/static/js/views/modals/base_modal.js
+#: cms/static/js/views/modals/course_outline_modals.js
 #: common/lib/xmodule/xmodule/js/src/html/edit.js
 #: cms/templates/js/certificate-editor.underscore
 #: cms/templates/js/content-group-editor.underscore
@@ -221,12 +234,12 @@ msgstr "Ûplöäd Fïlé Ⱡ'σяєм ιρѕυм ∂σłσя #"
 #: cms/templates/js/section-name-edit.underscore
 #: cms/templates/js/signatory-actions.underscore
 #: cms/templates/js/xblock-string-field-editor.underscore
-#: lms/templates/instructor/instructor_dashboard_2/cohort-discussions-course-wide.underscore
-#: lms/templates/instructor/instructor_dashboard_2/cohort-discussions-inline.underscore
 #: lms/templates/instructor/instructor_dashboard_2/cohort-form.underscore
-#: test_root/staticfiles/templates/instructor/instructor_dashboard_2/cohort-discussions-course-wide.underscore
-#: test_root/staticfiles/templates/instructor/instructor_dashboard_2/cohort-discussions-inline.underscore
+#: lms/templates/instructor/instructor_dashboard_2/divided-discussions-course-wide.underscore
+#: lms/templates/instructor/instructor_dashboard_2/divided-discussions-inline.underscore
 #: test_root/staticfiles/templates/instructor/instructor_dashboard_2/cohort-form.underscore
+#: test_root/staticfiles/templates/instructor/instructor_dashboard_2/divided-discussions-course-wide.underscore
+#: test_root/staticfiles/templates/instructor/instructor_dashboard_2/divided-discussions-inline.underscore
 msgid "Save"
 msgstr "Sävé Ⱡ'σяєм ι#"
 
@@ -245,8 +258,8 @@ msgid "Removing"
 msgstr "Rémövïng Ⱡ'σяєм ιρѕυм ∂#"
 
 #: cms/static/js/views/validation.js
-#: lms/static/js/groups/views/cohort_discussions_course_wide.js
-#: lms/static/js/groups/views/cohort_discussions_inline.js
+#: lms/static/js/discussions_management/views/divided_discussions_course_wide.js
+#: lms/static/js/discussions_management/views/divided_discussions_inline.js
 #: lms/static/js/views/fields.js
 msgid "Your changes have been saved."
 msgstr "Ýöür çhängés hävé ßéén sävéd. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢#"
@@ -1257,14 +1270,6 @@ msgstr "Nö çölör Ⱡ'σяєм ιρѕυм ∂#"
 msgid "Nonbreaking space"
 msgstr "Nönßréäkïng späçé Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмє#"
 
-#. #-#-#-#-#  djangojs-partial.po (0.1a)  #-#-#-#-#
-#. Translators: this is a message from the raw HTML editor displayed in the
-#. browser when a user needs to edit HTML
-#: common/lib/xmodule/xmodule/js/src/html/edit.js
-#: cms/templates/js/timed-examination-preference-editor.underscore
-msgid "None"
-msgstr "Nöné Ⱡ'σяєм ι#"
-
 #. Translators: this is a message from the raw HTML editor displayed in the
 #. browser when a user needs to edit HTML
 #: common/lib/xmodule/xmodule/js/src/html/edit.js
@@ -1666,12 +1671,12 @@ msgstr "Vértïçäl späçé Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт#"
 #. Translators: this is a message from the raw HTML editor displayed in the
 #. browser when a user needs to edit HTML
 #: common/lib/xmodule/xmodule/js/src/html/edit.js
-#: lms/templates/search/course_search_item.underscore
-#: lms/templates/search/dashboard_search_item.underscore
 #: openedx/features/course_bookmarks/static/course_bookmarks/templates/bookmarks-list.underscore
+#: openedx/features/course_search/static/course_search/templates/course_search_item.underscore
+#: openedx/features/course_search/static/course_search/templates/dashboard_search_item.underscore
 #: test_root/staticfiles/course_bookmarks/templates/bookmarks-list.underscore
-#: test_root/staticfiles/templates/search/course_search_item.underscore
-#: test_root/staticfiles/templates/search/dashboard_search_item.underscore
+#: test_root/staticfiles/course_search/templates/course_search_item.underscore
+#: test_root/staticfiles/course_search/templates/dashboard_search_item.underscore
 msgid "View"
 msgstr "Vïéw Ⱡ'σяєм ι#"
 
@@ -1786,6 +1791,7 @@ msgstr ""
 "SéqüénçéMödülé. Pléäsé çöntäçt thé çöürsé stäff. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αм#"
 
 #: common/lib/xmodule/xmodule/js/src/sequence/display.js
+#: openedx/features/course_bookmarks/static/course_bookmarks/js/views/bookmark_button.js
 msgid "Bookmarked"
 msgstr "Böökmärkéd Ⱡ'σяєм ιρѕυм ∂σłσ#"
 
@@ -2036,6 +2042,209 @@ msgstr "Türn ön tränsçrïpts Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αм
 #: common/lib/xmodule/xmodule/js/src/video/09_video_caption.js
 msgid "Turn off transcripts"
 msgstr "Türn öff tränsçrïpts Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, #"
+
+#: common/static/bundles/AssetsPage.bace7aaf2adb48c51598.js
+msgid "end"
+msgstr "énd Ⱡ'σяєм#"
+
+#: common/static/bundles/CourseGoals.c4996c40fda9d3059c82.js
+msgid "Thank you for setting your course goal to "
+msgstr ""
+"Thänk ýöü för séttïng ýöür çöürsé göäl tö  Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕє¢тєтυя #"
+
+#: common/static/bundles/CourseGoals.c4996c40fda9d3059c82.js
+msgid ""
+"There was an error in setting your goal, please reload the page and try "
+"again."
+msgstr ""
+"Théré wäs än érrör ïn séttïng ýöür göäl, pléäsé rélöäd thé pägé änd trý "
+"ägäïn. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєт#"
+
+#: common/static/bundles/CourseHome.8f43ec4ffa54018648ac.js
+#: openedx/features/course_experience/static/course_experience/js/CourseHome.js
+msgid "You have successfully updated your goal."
+msgstr ""
+"Ýöü hävé süççéssfüllý üpdätéd ýöür göäl. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕє¢тєтυя#"
+
+#: common/static/bundles/CourseHome.8f43ec4ffa54018648ac.js
+#: openedx/features/course_experience/static/course_experience/js/CourseHome.js
+msgid "There was an error updating your goal."
+msgstr ""
+"Théré wäs än érrör üpdätïng ýöür göäl. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕє¢тєтυя#"
+
+#: common/static/bundles/CourseHome.8f43ec4ffa54018648ac.js
+#: openedx/features/course_experience/static/course_experience/js/CourseHome.js
+msgid "Show more"
+msgstr "Shöw möré Ⱡ'σяєм ιρѕυм ∂σł#"
+
+#: common/static/bundles/CourseHome.8f43ec4ffa54018648ac.js
+#: openedx/features/course_experience/static/course_experience/js/CourseHome.js
+msgid "Show less"
+msgstr "Shöw léss Ⱡ'σяєм ιρѕυм ∂σł#"
+
+#: common/static/bundles/SingleSupportForm.24c3e19077ebd20ce989.js
+msgid "Please fix the following errors:"
+msgstr ""
+"Pléäsé fïx thé föllöwïng érrörs: Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тє#"
+
+#: common/static/bundles/SingleSupportForm.24c3e19077ebd20ce989.js
+msgid "Files that you upload must be smaller than 5MB in size."
+msgstr ""
+"Fïlés thät ýöü üplöäd müst ßé smällér thän 5MB ïn sïzé. Ⱡ'σяєм ιρѕυм ∂σłσя "
+"ѕιт αмєт, ¢σηѕє¢тєтυя α#"
+
+#: common/static/bundles/SingleSupportForm.24c3e19077ebd20ce989.js
+msgid ""
+"Files that you upload must be PDFs or image files in .gif, .jpg, .jpeg, or "
+".png format."
+msgstr ""
+"Fïlés thät ýöü üplöäd müst ßé PDFs ör ïmägé fïlés ïn .gïf, .jpg, .jpég, ör "
+".png förmät. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє#"
+
+#: common/static/bundles/SingleSupportForm.24c3e19077ebd20ce989.js
+msgid "Something went wrong. Please try again later."
+msgstr ""
+"Söméthïng wént wröng. Pléäsé trý ägäïn lätér. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕє¢тєтυя #"
+
+#: common/static/bundles/SingleSupportForm.24c3e19077ebd20ce989.js
+msgid "Add Attachment"
+msgstr "Àdd Àttäçhmént Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт#"
+
+#: common/static/bundles/SingleSupportForm.24c3e19077ebd20ce989.js
+msgid "(Optional)"
+msgstr "(Öptïönäl) Ⱡ'σяєм ιρѕυм ∂σłσ#"
+
+#: common/static/bundles/SingleSupportForm.24c3e19077ebd20ce989.js
+msgid "Remove file"
+msgstr "Rémövé fïlé Ⱡ'σяєм ιρѕυм ∂σłσя #"
+
+#: common/static/bundles/SingleSupportForm.24c3e19077ebd20ce989.js
+msgid "Course Name"
+msgstr "Çöürsé Nämé Ⱡ'σяєм ιρѕυм ∂σłσя #"
+
+#: common/static/bundles/SingleSupportForm.24c3e19077ebd20ce989.js
+msgid "What can we help you with, "
+msgstr "Whät çän wé hélp ýöü wïth,  Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє#"
+
+#: common/static/bundles/SingleSupportForm.24c3e19077ebd20ce989.js
+#: lms/static/js/instructor_dashboard/util.js
+msgid "Subject"
+msgstr "Süßjéçt Ⱡ'σяєм ιρѕυм #"
+
+#: common/static/bundles/SingleSupportForm.24c3e19077ebd20ce989.js
+msgid "Details"
+msgstr "Détäïls Ⱡ'σяєм ιρѕυм #"
+
+#: common/static/bundles/SingleSupportForm.24c3e19077ebd20ce989.js
+msgid "The more you tell us, the more quickly and helpfully we can respond!"
+msgstr ""
+"Thé möré ýöü téll üs, thé möré qüïçklý änd hélpfüllý wé çän réspönd! Ⱡ'σяєм "
+"ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя #"
+
+#: common/static/bundles/SingleSupportForm.24c3e19077ebd20ce989.js
+#: common/static/common/templates/discussion/new-post.underscore
+#: common/static/common/templates/discussion/thread-response.underscore
+#: common/static/common/templates/discussion/thread.underscore
+#: lms/templates/verify_student/incourse_reverify.underscore
+#: test_root/staticfiles/common/templates/discussion/new-post.underscore
+#: test_root/staticfiles/common/templates/discussion/thread-response.underscore
+#: test_root/staticfiles/common/templates/discussion/thread.underscore
+#: test_root/staticfiles/templates/verify_student/incourse_reverify.underscore
+#: test_root/staticfiles/xmodule_js/common_static/common/templates/discussion/new-post.underscore
+#: test_root/staticfiles/xmodule_js/common_static/common/templates/discussion/thread-response.underscore
+#: test_root/staticfiles/xmodule_js/common_static/common/templates/discussion/thread.underscore
+msgid "Submit"
+msgstr "Süßmït Ⱡ'σяєм ιρѕυ#"
+
+#: common/static/bundles/SingleSupportForm.24c3e19077ebd20ce989.js
+msgid "Sign in to "
+msgstr "Sïgn ïn tö  Ⱡ'σяєм ιρѕυм ∂σłσя #"
+
+#: common/static/bundles/SingleSupportForm.24c3e19077ebd20ce989.js
+#: lms/templates/student_account/hinted_login.underscore
+#: lms/templates/student_account/login.underscore
+#: test_root/staticfiles/templates/student_account/hinted_login.underscore
+#: test_root/staticfiles/templates/student_account/login.underscore
+msgid "Sign in"
+msgstr "Sïgn ïn Ⱡ'σяєм ιρѕυм #"
+
+#: common/static/bundles/SingleSupportForm.24c3e19077ebd20ce989.js
+msgid "Create an "
+msgstr "Çréäté än  Ⱡ'σяєм ιρѕυм ∂σłσ#"
+
+#: common/static/bundles/SingleSupportForm.24c3e19077ebd20ce989.js
+msgid "Enter a valid email address."
+msgstr "Éntér ä välïd émäïl äddréss. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢#"
+
+#: common/static/bundles/SingleSupportForm.24c3e19077ebd20ce989.js
+msgid "Enter a subject for your support request."
+msgstr ""
+"Éntér ä süßjéçt för ýöür süppört réqüést. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕє¢тєтυя #"
+
+#: common/static/bundles/SingleSupportForm.24c3e19077ebd20ce989.js
+msgid "Enter some details for your support request."
+msgstr ""
+"Éntér sömé détäïls för ýöür süppört réqüést. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕє¢тєтυя #"
+
+#: common/static/bundles/SingleSupportForm.24c3e19077ebd20ce989.js
+msgid "Contact Us"
+msgstr "Çöntäçt Ûs Ⱡ'σяєм ιρѕυм ∂σłσ#"
+
+#: common/static/bundles/SingleSupportForm.24c3e19077ebd20ce989.js
+msgid "Find answers to the top questions asked by learners."
+msgstr ""
+"Fïnd änswérs tö thé töp qüéstïöns äskéd ßý léärnérs. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт "
+"αмєт, ¢σηѕє¢тєтυя α#"
+
+#: common/static/bundles/SingleSupportForm.24c3e19077ebd20ce989.js
+msgid "Go to my Dashboard"
+msgstr "Gö tö mý Däshßöärd Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт#"
+
+#: common/static/bundles/SingleSupportForm.24c3e19077ebd20ce989.js
+msgid "Go to "
+msgstr "Gö tö  Ⱡ'σяєм ιρѕυ#"
+
+#: common/static/bundles/SingleSupportForm.24c3e19077ebd20ce989.js
+msgid ""
+"Thank you for submitting a request! We will contact you within 24 hours."
+msgstr ""
+"Thänk ýöü för süßmïttïng ä réqüést! Wé wïll çöntäçt ýöü wïthïn 24 höürs. "
+"Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя#"
+
+#: common/static/bundles/SingleSupportForm.24c3e19077ebd20ce989.js
+msgid "Cancel upload"
+msgstr "Çänçél üplöäd Ⱡ'σяєм ιρѕυм ∂σłσя ѕι#"
+
+#: common/static/bundles/StudioIndex.06cf9a104f002c871bbd.js
+msgid "Organization:"
+msgstr "Örgänïzätïön: Ⱡ'σяєм ιρѕυм ∂σłσя ѕι#"
+
+#: common/static/bundles/StudioIndex.06cf9a104f002c871bbd.js
+msgid "Course Number:"
+msgstr "Çöürsé Nümßér: Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт#"
+
+#: common/static/bundles/StudioIndex.06cf9a104f002c871bbd.js
+msgid "Course Run:"
+msgstr "Çöürsé Rün: Ⱡ'σяєм ιρѕυм ∂σłσя #"
+
+#: common/static/bundles/StudioIndex.06cf9a104f002c871bbd.js
+msgid "(Read-only)"
+msgstr "(Réäd-önlý) Ⱡ'σяєм ιρѕυм ∂σłσя #"
+
+#: common/static/bundles/StudioIndex.06cf9a104f002c871bbd.js
+msgid "Re-run Course"
+msgstr "Ré-rün Çöürsé Ⱡ'σяєм ιρѕυм ∂σłσя ѕι#"
+
+#: common/static/bundles/StudioIndex.06cf9a104f002c871bbd.js
+#: cms/templates/js/show-textbook.underscore
+msgid "View Live"
+msgstr "Vïéw Lïvé Ⱡ'σяєм ιρѕυм ∂σł#"
 
 #: common/static/common/js/components/utils/view_utils.js
 msgid "Required field."
@@ -2715,6 +2924,7 @@ msgstr ""
 
 #: lms/djangoapps/teams/static/teams/js/views/edit_team.js
 #: lms/static/js/student_account/views/account_settings_factory.js
+#: openedx/features/learner_profile/static/learner_profile/js/learner_profile_factory.js
 msgid "Language"
 msgstr "Längüägé Ⱡ'σяєм ιρѕυм ∂#"
 
@@ -2728,7 +2938,7 @@ msgstr ""
 " Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυ#"
 
 #: lms/djangoapps/teams/static/teams/js/views/edit_team.js
-#: lms/static/js/student_profile/views/learner_profile_factory.js
+#: openedx/features/learner_profile/static/learner_profile/js/learner_profile_factory.js
 msgid "Country"
 msgstr "Çöüntrý Ⱡ'σяєм ιρѕυм #"
 
@@ -3084,8 +3294,12 @@ msgid "HTML preview of post"
 msgstr "HTML prévïéw öf pöst Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, #"
 
 #: lms/static/coffee/src/customwmd.js
-msgid "Post body"
-msgstr "Pöst ßödý Ⱡ'σяєм ιρѕυм ∂σł#"
+#: common/static/common/templates/discussion/new-post.underscore
+#: test_root/staticfiles/common/templates/discussion/new-post.underscore
+#: test_root/staticfiles/xmodule_js/common_static/common/templates/discussion/new-post.underscore
+msgid "Your question or idea (required)"
+msgstr ""
+"Ýöür qüéstïön ör ïdéä (réqüïréd) Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тє#"
 
 #: lms/static/js/Markdown.Editor.js
 msgid "Insert Hyperlink"
@@ -3501,10 +3715,66 @@ msgstr ""
 "¢σηѕє¢тєтυ#"
 
 #: lms/static/js/dashboard/legacy.js
-msgid "An error occurred. Please try again later."
+msgid "You will be refunded the amount you paid."
 msgstr ""
-"Àn érrör öççürréd. Pléäsé trý ägäïn lätér. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"Ýöü wïll ßé réfündéd thé ämöünt ýöü päïd. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
 "¢σηѕє¢тєтυя #"
+
+#: lms/static/js/dashboard/legacy.js
+msgid "You will not be refunded the amount you paid."
+msgstr ""
+"Ýöü wïll nöt ßé réfündéd thé ämöünt ýöü päïd. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕє¢тєтυя #"
+
+#: lms/static/js/dashboard/legacy.js
+msgid ""
+"Are you sure you want to unenroll from the purchased course %(courseName)s "
+"(%(courseNumber)s)?"
+msgstr ""
+"Àré ýöü süré ýöü wänt tö ünénröll fröm thé pürçhäséd çöürsé %(courseName)s "
+"(%(courseNumber)s)? Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя #"
+
+#: lms/static/js/dashboard/legacy.js
+msgid ""
+"Are you sure you want to unenroll from %(courseName)s (%(courseNumber)s)?"
+msgstr ""
+"Àré ýöü süré ýöü wänt tö ünénröll fröm %(courseName)s (%(courseNumber)s)? "
+"Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α#"
+
+#: lms/static/js/dashboard/legacy.js
+msgid ""
+"Are you sure you want to unenroll from the verified %(certNameLong)s  track "
+"of %(courseName)s  (%(courseNumber)s)?"
+msgstr ""
+"Àré ýöü süré ýöü wänt tö ünénröll fröm thé vérïfïéd %(certNameLong)s  träçk "
+"öf %(courseName)s  (%(courseNumber)s)? Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕє¢тєт#"
+
+#: lms/static/js/dashboard/legacy.js
+msgid ""
+"Are you sure you want to unenroll from the verified %(certNameLong)s track "
+"of %(courseName)s (%(courseNumber)s)?"
+msgstr ""
+"Àré ýöü süré ýöü wänt tö ünénröll fröm thé vérïfïéd %(certNameLong)s träçk "
+"öf %(courseName)s (%(courseNumber)s)? Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕє¢тєтυ#"
+
+#: lms/static/js/dashboard/legacy.js
+msgid ""
+"The refund deadline for this course has passed,so you will not receive a "
+"refund."
+msgstr ""
+"Thé réfünd déädlïné för thïs çöürsé häs pässéd,sö ýöü wïll nöt réçéïvé ä "
+"réfünd. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тє#"
+
+#: lms/static/js/dashboard/legacy.js
+#: lms/static/js/learner_dashboard/views/unenroll_view.js
+msgid ""
+"Unable to determine whether we should give you a refund because of System "
+"Error. Please try again later."
+msgstr ""
+"Ûnäßlé tö détérmïné whéthér wé shöüld gïvé ýöü ä réfünd ßéçäüsé öf Sýstém "
+"Érrör. Pléäsé trý ägäïn lätér. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт α#"
 
 #: lms/static/js/discovery/views/search_form.js
 #, javascript-format
@@ -3521,12 +3791,103 @@ msgstr ""
 "¢σηѕє¢тєтυя#"
 
 #: lms/static/js/discovery/views/search_form.js
-#: lms/templates/search/search_error.underscore
-#: test_root/staticfiles/templates/search/search_error.underscore
+#: openedx/features/course_search/static/course_search/templates/search_error.underscore
+#: test_root/staticfiles/course_search/templates/search_error.underscore
 msgid "There was an error, try searching again."
 msgstr ""
 "Théré wäs än érrör, trý séärçhïng ägäïn. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
 "¢σηѕє¢тєтυя#"
+
+#: lms/static/js/discussions_management/views/discussions.js
+msgid "Not divided"
+msgstr "Nöt dïvïdéd Ⱡ'σяєм ιρѕυм ∂σłσя #"
+
+#: lms/static/js/discussions_management/views/discussions.js
+msgid ""
+"Discussions are unified; all learners interact with posts from other "
+"learners, regardless of the group they are in."
+msgstr ""
+"Dïsçüssïöns äré ünïfïéd; äll léärnérs ïntéräçt wïth pösts fröm öthér "
+"léärnérs, régärdléss öf thé gröüp théý äré ïn. Ⱡ'σяєм ιρѕυм ∂σł#"
+
+#: lms/static/js/discussions_management/views/discussions.js
+msgid "Enrollment Tracks"
+msgstr "Énröllmént Träçks Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмє#"
+
+#: lms/static/js/discussions_management/views/discussions.js
+msgid ""
+"Use enrollment tracks as the basis for dividing discussions. All learners, "
+"regardless of their enrollment track, see the same discussion topics, but "
+"within divided topics, only learners who are in the same enrollment track "
+"see and respond to each others’ posts."
+msgstr ""
+"Ûsé énröllmént träçks äs thé ßäsïs för dïvïdïng dïsçüssïöns. Àll léärnérs, "
+"régärdléss öf théïr énröllmént träçk, séé thé sämé dïsçüssïön töpïçs, ßüt "
+"wïthïn dïvïdéd töpïçs, önlý léärnérs whö äré ïn thé sämé énröllmént träçk "
+"séé änd réspönd tö éäçh öthérs’ pösts. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕє¢тєтυя α∂ιριѕι¢ιηg єłιт, ѕє∂ ∂σ єιυѕмσ∂ тємρσя ιη¢ι∂ι∂υηт υт łαвσяє єт "
+"∂σłσяє мαgηα αłιqυα. υт єηιм α∂ мιηιм νєηιαм, qυιѕ ησѕтяυ∂ єχєя¢ιтαтιση "
+"υłłαм¢σ łαвσяιѕ ηιѕι υт αłιqυιρ єχ єα ¢σммσ∂σ ¢σηѕєqυαт. ∂υιѕ αυтє ιяυяє "
+"∂σł#"
+
+#: lms/static/js/discussions_management/views/discussions.js
+msgid "Cohorts"
+msgstr "Çöhörts Ⱡ'σяєм ιρѕυм #"
+
+#: lms/static/js/discussions_management/views/discussions.js
+msgid ""
+"Use cohorts as the basis for dividing discussions. All learners, regardless "
+"of cohort, see the same discussion topics, but within divided topics, only "
+"members of the same cohort see and respond to each others’ posts. "
+msgstr ""
+"Ûsé çöhörts äs thé ßäsïs för dïvïdïng dïsçüssïöns. Àll léärnérs, régärdléss "
+"öf çöhört, séé thé sämé dïsçüssïön töpïçs, ßüt wïthïn dïvïdéd töpïçs, önlý "
+"mémßérs öf thé sämé çöhört séé änd réspönd tö éäçh öthérs’ pösts.  Ⱡ'σяєм "
+"ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α∂ιριѕι¢ιηg єłιт, ѕє∂ ∂σ єιυѕмσ∂ тємρσя "
+"ιη¢ι∂ι∂υηт υт łαвσяє єт ∂σłσяє мαgηα αłιqυα. υт єηιм α∂ мιηιм νєηιαм, qυιѕ "
+"ησѕтяυ∂ єχєя¢ιтαтιση υłłαм¢σ łαвσяιѕ ηιѕι υт αłιqυιρ єχ єα ¢σммσ∂σ "
+"¢σηѕєqυαт. ∂υιѕ αυтє ιяυяє ∂σłσя ιη яєρяєнєη∂єяιт ιη νσłυρтαтє νєłιт єѕѕє "
+"¢ιłłυм ∂σłσяє єυ ƒυgιαт ηυłłα ραяιαт#"
+
+#: lms/static/js/discussions_management/views/discussions.js
+msgid "Discussion topics in the course are not divided."
+msgstr ""
+"Dïsçüssïön töpïçs ïn thé çöürsé äré nöt dïvïdéd. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт "
+"αмєт, ¢σηѕє¢тєтυя α#"
+
+#: lms/static/js/discussions_management/views/discussions.js
+msgid "Any divided discussion topics are divided based on enrollment track."
+msgstr ""
+"Àný dïvïdéd dïsçüssïön töpïçs äré dïvïdéd ßäséd ön énröllmént träçk. Ⱡ'σяєм "
+"ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя #"
+
+#: lms/static/js/discussions_management/views/discussions.js
+msgid "Any divided discussion topics are divided based on cohort."
+msgstr ""
+"Àný dïvïdéd dïsçüssïön töpïçs äré dïvïdéd ßäséd ön çöhört. Ⱡ'σяєм ιρѕυм "
+"∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α#"
+
+#: lms/static/js/discussions_management/views/discussions.js
+msgid "Your changes have been saved. {details}"
+msgstr ""
+"Ýöür çhängés hävé ßéén sävéd. {details} Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕє¢тє#"
+
+#: lms/static/js/discussions_management/views/discussions.js
+msgid "We have encountered an error. Refresh your browser and then try again."
+msgstr ""
+"Wé hävé énçöüntéréd än érrör. Réfrésh ýöür ßröwsér änd thén trý ägäïn. "
+"Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя #"
+
+#: lms/static/js/discussions_management/views/divided_discussions.js
+#: lms/static/js/discussions_management/views/divided_discussions_course_wide.js
+#: lms/static/js/discussions_management/views/divided_discussions_inline.js
+#: lms/static/js/groups/views/cohort_form.js
+#: lms/static/js/groups/views/cohorts.js
+msgid "We've encountered an error. Refresh your browser and then try again."
+msgstr ""
+"Wé'vé énçöüntéréd än érrör. Réfrésh ýöür ßröwsér änd thén trý ägäïn. Ⱡ'σяєм "
+"ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя #"
 
 #: lms/static/js/edxnotes/views/notes_visibility_factory.js
 #: lms/static/js/edxnotes/views/search_box.js
@@ -3578,10 +3939,10 @@ msgstr ""
 "Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α#"
 
 #: lms/static/js/edxnotes/views/tabs/search_results.js
-#: lms/templates/search/course_search_results.underscore
-#: lms/templates/search/dashboard_search_results.underscore
-#: test_root/staticfiles/templates/search/course_search_results.underscore
-#: test_root/staticfiles/templates/search/dashboard_search_results.underscore
+#: openedx/features/course_search/static/course_search/templates/course_search_results.underscore
+#: openedx/features/course_search/static/course_search/templates/dashboard_search_results.underscore
+#: test_root/staticfiles/course_search/templates/course_search_results.underscore
+#: test_root/staticfiles/course_search/templates/dashboard_search_results.underscore
 msgid "Search Results"
 msgstr "Séärçh Résülts Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт#"
 
@@ -3608,16 +3969,6 @@ msgstr ""
 msgid "Choose one"
 msgstr "Çhöösé öné Ⱡ'σяєм ιρѕυм ∂σłσ#"
 
-#: lms/static/js/groups/views/cohort_discussions.js
-#: lms/static/js/groups/views/cohort_discussions_course_wide.js
-#: lms/static/js/groups/views/cohort_discussions_inline.js
-#: lms/static/js/groups/views/cohort_form.js
-#: lms/static/js/groups/views/cohorts.js
-msgid "We've encountered an error. Refresh your browser and then try again."
-msgstr ""
-"Wé'vé énçöüntéréd än érrör. Réfrésh ýöür ßröwsér änd thén trý ägäïn. Ⱡ'σяєм "
-"ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя #"
-
 #: lms/static/js/groups/views/cohort_editor.js
 #: lms/templates/instructor/instructor_dashboard_2/cohort-editor.underscore
 #: test_root/staticfiles/templates/instructor/instructor_dashboard_2/cohort-editor.underscore
@@ -3629,56 +3980,84 @@ msgid "Saved cohort"
 msgstr "Sävéd çöhört Ⱡ'σяєм ιρѕυм ∂σłσя ѕ#"
 
 #: lms/static/js/groups/views/cohort_editor.js
-msgid "Error adding students."
-msgstr "Érrör äddïng stüdénts. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢#"
+msgid "Error adding learners."
+msgstr "Érrör äddïng léärnérs. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢#"
 
 #: lms/static/js/groups/views/cohort_editor.js
 msgid "Enter a username or email."
 msgstr "Éntér ä üsérnämé ör émäïl. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕ#"
 
 #: lms/static/js/groups/views/cohort_editor.js
-msgid "{numUsersAdded} student has been added to this cohort"
-msgid_plural "{numUsersAdded} students have been added to this cohort"
+msgid "{numUsersAdded} learner has been added to this cohort. "
+msgid_plural "{numUsersAdded} learners have been added to this cohort. "
 msgstr[0] ""
-"{numUsersAdded} stüdént häs ßéén äddéd tö thïs çöhört Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт"
-" αмєт, ¢σηѕє¢тєтυя #"
-msgstr[1] ""
-"{numUsersAdded} stüdénts hävé ßéén äddéd tö thïs çöhört Ⱡ'σяєм ιρѕυм ∂σłσя "
+"{numUsersAdded} léärnér häs ßéén äddéd tö thïs çöhört.  Ⱡ'σяєм ιρѕυм ∂σłσя "
 "ѕιт αмєт, ¢σηѕє¢тєтυя #"
-
-#: lms/static/js/groups/views/cohort_editor.js
-msgid "{numMoved} student was removed from {oldCohort}"
-msgid_plural "{numMoved} students were removed from {oldCohort}"
-msgstr[0] ""
-"{numMoved} stüdént wäs rémövéd fröm {oldCohort} Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт,"
-" ¢σηѕє¢тє#"
 msgstr[1] ""
-"{numMoved} stüdénts wéré rémövéd fröm {oldCohort} Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт "
-"αмєт, ¢σηѕє¢тєт#"
+"{numUsersAdded} léärnérs hävé ßéén äddéd tö thïs çöhört.  Ⱡ'σяєм ιρѕυм ∂σłσя"
+" ѕιт αмєт, ¢σηѕє¢тєтυя #"
 
 #: lms/static/js/groups/views/cohort_editor.js
-msgid "{numPresent} student was already in the cohort"
-msgid_plural "{numPresent} students were already in the cohort"
+msgid "{numMoved} learner was moved from {prevCohort}"
+msgid_plural "{numMoved} learners were moved from {prevCohort}"
 msgstr[0] ""
-"{numPresent} stüdént wäs älréädý ïn thé çöhört Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"{numMoved} léärnér wäs mövéd fröm {prevCohort} Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕє¢т#"
+msgstr[1] ""
+"{numMoved} léärnérs wéré mövéd fröm {prevCohort} Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт "
+"αмєт, ¢σηѕє¢тє#"
+
+#: lms/static/js/groups/views/cohort_editor.js
+msgid "{numPresent} learner was already in the cohort"
+msgid_plural "{numPresent} learners were already in the cohort"
+msgstr[0] ""
+"{numPresent} léärnér wäs älréädý ïn thé çöhört Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
 "¢σηѕє¢тєтυ#"
 msgstr[1] ""
-"{numPresent} stüdénts wéré älréädý ïn thé çöhört Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт "
+"{numPresent} léärnérs wéré älréädý ïn thé çöhört Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт "
 "αмєт, ¢σηѕє¢тєтυя#"
 
 #: lms/static/js/groups/views/cohort_editor.js
-msgid "Unknown user: {user}"
-msgstr "Ûnknöwn üsér: {user} Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмє#"
+msgid "{email}"
+msgstr "{email} Ⱡ'σяєм#"
 
 #: lms/static/js/groups/views/cohort_editor.js
-msgid "There was an error when trying to add students:"
-msgid_plural "There were {numErrors} errors when trying to add students:"
+msgid ""
+"{numPreassigned} learner was pre-assigned for this cohort. This learner will"
+" automatically be added to the cohort when they enroll in the course."
+msgid_plural ""
+"{numPreassigned} learners were pre-assigned for this cohort. These learners "
+"will automatically be added to the cohort when they enroll in the course."
 msgstr[0] ""
-"Théré wäs än érrör whén trýïng tö ädd stüdénts: Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт,"
+"{numPreassigned} léärnér wäs pré-ässïgnéd för thïs çöhört. Thïs léärnér wïll"
+" äütömätïçällý ßé äddéd tö thé çöhört whén théý énröll ïn thé çöürsé. #"
+msgstr[1] ""
+"{numPreassigned} léärnérs wéré pré-ässïgnéd för thïs çöhört. Thésé léärnérs "
+"wïll äütömätïçällý ßé äddéd tö thé çöhört whén théý énröll ïn thé çöürsé. "
+"Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α∂ιριѕι¢ιηg єłιт, ѕє∂ ∂σ єιυѕмσ∂ "
+"тємρσя ιη¢ι∂ι∂υηт υт łαвσяє єт ∂σłσяє мαgηα αłιqυα. υт єηιм α∂ мιηιм νєηιαм,"
+" qυιѕ ησѕтяυ∂ єχєя¢ιтαтιση υłłαм¢σ łαвσяιѕ ηιѕι υт αłιqυιρ єχ єα ¢σммσ∂σ "
+"¢σηѕєqυαт. ∂υιѕ αυтє ιяυяє ∂σłσя ιη яєρяєнєη∂єяιт ιη νσłυρтαтє νєłιт єѕѕє "
+"¢ιłłυм ∂σłσяє єυ ƒυgιαт ηυłłα ραяιαтυя. єχ¢єρтєυя ѕιηт σ¢¢αє¢αт ¢υρι∂αтαт "
+"ηση ρяσι∂єηт, ѕυηт ιη ¢υłρα qυι σƒƒι¢ια ∂єѕєяυηт мσłłιт αηιм ι∂ єѕт łαвσя#"
+
+#: lms/static/js/groups/views/cohort_editor.js
+msgid "Unknown username: {user}"
+msgstr "Ûnknöwn üsérnämé: {user} Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, #"
+
+#: lms/static/js/groups/views/cohort_editor.js
+msgid "Invalid email address: {email}"
+msgstr "Ìnvälïd émäïl äddréss: {email} Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕ#"
+
+#: lms/static/js/groups/views/cohort_editor.js
+msgid "There was an error when trying to add learners:"
+msgid_plural "{numErrors} learners could not be added to this cohort:"
+msgstr[0] ""
+"Théré wäs än érrör whén trýïng tö ädd léärnérs: Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт,"
 " ¢σηѕє¢тєтυя α#"
 msgstr[1] ""
-"Théré wéré {numErrors} érrörs whén trýïng tö ädd stüdénts: Ⱡ'σяєм ιρѕυм "
-"∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α#"
+"{numErrors} léärnérs çöüld nöt ßé äddéd tö thïs çöhört: Ⱡ'σяєм ιρѕυм ∂σłσя "
+"ѕιт αмєт, ¢σηѕє¢тєтυя α#"
 
 #: lms/static/js/groups/views/cohort_editor.js
 msgid "View all errors"
@@ -3875,9 +4254,10 @@ msgstr ""
 " ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α#"
 
 #: lms/static/js/instructor_dashboard/data_download.js
+#: openedx/features/course_bookmarks/static/course_bookmarks/js/views/bookmarks_list.js
 #: cms/templates/js/move-xblock-modal.underscore
-#: lms/templates/search/search_loading.underscore
-#: test_root/staticfiles/templates/search/search_loading.underscore
+#: openedx/features/course_search/static/course_search/templates/search_loading.underscore
+#: test_root/staticfiles/course_search/templates/search_loading.underscore
 msgid "Loading"
 msgstr "Löädïng Ⱡ'σяєм ιρѕυм #"
 
@@ -3941,7 +4321,8 @@ msgstr "Märk énröllmént çödé äs ünüséd Ⱡ'σяєм ιρѕυм ∂σ�
 
 #: lms/static/js/instructor_dashboard/membership.js
 #: lms/static/js/student_account/views/account_settings_factory.js
-#: lms/static/js/student_profile/views/learner_profile_factory.js
+#: openedx/features/learner_profile/static/learner_profile/js/learner_profile_factory.js
+#: cms/templates/js/transcript-organization-credentials.underscore
 #: lms/templates/financial-assistance/financial_assessment_form.underscore
 #: test_root/staticfiles/proctoring/templates/course_allowances.underscore
 #: test_root/staticfiles/proctoring/templates/student-proctored-exam-attempts.underscore
@@ -3959,6 +4340,10 @@ msgid "Revoke access"
 msgstr "Révöké äççéss Ⱡ'σяєм ιρѕυм ∂σłσя ѕι#"
 
 #: lms/static/js/instructor_dashboard/membership.js
+msgid "Group"
+msgstr "Gröüp Ⱡ'σяєм ιρѕ#"
+
+#: lms/static/js/instructor_dashboard/membership.js
 msgid "Enter username or email"
 msgstr "Éntér üsérnämé ör émäïl Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σ#"
 
@@ -3966,6 +4351,12 @@ msgstr "Éntér üsérnämé ör émäïl Ⱡ'σяєм ιρѕυм ∂σłσя ѕ
 msgid "Please enter a username or email."
 msgstr ""
 "Pléäsé éntér ä üsérnämé ör émäïl. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тє#"
+
+#: lms/static/js/instructor_dashboard/membership.js
+msgid "This role requires a divided discussions scheme."
+msgstr ""
+"Thïs rölé réqüïrés ä dïvïdéd dïsçüssïöns sçhémé. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт "
+"αмєт, ¢σηѕє¢тєтυя α#"
 
 #: lms/static/js/instructor_dashboard/membership.js
 msgid "Error changing user's permissions."
@@ -4476,6 +4867,42 @@ msgstr ""
 "σƒƒι¢ια ∂єѕєяυηт мσłłιт αηιм ι#"
 
 #: lms/static/js/instructor_dashboard/student_admin.js
+msgid "Please enter a score."
+msgstr "Pléäsé éntér ä sçöré. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, #"
+
+#: lms/static/js/instructor_dashboard/student_admin.js
+msgid ""
+"Started task to override the score for problem '<%- problem_id %>' and "
+"student '<%- student_id %>'. Click the 'Show Task Status' button to see the "
+"status of the task."
+msgstr ""
+"Stärtéd täsk tö övérrïdé thé sçöré för prößlém '<%- problem_id %>' änd "
+"stüdént '<%- student_id %>'. Çlïçk thé 'Shöw Täsk Stätüs' ßüttön tö séé thé "
+"stätüs öf thé täsk. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α∂ιριѕι¢ιηg "
+"єłιт, ѕє∂ ∂σ єιυѕмσ∂ тємρσя ιη¢ι∂ι∂υηт υт łαвσяє єт ∂σłσяє мαgηα αłιqυα. υт "
+"єηιм α∂ мιηιм νєηιαм, qυιѕ ησѕтяυ∂ єχєя¢ιтαтιση υłłαм¢σ łαвσяιѕ ηιѕι υт "
+"αłιqυιρ єχ єα ¢σммσ∂σ ¢σηѕєqυαт. ∂υιѕ αυтє ιяυяє ∂σłσя ιη яєρяєнєη∂єяιт ιη "
+"νσłυρтαтє νєłιт єѕѕє ¢ιłłυм ∂σłσяє єυ ƒυgιαт ηυłłα ραяιαтυя. єχ¢єρтєυя ѕιηт "
+"σ¢¢αє¢αт ¢υρι∂αтαт ηση ρяσι∂єηт, ѕυηт ιη ¢υłρα qυι σƒƒι¢ια ∂єѕєяυηт мσłłιт "
+"αηιм ι∂ єѕт łαв#"
+
+#: lms/static/js/instructor_dashboard/student_admin.js
+msgid ""
+"Error starting a task to override score for problem '<%- problem_id %>' for "
+"student '<%- student_id %>'. Make sure that the the score and the problem "
+"and student identifiers are complete and correct."
+msgstr ""
+"Érrör stärtïng ä täsk tö övérrïdé sçöré för prößlém '<%- problem_id %>' för "
+"stüdént '<%- student_id %>'. Mäké süré thät thé thé sçöré änd thé prößlém "
+"änd stüdént ïdéntïfïérs äré çömplété änd çörréçt. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт "
+"αмєт, ¢σηѕє¢тєтυя α∂ιριѕι¢ιηg єłιт, ѕє∂ ∂σ єιυѕмσ∂ тємρσя ιη¢ι∂ι∂υηт υт "
+"łαвσяє єт ∂σłσяє мαgηα αłιqυα. υт єηιм α∂ мιηιм νєηιαм, qυιѕ ησѕтяυ∂ "
+"єχєя¢ιтαтιση υłłαм¢σ łαвσяιѕ ηιѕι υт αłιqυιρ єχ єα ¢σммσ∂σ ¢σηѕєqυαт. ∂υιѕ "
+"αυтє ιяυяє ∂σłσя ιη яєρяєнєη∂єяιт ιη νσłυρтαтє νєłιт єѕѕє ¢ιłłυм ∂σłσяє єυ "
+"ƒυgιαт ηυłłα ραяιαтυя. єχ¢єρтєυя ѕιηт σ¢¢αє¢αт ¢υρι∂αтαт ηση ρяσι∂єηт, ѕυηт "
+"ιη ¢υłρα qυι#"
+
+#: lms/static/js/instructor_dashboard/student_admin.js
 msgid ""
 "Started entrance exam rescore task for student '{student_id}'. Click the "
 "'Show Task Status' button to see the status of the task."
@@ -4589,10 +5016,6 @@ msgstr ""
 " téçhnïçäl süppört ïf thé prößlém pérsïsts. Ⱡ'σяєм ιρѕυм#"
 
 #: lms/static/js/instructor_dashboard/util.js
-msgid "Subject"
-msgstr "Süßjéçt Ⱡ'σяєм ιρѕυм #"
-
-#: lms/static/js/instructor_dashboard/util.js
 msgid "Sent By"
 msgstr "Sént Bý Ⱡ'σяєм ιρѕυм #"
 
@@ -4656,20 +5079,9 @@ msgstr "{type} Prögréss Ⱡ'σяєм ιρѕυм ∂σłσя ѕ#"
 msgid "Earned Certificates"
 msgstr "Éärnéd Çértïfïçätés Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт,#"
 
-#: lms/static/js/learner_dashboard/views/program_details_view_2017.js
+#: lms/static/js/learner_dashboard/views/program_details_view.js
 msgid "Enrolled"
 msgstr "Énrölléd Ⱡ'σяєм ιρѕυм ∂#"
-
-#: lms/static/js/search/base/views/search_results_view.js
-#, javascript-format
-msgid "%s result"
-msgid_plural "%s results"
-msgstr[0] "%s résült Ⱡ'σяєм ιρѕυм ∂σłσ#"
-msgstr[1] "%s résülts Ⱡ'σяєм ιρѕυм ∂σłσя #"
-
-#: lms/static/js/staff_debug_actions.js
-msgid "Unknown Error Occurred."
-msgstr "Ûnknöwn Érrör Öççürréd. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σ#"
 
 #: lms/static/js/staff_debug_actions.js
 msgid "Successfully reset the attempts for user {user}"
@@ -4717,6 +5129,18 @@ msgstr ""
 "Fäïléd tö résçöré prößlém tö ïmprövé sçöré för üsér. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт "
 "αмєт, ¢σηѕє¢тєтυя α#"
 
+#: lms/static/js/staff_debug_actions.js
+msgid "Successfully overrode problem score for {user}"
+msgstr ""
+"Süççéssfüllý övérrödé prößlém sçöré för {user} Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕє¢тєтυя #"
+
+#: lms/static/js/staff_debug_actions.js
+msgid "Could not override problem score for {user}."
+msgstr ""
+"Çöüld nöt övérrïdé prößlém sçöré för {user}. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕє¢тєтυя #"
+
 #: lms/static/js/student_account/account.js
 msgid "The data could not be saved."
 msgstr "Thé dätä çöüld nöt ßé sävéd. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢#"
@@ -4750,6 +5174,10 @@ msgstr ""
 "Pléäsé çhéçk ýöür émäïl tö çönfïrm thé çhängé Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
 "¢σηѕє¢тєтυя #"
 
+#: lms/static/js/student_account/tos_modal.js
+msgid "Terms of Service and Honor Code"
+msgstr "Térms öf Sérvïçé änd Hönör Çödé Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢т#"
+
 #: lms/static/js/student_account/views/FinishAuthView.js
 msgid "Saving your email preference"
 msgstr "Sävïng ýöür émäïl préférénçé Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢#"
@@ -4774,6 +5202,13 @@ msgstr "Löädïng ýöür çöürsés Ⱡ'σяєм ιρѕυм ∂σłσя ѕι�
 #: lms/static/js/student_account/views/RegisterView.js
 msgid "An error occurred."
 msgstr "Àn érrör öççürréd. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт#"
+
+#. Translators: This string is appended to optional field labels on the
+#. student login, registration, and
+#. profile forms.
+#: lms/static/js/student_account/views/FormView.js
+msgid "(optional)"
+msgstr "(öptïönäl) Ⱡ'σяєм ιρѕυм ∂σłσ#"
 
 #: lms/static/js/student_account/views/LoginView.js
 msgid "We couldn't sign you in."
@@ -4841,6 +5276,16 @@ msgstr ""
 "Wé çöüldn't çréäté ýöür äççöünt. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тє#"
 
 #: lms/static/js/student_account/views/RegisterView.js
+#: lms/templates/student_account/register.underscore
+#: test_root/staticfiles/templates/student_account/register.underscore
+msgid "Create Account"
+msgstr "Çréäté Àççöünt Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт#"
+
+#: lms/static/js/student_account/views/RegisterView.js
+msgid "(required)"
+msgstr "(réqüïréd) Ⱡ'σяєм ιρѕυм ∂σłσ#"
+
+#: lms/static/js/student_account/views/RegisterView.js
 msgid "You've successfully signed into %(currentProvider)s."
 msgstr ""
 "Ýöü'vé süççéssfüllý sïgnéd ïntö %(currentProvider)s. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт "
@@ -4855,53 +5300,6 @@ msgstr ""
 "%(platformName)s. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυ#"
 
 #: lms/static/js/student_account/views/account_settings_factory.js
-msgid "Basic Account Information"
-msgstr "Bäsïç Àççöünt Ìnförmätïön Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕ#"
-
-#: lms/static/js/student_account/views/account_settings_factory.js
-msgid ""
-"These settings include basic information about your account. You can also "
-"specify additional information and see your linked social accounts on this "
-"page."
-msgstr ""
-"Thésé séttïngs ïnçlüdé ßäsïç ïnförmätïön äßöüt ýöür äççöünt. Ýöü çän älsö "
-"spéçïfý äddïtïönäl ïnförmätïön änd séé ýöür lïnkéd söçïäl äççöünts ön thïs "
-"pägé. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α∂ιριѕι¢ιηg єłιт, ѕє∂ ∂σ "
-"єιυѕмσ∂ тємρσя ιη¢ι∂ι∂υηт υт łαвσяє єт ∂σłσяє мαgηα αłιqυα. υт єηιм α∂ мιηιм"
-" νєηιαм, qυιѕ ησѕтяυ∂ єχєя¢ιтαтιση υłłαм¢σ łαвσяιѕ ηιѕι υт αłιqυιρ єχ єα "
-"¢σммσ∂σ ¢σηѕєqυαт. ∂υιѕ αυтє ιяυяє ∂σłσя ιη яєρяєнєη∂єяιт ιη νσłυρтαтє νєłιт"
-" єѕѕє ¢ιłłυм ∂σłσяє єυ ƒυgιαт ηυłłα ραяιαтυя. єχ¢єρтєυя ѕιηт σ¢¢αє¢αт "
-"¢υρι∂αтαт ηση ρяσι∂єηт, ѕυηт ιη ¢υłρα qυι σƒƒι¢ια ∂єѕєяυηт мσłł#"
-
-#: lms/static/js/student_account/views/account_settings_factory.js
-msgid ""
-"The name that identifies you throughout {platform_name}. You cannot change "
-"your username."
-msgstr ""
-"Thé nämé thät ïdéntïfïés ýöü thröüghöüt {platform_name}. Ýöü çännöt çhängé "
-"ýöür üsérnämé. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєт#"
-
-#: lms/static/js/student_account/views/account_settings_factory.js
-msgid "Full Name"
-msgstr "Füll Nämé Ⱡ'σяєм ιρѕυм ∂σł#"
-
-#: lms/static/js/student_account/views/account_settings_factory.js
-msgid ""
-"The name that is used for ID verification and appears on your certificates. "
-"Other learners never see your full name. Make sure to enter your name "
-"exactly as it appears on your government-issued photo ID, including any non-"
-"Roman characters."
-msgstr ""
-"Thé nämé thät ïs üséd för ÌD vérïfïçätïön änd äppéärs ön ýöür çértïfïçätés. "
-"Öthér léärnérs névér séé ýöür füll nämé. Mäké süré tö éntér ýöür nämé "
-"éxäçtlý äs ït äppéärs ön ýöür gövérnmént-ïssüéd phötö ÌD, ïnçlüdïng äný nön-"
-"Römän çhäräçtérs. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α∂ιριѕι¢ιηg єłιт,"
-" ѕє∂ ∂σ єιυѕмσ∂ тємρσя ιη¢ι∂ι∂υηт υт łαвσяє єт ∂σłσяє мαgηα αłιqυα. υт єηιм "
-"α∂ мιηιм νєηιαм, qυιѕ ησѕтяυ∂ єχєя¢ιтαтιση υłłαм¢σ łαвσяιѕ ηιѕι υт αłιqυιρ "
-"єχ єα ¢σммσ∂σ ¢σηѕєqυαт. ∂υιѕ αυтє ιяυяє ∂σłσя ιη яєρяєнєη∂єяιт ιη νσłυρтαтє"
-" νєłιт єѕ#"
-
-#: lms/static/js/student_account/views/account_settings_factory.js
 msgid "Email Address"
 msgstr "Émäïl Àddréss Ⱡ'σяєм ιρѕυм ∂σłσя ѕι#"
 
@@ -4912,6 +5310,61 @@ msgid ""
 msgstr ""
 "Thé émäïl äddréss ýöü üsé tö sïgn ïn. Çömmünïçätïöns fröm {platform_name} "
 "änd ýöür çöürsés äré sént tö thïs äddréss. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт α#"
+
+#: lms/static/js/student_account/views/account_settings_factory.js
+msgid ""
+"The email address you use to sign in. Communications from {platform_name} "
+"and your courses are sent to this address.  To change the email address, "
+"please contact {contact_email}."
+msgstr ""
+"Thé émäïl äddréss ýöü üsé tö sïgn ïn. Çömmünïçätïöns fröm {platform_name} "
+"änd ýöür çöürsés äré sént tö thïs äddréss.  Tö çhängé thé émäïl äddréss, "
+"pléäsé çöntäçt {contact_email}. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя "
+"α∂ιριѕι¢ιηg єłιт, ѕє∂ ∂σ єιυѕмσ∂ тємρσя ιη¢ι∂ι∂υηт υт łαвσяє єт ∂σłσяє мαgηα"
+" αłιqυα. υт єηιм α∂ мιηιм νєηιαм, qυιѕ ησѕтяυ∂ єχєя¢ιтαтιση υłłαм¢σ łαвσяιѕ "
+"ηιѕι υт αłιqυιρ єχ єα ¢σммσ∂σ ¢σηѕєqυαт. ∂υιѕ αυтє ιяυяє ∂σłσя ιη "
+"яєρяєнєη∂єяιт ιη νσłυρтαтє νєłιт єѕѕє ¢ιłłυм ∂σłσяє єυ ƒυgιαт ηυłłα "
+"ραяιαтυя. єχ¢єρтєυя ѕιηт σ¢¢αє¢αт ¢υρι∂αтαт ηση ρяσι∂єηт, ѕυηт ιη ¢υłρα qυι "
+"σƒƒι¢ια ∂єѕєяυηт мσłł#"
+
+#: lms/static/js/student_account/views/account_settings_factory.js
+msgid "Basic Account Information"
+msgstr "Bäsïç Àççöünt Ìnförmätïön Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕ#"
+
+#: lms/static/js/student_account/views/account_settings_factory.js
+msgid "These settings include basic information about your account."
+msgstr ""
+"Thésé séttïngs ïnçlüdé ßäsïç ïnförmätïön äßöüt ýöür äççöünt. Ⱡ'σяєм ιρѕυм "
+"∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α#"
+
+#: lms/static/js/student_account/views/account_settings_factory.js
+msgid ""
+"The name that identifies you throughout {platform_name}. You cannot change "
+"your username."
+msgstr ""
+"Thé nämé thät ïdéntïfïés ýöü thröüghöüt {platform_name}. Ýöü çännöt çhängé "
+"ýöür üsérnämé. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєт#"
+
+#: lms/static/js/student_account/views/account_settings_factory.js
+#: openedx/features/learner_profile/static/learner_profile/js/learner_profile_factory.js
+msgid "Full Name"
+msgstr "Füll Nämé Ⱡ'σяєм ιρѕυм ∂σł#"
+
+#: lms/static/js/student_account/views/account_settings_factory.js
+msgid ""
+"The name that is used for ID verification and that appears on your "
+"certificates. Other learners see your full name if you have selected "
+"{bold_start}Full Profile{bold_end} for profile visibility. Make sure to "
+"enter your name exactly as it appears on your photo ID, including any non-"
+"Roman characters."
+msgstr ""
+"Thé nämé thät ïs üséd för ÌD vérïfïçätïön änd thät äppéärs ön ýöür "
+"çértïfïçätés. Öthér léärnérs séé ýöür füll nämé ïf ýöü hävé séléçtéd "
+"{bold_start}Füll Pröfïlé{bold_end} för pröfïlé vïsïßïlïtý. Mäké süré tö "
+"éntér ýöür nämé éxäçtlý äs ït äppéärs ön ýöür phötö ÌD, ïnçlüdïng äný nön-"
+"Römän çhäräçtérs. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α∂ιριѕι¢ιηg єłιт,"
+" ѕє∂ ∂σ єιυѕмσ∂ тємρσя ιη¢ι∂ι∂υηт υт łαвσяє єт ∂σłσяє мαgηα αłιqυα. υт єηιм "
+"α∂ мιηιм νєηιαм, qυιѕ ησѕтяυ∂ єχєя¢ιтαтιση υłłαм¢σ łαвσяιѕ ηιѕι υт αłιqυιρ#"
 
 #: lms/static/js/student_account/views/account_settings_factory.js
 #: lms/templates/student_account/account.underscore
@@ -4947,8 +5400,14 @@ msgstr ""
 "ä lïmïtéd nümßér öf längüägés. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт #"
 
 #: lms/static/js/student_account/views/account_settings_factory.js
-msgid "Country or Region"
-msgstr "Çöüntrý ör Régïön Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмє#"
+msgid "Country or Region of Residence"
+msgstr "Çöüntrý ör Régïön öf Résïdénçé Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢т#"
+
+#: lms/static/js/student_account/views/account_settings_factory.js
+msgid "The country or region where you live."
+msgstr ""
+"Thé çöüntrý ör régïön whéré ýöü lïvé. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕє¢тєтυ#"
 
 #: lms/static/js/student_account/views/account_settings_factory.js
 msgid "Time Zone"
@@ -4994,9 +5453,29 @@ msgid "Year of Birth"
 msgstr "Ýéär öf Bïrth Ⱡ'σяєм ιρѕυм ∂σłσя ѕι#"
 
 #: lms/static/js/student_account/views/account_settings_factory.js
-#: lms/static/js/student_profile/views/learner_profile_factory.js
+#: openedx/features/learner_profile/static/learner_profile/js/learner_profile_factory.js
 msgid "Preferred Language"
 msgstr "Préférréd Längüägé Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт#"
+
+#: lms/static/js/student_account/views/account_settings_factory.js
+msgid "Social Media Links"
+msgstr "Söçïäl Médïä Lïnks Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт#"
+
+#: lms/static/js/student_account/views/account_settings_factory.js
+msgid ""
+"Optionally, link your personal accounts to the social media icons on your "
+"edX profile."
+msgstr ""
+"Öptïönällý, lïnk ýöür pérsönäl äççöünts tö thé söçïäl médïä ïçöns ön ýöür "
+"édX pröfïlé. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢#"
+
+#: lms/static/js/student_account/views/account_settings_factory.js
+msgid " Link"
+msgstr " Lïnk Ⱡ'σяєм ιρѕ#"
+
+#: lms/static/js/student_account/views/account_settings_factory.js
+msgid "Enter your "
+msgstr "Éntér ýöür  Ⱡ'σяєм ιρѕυм ∂σłσя #"
 
 #: lms/static/js/student_account/views/account_settings_factory.js
 #: lms/static/js/student_account/views/account_settings_view.js
@@ -5056,11 +5535,19 @@ msgstr ""
 
 #: lms/static/js/student_account/views/account_settings_fields.js
 msgid ""
-"We've sent a message to {email_address}. Click the link in the message to "
-"reset your password."
+"We've sent a message to {email}. Click the link in the message to reset your"
+" password. Didn't receive the message? Contact {anchorStart}technical "
+"support{anchorEnd}."
 msgstr ""
-"Wé'vé sént ä méssägé tö {email_address}. Çlïçk thé lïnk ïn thé méssägé tö "
-"rését ýöür pässwörd. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тє#"
+"Wé'vé sént ä méssägé tö {email}. Çlïçk thé lïnk ïn thé méssägé tö rését ýöür"
+" pässwörd. Dïdn't réçéïvé thé méssägé? Çöntäçt {anchorStart}téçhnïçäl "
+"süppört{anchorEnd}. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α∂ιριѕι¢ιηg "
+"єłιт, ѕє∂ ∂σ єιυѕмσ∂ тємρσя ιη¢ι∂ι∂υηт υт łαвσяє єт ∂σłσяє мαgηα αłιqυα. υт "
+"єηιм α∂ мιηιм νєηιαм, qυιѕ ησѕтяυ∂ єχєя¢ιтαтιση υłłαм¢σ łαвσяιѕ ηιѕι υт "
+"αłιqυιρ єχ єα ¢σммσ∂σ ¢σηѕєqυαт. ∂υιѕ αυтє ιяυяє ∂σłσя ιη яєρяєнєη∂єяιт ιη "
+"νσłυρтαтє νєłιт єѕѕє ¢ιłłυм ∂σłσяє єυ ƒυgιαт ηυłłα ραяιαтυя. єχ¢єρтєυя ѕιηт "
+"σ¢¢αє¢αт ¢υρι∂αтαт ηση ρяσι∂єηт, ѕυηт ιη ¢υłρα qυι σƒƒι¢ια ∂єѕєяυηт мσłłιт "
+"αηιм ι∂ єѕ#"
 
 #: lms/static/js/student_account/views/account_settings_fields.js
 msgid "Link your {accountName} account"
@@ -5114,91 +5601,6 @@ msgstr "Àççöünt Ìnförmätïön Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт
 #: lms/static/js/student_account/views/account_settings_view.js
 msgid "Order History"
 msgstr "Ördér Hïstörý Ⱡ'σяєм ιρѕυм ∂σłσя ѕι#"
-
-#: lms/static/js/student_profile/views/badge_list_container.js
-msgid "Accomplishments Pagination"
-msgstr "Àççömplïshménts Pägïnätïön Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕ#"
-
-#: lms/static/js/student_profile/views/learner_profile_factory.js
-msgid "{platform_name} learners can see my:"
-msgstr ""
-"{platform_name} léärnérs çän séé mý: Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢ση#"
-
-#: lms/static/js/student_profile/views/learner_profile_factory.js
-msgid "Limited Profile"
-msgstr "Lïmïtéd Pröfïlé Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт α#"
-
-#: lms/static/js/student_profile/views/learner_profile_factory.js
-msgid "Full Profile"
-msgstr "Füll Pröfïlé Ⱡ'σяєм ιρѕυм ∂σłσя ѕ#"
-
-#: lms/static/js/student_profile/views/learner_profile_factory.js
-msgid "Add Country"
-msgstr "Àdd Çöüntrý Ⱡ'σяєм ιρѕυм ∂σłσя #"
-
-#: lms/static/js/student_profile/views/learner_profile_factory.js
-msgid "Add language"
-msgstr "Àdd längüägé Ⱡ'σяєм ιρѕυм ∂σłσя ѕ#"
-
-#: lms/static/js/student_profile/views/learner_profile_factory.js
-msgid "About me"
-msgstr "Àßöüt mé Ⱡ'σяєм ιρѕυм ∂#"
-
-#: lms/static/js/student_profile/views/learner_profile_factory.js
-msgid ""
-"Tell other learners a little about yourself: where you live, what your "
-"interests are, why you're taking courses, or what you hope to learn."
-msgstr ""
-"Téll öthér léärnérs ä lïttlé äßöüt ýöürsélf: whéré ýöü lïvé, whät ýöür "
-"ïntérésts äré, whý ýöü'ré täkïng çöürsés, ör whät ýöü höpé tö léärn. Ⱡ'σяєм "
-"ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α∂ιριѕι¢ιηg єłιт, ѕє∂ ∂σ єιυѕмσ∂ тємρσя "
-"ιη¢ι∂ι∂υηт υт łαвσяє єт ∂σłσяє мαgηα αłιqυα. υт єηιм α∂ мιηιм νєηιαм, qυιѕ "
-"ησѕтяυ∂ єχєя¢ιтαтιση υłłαм¢σ łαвσяιѕ ηιѕι υт αłιqυιρ єχ єα ¢σммσ∂σ "
-"¢σηѕєqυαт. ∂υιѕ αυтє ιяυяє ∂σłσя ιη яєρяєнєη∂єяιт ιη νσłυρтαтє νєłιт єѕѕє "
-"¢ιłłυм ∂σłσяє єυ ƒυgιαт ηυłłα ραяιαтυя. єχ¢єρтєυя ѕιηт σ¢¢αє¢αт ¢υρι∂αтαт "
-"ηση ρяσι∂єηт, ѕυηт ιη ¢υłρα qυι σƒƒι¢ια ∂єѕєяυηт мσłłιт αηιм ι∂ єѕт łα#"
-
-#: lms/static/js/student_profile/views/learner_profile_fields.js
-msgid "Account Settings page."
-msgstr "Àççöünt Séttïngs pägé. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢#"
-
-#: lms/static/js/student_profile/views/learner_profile_fields.js
-msgid ""
-"You must specify your birth year before you can share your full profile. To "
-"specify your birth year, go to the {account_settings_page_link}"
-msgstr ""
-"Ýöü müst spéçïfý ýöür ßïrth ýéär ßéföré ýöü çän shäré ýöür füll pröfïlé. Tö "
-"spéçïfý ýöür ßïrth ýéär, gö tö thé {account_settings_page_link} Ⱡ'σяєм ιρѕυм"
-" ∂σł#"
-
-#: lms/static/js/student_profile/views/learner_profile_fields.js
-msgid ""
-"You must be over 13 to share a full profile. If you are over 13, make sure "
-"that you have specified a birth year on the {account_settings_page_link}"
-msgstr ""
-"Ýöü müst ßé övér 13 tö shäré ä füll pröfïlé. Ìf ýöü äré övér 13, mäké süré "
-"thät ýöü hävé spéçïfïéd ä ßïrth ýéär ön thé {account_settings_page_link} "
-"Ⱡ'σяєм ιρѕ#"
-
-#: lms/static/js/student_profile/views/learner_profile_fields.js
-msgid "Profile Image"
-msgstr "Pröfïlé Ìmägé Ⱡ'σяєм ιρѕυм ∂σłσя ѕι#"
-
-#: lms/static/js/student_profile/views/learner_profile_fields.js
-msgid "Profile image for {username}"
-msgstr "Pröfïlé ïmägé för {username} Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, #"
-
-#: lms/static/js/student_profile/views/learner_profile_view.js
-msgid "About Me"
-msgstr "Àßöüt Mé Ⱡ'σяєм ιρѕυм ∂#"
-
-#: lms/static/js/student_profile/views/learner_profile_view.js
-msgid "Accomplishments"
-msgstr "Àççömplïshménts Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт α#"
-
-#: lms/static/js/student_profile/views/learner_profile_view.js
-msgid "Profile"
-msgstr "Pröfïlé Ⱡ'σяєм ιρѕυм #"
 
 #: lms/static/js/verify_student/views/image_input_view.js
 msgid "Image Upload Error"
@@ -5267,6 +5669,8 @@ msgstr ""
 "¢σηѕє¢тєтυя #"
 
 #: lms/static/js/verify_student/views/make_payment_step_view.js
+#: openedx/features/course_bookmarks/static/course_bookmarks/js/views/bookmark_button.js
+#: openedx/features/course_bookmarks/static/course_bookmarks/js/views/bookmarks_list.js
 msgid "An error has occurred. Please try again."
 msgstr ""
 "Àn érrör häs öççürréd. Pléäsé trý ägäïn. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
@@ -5465,6 +5869,112 @@ msgstr "Nümßér öf Stüdénts Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αм
 msgid "Overall Score"
 msgstr "Övéräll Sçöré Ⱡ'σяєм ιρѕυм ∂σłσя ѕι#"
 
+#: openedx/features/course_bookmarks/static/course_bookmarks/js/views/bookmark_button.js
+msgid "Bookmark this page"
+msgstr "Böökmärk thïs pägé Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт#"
+
+#: openedx/features/course_search/static/course_search/js/views/search_results_view.js
+msgid "{total_results} result"
+msgid_plural "{total_results} results"
+msgstr[0] "{total_results} résült Ⱡ'σяєм ιρѕυм ∂σłσ#"
+msgstr[1] "{total_results} résülts Ⱡ'σяєм ιρѕυм ∂σłσя #"
+
+#: openedx/features/learner_profile/static/learner_profile/js/learner_profile_factory.js
+msgid "Profile Visibility:"
+msgstr "Pröfïlé Vïsïßïlïtý: Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт,#"
+
+#: openedx/features/learner_profile/static/learner_profile/js/learner_profile_factory.js
+msgid "Limited Profile"
+msgstr "Lïmïtéd Pröfïlé Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт α#"
+
+#: openedx/features/learner_profile/static/learner_profile/js/learner_profile_factory.js
+msgid "Full Profile"
+msgstr "Füll Pröfïlé Ⱡ'σяєм ιρѕυм ∂σłσя ѕ#"
+
+#: openedx/features/learner_profile/static/learner_profile/js/learner_profile_factory.js
+msgid "Joined"
+msgstr "Jöïnéd Ⱡ'σяєм ιρѕυ#"
+
+#: openedx/features/learner_profile/static/learner_profile/js/learner_profile_factory.js
+msgid "Joined Date"
+msgstr "Jöïnéd Däté Ⱡ'σяєм ιρѕυм ∂σłσя #"
+
+#: openedx/features/learner_profile/static/learner_profile/js/learner_profile_factory.js
+msgid "Location"
+msgstr "Löçätïön Ⱡ'σяєм ιρѕυм ∂#"
+
+#: openedx/features/learner_profile/static/learner_profile/js/learner_profile_factory.js
+msgid "Add Country"
+msgstr "Àdd Çöüntrý Ⱡ'σяєм ιρѕυм ∂σłσя #"
+
+#: openedx/features/learner_profile/static/learner_profile/js/learner_profile_factory.js
+msgid "Add language"
+msgstr "Àdd längüägé Ⱡ'σяєм ιρѕυм ∂σłσя ѕ#"
+
+#: openedx/features/learner_profile/static/learner_profile/js/learner_profile_factory.js
+msgid "About me"
+msgstr "Àßöüt mé Ⱡ'σяєм ιρѕυм ∂#"
+
+#: openedx/features/learner_profile/static/learner_profile/js/learner_profile_factory.js
+msgid ""
+"Tell other learners a little about yourself: where you live, what your "
+"interests are, why you're taking courses, or what you hope to learn."
+msgstr ""
+"Téll öthér léärnérs ä lïttlé äßöüt ýöürsélf: whéré ýöü lïvé, whät ýöür "
+"ïntérésts äré, whý ýöü'ré täkïng çöürsés, ör whät ýöü höpé tö léärn. Ⱡ'σяєм "
+"ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α∂ιριѕι¢ιηg єłιт, ѕє∂ ∂σ єιυѕмσ∂ тємρσя "
+"ιη¢ι∂ι∂υηт υт łαвσяє єт ∂σłσяє мαgηα αłιqυα. υт єηιм α∂ мιηιм νєηιαм, qυιѕ "
+"ησѕтяυ∂ єχєя¢ιтαтιση υłłαм¢σ łαвσяιѕ ηιѕι υт αłιqυιρ єχ єα ¢σммσ∂σ "
+"¢σηѕєqυαт. ∂υιѕ αυтє ιяυяє ∂σłσя ιη яєρяєнєη∂єяιт ιη νσłυρтαтє νєłιт єѕѕє "
+"¢ιłłυм ∂σłσяє єυ ƒυgιαт ηυłłα ραяιαтυя. єχ¢єρтєυя ѕιηт σ¢¢αє¢αт ¢υρι∂αтαт "
+"ηση ρяσι∂єηт, ѕυηт ιη ¢υłρα qυι σƒƒι¢ια ∂єѕєяυηт мσłłιт αηιм ι∂ єѕт łα#"
+
+#: openedx/features/learner_profile/static/learner_profile/js/views/badge_list_container.js
+msgid "Accomplishments Pagination"
+msgstr "Àççömplïshménts Pägïnätïön Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕ#"
+
+#: openedx/features/learner_profile/static/learner_profile/js/views/learner_profile_fields.js
+msgid "Account Settings page."
+msgstr "Àççöünt Séttïngs pägé. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢#"
+
+#: openedx/features/learner_profile/static/learner_profile/js/views/learner_profile_fields.js
+msgid ""
+"You must specify your birth year before you can share your full profile. To "
+"specify your birth year, go to the {account_settings_page_link}"
+msgstr ""
+"Ýöü müst spéçïfý ýöür ßïrth ýéär ßéföré ýöü çän shäré ýöür füll pröfïlé. Tö "
+"spéçïfý ýöür ßïrth ýéär, gö tö thé {account_settings_page_link} Ⱡ'σяєм ιρѕυм"
+" ∂σł#"
+
+#: openedx/features/learner_profile/static/learner_profile/js/views/learner_profile_fields.js
+msgid ""
+"You must be over 13 to share a full profile. If you are over 13, make sure "
+"that you have specified a birth year on the {account_settings_page_link}"
+msgstr ""
+"Ýöü müst ßé övér 13 tö shäré ä füll pröfïlé. Ìf ýöü äré övér 13, mäké süré "
+"thät ýöü hävé spéçïfïéd ä ßïrth ýéär ön thé {account_settings_page_link} "
+"Ⱡ'σяєм ιρѕ#"
+
+#: openedx/features/learner_profile/static/learner_profile/js/views/learner_profile_fields.js
+msgid "Profile Image"
+msgstr "Pröfïlé Ìmägé Ⱡ'σяєм ιρѕυм ∂σłσя ѕι#"
+
+#: openedx/features/learner_profile/static/learner_profile/js/views/learner_profile_fields.js
+msgid "Profile image for {username}"
+msgstr "Pröfïlé ïmägé för {username} Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, #"
+
+#: openedx/features/learner_profile/static/learner_profile/js/views/learner_profile_view.js
+msgid "About Me"
+msgstr "Àßöüt Mé Ⱡ'σяєм ιρѕυм ∂#"
+
+#: openedx/features/learner_profile/static/learner_profile/js/views/learner_profile_view.js
+msgid "Accomplishments"
+msgstr "Àççömplïshménts Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт α#"
+
+#: openedx/features/learner_profile/static/learner_profile/js/views/learner_profile_view.js
+msgid "Profile"
+msgstr "Pröfïlé Ⱡ'σяєм ιρѕυм #"
+
 #: cms/static/cms/js/main.js cms/static/js/views/active_video_upload_list.js
 msgid ""
 "This may be happening because of an error with our server or your internet "
@@ -5596,52 +6106,6 @@ msgstr "ÀBÇDÉFGHÌJKLMNÖPQRSTÛVWXÝZ Ⱡ'σяєм ιρѕυм ∂σłσя ѕ
 msgid "Your export has failed."
 msgstr "Ýöür éxpört häs fäïléd. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σ#"
 
-#: cms/static/js/factories/import.js
-msgid "There was an error while importing the new library to our database."
-msgstr ""
-"Théré wäs än érrör whïlé ïmpörtïng thé néw lïßrärý tö öür dätäßäsé. Ⱡ'σяєм "
-"ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя #"
-
-#: cms/static/js/factories/import.js
-msgid "There was an error while importing the new course to our database."
-msgstr ""
-"Théré wäs än érrör whïlé ïmpörtïng thé néw çöürsé tö öür dätäßäsé. Ⱡ'σяєм "
-"ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя #"
-
-#: cms/static/js/factories/import.js
-msgid "There was an error during the upload process."
-msgstr ""
-"Théré wäs än érrör dürïng thé üplöäd pröçéss. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
-"¢σηѕє¢тєтυя #"
-
-#: cms/static/js/factories/import.js
-msgid "There was an error while unpacking the file."
-msgstr ""
-"Théré wäs än érrör whïlé ünpäçkïng thé fïlé. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
-"¢σηѕє¢тєтυя #"
-
-#: cms/static/js/factories/import.js
-msgid "There was an error while verifying the file you submitted."
-msgstr ""
-"Théré wäs än érrör whïlé vérïfýïng thé fïlé ýöü süßmïttéd. Ⱡ'σяєм ιρѕυм "
-"∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α#"
-
-#: cms/static/js/factories/import.js
-msgid "Choose new file"
-msgstr "Çhöösé néw fïlé Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт α#"
-
-#: cms/static/js/factories/import.js
-msgid "Your import has failed."
-msgstr "Ýöür ïmpört häs fäïléd. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σ#"
-
-#: cms/static/js/factories/import.js
-msgid ""
-"File format not supported. Please upload a file with a {file_extension} "
-"extension."
-msgstr ""
-"Fïlé förmät nöt süppörtéd. Pléäsé üplöäd ä fïlé wïth ä {file_extension} "
-"éxténsïön. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя #"
-
 #: cms/static/js/factories/manage_users.js
 msgid "Already a course team member"
 msgstr "Àlréädý ä çöürsé téäm mémßér Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢#"
@@ -5696,6 +6160,66 @@ msgid "You have unsaved changes. Do you really want to leave this page?"
 msgstr ""
 "Ýöü hävé ünsävéd çhängés. Dö ýöü réällý wänt tö léävé thïs pägé? Ⱡ'σяєм "
 "ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α#"
+
+#: cms/static/js/features/import/factories/import.js
+msgid "There was an error during the upload process."
+msgstr ""
+"Théré wäs än érrör dürïng thé üplöäd pröçéss. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕє¢тєтυя #"
+
+#: cms/static/js/features/import/factories/import.js
+msgid "There was an error while unpacking the file."
+msgstr ""
+"Théré wäs än érrör whïlé ünpäçkïng thé fïlé. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕє¢тєтυя #"
+
+#: cms/static/js/features/import/factories/import.js
+msgid "There was an error while verifying the file you submitted."
+msgstr ""
+"Théré wäs än érrör whïlé vérïfýïng thé fïlé ýöü süßmïttéd. Ⱡ'σяєм ιρѕυм "
+"∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α#"
+
+#: cms/static/js/features/import/factories/import.js
+msgid "Choose new file"
+msgstr "Çhöösé néw fïlé Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт α#"
+
+#: cms/static/js/features/import/factories/import.js
+msgid ""
+"File format not supported. Please upload a file with a {ext} extension."
+msgstr ""
+"Fïlé förmät nöt süppörtéd. Pléäsé üplöäd ä fïlé wïth ä {ext} éxténsïön. "
+"Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя #"
+
+#: cms/static/js/features/import/factories/import.js
+msgid "There was an error while importing the new library to our database."
+msgstr ""
+"Théré wäs än érrör whïlé ïmpörtïng thé néw lïßrärý tö öür dätäßäsé. Ⱡ'σяєм "
+"ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя #"
+
+#: cms/static/js/features/import/factories/import.js
+msgid "There was an error while importing the new course to our database."
+msgstr ""
+"Théré wäs än érrör whïlé ïmpörtïng thé néw çöürsé tö öür dätäßäsé. Ⱡ'σяєм "
+"ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя #"
+
+#: cms/static/js/features/import/factories/import.js
+msgid "Your import has failed."
+msgstr "Ýöür ïmpört häs fäïléd. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σ#"
+
+#: cms/static/js/features/import/views/import.js
+msgid "Your import is in progress; navigating away will abort it."
+msgstr ""
+"Ýöür ïmpört ïs ïn prögréss; nävïgätïng äwäý wïll äßört ït. Ⱡ'σяєм ιρѕυм "
+"∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α#"
+
+#: cms/static/js/features/import/views/import.js
+msgid "Error importing course"
+msgstr "Érrör ïmpörtïng çöürsé Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢#"
+
+#: cms/static/js/features/import/views/import.js
+msgid "There was an error with the upload"
+msgstr ""
+"Théré wäs än érrör wïth thé üplöäd Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєт#"
 
 #: cms/static/js/maintenance/force_publish_course.js
 msgid "Internal Server Error."
@@ -5805,6 +6329,12 @@ msgstr ""
 "∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α#"
 
 #: cms/static/js/models/settings/course_details.js
+msgid "The certificate available date must be later than the course end date."
+msgstr ""
+"Thé çértïfïçäté äväïläßlé däté müst ßé lätér thän thé çöürsé énd däté. "
+"Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя #"
+
+#: cms/static/js/models/settings/course_details.js
 msgid "Key should only contain letters, numbers, _, or -"
 msgstr ""
 "Kéý shöüld önlý çöntäïn léttérs, nümßérs, _, ör - Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт "
@@ -5815,6 +6345,12 @@ msgid "Please enter an integer between %(min)s and %(max)s."
 msgstr ""
 "Pléäsé éntér än ïntégér ßétwéén %(min)s änd %(max)s. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт "
 "αмєт, ¢σηѕє¢тєтυя #"
+
+#: cms/static/js/models/settings/course_grader.js
+msgid "The assignment type must have a name."
+msgstr ""
+"Thé ässïgnmént týpé müst hävé ä nämé. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕє¢тєтυ#"
 
 #: cms/static/js/models/settings/course_grader.js
 msgid "There's already another assignment type with this name."
@@ -5890,6 +6426,11 @@ msgid "or"
 msgstr "ör Ⱡ'σя#"
 
 #: cms/static/js/models/xblock_validation.js
+msgid "This unit has validation issues."
+msgstr ""
+"Thïs ünït häs välïdätïön ïssüés. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тє#"
+
+#: cms/static/js/models/xblock_validation.js
 msgid "This component has validation issues."
 msgstr ""
 "Thïs çömpönént häs välïdätïön ïssüés. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
@@ -5898,6 +6439,27 @@ msgstr ""
 #: cms/static/js/views/active_video_upload.js cms/static/js/views/assets.js
 msgid "Your file could not be uploaded"
 msgstr "Ýöür fïlé çöüld nöt ßé üplöädéd Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢т#"
+
+#: cms/static/js/views/active_video_upload_list.js
+msgid "Upload Videos"
+msgstr "Ûplöäd Vïdéös Ⱡ'σяєм ιρѕυм ∂σłσя ѕι#"
+
+#: cms/static/js/views/active_video_upload_list.js
+msgid "Drag and drop or {spanStart}browse your computer{spanEnd}."
+msgstr ""
+"Dräg änd dröp ör {spanStart}ßröwsé ýöür çömpütér{spanEnd}. Ⱡ'σяєм ιρѕυм "
+"∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя #"
+
+#: cms/static/js/views/active_video_upload_list.js
+msgid "Maximum file size: {maxFileSize} GB"
+msgstr ""
+"Mäxïmüm fïlé sïzé: {maxFileSize} GB Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕ#"
+
+#: cms/static/js/views/active_video_upload_list.js
+msgid "Supported file types: {supportedVideoTypes}"
+msgstr ""
+"Süppörtéd fïlé týpés: {supportedVideoTypes} Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕ#"
 
 #: cms/static/js/views/active_video_upload_list.js
 msgid "Your video uploads are not complete."
@@ -6015,6 +6577,50 @@ msgstr "Çréäté Ré-rün Ⱡ'σяєм ιρѕυм ∂σłσя ѕι#"
 msgid "Processing Re-run Request"
 msgstr "Pröçéssïng Ré-rün Réqüést Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕ#"
 
+#: cms/static/js/views/course_video_settings.js
+msgid "An error has occurred. Wait a few minutes, and then try again."
+msgstr ""
+"Àn érrör häs öççürréd. Wäït ä féw mïnütés, änd thén trý ägäïn. Ⱡ'σяєм ιρѕυм "
+"∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α#"
+
+#: cms/static/js/views/course_video_settings.js
+msgid "Select turnaround"
+msgstr "Séléçt türnäröünd Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмє#"
+
+#: cms/static/js/views/course_video_settings.js
+msgid "Select fidelity"
+msgstr "Séléçt fïdélïtý Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт α#"
+
+#: cms/static/js/views/course_video_settings.js
+msgid "Select language"
+msgstr "Séléçt längüägé Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт α#"
+
+#: cms/static/js/views/course_video_settings.js
+msgid "Press Remove to remove language"
+msgstr "Préss Rémövé tö rémövé längüägé Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢т#"
+
+#: cms/static/js/views/course_video_settings.js
+msgid "Settings updated"
+msgstr "Séttïngs üpdätéd Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αм#"
+
+#: cms/static/js/views/course_video_settings.js
+#: cms/templates/js/course-video-settings-update-settings-footer.underscore
+msgid "Last updated"
+msgstr "Läst üpdätéd Ⱡ'σяєм ιρѕυм ∂σłσя ѕ#"
+
+#: cms/static/js/views/course_video_settings.js
+msgid "Required"
+msgstr "Réqüïréd Ⱡ'σяєм ιρѕυм ∂#"
+
+#: cms/static/js/views/course_video_settings.js
+msgid "Automatic transcripts are disabled."
+msgstr ""
+"Àütömätïç tränsçrïpts äré dïsäßléd. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєт#"
+
+#: cms/static/js/views/course_video_settings.js
+msgid "{selectedProvider} credentials saved"
+msgstr "{selectedProvider} çrédéntïäls sävéd Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, #"
+
 #: cms/static/js/views/edit_chapter.js
 msgid "Upload a new PDF to “<%= name %>”"
 msgstr "Ûplöäd ä néw PDF tö “<%= name %>” Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕ#"
@@ -6118,12 +6724,14 @@ msgstr "Nöt ïn Ûsé Ⱡ'σяєм ιρѕυм ∂σłσ#"
 
 #. Translators: 'count' is number of units that the group
 #. configuration is used in.
+#. Translators: 'count' is number of locations that the group
+#. configuration is used in.
 #: cms/static/js/views/group_configuration_details.js
 #: cms/static/js/views/partition_group_details.js
-msgid "Used in {count} unit"
-msgid_plural "Used in {count} units"
-msgstr[0] "Ûséd ïn {count} ünït Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αм#"
-msgstr[1] "Ûséd ïn {count} ünïts Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмє#"
+msgid "Used in {count} location"
+msgid_plural "Used in {count} locations"
+msgstr[0] "Ûséd ïn {count} löçätïön Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, #"
+msgstr[1] "Ûséd ïn {count} löçätïöns Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, #"
 
 #. Translators: this refers to a collection of groups.
 #: cms/static/js/views/group_configuration_item.js
@@ -6141,21 +6749,6 @@ msgid "You have not created any group configurations yet."
 msgstr ""
 "Ýöü hävé nöt çréätéd äný gröüp çönfïgürätïöns ýét. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт "
 "αмєт, ¢σηѕє¢тєтυя α#"
-
-#: cms/static/js/views/import.js
-msgid "Your import is in progress; navigating away will abort it."
-msgstr ""
-"Ýöür ïmpört ïs ïn prögréss; nävïgätïng äwäý wïll äßört ït. Ⱡ'σяєм ιρѕυм "
-"∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α#"
-
-#: cms/static/js/views/import.js
-msgid "Error importing course"
-msgstr "Érrör ïmpörtïng çöürsé Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢#"
-
-#: cms/static/js/views/import.js
-msgid "There was an error with the upload"
-msgstr ""
-"Théré wäs än érrör wïth thé üplöäd Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєт#"
 
 #: cms/static/js/views/instructor_info.js
 msgid "Upload instructor image."
@@ -6338,11 +6931,6 @@ msgid "{display_name} Settings"
 msgstr "{display_name} Séttïngs Ⱡ'σяєм ιρѕυм ∂σłσя ѕ#"
 
 #: cms/static/js/views/modals/course_outline_modals.js
-msgid "Change the settings for {display_name}"
-msgstr ""
-"Çhängé thé séttïngs för {display_name} Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє#"
-
-#: cms/static/js/views/modals/course_outline_modals.js
 msgid "Publish {display_name}"
 msgstr "Püßlïsh {display_name} Ⱡ'σяєм ιρѕυм ∂σłσя #"
 
@@ -6359,6 +6947,26 @@ msgid "Publish"
 msgstr "Püßlïsh Ⱡ'σяєм ιρѕυм #"
 
 #: cms/static/js/views/modals/course_outline_modals.js
+msgid "Highlights for {display_name}"
+msgstr "Hïghlïghts för {display_name} Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт#"
+
+#: cms/static/js/views/modals/course_outline_modals.js
+msgid "Enable Weekly Highlight Emails"
+msgstr "Énäßlé Wééklý Hïghlïght Émäïls Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢т#"
+
+#: cms/static/js/views/modals/course_outline_modals.js
+msgid "Enable"
+msgstr "Énäßlé Ⱡ'σяєм ιρѕυ#"
+
+#: cms/static/js/views/modals/course_outline_modals.js
+msgid "Not yet"
+msgstr "Nöt ýét Ⱡ'σяєм ιρѕυм #"
+
+#: cms/static/js/views/modals/course_outline_modals.js
+msgid "All Learners and Staff"
+msgstr "Àll Léärnérs änd Stäff Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢#"
+
+#: cms/static/js/views/modals/course_outline_modals.js
 msgid "Basic"
 msgstr "Bäsïç Ⱡ'σяєм ιρѕ#"
 
@@ -6370,6 +6978,12 @@ msgstr "Vïsïßïlïtý Ⱡ'σяєм ιρѕυм ∂σłσ#"
 #: cms/static/js/views/modals/edit_xblock.js
 msgid "Editing: %(title)s"
 msgstr "Édïtïng: %(title)s Ⱡ'σяєм ιρѕυм ∂σłσя ѕ#"
+
+#: cms/static/js/views/modals/edit_xblock.js
+#: lms/templates/ccx/schedule.underscore
+#: test_root/staticfiles/templates/ccx/schedule.underscore
+msgid "Unit"
+msgstr "Ûnït Ⱡ'σяєм ι#"
 
 #: cms/static/js/views/modals/edit_xblock.js
 msgid "Component"
@@ -6437,16 +7051,19 @@ msgstr "Çöürsé Öütlïné Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт#"
 msgid "Date added"
 msgstr "Däté äddéd Ⱡ'σяєм ιρѕυм ∂σłσ#"
 
-#. Translators: "title" is the name of the current component being edited.
+#. Translators: "title" is the name of the current component or unit being
+#. edited.
 #: cms/static/js/views/pages/container.js
-msgid "Editing visibility for: %(title)s"
-msgstr "Édïtïng vïsïßïlïtý för: %(title)s Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє#"
+msgid "Editing access for: %(title)s"
+msgstr "Édïtïng äççéss för: %(title)s Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σ#"
 
 #: cms/static/js/views/pages/container_subviews.js
 msgid "Publishing"
 msgstr "Püßlïshïng Ⱡ'σяєм ιρѕυм ∂σłσ#"
 
 #: cms/static/js/views/pages/container_subviews.js
+#: cms/templates/js/course-video-settings-update-org-credentials-footer.underscore
+#: cms/templates/js/course-video-settings-update-settings-footer.underscore
 #: cms/templates/js/publish-xblock.underscore
 msgid "Discard Changes"
 msgstr "Dïsçärd Çhängés Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт α#"
@@ -6582,13 +7199,6 @@ msgid "You have not created any content groups yet."
 msgstr ""
 "Ýöü hävé nöt çréätéd äný çöntént gröüps ýét. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
 "¢σηѕє¢тєтυя #"
-
-#. Translators: This is listed as the duration for a video
-#. that has not yet reached the point in its processing by
-#. the servers where its duration is determined.
-#: cms/static/js/views/previous_video_upload.js
-msgid "Pending"
-msgstr "Péndïng Ⱡ'σяєм ιρѕυм #"
 
 #: cms/static/js/views/previous_video_upload.js
 msgid "Are you sure you want to remove this video from the list?"
@@ -6799,6 +7409,7 @@ msgid "subsection"
 msgstr "süßséçtïön Ⱡ'σяєм ιρѕυм ∂σłσ#"
 
 #: cms/static/js/views/utils/xblock_utils.js
+#: cms/templates/js/container-access.underscore
 msgid "unit"
 msgstr "ünït Ⱡ'σяєм ι#"
 
@@ -6884,6 +7495,131 @@ msgstr ""
 #: cms/static/js/views/video/translations_editor.js
 msgid "Upload translation"
 msgstr "Ûplöäd tränslätïön Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт#"
+
+#: cms/static/js/views/video_thumbnail.js
+msgid "Add Thumbnail"
+msgstr "Àdd Thümßnäïl Ⱡ'σяєм ιρѕυм ∂σłσя ѕι#"
+
+#: cms/static/js/views/video_thumbnail.js
+msgid "Edit Thumbnail"
+msgstr "Édït Thümßnäïl Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт#"
+
+#. Translators: This is a 2 part text which tells the image requirements.
+#: cms/static/js/views/video_thumbnail.js
+msgid ""
+"{InstructionsSpanStart}{videoImageResoultion}{lineBreak} "
+"{videoImageSupportedFileFormats}{spanEnd}"
+msgstr ""
+"{InstructionsSpanStart}{videoImageResoultion}{lineBreak} "
+"{videoImageSupportedFileFormats}{spanEnd} Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αм#"
+
+#: cms/static/js/views/video_thumbnail.js
+msgid "Image upload failed"
+msgstr "Ìmägé üplöäd fäïléd Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт,#"
+
+#. Translators: This is a 3 part text which tells the image requirements.
+#: cms/static/js/views/video_thumbnail.js
+msgid ""
+"{ReqTextSpanStart}Requirements{spanEnd}{lineBreak}{InstructionsSpanStart}{videoImageResoultion}{lineBreak}"
+" {videoImageSupportedFileFormats}{spanEnd}"
+msgstr ""
+"{ReqTextSpanStart}Réqüïréménts{spanEnd}{lineBreak}{InstructionsSpanStart}{videoImageResoultion}{lineBreak}"
+" {videoImageSupportedFileFormats}{spanEnd} Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕє¢тєтυ#"
+
+#. Translators: message will be like 1280x720 pixels
+#: cms/static/js/views/video_thumbnail.js
+msgid "{maxWidth}x{maxHeight} pixels"
+msgstr "{maxWidth}x{maxHeight} pïxéls Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт#"
+
+#. Translators: message will be like Thumbnail for Arrow.mp4
+#: cms/static/js/views/video_thumbnail.js
+msgid "Thumbnail for {videoName}"
+msgstr "Thümßnäïl för {videoName} Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмє#"
+
+#. Translators: message will be like Add Thumbnail - Arrow.mp4
+#: cms/static/js/views/video_thumbnail.js
+msgid "Add Thumbnail - {videoName}"
+msgstr "Àdd Thümßnäïl - {videoName} Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт,#"
+
+#. Translators: humanizeDuration will be like 10 minutes, an hour and 20
+#. minutes etc
+#: cms/static/js/views/video_thumbnail.js
+msgid "Video duration is {humanizeDuration}"
+msgstr "Vïdéö dürätïön ïs {humanizeDuration} Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, #"
+
+#: cms/static/js/views/video_thumbnail.js
+#: test_root/staticfiles/proctoring/templates/add-new-allowance.underscore
+msgid "minutes"
+msgstr "mïnütés Ⱡ'σяєм ιρѕυм #"
+
+#: cms/static/js/views/video_thumbnail.js
+msgid "minute"
+msgstr "mïnüté Ⱡ'σяєм ιρѕυ#"
+
+#. Translators: message will be like 15 minutes, 1 minute
+#: cms/static/js/views/video_thumbnail.js
+msgid "{minutes} {unit}"
+msgstr "{minutes} {unit} Ⱡ'σяєм ιρѕυм #"
+
+#: cms/static/js/views/video_thumbnail.js
+msgid "seconds"
+msgstr "séçönds Ⱡ'σяєм ιρѕυм #"
+
+#: cms/static/js/views/video_thumbnail.js
+msgid "second"
+msgstr "séçönd Ⱡ'σяєм ιρѕυ#"
+
+#. Translators: message will be like 20 seconds, 1 second
+#: cms/static/js/views/video_thumbnail.js
+msgid "{seconds} {unit}"
+msgstr "{seconds} {unit} Ⱡ'σяєм ιρѕυм #"
+
+#. Translators: `and` will be used to combine both miuntes and seconds like
+#. `13 minutes and 45 seconds`
+#: cms/static/js/views/video_thumbnail.js
+msgid " and "
+msgstr " änd  Ⱡ'σяєм ιρѕ#"
+
+#: cms/static/js/views/video_thumbnail.js
+msgid "Video image upload started"
+msgstr "Vïdéö ïmägé üplöäd stärtéd Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕ#"
+
+#: cms/static/js/views/video_thumbnail.js
+msgid "Video image upload completed"
+msgstr "Vïdéö ïmägé üplöäd çömplétéd Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢#"
+
+#: cms/static/js/views/video_thumbnail.js
+msgid ""
+"This image file type is not supported. Supported file types are "
+"{supportedFileFormats}."
+msgstr ""
+"Thïs ïmägé fïlé týpé ïs nöt süppörtéd. Süppörtéd fïlé týpés äré "
+"{supportedFileFormats}. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя #"
+
+#. Translators: maxFileSizeInMB will be like 2 MB.
+#: cms/static/js/views/video_thumbnail.js
+msgid "The selected image must be smaller than {maxFileSizeInMB}."
+msgstr ""
+"Thé séléçtéd ïmägé müst ßé smällér thän {maxFileSizeInMB}. Ⱡ'σяєм ιρѕυм "
+"∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя #"
+
+#. Translators: minFileSizeInKB will be like 2 KB.
+#: cms/static/js/views/video_thumbnail.js
+msgid "The selected image must be larger than {minFileSizeInKB}."
+msgstr ""
+"Thé séléçtéd ïmägé müst ßé lärgér thän {minFileSizeInKB}. Ⱡ'σяєм ιρѕυм ∂σłσя"
+" ѕιт αмєт, ¢σηѕє¢тєтυя #"
+
+#: cms/static/js/views/video_thumbnail.js
+msgid "Could not upload the video image file"
+msgstr ""
+"Çöüld nöt üplöäd thé vïdéö ïmägé fïlé Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕє¢тєтυ#"
+
+#: cms/static/js/views/video_thumbnail.js
+msgid "Image upload failed. "
+msgstr "Ìmägé üplöäd fäïléd.  Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, #"
 
 #: cms/static/js/views/xblock_editor.js
 msgid "Editor"
@@ -6981,18 +7717,6 @@ msgstr "Zööm Ìn Ⱡ'σяєм ιρѕυм #"
 #: test_root/staticfiles/xmodule_js/common_static/common/templates/image-modal.underscore
 msgid "Zoom Out"
 msgstr "Zööm Öüt Ⱡ'σяєм ιρѕυм ∂#"
-
-#: common/static/common/templates/sequence-breadcrumbs.underscore
-#: test_root/staticfiles/common/templates/sequence-breadcrumbs.underscore
-#: test_root/staticfiles/xmodule_js/common_static/common/templates/sequence-breadcrumbs.underscore
-msgid "Return to course outline"
-msgstr "Rétürn tö çöürsé öütlïné Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢ση#"
-
-#: common/static/common/templates/sequence-breadcrumbs.underscore
-#: test_root/staticfiles/common/templates/sequence-breadcrumbs.underscore
-#: test_root/staticfiles/xmodule_js/common_static/common/templates/sequence-breadcrumbs.underscore
-msgid "Outline"
-msgstr "Öütlïné Ⱡ'σяєм ιρѕυм #"
 
 #: common/static/common/templates/components/paging-footer.underscore
 #: test_root/staticfiles/common/templates/components/paging-footer.underscore
@@ -7111,6 +7835,23 @@ msgstr "Löäd möré Ⱡ'σяєм ιρѕυм ∂σł#"
 msgid "Error posting your message."
 msgstr "Érrör pöstïng ýöür méssägé. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє#"
 
+#: common/static/common/templates/discussion/new-post-visibility.underscore
+#: test_root/staticfiles/common/templates/discussion/new-post-visibility.underscore
+#: test_root/staticfiles/xmodule_js/common_static/common/templates/discussion/new-post-visibility.underscore
+#, python-format
+msgid "This post will be visible only to %(group_name)s."
+msgstr ""
+"Thïs pöst wïll ßé vïsïßlé önlý tö %(group_name)s. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт "
+"αмєт, ¢σηѕє¢тєтυя#"
+
+#: common/static/common/templates/discussion/new-post-visibility.underscore
+#: test_root/staticfiles/common/templates/discussion/new-post-visibility.underscore
+#: test_root/staticfiles/xmodule_js/common_static/common/templates/discussion/new-post-visibility.underscore
+msgid "This post will be visible to everyone."
+msgstr ""
+"Thïs pöst wïll ßé vïsïßlé tö évérýöné. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕє¢тєтυя#"
+
 #: common/static/common/templates/discussion/new-post.underscore
 #: test_root/staticfiles/common/templates/discussion/new-post.underscore
 #: test_root/staticfiles/xmodule_js/common_static/common/templates/discussion/new-post.underscore
@@ -7128,10 +7869,10 @@ msgstr "Vïsïßlé tö Ⱡ'σяєм ιρѕυм ∂σłσ#"
 #: test_root/staticfiles/xmodule_js/common_static/common/templates/discussion/new-post.underscore
 msgid ""
 "Discussion admins, moderators, and TAs can make their posts visible to all "
-"students or specify a single cohort."
+"students or specify a single group."
 msgstr ""
 "Dïsçüssïön ädmïns, mödérätörs, änd TÀs çän mäké théïr pösts vïsïßlé tö äll "
-"stüdénts ör spéçïfý ä sïnglé çöhört. Ⱡ'σяєм ιρѕυм ∂σłσя #"
+"stüdénts ör spéçïfý ä sïnglé gröüp. Ⱡ'σяєм ιρѕυм ∂σłσя ѕ#"
 
 #: common/static/common/templates/discussion/new-post.underscore
 #: test_root/staticfiles/common/templates/discussion/new-post.underscore
@@ -7154,13 +7895,6 @@ msgstr ""
 #: common/static/common/templates/discussion/new-post.underscore
 #: test_root/staticfiles/common/templates/discussion/new-post.underscore
 #: test_root/staticfiles/xmodule_js/common_static/common/templates/discussion/new-post.underscore
-msgid "Your question or idea (required)"
-msgstr ""
-"Ýöür qüéstïön ör ïdéä (réqüïréd) Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тє#"
-
-#: common/static/common/templates/discussion/new-post.underscore
-#: test_root/staticfiles/common/templates/discussion/new-post.underscore
-#: test_root/staticfiles/xmodule_js/common_static/common/templates/discussion/new-post.underscore
 msgid "follow this post"
 msgstr "föllöw thïs pöst Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αм#"
 
@@ -7175,20 +7909,6 @@ msgstr "pöst änönýmöüslý Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αм#
 #: test_root/staticfiles/xmodule_js/common_static/common/templates/discussion/new-post.underscore
 msgid "post anonymously to classmates"
 msgstr "pöst änönýmöüslý tö çlässmätés Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢т#"
-
-#: common/static/common/templates/discussion/new-post.underscore
-#: common/static/common/templates/discussion/thread-response.underscore
-#: common/static/common/templates/discussion/thread.underscore
-#: lms/templates/verify_student/incourse_reverify.underscore
-#: test_root/staticfiles/common/templates/discussion/new-post.underscore
-#: test_root/staticfiles/common/templates/discussion/thread-response.underscore
-#: test_root/staticfiles/common/templates/discussion/thread.underscore
-#: test_root/staticfiles/templates/verify_student/incourse_reverify.underscore
-#: test_root/staticfiles/xmodule_js/common_static/common/templates/discussion/new-post.underscore
-#: test_root/staticfiles/xmodule_js/common_static/common/templates/discussion/thread-response.underscore
-#: test_root/staticfiles/xmodule_js/common_static/common/templates/discussion/thread.underscore
-msgid "Submit"
-msgstr "Süßmït Ⱡ'σяєм ιρѕυ#"
 
 #: common/static/common/templates/discussion/post-user-display.underscore
 #: test_root/staticfiles/common/templates/discussion/post-user-display.underscore
@@ -7885,11 +8605,6 @@ msgstr "Çölläpsé Àll Ⱡ'σяєм ιρѕυм ∂σłσя ѕ#"
 
 #: lms/templates/ccx/schedule.underscore
 #: test_root/staticfiles/templates/ccx/schedule.underscore
-msgid "Unit"
-msgstr "Ûnït Ⱡ'σяєм ι#"
-
-#: lms/templates/ccx/schedule.underscore
-#: test_root/staticfiles/templates/ccx/schedule.underscore
 msgid "Start Date"
 msgstr "Stärt Däté Ⱡ'σяєм ιρѕυм ∂σłσ#"
 
@@ -8109,23 +8824,24 @@ msgstr ""
 msgid "End My Exam"
 msgstr "Énd Mý Éxäm Ⱡ'σяєм ιρѕυм ∂σłσя #"
 
+#: lms/templates/courseware/proctored-exam-status.underscore
+#: test_root/staticfiles/templates/courseware/proctored-exam-status.underscore
+msgid "Hide Timer"
+msgstr "Hïdé Tïmér Ⱡ'σяєм ιρѕυм ∂σłσ#"
+
 #: lms/templates/discovery/course_card.underscore
 #: test_root/staticfiles/templates/discovery/course_card.underscore
 msgid "LEARN MORE"
 msgstr "LÉÀRN MÖRÉ Ⱡ'σяєм ιρѕυм ∂σłσ#"
 
 #: lms/templates/discovery/course_card.underscore
-#: lms/templates/discovery/course_card_2017.underscore
 #: test_root/staticfiles/templates/discovery/course_card.underscore
-#: test_root/staticfiles/templates/discovery/course_card_2017.underscore
 #, python-format
 msgid "Starts: %(start_date)s"
 msgstr "Stärts: %(start_date)s Ⱡ'σяєм ιρѕυм ∂σłσя #"
 
 #: lms/templates/discovery/course_card.underscore
-#: lms/templates/discovery/course_card_2017.underscore
 #: test_root/staticfiles/templates/discovery/course_card.underscore
-#: test_root/staticfiles/templates/discovery/course_card_2017.underscore
 msgid "Starts"
 msgstr "Stärts Ⱡ'σяєм ιρѕυ#"
 
@@ -8202,6 +8918,15 @@ msgstr "för Ⱡ'σяєм#"
 #: test_root/staticfiles/templates/fields/field_order_history.underscore
 msgid "Product Name"
 msgstr "Prödüçt Nämé Ⱡ'σяєм ιρѕυм ∂σłσя ѕ#"
+
+#: lms/templates/fields/field_textarea.underscore
+#: test_root/staticfiles/templates/fields/field_textarea.underscore
+msgid ""
+"{currentCountOpeningTag}{currentCharacterCount}{currentCountClosingTag} of "
+"{maxCharacters}"
+msgstr ""
+"{currentCountOpeningTag}{currentCharacterCount}{currentCountClosingTag} öf "
+"{maxCharacters} Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αм#"
 
 #: lms/templates/financial-assistance/financial_assessment_form.underscore
 #: lms/templates/financial-assistance/financial_assessment_submitted.underscore
@@ -8400,95 +9125,38 @@ msgstr "Çértïfïçäté Générätéd Ⱡ'σяєм ιρѕυм ∂σłσя ѕ�
 msgid "Remove from List"
 msgstr "Rémövé fröm Lïst Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αм#"
 
-#: lms/templates/instructor/instructor_dashboard_2/cohort-discussions-course-wide.underscore
-#: lms/templates/instructor/instructor_dashboard_2/cohorts.underscore
-#: test_root/staticfiles/templates/instructor/instructor_dashboard_2/cohort-discussions-course-wide.underscore
-#: test_root/staticfiles/templates/instructor/instructor_dashboard_2/cohorts.underscore
-msgid "Specify whether discussion topics are divided by cohort"
-msgstr ""
-"Spéçïfý whéthér dïsçüssïön töpïçs äré dïvïdéd ßý çöhört Ⱡ'σяєм ιρѕυм ∂σłσя "
-"ѕιт αмєт, ¢σηѕє¢тєтυя α#"
-
-#: lms/templates/instructor/instructor_dashboard_2/cohort-discussions-course-wide.underscore
-#: test_root/staticfiles/templates/instructor/instructor_dashboard_2/cohort-discussions-course-wide.underscore
-msgid "Course-Wide Discussion Topics"
-msgstr "Çöürsé-Wïdé Dïsçüssïön Töpïçs Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢#"
-
-#: lms/templates/instructor/instructor_dashboard_2/cohort-discussions-course-wide.underscore
-#: test_root/staticfiles/templates/instructor/instructor_dashboard_2/cohort-discussions-course-wide.underscore
-msgid ""
-"Select the course-wide discussion topics that you want to divide by cohort."
-msgstr ""
-"Séléçt thé çöürsé-wïdé dïsçüssïön töpïçs thät ýöü wänt tö dïvïdé ßý çöhört. "
-"Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυ#"
-
-#: lms/templates/instructor/instructor_dashboard_2/cohort-discussions-inline.underscore
-#: test_root/staticfiles/templates/instructor/instructor_dashboard_2/cohort-discussions-inline.underscore
-msgid "Content-Specific Discussion Topics"
-msgstr ""
-"Çöntént-Spéçïfïç Dïsçüssïön Töpïçs Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєт#"
-
-#: lms/templates/instructor/instructor_dashboard_2/cohort-discussions-inline.underscore
-#: test_root/staticfiles/templates/instructor/instructor_dashboard_2/cohort-discussions-inline.underscore
-msgid ""
-"Specify whether content-specific discussion topics are divided by cohort."
-msgstr ""
-"Spéçïfý whéthér çöntént-spéçïfïç dïsçüssïön töpïçs äré dïvïdéd ßý çöhört. "
-"Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя#"
-
-#: lms/templates/instructor/instructor_dashboard_2/cohort-discussions-inline.underscore
-#: test_root/staticfiles/templates/instructor/instructor_dashboard_2/cohort-discussions-inline.underscore
-msgid "Always cohort content-specific discussion topics"
-msgstr ""
-"Àlwäýs çöhört çöntént-spéçïfïç dïsçüssïön töpïçs Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт "
-"αмєт, ¢σηѕє¢тєтυя α#"
-
-#: lms/templates/instructor/instructor_dashboard_2/cohort-discussions-inline.underscore
-#: test_root/staticfiles/templates/instructor/instructor_dashboard_2/cohort-discussions-inline.underscore
-msgid "Cohort selected content-specific discussion topics"
-msgstr ""
-"Çöhört séléçtéd çöntént-spéçïfïç dïsçüssïön töpïçs Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт "
-"αмєт, ¢σηѕє¢тєтυя α#"
-
-#: lms/templates/instructor/instructor_dashboard_2/cohort-discussions-inline.underscore
-#: test_root/staticfiles/templates/instructor/instructor_dashboard_2/cohort-discussions-inline.underscore
-msgid "No content-specific discussion topics exist."
-msgstr ""
-"Nö çöntént-spéçïfïç dïsçüssïön töpïçs éxïst. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
-"¢σηѕє¢тєтυя #"
-
 #: lms/templates/instructor/instructor_dashboard_2/cohort-discussions-subcategory.underscore
 #: test_root/staticfiles/templates/instructor/instructor_dashboard_2/cohort-discussions-subcategory.underscore
-msgid "Cohorted"
-msgstr "Çöhörtéd Ⱡ'σяєм ιρѕυм ∂#"
+msgid "Divided"
+msgstr "Dïvïdéd Ⱡ'σяєм ιρѕυм #"
 
 #: lms/templates/instructor/instructor_dashboard_2/cohort-editor.underscore
 #: test_root/staticfiles/templates/instructor/instructor_dashboard_2/cohort-editor.underscore
-msgid "Manage Students"
-msgstr "Mänägé Stüdénts Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт α#"
+msgid "Manage Learners"
+msgstr "Mänägé Léärnérs Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт α#"
 
 #: lms/templates/instructor/instructor_dashboard_2/cohort-editor.underscore
 #: test_root/staticfiles/templates/instructor/instructor_dashboard_2/cohort-editor.underscore
-msgid "Add students to this cohort"
-msgstr "Àdd stüdénts tö thïs çöhört Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє#"
+msgid "Add learners to this cohort"
+msgstr "Àdd léärnérs tö thïs çöhört Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє#"
 
 #: lms/templates/instructor/instructor_dashboard_2/cohort-editor.underscore
 #: test_root/staticfiles/templates/instructor/instructor_dashboard_2/cohort-editor.underscore
 msgid ""
-"Note: Students can be in only one cohort. Adding students to this group "
+"Note: Learners can be in only one cohort. Adding learners to this group "
 "overrides any previous group assignment."
 msgstr ""
-"Nöté: Stüdénts çän ßé ïn önlý öné çöhört. Àddïng stüdénts tö thïs gröüp "
+"Nöté: Léärnérs çän ßé ïn önlý öné çöhört. Àddïng léärnérs tö thïs gröüp "
 "övérrïdés äný prévïöüs gröüp ässïgnmént. Ⱡ'σяєм ιρѕυм ∂σłσя#"
 
 #: lms/templates/instructor/instructor_dashboard_2/cohort-editor.underscore
 #: test_root/staticfiles/templates/instructor/instructor_dashboard_2/cohort-editor.underscore
 msgid ""
 "Enter email addresses and/or usernames, separated by new lines or commas, "
-"for the students you want to add. *"
+"for the learners you want to add. *"
 msgstr ""
 "Éntér émäïl äddréssés änd/ör üsérnämés, sépärätéd ßý néw lïnés ör çömmäs, "
-"för thé stüdénts ýöü wänt tö ädd. * Ⱡ'σяєм ιρѕυм ∂σłσя ѕ#"
+"för thé léärnérs ýöü wänt tö ädd. * Ⱡ'σяєм ιρѕυм ∂σłσя ѕ#"
 
 #: lms/templates/instructor/instructor_dashboard_2/cohort-editor.underscore
 #: lms/templates/instructor/instructor_dashboard_2/cohort-form.underscore
@@ -8515,8 +9183,8 @@ msgstr ""
 
 #: lms/templates/instructor/instructor_dashboard_2/cohort-editor.underscore
 #: test_root/staticfiles/templates/instructor/instructor_dashboard_2/cohort-editor.underscore
-msgid "Add Students"
-msgstr "Àdd Stüdénts Ⱡ'σяєм ιρѕυм ∂σłσя ѕ#"
+msgid "Add Learners"
+msgstr "Àdd Léärnérs Ⱡ'σяєм ιρѕυм ∂σłσя ѕ#"
 
 #: lms/templates/instructor/instructor_dashboard_2/cohort-form.underscore
 #: test_root/staticfiles/templates/instructor/instructor_dashboard_2/cohort-form.underscore
@@ -8676,19 +9344,19 @@ msgstr "Vïéw Çöhört Ⱡ'σяєм ιρѕυм ∂σłσя #"
 
 #: lms/templates/instructor/instructor_dashboard_2/cohorts.underscore
 #: test_root/staticfiles/templates/instructor/instructor_dashboard_2/cohorts.underscore
-msgid "Assign students to cohorts by uploading a CSV file"
+msgid "Assign learners to cohorts by uploading a CSV file"
 msgstr ""
-"Àssïgn stüdénts tö çöhörts ßý üplöädïng ä ÇSV fïlé Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт "
+"Àssïgn léärnérs tö çöhörts ßý üplöädïng ä ÇSV fïlé Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт "
 "αмєт, ¢σηѕє¢тєтυя α#"
 
 #: lms/templates/instructor/instructor_dashboard_2/cohorts.underscore
 #: test_root/staticfiles/templates/instructor/instructor_dashboard_2/cohorts.underscore
 msgid ""
-"To review student cohort assignments or see the results of uploading a CSV "
+"To review learner cohort assignments or see the results of uploading a CSV "
 "file, download course profile information or cohort results on the "
 "{link_start}Data Download{link_end} page."
 msgstr ""
-"Tö révïéw stüdént çöhört ässïgnménts ör séé thé résülts öf üplöädïng ä ÇSV "
+"Tö révïéw léärnér çöhört ässïgnménts ör séé thé résülts öf üplöädïng ä ÇSV "
 "fïlé, döwnlöäd çöürsé pröfïlé ïnförmätïön ör çöhört résülts ön thé "
 "{link_start}Dätä Döwnlöäd{link_end} pägé. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
 "¢σηѕє¢тєтυя α∂ιριѕι¢ιηg єłιт, ѕє∂ ∂σ єιυѕмσ∂ тємρσя ιη¢ι∂ι∂υηт υт łαвσяє єт "
@@ -8697,6 +9365,59 @@ msgstr ""
 "∂σłσя ιη яєρяєнєη∂єяιт ιη νσłυρтαтє νєłιт єѕѕє ¢ιłłυм ∂σłσяє єυ ƒυgιαт ηυłłα"
 " ραяιαтυя. єχ¢єρтєυя ѕιηт σ¢¢αє¢αт ¢υρι∂αтαт ηση ρяσι∂єηт, ѕυηт ιη ¢υłρα qυι"
 " σƒƒι¢#"
+
+#: lms/templates/instructor/instructor_dashboard_2/discussions.underscore
+#: test_root/staticfiles/templates/instructor/instructor_dashboard_2/discussions.underscore
+msgid "Specify whether discussion topics are divided"
+msgstr ""
+"Spéçïfý whéthér dïsçüssïön töpïçs äré dïvïdéd Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕє¢тєтυя #"
+
+#: lms/templates/instructor/instructor_dashboard_2/divided-discussions-course-wide.underscore
+#: test_root/staticfiles/templates/instructor/instructor_dashboard_2/divided-discussions-course-wide.underscore
+msgid "Course-Wide Discussion Topics"
+msgstr "Çöürsé-Wïdé Dïsçüssïön Töpïçs Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢#"
+
+#: lms/templates/instructor/instructor_dashboard_2/divided-discussions-course-wide.underscore
+#: test_root/staticfiles/templates/instructor/instructor_dashboard_2/divided-discussions-course-wide.underscore
+msgid "Select the course-wide discussion topics that you want to divide."
+msgstr ""
+"Séléçt thé çöürsé-wïdé dïsçüssïön töpïçs thät ýöü wänt tö dïvïdé. Ⱡ'σяєм "
+"ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α#"
+
+#: lms/templates/instructor/instructor_dashboard_2/divided-discussions-inline.underscore
+#: test_root/staticfiles/templates/instructor/instructor_dashboard_2/divided-discussions-inline.underscore
+msgid "Content-Specific Discussion Topics"
+msgstr ""
+"Çöntént-Spéçïfïç Dïsçüssïön Töpïçs Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєт#"
+
+#: lms/templates/instructor/instructor_dashboard_2/divided-discussions-inline.underscore
+#: test_root/staticfiles/templates/instructor/instructor_dashboard_2/divided-discussions-inline.underscore
+msgid "Specify whether content-specific discussion topics are divided."
+msgstr ""
+"Spéçïfý whéthér çöntént-spéçïfïç dïsçüssïön töpïçs äré dïvïdéd. Ⱡ'σяєм ιρѕυм"
+" ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α#"
+
+#: lms/templates/instructor/instructor_dashboard_2/divided-discussions-inline.underscore
+#: test_root/staticfiles/templates/instructor/instructor_dashboard_2/divided-discussions-inline.underscore
+msgid "Always divide content-specific discussion topics"
+msgstr ""
+"Àlwäýs dïvïdé çöntént-spéçïfïç dïsçüssïön töpïçs Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт "
+"αмєт, ¢σηѕє¢тєтυя α#"
+
+#: lms/templates/instructor/instructor_dashboard_2/divided-discussions-inline.underscore
+#: test_root/staticfiles/templates/instructor/instructor_dashboard_2/divided-discussions-inline.underscore
+msgid "Divide the selected content-specific discussion topics"
+msgstr ""
+"Dïvïdé thé séléçtéd çöntént-spéçïfïç dïsçüssïön töpïçs Ⱡ'σяєм ιρѕυм ∂σłσя "
+"ѕιт αмєт, ¢σηѕє¢тєтυя α#"
+
+#: lms/templates/instructor/instructor_dashboard_2/divided-discussions-inline.underscore
+#: test_root/staticfiles/templates/instructor/instructor_dashboard_2/divided-discussions-inline.underscore
+msgid "No content-specific discussion topics exist."
+msgstr ""
+"Nö çöntént-spéçïfïç dïsçüssïön töpïçs éxïst. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕє¢тєтυя #"
 
 #: lms/templates/instructor/instructor_dashboard_2/enrollment-code-lookup-links.underscore
 #: test_root/staticfiles/templates/instructor/instructor_dashboard_2/enrollment-code-lookup-links.underscore
@@ -8708,118 +9429,62 @@ msgstr "Ûséd Ⱡ'σяєм ι#"
 msgid "Valid"
 msgstr "Välïd Ⱡ'σяєм ιρѕ#"
 
-#: lms/templates/learner_dashboard/certificate.underscore
-#: test_root/staticfiles/templates/learner_dashboard/certificate.underscore
-msgid "Program Certificates"
-msgstr "Prögräm Çértïfïçätés Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, #"
-
 #: lms/templates/learner_dashboard/certificate_status.underscore
+#: lms/templates/learner_dashboard/upgrade_message.underscore
 #: test_root/staticfiles/templates/learner_dashboard/certificate_status.underscore
-msgid "Congratulations! You have earned a certificate for this course."
-msgstr ""
-"Çöngrätülätïöns! Ýöü hävé éärnéd ä çértïfïçäté för thïs çöürsé. Ⱡ'σяєм ιρѕυм"
-" ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α#"
-
-#: lms/templates/learner_dashboard/certificate_status.underscore
-#: test_root/staticfiles/templates/learner_dashboard/certificate_status.underscore
-msgid "View Certificate"
-msgstr "Vïéw Çértïfïçäté Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αм#"
-
-#: lms/templates/learner_dashboard/certificate_status_2017.underscore
-#: lms/templates/learner_dashboard/upgrade_message_2017.underscore
-#: test_root/staticfiles/templates/learner_dashboard/certificate_status_2017.underscore
-#: test_root/staticfiles/templates/learner_dashboard/upgrade_message_2017.underscore
+#: test_root/staticfiles/templates/learner_dashboard/upgrade_message.underscore
 msgid "Certificate Status:"
 msgstr "Çértïfïçäté Stätüs: Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт,#"
 
-#: lms/templates/learner_dashboard/certificate_status_2017.underscore
-#: test_root/staticfiles/templates/learner_dashboard/certificate_status_2017.underscore
+#: lms/templates/learner_dashboard/certificate_status.underscore
+#: test_root/staticfiles/templates/learner_dashboard/certificate_status.underscore
 msgid "Certificate Purchased"
 msgstr "Çértïfïçäté Pürçhäséd Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, #"
 
-#: lms/templates/learner_dashboard/course_card.underscore
-#: test_root/staticfiles/templates/learner_dashboard/course_card.underscore
-#, python-format
-msgid "%(courseName)s Home Page."
-msgstr "%(courseName)s Hömé Pägé. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт#"
+#: lms/templates/learner_dashboard/course_enroll.underscore
+#: test_root/staticfiles/templates/learner_dashboard/course_enroll.underscore
+msgid "Final Grade"
+msgstr "Fïnäl Grädé Ⱡ'σяєм ιρѕυм ∂σłσя #"
 
 #: lms/templates/learner_dashboard/course_enroll.underscore
 #: test_root/staticfiles/templates/learner_dashboard/course_enroll.underscore
-msgid "enrolled"
-msgstr "énrölléd Ⱡ'σяєм ιρѕυм ∂#"
+msgid "for {courseName}"
+msgstr "för {courseName} Ⱡ'σяєм ιρѕυм #"
 
 #: lms/templates/learner_dashboard/course_enroll.underscore
-#: lms/templates/learner_dashboard/course_enroll_2017.underscore
 #: test_root/staticfiles/templates/learner_dashboard/course_enroll.underscore
-#: test_root/staticfiles/templates/learner_dashboard/course_enroll_2017.underscore
-msgid "View Course"
-msgstr "Vïéw Çöürsé Ⱡ'σяєм ιρѕυм ∂σłσя #"
-
-#: lms/templates/learner_dashboard/course_enroll.underscore
-#: lms/templates/learner_dashboard/course_enroll_2017.underscore
-#: test_root/staticfiles/templates/learner_dashboard/course_enroll.underscore
-#: test_root/staticfiles/templates/learner_dashboard/course_enroll_2017.underscore
 msgid "View Archived Course"
 msgstr "Vïéw Àrçhïvéd Çöürsé Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, #"
 
 #: lms/templates/learner_dashboard/course_enroll.underscore
 #: test_root/staticfiles/templates/learner_dashboard/course_enroll.underscore
-msgid "Not Enrolled"
-msgstr "Nöt Énrölléd Ⱡ'σяєм ιρѕυм ∂σłσя ѕ#"
+msgid "View Course"
+msgstr "Vïéw Çöürsé Ⱡ'σяєм ιρѕυм ∂σłσя #"
 
 #: lms/templates/learner_dashboard/course_enroll.underscore
 #: test_root/staticfiles/templates/learner_dashboard/course_enroll.underscore
-msgid "Please select a course date"
-msgstr "Pléäsé séléçt ä çöürsé däté Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє#"
+msgid "Choose a course run:"
+msgstr "Çhöösé ä çöürsé rün: Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, #"
 
 #: lms/templates/learner_dashboard/course_enroll.underscore
 #: test_root/staticfiles/templates/learner_dashboard/course_enroll.underscore
-msgid "Select Course Run"
-msgstr "Séléçt Çöürsé Rün Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмє#"
-
-#: lms/templates/learner_dashboard/course_enroll.underscore
-#: test_root/staticfiles/templates/learner_dashboard/course_enroll.underscore
-msgid "Choose Course Date"
-msgstr "Çhöösé Çöürsé Däté Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт#"
-
-#: lms/templates/learner_dashboard/course_enroll.underscore
-#: test_root/staticfiles/templates/learner_dashboard/course_enroll.underscore
-#, python-format
-msgid "Starts %(start)s"
-msgstr "Stärts %(start)s Ⱡ'σяєм ιρѕυм ∂σłσ#"
-
-#: lms/templates/learner_dashboard/course_enroll.underscore
-#: lms/templates/learner_dashboard/course_enroll_2017.underscore
-#: test_root/staticfiles/templates/learner_dashboard/course_enroll.underscore
-#: test_root/staticfiles/templates/learner_dashboard/course_enroll_2017.underscore
 msgid "Enroll Now"
 msgstr "Énröll Nöw Ⱡ'σяєм ιρѕυм ∂σłσ#"
 
 #: lms/templates/learner_dashboard/course_enroll.underscore
-#: lms/templates/learner_dashboard/course_enroll_2017.underscore
 #: test_root/staticfiles/templates/learner_dashboard/course_enroll.underscore
-#: test_root/staticfiles/templates/learner_dashboard/course_enroll_2017.underscore
 msgid "Coming Soon"
 msgstr "Çömïng Söön Ⱡ'σяєм ιρѕυм ∂σłσя #"
 
 #: lms/templates/learner_dashboard/course_enroll.underscore
-#: lms/templates/learner_dashboard/course_enroll_2017.underscore
 #: test_root/staticfiles/templates/learner_dashboard/course_enroll.underscore
-#: test_root/staticfiles/templates/learner_dashboard/course_enroll_2017.underscore
 msgid "Enrollment Opens on"
 msgstr "Énröllmént Öpéns ön Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт,#"
 
 #: lms/templates/learner_dashboard/course_enroll.underscore
-#: lms/templates/learner_dashboard/course_enroll_2017.underscore
 #: test_root/staticfiles/templates/learner_dashboard/course_enroll.underscore
-#: test_root/staticfiles/templates/learner_dashboard/course_enroll_2017.underscore
 msgid "Not Currently Available"
 msgstr "Nöt Çürréntlý Àväïläßlé Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σ#"
-
-#: lms/templates/learner_dashboard/course_enroll_2017.underscore
-#: test_root/staticfiles/templates/learner_dashboard/course_enroll_2017.underscore
-msgid "Choose a course run:"
-msgstr "Çhöösé ä çöürsé rün: Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, #"
 
 #: lms/templates/learner_dashboard/empty_programs_list.underscore
 #: test_root/staticfiles/templates/learner_dashboard/empty_programs_list.underscore
@@ -8885,18 +9550,18 @@ msgstr ""
 "Öpén thé çértïfïçäté ýöü éärnéd för thé %(title)s prögräm. Ⱡ'σяєм ιρѕυм "
 "∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α#"
 
-#: lms/templates/learner_dashboard/program_details_view_2017.underscore
-#: test_root/staticfiles/templates/learner_dashboard/program_details_view_2017.underscore
+#: lms/templates/learner_dashboard/program_details_view.underscore
+#: test_root/staticfiles/templates/learner_dashboard/program_details_view.underscore
 msgid "Congratulations!"
 msgstr "Çöngrätülätïöns! Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αм#"
 
-#: lms/templates/learner_dashboard/program_details_view_2017.underscore
-#: test_root/staticfiles/templates/learner_dashboard/program_details_view_2017.underscore
+#: lms/templates/learner_dashboard/program_details_view.underscore
+#: test_root/staticfiles/templates/learner_dashboard/program_details_view.underscore
 msgid "Your Program Journey"
 msgstr "Ýöür Prögräm Jöürnéý Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, #"
 
-#: lms/templates/learner_dashboard/program_details_view_2017.underscore
-#: test_root/staticfiles/templates/learner_dashboard/program_details_view_2017.underscore
+#: lms/templates/learner_dashboard/program_details_view.underscore
+#: test_root/staticfiles/templates/learner_dashboard/program_details_view.underscore
 msgid ""
 "To complete the program, you must earn a verified certificate for each "
 "course."
@@ -8904,30 +9569,45 @@ msgstr ""
 "Tö çömplété thé prögräm, ýöü müst éärn ä vérïfïéd çértïfïçäté för éäçh "
 "çöürsé. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєт#"
 
-#: lms/templates/learner_dashboard/program_details_view_2017.underscore
-#: test_root/staticfiles/templates/learner_dashboard/program_details_view_2017.underscore
+#: lms/templates/learner_dashboard/program_details_view.underscore
+#: test_root/staticfiles/templates/learner_dashboard/program_details_view.underscore
+msgid "Upgrade All Remaining Courses ("
+msgstr "Ûpgrädé Àll Rémäïnïng Çöürsés ( Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢т#"
+
+#: lms/templates/learner_dashboard/program_details_view.underscore
+#: test_root/staticfiles/templates/learner_dashboard/program_details_view.underscore
+msgid "${listPrice}"
+msgstr "${listPrice} Ⱡ'σяєм ι#"
+
+#: lms/templates/learner_dashboard/program_details_view.underscore
+#: test_root/staticfiles/templates/learner_dashboard/program_details_view.underscore
+msgid " ${price} {currency} )"
+msgstr " ${price} {currency} ) Ⱡ'σяєм ιρѕυм ∂σłσя #"
+
+#: lms/templates/learner_dashboard/program_details_view.underscore
+#: test_root/staticfiles/templates/learner_dashboard/program_details_view.underscore
 msgid "COURSES IN PROGRESS"
 msgstr "ÇÖÛRSÉS ÌN PRÖGRÉSS Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт,#"
 
-#: lms/templates/learner_dashboard/program_details_view_2017.underscore
-#: test_root/staticfiles/templates/learner_dashboard/program_details_view_2017.underscore
+#: lms/templates/learner_dashboard/program_details_view.underscore
+#: test_root/staticfiles/templates/learner_dashboard/program_details_view.underscore
 msgid "REMAINING COURSES"
 msgstr "RÉMÀÌNÌNG ÇÖÛRSÉS Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмє#"
 
-#: lms/templates/learner_dashboard/program_details_view_2017.underscore
-#: test_root/staticfiles/templates/learner_dashboard/program_details_view_2017.underscore
+#: lms/templates/learner_dashboard/program_details_view.underscore
+#: test_root/staticfiles/templates/learner_dashboard/program_details_view.underscore
 msgid "COMPLETED COURSES"
 msgstr "ÇÖMPLÉTÉD ÇÖÛRSÉS Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмє#"
 
-#: lms/templates/learner_dashboard/program_details_view_2017.underscore
-#: test_root/staticfiles/templates/learner_dashboard/program_details_view_2017.underscore
+#: lms/templates/learner_dashboard/program_details_view.underscore
+#: test_root/staticfiles/templates/learner_dashboard/program_details_view.underscore
 msgid "As you complete courses, you will see them listed here."
 msgstr ""
 "Às ýöü çömplété çöürsés, ýöü wïll séé thém lïstéd héré. Ⱡ'σяєм ιρѕυм ∂σłσя "
 "ѕιт αмєт, ¢σηѕє¢тєтυя α#"
 
-#: lms/templates/learner_dashboard/program_details_view_2017.underscore
-#: test_root/staticfiles/templates/learner_dashboard/program_details_view_2017.underscore
+#: lms/templates/learner_dashboard/program_details_view.underscore
+#: test_root/staticfiles/templates/learner_dashboard/program_details_view.underscore
 msgid ""
 "Complete courses on your schedule to ensure you stand out in your field!"
 msgstr ""
@@ -8935,72 +9615,19 @@ msgstr ""
 "Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя#"
 
 #: lms/templates/learner_dashboard/program_header_view.underscore
-#: lms/templates/learner_dashboard/program_header_view_2017.underscore
 #: test_root/staticfiles/templates/learner_dashboard/program_header_view.underscore
-#: test_root/staticfiles/templates/learner_dashboard/program_header_view_2017.underscore
 msgid "{organization}\\'s logo"
 msgstr "{organization}\\'s lögö Ⱡ'σяєм ιρѕυм ∂σłσя #"
 
-#: lms/templates/learner_dashboard/program_header_view.underscore
-#: test_root/staticfiles/templates/learner_dashboard/program_header_view.underscore
-msgid "You are here"
-msgstr "Ýöü äré héré Ⱡ'σяєм ιρѕυм ∂σłσя ѕ#"
-
-#: lms/templates/learner_dashboard/program_header_view.underscore
-#: test_root/staticfiles/templates/learner_dashboard/program_header_view.underscore
-msgid "Dashboard"
-msgstr "Däshßöärd Ⱡ'σяєм ιρѕυм ∂σł#"
-
-#: lms/templates/learner_dashboard/program_header_view.underscore
-#: test_root/staticfiles/templates/learner_dashboard/program_header_view.underscore
-msgid "Programs"
-msgstr "Prögräms Ⱡ'σяєм ιρѕυм ∂#"
-
 #: lms/templates/learner_dashboard/upgrade_message.underscore
 #: test_root/staticfiles/templates/learner_dashboard/upgrade_message.underscore
-msgid ""
-"You need a certificate in this course to be eligible for a program "
-"certificate."
-msgstr ""
-"Ýöü nééd ä çértïfïçäté ïn thïs çöürsé tö ßé élïgïßlé för ä prögräm "
-"çértïfïçäté. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєт#"
-
-#: lms/templates/learner_dashboard/upgrade_message.underscore
-#: test_root/staticfiles/templates/learner_dashboard/upgrade_message.underscore
-msgid "Upgrade Now"
-msgstr "Ûpgrädé Nöw Ⱡ'σяєм ιρѕυм ∂σłσя #"
-
-#: lms/templates/learner_dashboard/upgrade_message_2017.underscore
-#: test_root/staticfiles/templates/learner_dashboard/upgrade_message_2017.underscore
 msgid "Needs verified certificate "
 msgstr "Nééds vérïfïéd çértïfïçäté  Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє#"
 
-#: lms/templates/learner_dashboard/upgrade_message_2017.underscore
-#: test_root/staticfiles/templates/learner_dashboard/upgrade_message_2017.underscore
-msgid "Buy Certificate"
-msgstr "Büý Çértïfïçäté Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт α#"
-
-#: lms/templates/search/course_search_results.underscore
-#: lms/templates/search/dashboard_search_results.underscore
-#: test_root/staticfiles/templates/search/course_search_results.underscore
-#: test_root/staticfiles/templates/search/dashboard_search_results.underscore
-#, python-format
-msgid "Load next %(num_items)s result"
-msgid_plural "Load next %(num_items)s results"
-msgstr[0] "Löäd néxt %(num_items)s résült Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, #"
-msgstr[1] "Löäd néxt %(num_items)s résülts Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, #"
-
-#: lms/templates/search/course_search_results.underscore
-#: lms/templates/search/dashboard_search_results.underscore
-#: test_root/staticfiles/templates/search/course_search_results.underscore
-#: test_root/staticfiles/templates/search/dashboard_search_results.underscore
-msgid "Sorry, no results were found."
-msgstr "Sörrý, nö résülts wéré föünd. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢#"
-
-#: lms/templates/search/dashboard_search_results.underscore
-#: test_root/staticfiles/templates/search/dashboard_search_results.underscore
-msgid "Back to Dashboard"
-msgstr "Bäçk tö Däshßöärd Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмє#"
+#: lms/templates/learner_dashboard/upgrade_message.underscore
+#: test_root/staticfiles/templates/learner_dashboard/upgrade_message.underscore
+msgid "Upgrade to Verified"
+msgstr "Ûpgrädé tö Vérïfïéd Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт,#"
 
 #: lms/templates/student_account/account.underscore
 #: test_root/staticfiles/templates/student_account/account.underscore
@@ -9033,15 +9660,6 @@ msgstr ""
 #: test_root/staticfiles/templates/student_account/form_field.underscore
 msgid "Forgot password?"
 msgstr "Förgöt pässwörd? Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αм#"
-
-#: lms/templates/student_account/hinted_login.underscore
-#: lms/templates/student_account/login.underscore
-#: lms/templates/student_account/register.underscore
-#: test_root/staticfiles/templates/student_account/hinted_login.underscore
-#: test_root/staticfiles/templates/student_account/login.underscore
-#: test_root/staticfiles/templates/student_account/register.underscore
-msgid "Sign in"
-msgstr "Sïgn ïn Ⱡ'σяєм ιρѕυм #"
 
 #: lms/templates/student_account/hinted_login.underscore
 #: test_root/staticfiles/templates/student_account/hinted_login.underscore
@@ -9099,6 +9717,21 @@ msgstr "Régïstér thröügh édX Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт α
 
 #: lms/templates/student_account/login.underscore
 #: test_root/staticfiles/templates/student_account/login.underscore
+msgid "First time here?"
+msgstr "Fïrst tïmé héré? Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αм#"
+
+#: lms/templates/student_account/login.underscore
+#: test_root/staticfiles/templates/student_account/login.underscore
+msgid "Create an Account."
+msgstr "Çréäté än Àççöünt. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт#"
+
+#: lms/templates/student_account/login.underscore
+#: test_root/staticfiles/templates/student_account/login.underscore
+msgid "Sign In"
+msgstr "Sïgn Ìn Ⱡ'σяєм ιρѕυм #"
+
+#: lms/templates/student_account/login.underscore
+#: test_root/staticfiles/templates/student_account/login.underscore
 msgid ""
 "Sign in here using your email address and password, or use one of the "
 "providers listed below."
@@ -9140,17 +9773,6 @@ msgstr ""
 "Ûsé mý ïnstïtütïön/çämpüs çrédéntïäls Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
 "¢σηѕє¢тєтυ#"
 
-#: lms/templates/student_account/login.underscore
-#: test_root/staticfiles/templates/student_account/login.underscore
-#, python-format
-msgid "New to %(platformName)s?"
-msgstr "Néw tö %(platformName)s? Ⱡ'σяєм ιρѕυм ∂σłσя #"
-
-#: lms/templates/student_account/login.underscore
-#: test_root/staticfiles/templates/student_account/login.underscore
-msgid "Create an account"
-msgstr "Çréäté än äççöünt Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмє#"
-
 #: lms/templates/student_account/password_reset.underscore
 #: test_root/staticfiles/templates/student_account/password_reset.underscore
 msgid "Password assistance"
@@ -9172,6 +9794,17 @@ msgstr "Rését mý pässwörd Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмє
 
 #: lms/templates/student_account/register.underscore
 #: test_root/staticfiles/templates/student_account/register.underscore
+msgid "Already have an {platformName} account?"
+msgstr ""
+"Àlréädý hävé än {platformName} äççöünt? Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢#"
+
+#: lms/templates/student_account/register.underscore
+#: test_root/staticfiles/templates/student_account/register.underscore
+msgid "Sign in."
+msgstr "Sïgn ïn. Ⱡ'σяєм ιρѕυм ∂#"
+
+#: lms/templates/student_account/register.underscore
+#: test_root/staticfiles/templates/student_account/register.underscore
 msgid "Create an account using"
 msgstr "Çréäté än äççöünt üsïng Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σ#"
 
@@ -9189,122 +9822,10 @@ msgstr "ör çréäté ä néw öné héré Ⱡ'σяєм ιρѕυм ∂σłσя 
 
 #: lms/templates/student_account/register.underscore
 #: test_root/staticfiles/templates/student_account/register.underscore
-msgid "Create a new account"
-msgstr "Çréäté ä néw äççöünt Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, #"
-
-#: lms/templates/student_account/register.underscore
-#: test_root/staticfiles/templates/student_account/register.underscore
-msgid "Create your account"
-msgstr "Çréäté ýöür äççöünt Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт,#"
-
-#: lms/templates/student_account/register.underscore
-#: test_root/staticfiles/templates/student_account/register.underscore
-msgid "Required field"
-msgstr "Réqüïréd fïéld Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт#"
-
-#: lms/templates/student_account/register.underscore
-#: test_root/staticfiles/templates/student_account/register.underscore
-msgid "Already have an account?"
-msgstr "Àlréädý hävé än äççöünt? Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢ση#"
-
-#: lms/templates/student_profile/badge.underscore
-#: test_root/staticfiles/templates/student_profile/badge.underscore
-#, python-format
-msgid "Share your \"%(display_name)s\" award"
-msgstr "Shäré ýöür \"%(display_name)s\" äwärd Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢#"
-
-#: lms/templates/student_profile/badge.underscore
-#: test_root/staticfiles/templates/student_profile/badge.underscore
-msgid "Share"
-msgstr "Shäré Ⱡ'σяєм ιρѕ#"
-
-#: lms/templates/student_profile/badge.underscore
-#: test_root/staticfiles/templates/student_profile/badge.underscore
-#, python-format
-msgid "Earned %(created)s."
-msgstr "Éärnéd %(created)s. Ⱡ'σяєм ιρѕυм ∂σłσя #"
-
-#: lms/templates/student_profile/badge_placeholder.underscore
-#: test_root/staticfiles/templates/student_profile/badge_placeholder.underscore
-msgid "What's Your Next Accomplishment?"
+msgid "Support education research by providing additional information"
 msgstr ""
-"Whät's Ýöür Néxt Àççömplïshmént? Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тє#"
-
-#: lms/templates/student_profile/badge_placeholder.underscore
-#: test_root/staticfiles/templates/student_profile/badge_placeholder.underscore
-msgid "Start working toward your next learning goal."
-msgstr ""
-"Stärt wörkïng töwärd ýöür néxt léärnïng göäl. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
-"¢σηѕє¢тєтυя #"
-
-#: lms/templates/student_profile/badge_placeholder.underscore
-#: test_root/staticfiles/templates/student_profile/badge_placeholder.underscore
-msgid "Find a course"
-msgstr "Fïnd ä çöürsé Ⱡ'σяєм ιρѕυм ∂σłσя ѕι#"
-
-#: lms/templates/student_profile/learner_profile.underscore
-#: test_root/staticfiles/templates/student_profile/learner_profile.underscore
-msgid "An error occurred. Try loading the page again."
-msgstr ""
-"Àn érrör öççürréd. Trý löädïng thé pägé ägäïn. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
-"¢σηѕє¢тєтυя α#"
-
-#: lms/templates/student_profile/section_two.underscore
-#: test_root/staticfiles/templates/student_profile/section_two.underscore
-msgid "You are currently sharing a limited profile."
-msgstr ""
-"Ýöü äré çürréntlý shärïng ä lïmïtéd pröfïlé. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
-"¢σηѕє¢тєтυя #"
-
-#: lms/templates/student_profile/section_two.underscore
-#: test_root/staticfiles/templates/student_profile/section_two.underscore
-msgid "This learner is currently sharing a limited profile."
-msgstr ""
-"Thïs léärnér ïs çürréntlý shärïng ä lïmïtéd pröfïlé. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт "
-"αмєт, ¢σηѕє¢тєтυя α#"
-
-#: lms/templates/student_profile/share_modal.underscore
-#: test_root/staticfiles/templates/student_profile/share_modal.underscore
-msgid "Share on Mozilla Backpack"
-msgstr "Shäré ön Mözïllä Bäçkpäçk Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕ#"
-
-#: lms/templates/student_profile/share_modal.underscore
-#: test_root/staticfiles/templates/student_profile/share_modal.underscore
-msgid ""
-"To share your certificate on Mozilla Backpack, you must first have a "
-"Backpack account. Complete the following steps to add your certificate to "
-"Backpack."
-msgstr ""
-"Tö shäré ýöür çértïfïçäté ön Mözïllä Bäçkpäçk, ýöü müst fïrst hävé ä "
-"Bäçkpäçk äççöünt. Çömplété thé föllöwïng stéps tö ädd ýöür çértïfïçäté tö "
-"Bäçkpäçk. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α∂ιριѕι¢ιηg єłιт, ѕє∂ ∂σ "
-"єιυѕмσ∂ тємρσя ιη¢ι∂ι∂υηт υт łαвσяє єт ∂σłσяє мαgηα αłιqυα. υт єηιм α∂ мιηιм"
-" νєηιαм, qυιѕ ησѕтяυ∂ єχєя¢ιтαтιση υłłαм¢σ łαвσяιѕ ηιѕι υт αłιqυιρ єχ єα "
-"¢σммσ∂σ ¢σηѕєqυαт. ∂υιѕ αυтє ιяυяє ∂σłσя ιη яєρяєнєη∂єяιт ιη νσłυρтαтє νєłιт"
-" єѕѕє ¢ιłłυм ∂σłσяє єυ ƒυgιαт ηυłłα ραяιαтυя. єχ¢єρтєυя ѕιηт σ¢¢αє¢αт "
-"¢υρι∂αтαт ηση ρяσι∂єηт, ѕυηт ιη ¢υłρα qυι σƒƒι¢ια ∂єѕєяυηт мσłłιт#"
-
-#: lms/templates/student_profile/share_modal.underscore
-#: test_root/staticfiles/templates/student_profile/share_modal.underscore
-#, python-format
-msgid ""
-"Create a %(link_start)sMozilla Backpack%(link_end)s account, or log in to "
-"your existing account"
-msgstr ""
-"Çréäté ä %(link_start)sMözïllä Bäçkpäçk%(link_end)s äççöünt, ör lög ïn tö "
-"ýöür éxïstïng äççöünt Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυ#"
-
-#: lms/templates/student_profile/share_modal.underscore
-#: test_root/staticfiles/templates/student_profile/share_modal.underscore
-#, python-format
-msgid ""
-"%(download_link_start)sDownload this image (right-click or option-click, "
-"save as)%(link_end)s and then %(upload_link_start)supload%(link_end)s it to "
-"your backpack.</li>"
-msgstr ""
-"%(download_link_start)sDöwnlöäd thïs ïmägé (rïght-çlïçk ör öptïön-çlïçk, "
-"sävé äs)%(link_end)s änd thén %(upload_link_start)süplöäd%(link_end)s ït tö "
-"ýöür ßäçkpäçk.</li> Ⱡ'σяєм ιρѕυм ∂σłσя ѕ#"
+"Süppört édüçätïön réséärçh ßý prövïdïng äddïtïönäl ïnförmätïön Ⱡ'σяєм ιρѕυм "
+"∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α#"
 
 #: lms/templates/verify_student/enrollment_confirmation_step.underscore
 #: test_root/staticfiles/templates/verify_student/enrollment_confirmation_step.underscore
@@ -10111,6 +10632,114 @@ msgstr ""
 "Ûsé ßöökmärks tö hélp ýöü éäsïlý rétürn tö çöürséwäré pägés. Tö ßöökmärk ä "
 "pägé, çlïçk \"Böökmärk thïs pägé\" ündér thé pägé tïtlé. Ⱡ'σ#"
 
+#: openedx/features/course_search/static/course_search/templates/course_search_results.underscore
+#: openedx/features/course_search/static/course_search/templates/dashboard_search_results.underscore
+#: test_root/staticfiles/course_search/templates/course_search_results.underscore
+#: test_root/staticfiles/course_search/templates/dashboard_search_results.underscore
+msgid "Load next {num_items} result"
+msgid_plural "Load next {num_items} results"
+msgstr[0] "Löäd néxt {num_items} résült Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, #"
+msgstr[1] "Löäd néxt {num_items} résülts Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, #"
+
+#: openedx/features/course_search/static/course_search/templates/course_search_results.underscore
+#: openedx/features/course_search/static/course_search/templates/dashboard_search_results.underscore
+#: test_root/staticfiles/course_search/templates/course_search_results.underscore
+#: test_root/staticfiles/course_search/templates/dashboard_search_results.underscore
+msgid "Sorry, no results were found."
+msgstr "Sörrý, nö résülts wéré föünd. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢#"
+
+#: openedx/features/learner_profile/static/learner_profile/templates/badge.underscore
+#: test_root/staticfiles/learner_profile/templates/badge.underscore
+#, python-format
+msgid "Share your \"%(display_name)s\" award"
+msgstr "Shäré ýöür \"%(display_name)s\" äwärd Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢#"
+
+#: openedx/features/learner_profile/static/learner_profile/templates/badge.underscore
+#: test_root/staticfiles/learner_profile/templates/badge.underscore
+msgid "Share"
+msgstr "Shäré Ⱡ'σяєм ιρѕ#"
+
+#: openedx/features/learner_profile/static/learner_profile/templates/badge.underscore
+#: test_root/staticfiles/learner_profile/templates/badge.underscore
+#, python-format
+msgid "Earned %(created)s."
+msgstr "Éärnéd %(created)s. Ⱡ'σяєм ιρѕυм ∂σłσя #"
+
+#: openedx/features/learner_profile/static/learner_profile/templates/badge_placeholder.underscore
+#: test_root/staticfiles/learner_profile/templates/badge_placeholder.underscore
+msgid "What's Your Next Accomplishment?"
+msgstr ""
+"Whät's Ýöür Néxt Àççömplïshmént? Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тє#"
+
+#: openedx/features/learner_profile/static/learner_profile/templates/badge_placeholder.underscore
+#: test_root/staticfiles/learner_profile/templates/badge_placeholder.underscore
+msgid "Start working toward your next learning goal."
+msgstr ""
+"Stärt wörkïng töwärd ýöür néxt léärnïng göäl. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕє¢тєтυя #"
+
+#: openedx/features/learner_profile/static/learner_profile/templates/badge_placeholder.underscore
+#: test_root/staticfiles/learner_profile/templates/badge_placeholder.underscore
+msgid "Find a course"
+msgstr "Fïnd ä çöürsé Ⱡ'σяєм ιρѕυм ∂σłσя ѕι#"
+
+#: openedx/features/learner_profile/static/learner_profile/templates/section_two.underscore
+#: test_root/staticfiles/learner_profile/templates/section_two.underscore
+msgid "You are currently sharing a limited profile."
+msgstr ""
+"Ýöü äré çürréntlý shärïng ä lïmïtéd pröfïlé. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕє¢тєтυя #"
+
+#: openedx/features/learner_profile/static/learner_profile/templates/section_two.underscore
+#: test_root/staticfiles/learner_profile/templates/section_two.underscore
+msgid "This learner is currently sharing a limited profile."
+msgstr ""
+"Thïs léärnér ïs çürréntlý shärïng ä lïmïtéd pröfïlé. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт "
+"αмєт, ¢σηѕє¢тєтυя α#"
+
+#: openedx/features/learner_profile/static/learner_profile/templates/share_modal.underscore
+#: test_root/staticfiles/learner_profile/templates/share_modal.underscore
+msgid "Share on Mozilla Backpack"
+msgstr "Shäré ön Mözïllä Bäçkpäçk Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕ#"
+
+#: openedx/features/learner_profile/static/learner_profile/templates/share_modal.underscore
+#: test_root/staticfiles/learner_profile/templates/share_modal.underscore
+msgid ""
+"To share your certificate on Mozilla Backpack, you must first have a "
+"Backpack account. Complete the following steps to add your certificate to "
+"Backpack."
+msgstr ""
+"Tö shäré ýöür çértïfïçäté ön Mözïllä Bäçkpäçk, ýöü müst fïrst hävé ä "
+"Bäçkpäçk äççöünt. Çömplété thé föllöwïng stéps tö ädd ýöür çértïfïçäté tö "
+"Bäçkpäçk. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α∂ιριѕι¢ιηg єłιт, ѕє∂ ∂σ "
+"єιυѕмσ∂ тємρσя ιη¢ι∂ι∂υηт υт łαвσяє єт ∂σłσяє мαgηα αłιqυα. υт єηιм α∂ мιηιм"
+" νєηιαм, qυιѕ ησѕтяυ∂ єχєя¢ιтαтιση υłłαм¢σ łαвσяιѕ ηιѕι υт αłιqυιρ єχ єα "
+"¢σммσ∂σ ¢σηѕєqυαт. ∂υιѕ αυтє ιяυяє ∂σłσя ιη яєρяєнєη∂єяιт ιη νσłυρтαтє νєłιт"
+" єѕѕє ¢ιłłυм ∂σłσяє єυ ƒυgιαт ηυłłα ραяιαтυя. єχ¢єρтєυя ѕιηт σ¢¢αє¢αт "
+"¢υρι∂αтαт ηση ρяσι∂єηт, ѕυηт ιη ¢υłρα qυι σƒƒι¢ια ∂єѕєяυηт мσłłιт#"
+
+#: openedx/features/learner_profile/static/learner_profile/templates/share_modal.underscore
+#: test_root/staticfiles/learner_profile/templates/share_modal.underscore
+#, python-format
+msgid ""
+"Create a %(link_start)sMozilla Backpack%(link_end)s account, or log in to "
+"your existing account"
+msgstr ""
+"Çréäté ä %(link_start)sMözïllä Bäçkpäçk%(link_end)s äççöünt, ör lög ïn tö "
+"ýöür éxïstïng äççöünt Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυ#"
+
+#: openedx/features/learner_profile/static/learner_profile/templates/share_modal.underscore
+#: test_root/staticfiles/learner_profile/templates/share_modal.underscore
+#, python-format
+msgid ""
+"%(download_link_start)sDownload this image (right-click or option-click, "
+"save as)%(link_end)s and then %(upload_link_start)supload%(link_end)s it to "
+"your backpack.</li>"
+msgstr ""
+"%(download_link_start)sDöwnlöäd thïs ïmägé (rïght-çlïçk ör öptïön-çlïçk, "
+"sävé äs)%(link_end)s änd thén %(upload_link_start)süplöäd%(link_end)s ït tö "
+"ýöür ßäçkpäçk.</li> Ⱡ'σяєм ιρѕυм ∂σłσя ѕ#"
+
 #: test_root/staticfiles/proctoring/templates/add-new-allowance.underscore
 msgid "Add a New Allowance"
 msgstr "Àdd ä Néw Àllöwänçé Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт,#"
@@ -10141,10 +10770,6 @@ msgstr "Àddïtïönäl Tïmé (mïnütés) Ⱡ'σяєм ιρѕυм ∂σłσя 
 #: test_root/staticfiles/proctoring/templates/add-new-allowance.underscore
 msgid "Value"
 msgstr "Välüé Ⱡ'σяєм ιρѕ#"
-
-#: test_root/staticfiles/proctoring/templates/add-new-allowance.underscore
-msgid "minutes"
-msgstr "mïnütés Ⱡ'σяєм ιρѕυм #"
 
 #: test_root/staticfiles/proctoring/templates/add-new-allowance.underscore
 msgid "Username or Email"
@@ -10223,12 +10848,6 @@ msgid "Make this subsection available as a prerequisite to other content"
 msgstr ""
 "Mäké thïs süßséçtïön äväïläßlé äs ä préréqüïsïté tö öthér çöntént Ⱡ'σяєм "
 "ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α#"
-
-#: cms/templates/js/active-video-upload-list.underscore
-msgid "Drag and drop or click here to upload video files."
-msgstr ""
-"Dräg änd dröp ör çlïçk héré tö üplöäd vïdéö fïlés. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт "
-"αмєт, ¢σηѕє¢тєтυя α#"
 
 #: cms/templates/js/active-video-upload-list.underscore
 msgid "Active Uploads"
@@ -10448,6 +11067,24 @@ msgstr "Àçtïväté Ⱡ'σяєм ιρѕυм ∂#"
 msgid "Deactivate"
 msgstr "Déäçtïväté Ⱡ'σяєм ιρѕυм ∂σłσ#"
 
+#: cms/templates/js/container-access.underscore
+msgid "component"
+msgstr "çömpönént Ⱡ'σяєм ιρѕυм ∂σł#"
+
+#: cms/templates/js/container-access.underscore
+msgid "Access to this {blockType} is restricted to: {selectedGroupsLabel}"
+msgstr ""
+"Àççéss tö thïs {blockType} ïs réstrïçtéd tö: {selectedGroupsLabel} Ⱡ'σяєм "
+"ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя#"
+
+#: cms/templates/js/container-access.underscore
+msgid ""
+"Access to some content in this {blockType} is restricted to specific groups "
+"of learners."
+msgstr ""
+"Àççéss tö sömé çöntént ïn thïs {blockType} ïs réstrïçtéd tö spéçïfïç gröüps "
+"öf léärnérs. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тє#"
+
 #: cms/templates/js/container-message.underscore
 msgid ""
 "Caution: The last published version of this unit is live. By publishing "
@@ -10560,6 +11197,18 @@ msgstr ""
 "¢υρι∂αтαт ηση ρяσι∂єηт, ѕυηт ιη ¢υłρα qυι σƒƒι¢ια ∂єѕєяυηт мσłłιт αηιм ι∂ "
 "єѕт ł#"
 
+#: cms/templates/js/course-highlights-enable.underscore
+msgid "Weekly Highlight Emails"
+msgstr "Wééklý Hïghlïght Émäïls Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σ#"
+
+#: cms/templates/js/course-highlights-enable.underscore
+msgid "Enabled"
+msgstr "Énäßléd Ⱡ'σяєм ιρѕυм #"
+
+#: cms/templates/js/course-highlights-enable.underscore
+msgid "Enable Now"
+msgstr "Énäßlé Nöw Ⱡ'σяєм ιρѕυм ∂σłσ#"
+
 #: cms/templates/js/course-instructor-details.underscore
 msgid "Instructor Name"
 msgstr "Ìnstrüçtör Nämé Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт α#"
@@ -10658,11 +11307,18 @@ msgstr ""
 "∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя α#"
 
 #: cms/templates/js/course-outline.underscore
-msgid ""
-"Some content in this unit is visible only to specific groups of learners"
+msgid "Access to this unit is restricted to: {selectedGroupsLabel}"
 msgstr ""
-"Sömé çöntént ïn thïs ünït ïs vïsïßlé önlý tö spéçïfïç gröüps öf léärnérs "
-"Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя#"
+"Àççéss tö thïs ünït ïs réstrïçtéd tö: {selectedGroupsLabel} Ⱡ'σяєм ιρѕυм "
+"∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя #"
+
+#: cms/templates/js/course-outline.underscore
+msgid ""
+"Access to some content in this unit is restricted to specific groups of "
+"learners"
+msgstr ""
+"Àççéss tö sömé çöntént ïn thïs ünït ïs réstrïçtéd tö spéçïfïç gröüps öf "
+"léärnérs Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тє#"
 
 #: cms/templates/js/course-outline.underscore
 msgid "Ungraded"
@@ -10715,6 +11371,11 @@ msgid "Scheduled:"
 msgstr "Sçhédüléd: Ⱡ'σяєм ιρѕυм ∂σłσ#"
 
 #: cms/templates/js/course-outline.underscore
+#: cms/templates/js/highlights-editor.underscore
+msgid "Section Highlights"
+msgstr "Séçtïön Hïghlïghts Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт#"
+
+#: cms/templates/js/course-outline.underscore
 msgid "Graded as:"
 msgstr "Grädéd äs: Ⱡ'σяєм ιρѕυм ∂σłσ#"
 
@@ -10753,6 +11414,90 @@ msgstr "Léärnïng Öütçömé Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αм
 #: cms/templates/js/course-settings-learning-fields.underscore
 msgid "Add a learning outcome here"
 msgstr "Àdd ä léärnïng öütçömé héré Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє#"
+
+#: cms/templates/js/course-video-settings-update-org-credentials-footer.underscore
+msgid "Press discard changes to discard your changes."
+msgstr ""
+"Préss dïsçärd çhängés tö dïsçärd ýöür çhängés. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕє¢тєтυя α#"
+
+#: cms/templates/js/course-video-settings-update-org-credentials-footer.underscore
+#: cms/templates/js/course-video-settings-update-settings-footer.underscore
+msgid "Update Settings"
+msgstr "Ûpdäté Séttïngs Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт α#"
+
+#: cms/templates/js/course-video-settings-update-org-credentials-footer.underscore
+msgid "Press update settings to update the information for your organization."
+msgstr ""
+"Préss üpdäté séttïngs tö üpdäté thé ïnförmätïön för ýöür örgänïzätïön. "
+"Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя #"
+
+#: cms/templates/js/course-video-settings-update-settings-footer.underscore
+msgid "Press discard changes to discard changes."
+msgstr ""
+"Préss dïsçärd çhängés tö dïsçärd çhängés. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕє¢тєтυя #"
+
+#: cms/templates/js/course-video-settings-update-settings-footer.underscore
+msgid "Press update settings to update course video settings"
+msgstr ""
+"Préss üpdäté séttïngs tö üpdäté çöürsé vïdéö séttïngs Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт"
+" αмєт, ¢σηѕє¢тєтυя α#"
+
+#: cms/templates/js/course-video-settings.underscore
+msgid "Press close to hide course video settings"
+msgstr ""
+"Préss çlösé tö hïdé çöürsé vïdéö séttïngs Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕє¢тєтυя #"
+
+#: cms/templates/js/course-video-settings.underscore
+msgid "Course Video Settings"
+msgstr "Çöürsé Vïdéö Séttïngs Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, #"
+
+#: cms/templates/js/course-video-transcript-preferences.underscore
+msgid "Transcript Turnaround"
+msgstr "Tränsçrïpt Türnäröünd Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, #"
+
+#: cms/templates/js/course-video-transcript-preferences.underscore
+msgid "Transcript Fidelity"
+msgstr "Tränsçrïpt Fïdélïtý Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт,#"
+
+#: cms/templates/js/course-video-transcript-preferences.underscore
+msgid "Video Source Language"
+msgstr "Vïdéö Söürçé Längüägé Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, #"
+
+#: cms/templates/js/course-video-transcript-preferences.underscore
+msgid "Transcript Languages"
+msgstr "Tränsçrïpt Längüägés Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, #"
+
+#: cms/templates/js/course-video-transcript-preferences.underscore
+#: cms/templates/js/metadata-dict-entry.underscore
+#: cms/templates/js/metadata-list-entry.underscore
+#: cms/templates/js/video/metadata-translations-entry.underscore
+msgid "Add"
+msgstr "Àdd Ⱡ'σяєм#"
+
+#: cms/templates/js/course-video-transcript-preferences.underscore
+msgid "Press Add to language"
+msgstr "Préss Àdd tö längüägé Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, #"
+
+#: cms/templates/js/course-video-transcript-provider-empty.underscore
+msgid "Automated Transcripts"
+msgstr "Àütömätéd Tränsçrïpts Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, #"
+
+#: cms/templates/js/course-video-transcript-provider-selected.underscore
+msgid "Transcript Provider"
+msgstr "Tränsçrïpt Prövïdér Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт,#"
+
+#: cms/templates/js/course-video-transcript-provider-selected.underscore
+msgid "Change"
+msgstr "Çhängé Ⱡ'σяєм ιρѕυ#"
+
+#: cms/templates/js/course-video-transcript-provider-selected.underscore
+msgid "Press change to change selected transcript provider."
+msgstr ""
+"Préss çhängé tö çhängé séléçtéd tränsçrïpt prövïdér. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт "
+"αмєт, ¢σηѕє¢тєтυя α#"
 
 #: cms/templates/js/course_grade_policy.underscore
 msgid "Assignment Type Name"
@@ -11024,6 +11769,32 @@ msgstr ""
 msgid "delete group"
 msgstr "délété gröüp Ⱡ'σяєм ιρѕυм ∂σłσя ѕ#"
 
+#: cms/templates/js/highlights-editor.underscore
+msgid ""
+"This feature is currently in testing. Course teams can enter highlights, but"
+" learners will not receive email messages."
+msgstr ""
+"Thïs féätüré ïs çürréntlý ïn téstïng. Çöürsé téäms çän éntér hïghlïghts, ßüt"
+" léärnérs wïll nöt réçéïvé émäïl méssägés. Ⱡ'σяєм ιρѕυм #"
+
+#: cms/templates/js/highlights-editor.underscore
+msgid ""
+"Enter 3-5 highlights to include in the email message that learners receive "
+"for this section (250 character limit)."
+msgstr ""
+"Éntér 3-5 hïghlïghts tö ïnçlüdé ïn thé émäïl méssägé thät léärnérs réçéïvé "
+"för thïs séçtïön (250 çhäräçtér lïmït). Ⱡ'σяєм ιρѕυм ∂σł#"
+
+#: cms/templates/js/highlights-editor.underscore
+msgid "Highlight {highlight_index}"
+msgstr "Hïghlïght {highlight_index} Ⱡ'σяєм ιρѕυм ∂σłσя ѕι#"
+
+#: cms/templates/js/highlights-editor.underscore
+msgid "A highlight to look forward to this week."
+msgstr ""
+"À hïghlïght tö löök förwärd tö thïs wéék. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
+"¢σηѕє¢тєтυя #"
+
 #: cms/templates/js/license-selector.underscore
 msgid "License Type"
 msgstr "Lïçénsé Týpé Ⱡ'σяєм ιρѕυм ∂σłσя ѕ#"
@@ -11075,12 +11846,6 @@ msgid "New %(item_type)s"
 msgstr "Néw %(item_type)s Ⱡ'σяєм ιρѕυм #"
 
 #: cms/templates/js/metadata-dict-entry.underscore
-#: cms/templates/js/metadata-list-entry.underscore
-#: cms/templates/js/video/metadata-translations-entry.underscore
-msgid "Add"
-msgstr "Àdd Ⱡ'σяєм#"
-
-#: cms/templates/js/metadata-dict-entry.underscore
 #: cms/templates/js/metadata-file-uploader-entry.underscore
 #: cms/templates/js/metadata-list-entry.underscore
 #: cms/templates/js/metadata-number-entry.underscore
@@ -11126,17 +11891,16 @@ msgid "Add your first textbook"
 msgstr "Àdd ýöür fïrst téxtßöök Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σ#"
 
 #: cms/templates/js/partition-group-details.underscore
-msgid "This group controls visibility of:"
-msgstr ""
-"Thïs gröüp çöntröls vïsïßïlïtý öf: Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєт#"
+msgid "This group controls access to:"
+msgstr "Thïs gröüp çöntröls äççéss tö: Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢т#"
 
 #: cms/templates/js/partition-group-details.underscore
 msgid ""
-"Use this group to control a component's visibility in the {linkStart}Course "
-"Outline{linkEnd}."
+"In the {linkStart}Course Outline{linkEnd}, use this group to control access "
+"to a component."
 msgstr ""
-"Ûsé thïs gröüp tö çöntröl ä çömpönént's vïsïßïlïtý ïn thé {linkStart}Çöürsé "
-"Öütlïné{linkEnd}. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєт#"
+"Ìn thé {linkStart}Çöürsé Öütlïné{linkEnd}, üsé thïs gröüp tö çöntröl äççéss "
+"tö ä çömpönént. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєт#"
 
 #: cms/templates/js/previous-video-upload-list.underscore
 msgid "Previous Uploads"
@@ -11148,8 +11912,8 @@ msgstr ""
 "Döwnlöäd äväïläßlé énçödïngs (.çsv) Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєт#"
 
 #: cms/templates/js/previous-video-upload-list.underscore
-msgid "Duration"
-msgstr "Dürätïön Ⱡ'σяєм ιρѕυм ∂#"
+msgid "Thumbnail"
+msgstr "Thümßnäïl Ⱡ'σяєм ιρѕυм ∂σł#"
 
 #: cms/templates/js/previous-video-upload-list.underscore
 msgid "Video ID"
@@ -11250,13 +12014,6 @@ msgstr "wïth %(section_or_subsection)s Ⱡ'σяєм ιρѕυм ∂#"
 #: cms/templates/js/publish-xblock.underscore
 msgid "Staff and Learners"
 msgstr "Stäff änd Léärnérs Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт#"
-
-#: cms/templates/js/publish-xblock.underscore
-msgid ""
-"Some content in this unit is visible only to specific groups of learners."
-msgstr ""
-"Sömé çöntént ïn thïs ünït ïs vïsïßlé önlý tö spéçïfïç gröüps öf léärnérs. "
-"Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя#"
 
 #: cms/templates/js/publish-xblock.underscore
 #: cms/templates/js/staff-lock-editor.underscore
@@ -11370,10 +12127,6 @@ msgid ""
 msgstr ""
 "Ìf thé süßséçtïön döés nöt hävé ä düé däté, léärnérs älwäýs séé théïr sçörés"
 " whén théý süßmït änswérs tö ässéssménts. Ⱡ'σяєм ιρѕυм ∂#"
-
-#: cms/templates/js/show-textbook.underscore
-msgid "View Live"
-msgstr "Vïéw Lïvé Ⱡ'σяєм ιρѕυм ∂σł#"
 
 #: cms/templates/js/signatory-details.underscore
 #: cms/templates/js/signatory-editor.underscore
@@ -11607,18 +12360,92 @@ msgstr "Révïéw Rülés Ⱡ'σяєм ιρѕυм ∂σłσя ѕ#"
 
 #: cms/templates/js/timed-examination-preference-editor.underscore
 msgid ""
-"Specify any additional rules or rule exceptions that the proctoring review "
-"team should enforce when reviewing the videos. For example, you could "
-"specify that calculators are allowed."
+"Specify any rules or rule exceptions that the proctoring review team should "
+"enforce when reviewing the videos. For example, you could specify that "
+"calculators are allowed. These specified rules are visible to learners "
+"before the learners start the exam, along with the {linkStart}general "
+"proctored exam rules{linkEnd}."
 msgstr ""
-"Spéçïfý äný äddïtïönäl rülés ör rülé éxçéptïöns thät thé pröçtörïng révïéw "
-"téäm shöüld énförçé whén révïéwïng thé vïdéös. För éxämplé, ýöü çöüld "
-"spéçïfý thät çälçülätörs äré ällöwéd. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, "
-"¢σηѕє¢тєтυя α∂ιριѕι¢ιηg єłιт, ѕє∂ ∂σ єιυѕмσ∂ тємρσя ιη¢ι∂ι∂υηт υт łαвσяє єт "
-"∂σłσяє мαgηα αłιqυα. υт єηιм α∂ мιηιм νєηιαм, qυιѕ ησѕтяυ∂ єχєя¢ιтαтιση "
-"υłłαм¢σ łαвσяιѕ ηιѕι υт αłιqυιρ єχ єα ¢σммσ∂σ ¢σηѕєqυαт. ∂υιѕ αυтє ιяυяє "
-"∂σłσя ιη яєρяєнєη∂єяιт ιη νσłυρтαтє νєłιт єѕѕє ¢ιłłυм ∂σłσяє єυ ƒυgιαт ηυłłα"
-" ραяιαтυя. єχ¢єρтєυя ѕιηт σ¢¢αє¢αт ¢υρι∂αтαт ηση ρяσι∂єηт, ѕυ#"
+"Spéçïfý äný rülés ör rülé éxçéptïöns thät thé pröçtörïng révïéw téäm shöüld "
+"énförçé whén révïéwïng thé vïdéös. För éxämplé, ýöü çöüld spéçïfý thät "
+"çälçülätörs äré ällöwéd. Thésé spéçïfïéd rülés äré vïsïßlé tö léärnérs "
+"ßéföré thé léärnérs stärt thé éxäm, älöng wïth thé {linkStart}généräl "
+"pröçtöréd éxäm rülés{linkEnd}. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя "
+"α∂ιριѕι¢ιηg єłιт, ѕє∂ ∂σ єιυѕмσ∂ тємρσя ιη¢ι∂ι∂υηт υт łαвσяє єт ∂σłσяє мαgηα"
+" αłιqυα. υт єηιм α∂ мιηιм νєηιαм, qυιѕ ησѕтяυ∂#"
+
+#: cms/templates/js/timed-examination-preference-editor.underscore
+msgid "General Proctored Exam Rules"
+msgstr "Généräl Pröçtöréd Éxäm Rülés Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢#"
+
+#: cms/templates/js/timed-examination-preference-editor.underscore
+msgid ""
+"Specify any rules or rule exceptions that the proctoring review team should "
+"enforce when reviewing the videos. For example, you could specify that "
+"calculators are allowed. These specified rules are visible to learners "
+"before the learners start the exam."
+msgstr ""
+"Spéçïfý äný rülés ör rülé éxçéptïöns thät thé pröçtörïng révïéw téäm shöüld "
+"énförçé whén révïéwïng thé vïdéös. För éxämplé, ýöü çöüld spéçïfý thät "
+"çälçülätörs äré ällöwéd. Thésé spéçïfïéd rülés äré vïsïßlé tö léärnérs "
+"ßéföré thé léärnérs stärt thé éxäm. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя"
+" α∂ιριѕι¢ιηg єłιт, ѕє∂ ∂σ єιυѕмσ∂ тємρσя ιη¢ι∂ι∂υηт υт łαвσяє єт ∂σłσяє "
+"мαgηα αłιqυα. υт єηιм α∂ мιηιм νєηιαм, qυιѕ ησѕтяυ∂ єχєя¢ιтαтιση υłłαм¢σ "
+"łαвσяιѕ ηιѕι υт αłιqυιρ єχ єα ¢σммσ∂σ ¢σηѕєqυαт. ∂υιѕ αυтє ιяυяє ∂σłσя ιη "
+"яєρяєнєη∂#"
+
+#: cms/templates/js/transcript-organization-credentials.underscore
+msgid "Account"
+msgstr "Àççöünt Ⱡ'σяєм ιρѕυм #"
+
+#: cms/templates/js/transcript-organization-credentials.underscore
+msgid ""
+"This action updates the {provider} information for your entire organization."
+msgstr ""
+"Thïs äçtïön üpdätés thé {provider} ïnförmätïön för ýöür éntïré örgänïzätïön."
+" Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕє¢тєтυя #"
+
+#: cms/templates/js/transcript-organization-credentials.underscore
+msgid "Enter the account information for your organization."
+msgstr ""
+"Éntér thé äççöünt ïnförmätïön för ýöür örgänïzätïön. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт "
+"αмєт, ¢σηѕє¢тєтυя α#"
+
+#: cms/templates/js/transcript-organization-credentials.underscore
+msgid "API Key"
+msgstr "ÀPÌ Kéý Ⱡ'σяєм ιρѕυм #"
+
+#: cms/templates/js/transcript-organization-credentials.underscore
+msgid "API Secret"
+msgstr "ÀPÌ Séçrét Ⱡ'σяєм ιρѕυм ∂σłσ#"
+
+#: cms/templates/js/unit-access-editor.underscore
+msgid "Unit Access"
+msgstr "Ûnït Àççéss Ⱡ'σяєм ιρѕυм ∂σłσя #"
+
+#: cms/templates/js/unit-access-editor.underscore
+msgid "Restrict access to:"
+msgstr "Réstrïçt äççéss tö: Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт,#"
+
+#: cms/templates/js/unit-access-editor.underscore
+msgid "Select a group type"
+msgstr "Séléçt ä gröüp týpé Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт,#"
+
+#: cms/templates/js/unit-access-editor.underscore
+msgid "Select one or more groups:"
+msgstr "Séléçt öné ör möré gröüps: Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕ#"
+
+#: cms/templates/js/unit-access-editor.underscore
+msgid "Deleted Group"
+msgstr "Délétéd Gröüp Ⱡ'σяєм ιρѕυм ∂σłσя ѕι#"
+
+#: cms/templates/js/unit-access-editor.underscore
+msgid ""
+"This group no longer exists. Choose another group or do not restrict access "
+"to this unit."
+msgstr ""
+"Thïs gröüp nö löngér éxïsts. Çhöösé änöthér gröüp ör dö nöt réstrïçt äççéss "
+"tö thïs ünït. Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт αмєт, ¢σηѕ#"
 
 #: cms/templates/js/upload-dialog.underscore
 msgid "File upload succeeded"
@@ -11663,9 +12490,18 @@ msgstr ""
 "νσłυρтαтє νєłιт єѕѕє ¢ιłłυм ∂σłσяє єυ ƒυgιαт ηυłłα ραяιαтυя. єχ¢єρтєυя ѕιηт "
 "σ¢¢αє¢αт ¢υρι∂αтαт ηση ρяσι∂єηт, ѕυηт ιη ¢υłρα qυι σ#"
 
-#: cms/templates/js/xblock-string-field-editor.underscore
-msgid "Edit the name"
-msgstr "Édït thé nämé Ⱡ'σяєм ιρѕυм ∂σłσя ѕι#"
+#: cms/templates/js/video-thumbnail.underscore
+msgid ""
+"Recommended image resolution is {imageResolution}, maximum image file size "
+"should be {maxFileSize} and format must be one of {supportedImageFormats}."
+msgstr ""
+"Réçömméndéd ïmägé résölütïön ïs {imageResolution}, mäxïmüm ïmägé fïlé sïzé "
+"shöüld ßé {maxFileSize} änd förmät müst ßé öné öf {supportedImageFormats}. "
+"Ⱡ'σяєм ιρѕυм ∂σłσя ѕιт #"
+
+#: cms/templates/js/xblock-access-editor.underscore
+msgid "Set Access"
+msgstr "Sét Àççéss Ⱡ'σяєм ιρѕυм ∂σłσ#"
 
 #: cms/templates/js/xblock-string-field-editor.underscore
 #, python-format

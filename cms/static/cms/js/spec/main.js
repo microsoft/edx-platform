@@ -26,7 +26,6 @@
         baseUrl: '/base/',
         paths: {
             'gettext': 'xmodule_js/common_static/js/test/i18n',
-            'mustache': 'xmodule_js/common_static/js/vendor/mustache',
             'codemirror': 'xmodule_js/common_static/js/vendor/CodeMirror/codemirror',
             'jquery': 'xmodule_js/common_static/common/js/vendor/jquery',
             'jquery-migrate': 'xmodule_js/common_static/common/js/vendor/jquery-migrate',
@@ -71,7 +70,7 @@
             'domReady': 'xmodule_js/common_static/js/vendor/domReady',
             'URI': 'xmodule_js/common_static/js/vendor/URI.min',
             'mock-ajax': 'xmodule_js/common_static/js/vendor/mock-ajax',
-            mathjax: '//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-MML-AM_SVG&delayStartupUntil=configured',   // eslint-disable-line max-len
+            mathjax: '//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_SVG&delayStartupUntil=configured',   // eslint-disable-line max-len
             'youtube': '//www.youtube.com/player_api?noext',
             'coffee/src/ajax_prefix': 'xmodule_js/common_static/coffee/src/ajax_prefix',
             'js/spec/test_utils': 'js/spec/test_utils'
@@ -258,6 +257,8 @@
         'js/spec/utils/module_spec',
         'js/spec/views/active_video_upload_list_spec',
         'js/spec/views/previous_video_upload_spec',
+        'js/spec/views/video_thumbnail_spec',
+        'js/spec/views/course_video_settings_spec',
         'js/spec/views/previous_video_upload_list_spec',
         'js/spec/views/assets_spec',
         'js/spec/views/baseview_spec',

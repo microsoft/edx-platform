@@ -10,9 +10,11 @@ from django.test import TestCase
 from django.test.utils import override_settings
 from oauth2_provider.models import get_application_model
 
-from openedx.core.djangoapps.api_admin.models import ApiAccessRequest, ApiAccessConfig
+from openedx.core.djangoapps.api_admin.models import ApiAccessConfig, ApiAccessRequest
 from openedx.core.djangoapps.api_admin.tests.factories import (
-    ApiAccessRequestFactory, ApplicationFactory, CatalogFactory
+    ApiAccessRequestFactory,
+    ApplicationFactory,
+    CatalogFactory
 )
 from openedx.core.djangoapps.api_admin.tests.utils import VALID_DATA
 from openedx.core.djangolib.testing.utils import skip_unless_lms

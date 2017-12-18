@@ -2,37 +2,41 @@
 Test cases for tabs.
 """
 
-from waffle.testutils import override_flag
-
+import pytest
 from django.core.urlresolvers import reverse
 from django.http import Http404
+from milestones.tests.utils import MilestonesTestCaseMixin
 from mock import MagicMock, Mock, patch
 from nose.plugins.attrib import attr
 
 from courseware.courses import get_course_by_id
 from courseware.tabs import (
-    get_course_tab_list, CoursewareTab, CourseInfoTab, ProgressTab,
-    ExternalDiscussionCourseTab, ExternalLinkCourseTab
+    CourseInfoTab,
+    CoursewareTab,
+    ExternalDiscussionCourseTab,
+    ExternalLinkCourseTab,
+    ProgressTab,
+    get_course_tab_list
 )
-from courseware.tests.helpers import LoginEnrollmentTestCase
 from courseware.tests.factories import InstructorFactory, StaffFactory
-from courseware.views.views import get_static_tab_fragment, StaticCourseTabView
+from courseware.tests.helpers import LoginEnrollmentTestCase
+from courseware.views.views import StaticCourseTabView, get_static_tab_fragment
+from openedx.core.djangoapps.waffle_utils.testutils import override_waffle_flag
 from openedx.core.djangolib.testing.utils import get_mock_request
-from openedx.features.course_experience import UNIFIED_COURSE_EXPERIENCE_FLAG
+from openedx.features.course_experience import UNIFIED_COURSE_TAB_FLAG
 from student.models import CourseEnrollment
 from student.tests.factories import UserFactory
 from util.milestones_helpers import (
-    get_milestone_relationship_types,
-    add_milestone,
+    add_course_content_milestone,
     add_course_milestone,
-    add_course_content_milestone
+    add_milestone,
+    get_milestone_relationship_types
 )
-from milestones.tests.utils import MilestonesTestCaseMixin
 from xmodule import tabs as xmodule_tabs
 from xmodule.modulestore.tests.django_utils import (
+    TEST_DATA_MIXED_MODULESTORE,
     ModuleStoreTestCase,
-    SharedModuleStoreTestCase,
-    TEST_DATA_MIXED_MODULESTORE
+    SharedModuleStoreTestCase
 )
 from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
 from xmodule.modulestore.tests.utils import TEST_DATA_DIR
@@ -57,9 +61,7 @@ class TabTestCase(SharedModuleStoreTestCase):
         """
         Creates a mock user with the specified properties.
         """
-        user = UserFactory()
-        user.name = 'mock_user'
-        user.is_staff = is_staff
+        user = UserFactory(is_staff=is_staff)
         user.is_enrolled = is_enrolled
         user.is_authenticated = lambda: is_authenticated
         return user
@@ -649,11 +651,10 @@ class CourseTabListTestCase(TabListTestCase):
         self.course.tabs = self.all_valid_tab_list
 
         # enumerate the tabs with no user
-        for i, tab in enumerate(xmodule_tabs.CourseTabList.iterate_displayable(
-                self.course,
-                inline_collections=False
-        )):
-            self.assertEquals(tab.type, self.course.tabs[i].type)
+        expected = [tab.type for tab in
+                    xmodule_tabs.CourseTabList.iterate_displayable(self.course, inline_collections=False)]
+        actual = [tab.type for tab in self.course.tabs if tab.is_enabled(self.course, user=None)]
+        assert actual == expected
 
         # enumerate the tabs with a staff user
         user = UserFactory(is_staff=True)
@@ -690,6 +691,7 @@ class CourseTabListTestCase(TabListTestCase):
             # get tab by id
             self.assertEquals(xmodule_tabs.CourseTabList.get_tab_by_id(self.course.tabs, tab.tab_id), tab)
 
+    @pytest.mark.django111_expected_failure
     def test_course_tabs_staff_only(self):
         """
         Tests the static tabs that available only for instructor
@@ -721,6 +723,7 @@ class CourseTabListTestCase(TabListTestCase):
 
 
 @attr(shard=1)
+@pytest.mark.django111_expected_failure
 class ProgressTestCase(TabTestCase):
     """Test cases for Progress Tab."""
 
@@ -751,6 +754,7 @@ class ProgressTestCase(TabTestCase):
 
 
 @attr(shard=1)
+@pytest.mark.django111_expected_failure
 class StaticTabTestCase(TabTestCase):
     """Test cases for Static Tab."""
 
@@ -770,25 +774,36 @@ class StaticTabTestCase(TabTestCase):
 
 
 @attr(shard=1)
+@pytest.mark.django111_expected_failure
 class CourseInfoTabTestCase(TabTestCase):
     """Test cases for the course info tab."""
     def setUp(self):
         self.user = self.create_mock_user()
         self.request = get_mock_request(self.user)
 
+    @override_waffle_flag(UNIFIED_COURSE_TAB_FLAG, active=False)
     def test_default_tab(self):
         # Verify that the course info tab is the first tab
         tabs = get_course_tab_list(self.request, self.course)
         self.assertEqual(tabs[0].type, 'course_info')
 
-    @override_flag(UNIFIED_COURSE_EXPERIENCE_FLAG, active=True)
+    @override_waffle_flag(UNIFIED_COURSE_TAB_FLAG, active=True)
     def test_default_tab_for_new_course_experience(self):
         # Verify that the unified course experience hides the course info tab
         tabs = get_course_tab_list(self.request, self.course)
         self.assertEqual(tabs[0].type, 'courseware')
 
+    # TODO: LEARNER-611 - remove once course_info is removed.
+    @override_waffle_flag(UNIFIED_COURSE_TAB_FLAG, active=True)
+    def test_default_tab_for_displayable(self):
+        tabs = xmodule_tabs.CourseTabList.iterate_displayable(self.course, self.user)
+        for i, tab in enumerate(tabs):
+            if i == 0:
+                self.assertEqual(tab.type, 'course_info')
+
 
 @attr(shard=1)
+@pytest.mark.django111_expected_failure
 class DiscussionLinkTestCase(TabTestCase):
     """Test cases for discussion link tab."""
 

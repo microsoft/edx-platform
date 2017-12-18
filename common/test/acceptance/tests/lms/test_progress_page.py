@@ -3,24 +3,27 @@
 End-to-end tests for the LMS that utilize the
 progress page.
 """
-import ddt
-
 from contextlib import contextmanager
-from nose.plugins.attrib import attr
-from flaky import flaky
 
-from ..helpers import (
-    UniqueCourseTest, auto_auth, create_multiple_choice_problem, create_multiple_choice_xml, get_modal_alert
-)
+import ddt
+from nose.plugins.attrib import attr
+
 from ...fixtures.course import CourseFixture, XBlockFixtureDesc
 from ...pages.common.logout import LogoutPage
 from ...pages.lms.courseware import CoursewarePage
 from ...pages.lms.instructor_dashboard import InstructorDashboardPage, StudentSpecificAdmin
 from ...pages.lms.problem import ProblemPage
 from ...pages.lms.progress import ProgressPage
-from ...pages.studio.component_editor import ComponentEditorView
-from ...pages.studio.utils import type_in_codemirror
+from ...pages.studio.xblock_editor import XBlockEditorView
 from ...pages.studio.overview import CourseOutlinePage as StudioCourseOutlinePage
+from ...pages.studio.utils import type_in_codemirror
+from ..helpers import (
+    UniqueCourseTest,
+    auto_auth,
+    create_multiple_choice_problem,
+    create_multiple_choice_xml,
+    get_modal_alert
+)
 
 
 class ProgressPageBaseTest(UniqueCourseTest):
@@ -176,7 +179,7 @@ class PersistentGradesTest(ProgressPageBaseTest):
         """
         unit, component = self._get_problem_in_studio()
         component.edit()
-        component_editor = ComponentEditorView(self.browser, component.locator)
+        component_editor = XBlockEditorView(self.browser, component.locator)
         component_editor.set_field_value_and_save('Problem Weight', 5)
         unit.publish()
 
@@ -322,6 +325,9 @@ class SubsectionGradingPolicyTest(ProgressPageBaseTest):
             # Answer the first Lab problem (unit only contains a single problem)
             self._answer_problem_correctly()
             self.progress_page.visit()
+
+            # Verify the basic a11y of the progress page
+            self.progress_page.a11y_audit.check_for_accessibility_errors()
 
             # Verify that y-Axis labels are aria-hidden
             self.assertEqual(['100%', 'true'], self.progress_page.y_tick_label(0))

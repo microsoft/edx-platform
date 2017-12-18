@@ -57,13 +57,16 @@ else
             echo "Finding pylint violations and storing in report..."
             # HACK: we need to print something to the console, otherwise circleci
             # fails and aborts the job because nothing is displayed for > 10 minutes.
-            paver run_pylint -l $PYLINT_THRESHOLD | tee pylint.log || EXIT=1
+            paver run_pylint -l $LOWER_PYLINT_THRESHOLD:$UPPER_PYLINT_THRESHOLD | tee pylint.log || EXIT=1
 
             mkdir -p reports
             PATH=$PATH:node_modules/.bin
 
             echo "Finding ESLint violations and storing report..."
             paver run_eslint -l $ESLINT_THRESHOLD > eslint.log || { cat eslint.log; EXIT=1; }
+
+            echo "Finding Stylelint violations and storing report..."
+            paver run_stylelint -l $STYLELINT_THRESHOLD > stylelint.log || { cat stylelint.log; EXIT=1; }
 
             # Run quality task. Pass in the 'fail-under' percentage to diff-quality
             paver run_quality -p 100 || EXIT=1

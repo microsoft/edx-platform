@@ -8,38 +8,32 @@ import logging
 import os
 import re
 import shutil
-from path import Path as path
-
-from six import text_type
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.core.files import File
-from django.core.servers.basehttp import FileWrapper
 from django.db import transaction
-from django.http import HttpResponse, HttpResponseNotFound, Http404
+from django.http import Http404, HttpResponse, HttpResponseNotFound
 from django.utils.translation import ugettext as _
 from django.views.decorators.csrf import ensure_csrf_cookie
-from django.views.decorators.http import require_http_methods, require_GET
-
-from edxmako.shortcuts import render_to_response
-from xmodule.exceptions import SerializationError
-from xmodule.modulestore.django import modulestore
+from django.views.decorators.http import require_GET, require_http_methods
 from opaque_keys.edx.keys import CourseKey
 from opaque_keys.edx.locator import LibraryLocator
+from path import Path as path
+from six import text_type
 from user_tasks.conf import settings as user_tasks_settings
 from user_tasks.models import UserTaskArtifact, UserTaskStatus
+from wsgiref.util import FileWrapper
 
+from contentstore.storage import course_import_export_storage
+from contentstore.tasks import CourseExportTask, CourseImportTask, export_olx, import_olx
+from contentstore.utils import reverse_course_url, reverse_library_url
+from edxmako.shortcuts import render_to_response
 from student.auth import has_course_author_access
-
 from util.json_request import JsonResponse
 from util.views import ensure_valid_course_key
-from contentstore.storage import course_import_export_storage
-from contentstore.tasks import CourseExportTask, CourseImportTask, create_export_tarball, export_olx, import_olx
-
-from contentstore.utils import reverse_course_url, reverse_library_url
-
+from xmodule.modulestore.django import modulestore
 
 __all__ = [
     'import_handler', 'import_status_handler',
@@ -275,14 +269,14 @@ def import_status_handler(request, course_key_string, filename=None):
     return JsonResponse({"ImportStatus": status})
 
 
-def send_tarball(tarball):
+def send_tarball(tarball, size):
     """
     Renders a tarball to response, for use when sending a tar.gz file to the user.
     """
     wrapper = FileWrapper(tarball)
     response = HttpResponse(wrapper, content_type='application/x-tgz')
     response['Content-Disposition'] = 'attachment; filename=%s' % os.path.basename(tarball.name.encode('utf-8'))
-    response['Content-Length'] = os.path.getsize(tarball.name)
+    response['Content-Length'] = size
     return response
 
 
@@ -297,21 +291,12 @@ def export_handler(request, course_key_string):
 
     GET
         html: return html page for import page
-        application/x-tgz: return tar.gz file containing exported course
         json: not supported
     POST
         Start a Celery task to export the course
 
-    Note that there are 3 ways to request the tar.gz file.  The Studio UI uses
-    a POST request to start the export asynchronously, with a link appearing
-    on the page once it's ready.  Additionally, for backwards compatibility
-    reasons the request header can specify application/x-tgz via HTTP_ACCEPT,
-    or a query parameter can be used (?_accept=application/x-tgz); this will
-    export the course synchronously and return the resulting file (unless the
-    request times out for a large course).
-
-    If the tar.gz file has been requested but the export operation fails, the
-    import page will be returned including a description of the error.
+    The Studio UI uses a POST request to start the export asynchronously, with
+    a link appearing on the page once it's ready.
     """
     course_key = CourseKey.from_string(course_key_string)
     if not has_course_author_access(request.user, course_key):
@@ -341,16 +326,10 @@ def export_handler(request, course_key_string):
     if request.method == 'POST':
         export_olx.delay(request.user.id, course_key_string, request.LANGUAGE_CODE)
         return JsonResponse({'ExportStatus': 1})
-    elif 'application/x-tgz' in requested_format:
-        try:
-            tarball = create_export_tarball(courselike_module, course_key, context)
-            return send_tarball(tarball)
-        except SerializationError:
-            return render_to_response('export.html', context)
     elif 'text/html' in requested_format:
         return render_to_response('export.html', context)
     else:
-        # Only HTML or x-tgz request formats are supported (no JSON).
+        # Only HTML request format is supported (no JSON).
         return HttpResponse(status=406)
 
 
@@ -401,6 +380,7 @@ def export_status_handler(request, course_key_string):
         else:
             # local file, serve from the authorization wrapper view
             output_url = reverse_course_url('export_output_handler', course_key)
+
     elif task_status.state in (UserTaskStatus.FAILED, UserTaskStatus.CANCELED):
         status = max(-(task_status.completed_steps + 1), -2)
         errors = UserTaskArtifact.objects.filter(status=task_status, name='Error')
@@ -443,7 +423,7 @@ def export_output_handler(request, course_key_string):
         try:
             artifact = UserTaskArtifact.objects.get(status=task_status, name='Output')
             tarball = course_import_export_storage.open(artifact.file.name)
-            return send_tarball(tarball)
+            return send_tarball(tarball, artifact.file.storage.size(artifact.file.name))
         except UserTaskArtifact.DoesNotExist:
             raise Http404
         finally:

@@ -1,19 +1,29 @@
 """
 Testing indexing of the courseware as it is changed
 """
-import ddt
 import json
-from lazy.lazy import lazy
 import time
 from datetime import datetime
-from dateutil.tz import tzutc
+from unittest import skip
+from uuid import uuid4
+
+import ddt
+import pytest
+from django.conf import settings
+from lazy.lazy import lazy
 from mock import patch
 from pytz import UTC
-from uuid import uuid4
-from unittest import skip
+from search.search_engine_base import SearchEngine
 
-from django.conf import settings
-
+from contentstore.courseware_index import (
+    CourseAboutSearchIndexer,
+    CoursewareSearchIndexer,
+    LibrarySearchIndexer,
+    SearchIndexingError
+)
+from contentstore.signals.handlers import listen_for_course_publish, listen_for_library_update
+from contentstore.tests.utils import CourseTestCase
+from contentstore.utils import reverse_course_url, reverse_usage_url
 from course_modes.models import CourseMode
 from openedx.core.djangoapps.models.course_details import CourseDetails
 from xmodule.library_tools import normalize_key_for_search
@@ -25,28 +35,19 @@ from xmodule.modulestore.mixed import MixedModuleStore
 from xmodule.modulestore.tests.django_utils import (
     TEST_DATA_MONGO_MODULESTORE,
     TEST_DATA_SPLIT_MODULESTORE,
-    SharedModuleStoreTestCase)
-from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory, LibraryFactory
-from xmodule.modulestore.tests.mongo_connection import MONGO_PORT_NUM, MONGO_HOST
-from xmodule.modulestore.tests.utils import (
-    create_modulestore_instance, LocationMixin,
-    MixedSplitTestCase, MongoContentstoreBuilder
+    SharedModuleStoreTestCase
 )
+from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory, LibraryFactory
+from xmodule.modulestore.tests.mongo_connection import MONGO_HOST, MONGO_PORT_NUM
+from xmodule.modulestore.tests.utils import (
+    LocationMixin,
+    MixedSplitTestCase,
+    MongoContentstoreBuilder,
+    create_modulestore_instance
+)
+from xmodule.partitions.partitions import UserPartition
 from xmodule.tests import DATA_DIR
 from xmodule.x_module import XModuleMixin
-from xmodule.partitions.partitions import UserPartition
-
-from search.search_engine_base import SearchEngine
-
-from contentstore.courseware_index import (
-    CoursewareSearchIndexer,
-    LibrarySearchIndexer,
-    SearchIndexingError,
-    CourseAboutSearchIndexer,
-)
-from contentstore.signals.handlers import listen_for_course_publish, listen_for_library_update
-from contentstore.utils import reverse_course_url, reverse_usage_url
-from contentstore.tests.utils import CourseTestCase
 
 COURSE_CHILD_STRUCTURE = {
     "course": "chapter",
@@ -180,6 +181,7 @@ class MixedWithOptionsTestCase(MixedSplitTestCase):
             store.update_item(item, ModuleStoreEnum.UserID.test)
 
 
+@pytest.mark.django_db
 @ddt.ddt
 class TestCoursewareSearchIndexer(MixedWithOptionsTestCase):
     """ Tests the operation of the CoursewareSearchIndexer """
@@ -739,6 +741,12 @@ class TestTaskExecution(SharedModuleStoreTestCase):
             publish_item=False,
         )
 
+    @classmethod
+    def tearDownClass(cls):
+        SignalHandler.course_published.connect(listen_for_course_publish)
+        SignalHandler.library_updated.connect(listen_for_library_update)
+        super(TestTaskExecution, cls).tearDownClass()
+
     def test_task_indexing_course(self):
         """ Making sure that the receiver correctly fires off the task when invoked by signal """
         searcher = SearchEngine.get_search_engine(CoursewareSearchIndexer.INDEX_NAME)
@@ -1178,7 +1186,7 @@ class GroupConfigurationSearchMongo(CourseTestCase, MixedWithOptionsTestCase):
             'content_type': 'Text',
             'org': self.course.org,
             'content_groups': content_groups,
-            'start_date': datetime(2015, 4, 1, 0, 0, tzinfo=tzutc())
+            'start_date': datetime(2015, 4, 1, 0, 0, tzinfo=UTC)
         }
 
     def _html_experiment_group_result(self, html_unit, content_groups):
@@ -1198,7 +1206,7 @@ class GroupConfigurationSearchMongo(CourseTestCase, MixedWithOptionsTestCase):
             'content_type': 'Text',
             'org': self.course.org,
             'content_groups': content_groups,
-            'start_date': datetime(2015, 4, 1, 0, 0, tzinfo=tzutc())
+            'start_date': datetime(2015, 4, 1, 0, 0, tzinfo=UTC)
         }
 
     def _vertical_experiment_group_result(self, vertical, content_groups):
@@ -1206,7 +1214,7 @@ class GroupConfigurationSearchMongo(CourseTestCase, MixedWithOptionsTestCase):
         Return object with arguments and content group for split_test vertical.
         """
         return {
-            'start_date': datetime(2015, 4, 1, 0, 0, tzinfo=tzutc()),
+            'start_date': datetime(2015, 4, 1, 0, 0, tzinfo=UTC),
             'content': {'display_name': vertical.display_name},
             'course': unicode(self.course.id),
             'location': [
@@ -1238,7 +1246,7 @@ class GroupConfigurationSearchMongo(CourseTestCase, MixedWithOptionsTestCase):
             'content_type': 'Text',
             'org': self.course.org,
             'content_groups': None,
-            'start_date': datetime(2015, 4, 1, 0, 0, tzinfo=tzutc())
+            'start_date': datetime(2015, 4, 1, 0, 0, tzinfo=UTC)
         }
 
     def _get_index_values_from_call_args(self, mock_index):

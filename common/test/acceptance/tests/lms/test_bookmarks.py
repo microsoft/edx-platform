@@ -3,18 +3,19 @@
 End-to-end tests for the courseware unit bookmarks.
 """
 import json
-from nose.plugins.attrib import attr
+from unittest import skip
+
 import requests
-from common.test.acceptance.pages.studio.auto_auth import AutoAuthPage as StudioAutoAuthPage
-from common.test.acceptance.pages.lms.auto_auth import AutoAuthPage as LmsAutoAuthPage
+from nose.plugins.attrib import attr
+
+from common.test.acceptance.fixtures.course import CourseFixture, XBlockFixtureDesc
+from common.test.acceptance.pages.common import BASE_URL
+from common.test.acceptance.pages.common.auto_auth import AutoAuthPage
+from common.test.acceptance.pages.common.logout import LogoutPage
 from common.test.acceptance.pages.lms.bookmarks import BookmarksPage
 from common.test.acceptance.pages.lms.course_home import CourseHomePage
 from common.test.acceptance.pages.lms.courseware import CoursewarePage
 from common.test.acceptance.pages.studio.overview import CourseOutlinePage as StudioCourseOutlinePage
-from common.test.acceptance.pages.common.logout import LogoutPage
-from common.test.acceptance.pages.common import BASE_URL
-
-from common.test.acceptance.fixtures.course import CourseFixture, XBlockFixtureDesc
 from common.test.acceptance.tests.helpers import EventsTestMixin, UniqueCourseTest, is_404_page
 
 
@@ -55,7 +56,7 @@ class BookmarksTestMixin(EventsTestMixin, UniqueCourseTest):
         self.create_course_fixture(num_chapters)
 
         # Auto-auth register for the course.
-        LmsAutoAuthPage(self.browser, username=self.USERNAME, email=self.EMAIL, course_id=self.course_id).visit()
+        AutoAuthPage(self.browser, username=self.USERNAME, email=self.EMAIL, course_id=self.course_id).visit()
 
         self.courseware_page.visit()
 
@@ -158,7 +159,7 @@ class BookmarksTest(BookmarksTestMixin):
 
         # Logout and login as staff
         LogoutPage(self.browser).visit()
-        StudioAutoAuthPage(
+        AutoAuthPage(
             self.browser, username=self.USERNAME, email=self.EMAIL, course_id=self.course_id, staff=True
         ).visit()
 
@@ -170,7 +171,7 @@ class BookmarksTest(BookmarksTestMixin):
 
         # Logout and login as a student.
         LogoutPage(self.browser).visit()
-        LmsAutoAuthPage(self.browser, username=self.USERNAME, email=self.EMAIL, course_id=self.course_id).visit()
+        AutoAuthPage(self.browser, username=self.USERNAME, email=self.EMAIL, course_id=self.course_id).visit()
 
         # Visit courseware as a student.
         self.courseware_page.visit()
@@ -348,7 +349,7 @@ class BookmarksTest(BookmarksTestMixin):
         self._verify_breadcrumbs(num_units=1)
 
         LogoutPage(self.browser).visit()
-        LmsAutoAuthPage(
+        AutoAuthPage(
             self.browser,
             username=self.USERNAME,
             email=self.EMAIL,
@@ -360,11 +361,12 @@ class BookmarksTest(BookmarksTestMixin):
         self.update_and_publish_block_display_name(modified_name)
 
         LogoutPage(self.browser).visit()
-        LmsAutoAuthPage(self.browser, username=self.USERNAME, email=self.EMAIL, course_id=self.course_id).visit()
+        AutoAuthPage(self.browser, username=self.USERNAME, email=self.EMAIL, course_id=self.course_id).visit()
 
         self.bookmarks_page.visit()
         self._verify_breadcrumbs(num_units=1, modified_name=modified_name)
 
+    @skip("andya: 10/19/17: potentially flaky test")
     def test_unreachable_bookmark(self):
         """
         Scenario: We should get a HTTP 404 for an unreachable bookmark.

@@ -5,55 +5,48 @@ Tests of verify_student views.
 
 import json
 import urllib
-from datetime import timedelta, datetime
+from datetime import datetime, timedelta
 from uuid import uuid4
 
+import boto
 import ddt
 import httpretty
 import mock
-from nose.plugins.attrib import attr
-import boto
 import moto
 import pytz
-from bs4 import BeautifulSoup
-from mock import patch, Mock
 import requests
-from waffle.testutils import override_switch
-
+from bs4 import BeautifulSoup
 from django.conf import settings
-from django.core.urlresolvers import reverse
 from django.core import mail
+from django.core.urlresolvers import reverse
 from django.test import TestCase
 from django.test.client import Client, RequestFactory
 from django.test.utils import override_settings
-
-from opaque_keys.edx.locations import SlashSeparatedCourseKey
+from mock import Mock, patch
+from nose.plugins.attrib import attr
+from opaque_keys.edx.keys import CourseKey
 from opaque_keys.edx.locator import CourseLocator
+from waffle.testutils import override_switch
 
+from common.test.utils import XssTestMixin
 from course_modes.models import CourseMode
 from course_modes.tests.factories import CourseModeFactory
-from common.test.utils import XssTestMixin
-from commerce.models import CommerceConfiguration
-from commerce.tests import TEST_PAYMENT_DATA, TEST_API_URL, TEST_PUBLIC_URL_ROOT
+from lms.djangoapps.commerce.models import CommerceConfiguration
+from lms.djangoapps.commerce.tests import TEST_API_URL, TEST_PAYMENT_DATA, TEST_PUBLIC_URL_ROOT
+from lms.djangoapps.commerce.utils import EcommerceService
+from lms.djangoapps.verify_student.models import SoftwareSecurePhotoVerification, VerificationDeadline
+from lms.djangoapps.verify_student.views import PayAndVerifyView, checkout_with_ecommerce_service, render_to_response
 from openedx.core.djangoapps.embargo.test_utils import restrict_course
-from openedx.core.djangoapps.user_api.accounts.api import get_account_settings
 from openedx.core.djangoapps.theming.tests.test_util import with_comprehensive_theme
-from shoppingcart.models import Order, CertificateItem
-from student.tests.factories import UserFactory, CourseEnrollmentFactory
+from openedx.core.djangoapps.user_api.accounts.api import get_account_settings
+from shoppingcart.models import CertificateItem, Order
 from student.models import CourseEnrollment
+from student.tests.factories import CourseEnrollmentFactory, UserFactory
 from util.testing import UrlResetMixin
+from xmodule.modulestore import ModuleStoreEnum
+from xmodule.modulestore.django import modulestore
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
-from xmodule.modulestore.django import modulestore
-from xmodule.modulestore import ModuleStoreEnum
-
-
-from lms.djangoapps.verify_student.models import (
-    VerificationDeadline, SoftwareSecurePhotoVerification,
-)
-from lms.djangoapps.verify_student.views import (
-    checkout_with_ecommerce_service, render_to_response, PayAndVerifyView,
-)
 
 
 def mock_render_to_response(*args, **kwargs):
@@ -96,8 +89,15 @@ class TestPayAndVerifyView(UrlResetMixin, ModuleStoreTestCase, XssTestMixin):
     PASSWORD = "test_password"
 
     NOW = datetime.now(pytz.UTC)
-    YESTERDAY = NOW - timedelta(days=1)
-    TOMORROW = NOW + timedelta(days=1)
+    YESTERDAY = 'yesterday'
+    TOMORROW = 'tomorrow'
+    NEXT_YEAR = 'next_year'
+    DATES = {
+        YESTERDAY: NOW - timedelta(days=1),
+        TOMORROW: NOW + timedelta(days=1),
+        NEXT_YEAR: NOW + timedelta(days=360),
+        None: None,
+    }
 
     URLCONF_MODULES = ['openedx.core.djangoapps.embargo']
 
@@ -139,7 +139,6 @@ class TestPayAndVerifyView(UrlResetMixin, ModuleStoreTestCase, XssTestMixin):
     )
     def test_start_flow_with_ecommerce(self):
         """Verify user gets redirected to ecommerce checkout when ecommerce checkout is enabled."""
-        checkout_page = '/test_basket/'
         sku = 'TESTSKU'
         # When passing a SKU ecommerce api gets called.
         httpretty.register_uri(
@@ -148,15 +147,19 @@ class TestPayAndVerifyView(UrlResetMixin, ModuleStoreTestCase, XssTestMixin):
             body=json.dumps(['foo', 'bar']),
             content_type="application/json",
         )
+        configuration = CommerceConfiguration.objects.create(checkout_on_ecommerce_service=True)
+        checkout_page = configuration.MULTIPLE_ITEMS_BASKET_PAGE_URL
+        checkout_page += "?utm_source=test"
         httpretty.register_uri(httpretty.GET, "{}{}".format(TEST_PUBLIC_URL_ROOT, checkout_page))
-        CommerceConfiguration.objects.create(
-            checkout_on_ecommerce_service=True,
-            single_course_checkout_page=checkout_page
-        )
+
         course = self._create_course('verified', sku=sku)
         self._enroll(course.id)
-        response = self._get_page('verify_student_start_flow', course.id, expected_status_code=302)
-        expected_page = '{}{}?sku={}'.format(TEST_PUBLIC_URL_ROOT, checkout_page, sku)
+
+        # Verify that utm params are included in the url used for redirect
+        url_with_utm = 'http://www.example.com/basket/add/?utm_source=test&sku=TESTSKU'
+        with mock.patch.object(EcommerceService, 'get_checkout_page_url', return_value=url_with_utm):
+            response = self._get_page('verify_student_start_flow', course.id, expected_status_code=302)
+        expected_page = '{}{}&sku={}'.format(TEST_PUBLIC_URL_ROOT, checkout_page, sku)
         self.assertRedirects(response, expected_page, fetch_redirect_response=False)
 
     @ddt.data(
@@ -496,7 +499,7 @@ class TestPayAndVerifyView(UrlResetMixin, ModuleStoreTestCase, XssTestMixin):
     )
     @ddt.unpack
     def test_payment_confirmation_course_details(self, course_start, show_courseware_url):
-        course = self._create_course("verified", course_start=course_start)
+        course = self._create_course("verified", course_start=self.DATES[course_start])
         self._enroll(course.id, "verified")
         response = self._get_page('verify_student_payment_confirmation', course.id)
 
@@ -757,9 +760,10 @@ class TestPayAndVerifyView(UrlResetMixin, ModuleStoreTestCase, XssTestMixin):
         self.assertContains(response, "verification deadline")
         self.assertContains(response, deadline)
 
-    @ddt.data(datetime.now(tz=pytz.UTC) + timedelta(days=360), None)
+    @ddt.data(NEXT_YEAR, None)
     def test_course_mode_expired_verification_deadline_in_future(self, verification_deadline):
         """Verify that student can not upgrade in expired course mode."""
+        verification_deadline = self.DATES[verification_deadline]
         course_modes = ("verified", "credit")
         course = self._create_course(*course_modes)
 
@@ -1314,7 +1318,7 @@ class TestCreateOrderView(ModuleStoreTestCase):
         self.course_id = 'Robot/999/Test_Course'
         self.course = CourseFactory.create(org='Robot', number='999', display_name='Test Course')
         verified_mode = CourseMode(
-            course_id=SlashSeparatedCourseKey("Robot", "999", 'Test_Course'),
+            course_id=CourseKey.from_string("Robot/999/Test_Course"),
             mode_slug="verified",
             mode_display_name="Verified Certificate",
             min_price=50

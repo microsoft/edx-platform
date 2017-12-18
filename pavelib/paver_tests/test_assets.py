@@ -1,141 +1,20 @@
 """Unit tests for the Paver asset tasks."""
 
-import ddt
 import os
 from unittest import TestCase
-from pavelib.assets import collect_assets, COLLECTSTATIC_LOG_DIR_ARG
-from paver.easy import call_task, path
+
+import ddt
 from mock import patch
-from watchdog.observers.polling import PollingObserver
+from paver.easy import call_task, path
+from watchdog.observers import Observer
+
+from pavelib.assets import COLLECTSTATIC_LOG_DIR_ARG, collect_assets
+
+from ..utils.envs import Env
 from .utils import PaverTestCase
 
 ROOT_PATH = path(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-TEST_THEME = ROOT_PATH / "common/test/test-theme"  # pylint: disable=invalid-name
-
-
-@ddt.ddt
-class TestPaverAssetTasks(PaverTestCase):
-    """
-    Test the Paver asset tasks.
-    """
-    @ddt.data(
-        [""],
-        ["--force"],
-        ["--debug"],
-        ["--system=lms"],
-        ["--system=lms --force"],
-        ["--system=studio"],
-        ["--system=studio --force"],
-        ["--system=lms,studio"],
-        ["--system=lms,studio --force"],
-    )
-    @ddt.unpack
-    def test_compile_sass(self, options):
-        """
-        Test the "compile_sass" task.
-        """
-        parameters = options.split(" ")
-        system = []
-        if "--system=studio" not in parameters:
-            system += ["lms"]
-        if "--system=lms" not in parameters:
-            system += ["studio"]
-        debug = "--debug" in parameters
-        force = "--force" in parameters
-        self.reset_task_messages()
-        call_task('pavelib.assets.compile_sass', options={"system": system, "debug": debug, "force": force})
-        expected_messages = []
-        if force:
-            expected_messages.append("rm -rf common/static/css/*.css")
-        expected_messages.append("libsass common/static/sass")
-
-        if "lms" in system:
-            if force:
-                expected_messages.append("rm -rf lms/static/css/*.css")
-            expected_messages.append("libsass lms/static/sass")
-            if force:
-                expected_messages.append("rm -rf lms/static/certificates/css/*.css")
-            expected_messages.append("libsass lms/static/certificates/sass")
-        if "studio" in system:
-            if force:
-                expected_messages.append("rm -rf cms/static/css/*.css")
-            expected_messages.append("libsass cms/static/sass")
-
-        self.assertEquals(self.task_messages, expected_messages)
-
-
-@ddt.ddt
-class TestPaverThemeAssetTasks(PaverTestCase):
-    """
-    Test the Paver asset tasks.
-    """
-    @ddt.data(
-        [""],
-        ["--force"],
-        ["--debug"],
-        ["--system=lms"],
-        ["--system=lms --force"],
-        ["--system=studio"],
-        ["--system=studio --force"],
-        ["--system=lms,studio"],
-        ["--system=lms,studio --force"],
-    )
-    @ddt.unpack
-    def test_compile_theme_sass(self, options):
-        """
-        Test the "compile_sass" task.
-        """
-        parameters = options.split(" ")
-        system = []
-
-        if "--system=studio" not in parameters:
-            system += ["lms"]
-        if "--system=lms" not in parameters:
-            system += ["studio"]
-        debug = "--debug" in parameters
-        force = "--force" in parameters
-
-        self.reset_task_messages()
-        call_task(
-            'pavelib.assets.compile_sass',
-            options={"system": system, "debug": debug, "force": force, "theme_dirs": [TEST_THEME.dirname()],
-                     "themes": [TEST_THEME.basename()]},
-        )
-        expected_messages = []
-        if force:
-            expected_messages.append("rm -rf common/static/css/*.css")
-        expected_messages.append("libsass common/static/sass")
-
-        if "lms" in system:
-            expected_messages.append("mkdir_p " + repr(TEST_THEME / "lms/static/css"))
-
-            if force:
-                expected_messages.append("rm -rf " + str(TEST_THEME) + "/lms/static/css/*.css")
-            expected_messages.append("libsass lms/static/sass")
-            if force:
-                expected_messages.append("rm -rf " + str(TEST_THEME) + "/lms/static/css/*.css")
-            expected_messages.append("libsass " + str(TEST_THEME) + "/lms/static/sass")
-            if force:
-                expected_messages.append("rm -rf lms/static/css/*.css")
-            expected_messages.append("libsass lms/static/sass")
-            if force:
-                expected_messages.append("rm -rf lms/static/certificates/css/*.css")
-            expected_messages.append("libsass lms/static/certificates/sass")
-
-        if "studio" in system:
-            expected_messages.append("mkdir_p " + repr(TEST_THEME / "cms/static/css"))
-            if force:
-                expected_messages.append("rm -rf " + str(TEST_THEME) + "/cms/static/css/*.css")
-            expected_messages.append("libsass cms/static/sass")
-            if force:
-                expected_messages.append("rm -rf " + str(TEST_THEME) + "/cms/static/css/*.css")
-            expected_messages.append("libsass " + str(TEST_THEME) + "/cms/static/sass")
-
-            if force:
-                expected_messages.append("rm -rf cms/static/css/*.css")
-            expected_messages.append("libsass cms/static/sass")
-
-        self.assertEquals(self.task_messages, expected_messages)
+TEST_THEME_DIR = ROOT_PATH / "common/test/test-theme"  # pylint: disable=invalid-name
 
 
 class TestPaverWatchAssetTasks(TestCase):
@@ -147,8 +26,8 @@ class TestPaverWatchAssetTasks(TestCase):
         self.expected_sass_directories = [
             path('common/static/sass'),
             path('common/static'),
+            path('node_modules/@edx'),
             path('node_modules'),
-            path('node_modules/edx-pattern-library/node_modules'),
             path('lms/static/sass/partials'),
             path('lms/static/sass'),
             path('lms/static/certificates/sass'),
@@ -166,7 +45,7 @@ class TestPaverWatchAssetTasks(TestCase):
         Test the "compile_sass" task.
         """
         with patch('pavelib.assets.SassWatcher.register') as mock_register:
-            with patch('pavelib.assets.PollingObserver.start'):
+            with patch('pavelib.assets.Observer.start'):
                 with patch('pavelib.assets.execute_webpack_watch') as mock_webpack:
                     call_task(
                         'pavelib.assets.watch_assets',
@@ -177,7 +56,7 @@ class TestPaverWatchAssetTasks(TestCase):
 
                     sass_watcher_args = mock_register.call_args_list[0][0]
 
-                    self.assertIsInstance(sass_watcher_args[0], PollingObserver)
+                    self.assertIsInstance(sass_watcher_args[0], Observer)
                     self.assertIsInstance(sass_watcher_args[1], list)
                     self.assertItemsEqual(sass_watcher_args[1], self.expected_sass_directories)
 
@@ -186,25 +65,28 @@ class TestPaverWatchAssetTasks(TestCase):
         Test the Paver watch asset tasks with theming enabled.
         """
         self.expected_sass_directories.extend([
-            path(TEST_THEME) / 'lms/static/sass',
-            path(TEST_THEME) / 'lms/static/sass/partials',
-            path(TEST_THEME) / 'cms/static/sass',
-            path(TEST_THEME) / 'cms/static/sass/partials',
+            path(TEST_THEME_DIR) / 'lms/static/sass',
+            path(TEST_THEME_DIR) / 'lms/static/sass/partials',
+            path(TEST_THEME_DIR) / 'cms/static/sass',
+            path(TEST_THEME_DIR) / 'cms/static/sass/partials',
         ])
 
         with patch('pavelib.assets.SassWatcher.register') as mock_register:
-            with patch('pavelib.assets.PollingObserver.start'):
+            with patch('pavelib.assets.Observer.start'):
                 with patch('pavelib.assets.execute_webpack_watch') as mock_webpack:
                     call_task(
                         'pavelib.assets.watch_assets',
-                        options={"background": True, "theme_dirs": [TEST_THEME.dirname()],
-                                 "themes": [TEST_THEME.basename()]},
+                        options={
+                            "background": True,
+                            "theme_dirs": [TEST_THEME_DIR.dirname()],
+                            "themes": [TEST_THEME_DIR.basename()]
+                        },
                     )
                     self.assertEqual(mock_register.call_count, 2)
                     self.assertEqual(mock_webpack.call_count, 1)
 
                     sass_watcher_args = mock_register.call_args_list[0][0]
-                    self.assertIsInstance(sass_watcher_args[0], PollingObserver)
+                    self.assertIsInstance(sass_watcher_args[0], Observer)
                     self.assertIsInstance(sass_watcher_args[1], list)
                     self.assertItemsEqual(sass_watcher_args[1], self.expected_sass_directories)
 
@@ -249,12 +131,12 @@ class TestCollectAssets(PaverTestCase):
         if specified_log_loc is None:
             collect_assets(
                 systems,
-                "devstack"
+                Env.DEVSTACK_SETTINGS
             )
         else:
             collect_assets(
                 systems,
-                "devstack",
+                Env.DEVSTACK_SETTINGS,
                 **specified_log_dict
             )
         self.assertEqual(self.task_messages, expected_messages)
@@ -268,7 +150,7 @@ class TestCollectAssets(PaverTestCase):
         systems = ["lms"]
         kwargs = {COLLECTSTATIC_LOG_DIR_ARG: None}
         expected_messages = self._set_expected_messages(log_location=expected_log_loc, systems=systems)
-        collect_assets(systems, "devstack", **kwargs)
+        collect_assets(systems, Env.DEVSTACK_SETTINGS, **kwargs)
         self.assertEqual(self.task_messages, expected_messages)
 
     def _set_expected_messages(self, log_location, systems):
@@ -281,8 +163,9 @@ class TestCollectAssets(PaverTestCase):
         expected_messages = []
         for sys in systems:
             expected_messages.append(
-                'python manage.py {system} --settings=devstack collectstatic --noinput {log_loc}'.format(
+                'python manage.py {system} --settings={settings} collectstatic --noinput {log_loc}'.format(
                     system=sys,
+                    settings=Env.DEVSTACK_SETTINGS,
                     log_loc=log_location
                 )
             )

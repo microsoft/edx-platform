@@ -18,6 +18,7 @@ try:
 except ImportError:
     dog_stats_api = None
 from pytz import utc
+from django.utils.encoding import smart_text
 
 from capa.capa_problem import LoncapaProblem, LoncapaSystem
 from capa.inputtypes import Status
@@ -25,9 +26,10 @@ from capa.responsetypes import StudentInputError, ResponseError, LoncapaProblemE
 from capa.util import convert_files_to_filenames, get_inner_html_from_xpath
 from xblock.fields import Boolean, Dict, Float, Integer, Scope, String, XMLString
 from xblock.scorable import ScorableXBlockMixin, Score
-from xmodule.capa_base_constants import RANDOMIZATION, SHOWANSWER, SHOW_CORRECTNESS
+from xmodule.capa_base_constants import RANDOMIZATION, SHOWANSWER
 from xmodule.exceptions import NotFoundError
-from .fields import Date, Timedelta
+from xmodule.graders import ShowCorrectness
+from .fields import Date, Timedelta, ScoreField
 from .progress import Progress
 
 from openedx.core.djangolib.markup import HTML, Text
@@ -103,7 +105,8 @@ class CapaFields(object):
     attempts = Integer(
         help=_("Number of attempts taken by the student on this problem"),
         default=0,
-        scope=Scope.user_state)
+        scope=Scope.user_state
+    )
     max_attempts = Integer(
         display_name=_("Maximum Attempts"),
         help=_("Defines the number of times a student can try to answer this problem. "
@@ -120,11 +123,11 @@ class CapaFields(object):
         help=_("Defines when to show whether a learner's answer to the problem is correct. "
                "Configured on the subsection."),
         scope=Scope.settings,
-        default=SHOW_CORRECTNESS.ALWAYS,
+        default=ShowCorrectness.ALWAYS,
         values=[
-            {"display_name": _("Always"), "value": SHOW_CORRECTNESS.ALWAYS},
-            {"display_name": _("Never"), "value": SHOW_CORRECTNESS.NEVER},
-            {"display_name": _("Past Due"), "value": SHOW_CORRECTNESS.PAST_DUE},
+            {"display_name": _("Always"), "value": ShowCorrectness.ALWAYS},
+            {"display_name": _("Never"), "value": ShowCorrectness.NEVER},
+            {"display_name": _("Past Due"), "value": ShowCorrectness.PAST_DUE},
         ],
     )
     showanswer = String(
@@ -182,6 +185,9 @@ class CapaFields(object):
                        scope=Scope.user_state, default={})
     input_state = Dict(help=_("Dictionary for maintaining the state of inputtypes"), scope=Scope.user_state)
     student_answers = Dict(help=_("Dictionary with the current student responses"), scope=Scope.user_state)
+
+    # enforce_type is set to False here because this field is saved as a dict in the database.
+    score = ScoreField(help=_("Dictionary with the current student score"), scope=Scope.user_state, enforce_type=False)
     has_saved_answers = Boolean(help=_("Whether or not the answers have been saved since last submit"),
                                 scope=Scope.user_state)
     done = Boolean(help=_("Whether the student has answered the problem"), scope=Scope.user_state)
@@ -291,7 +297,8 @@ class CapaMixin(ScorableXBlockMixin, CapaFields):
 
             self.set_state_from_lcp()
 
-        self.set_score(self.score_from_lcp())
+        if self.score is None:
+            self.set_score(self.score_from_lcp())
 
         assert self.seed is not None
 
@@ -379,9 +386,8 @@ class CapaMixin(ScorableXBlockMixin, CapaFields):
         """
         For now, just return weighted earned / weighted possible
         """
-        score = self.get_score()
-        raw_earned = score.raw_earned
-        raw_possible = score.raw_possible
+        raw_earned = self.score.raw_earned
+        raw_possible = self.score.raw_possible
 
         if raw_possible > 0:
             if self.weight is not None:
@@ -635,12 +641,15 @@ class CapaMixin(ScorableXBlockMixin, CapaFields):
             # Translators: {previous_hints} is the HTML of hints that have already been generated, {hint_number_prefix}
             # is a header for this hint, and {hint_text} is the text of the hint itself.
             # This string is being passed to translation only for possible reordering of the placeholders.
-            total_text = HTML(_('{previous_hints}<li><strong>{hint_number_prefix}</strong>{hint_text}</li>')).format(
+            total_text = HTML(_('{previous_hints}{list_start_tag}{strong_text}{hint_text}</li>')).format(
                 previous_hints=HTML(total_text),
-                # Translators: e.g. "Hint 1 of 3: " meaning we are showing the first of three hints.
-                # This text is shown in bold before the accompanying hint text.
-                hint_number_prefix=Text(_("Hint ({hint_num} of {hints_count}): ")).format(
-                    hint_num=counter + 1, hints_count=len(demand_hints)
+                list_start_tag=HTML('<li class="hint-index-{counter}" tabindex="-1">').format(counter=counter),
+                strong_text=HTML('<strong>{hint_number_prefix}</strong>').format(
+                    # Translators: e.g. "Hint 1 of 3: " meaning we are showing the first of three hints.
+                    # This text is shown in bold before the accompanying hint text.
+                    hint_number_prefix=Text(_("Hint ({hint_num} of {hints_count}): ")).format(
+                        hint_num=counter + 1, hints_count=len(demand_hints)
+                    )
                 ),
                 # Course-authored HTML demand hints are supported.
                 hint_text=HTML(get_inner_html_from_xpath(demand_hints[counter]))
@@ -695,7 +704,7 @@ class CapaMixin(ScorableXBlockMixin, CapaFields):
 
         content = {
             'name': self.display_name_with_default,
-            'html': html,
+            'html': smart_text(html),
             'weight': self.weight,
         }
 
@@ -709,7 +718,7 @@ class CapaMixin(ScorableXBlockMixin, CapaFields):
         save_message = None
         if self.has_saved_answers:
             save_message = _(
-                "Your answers were previously saved. Click '{button_name}' to grade them."
+                u"Your answers were previously saved. Click '{button_name}' to grade them."
             ).format(button_name=self.submit_button_name())
 
         context = {
@@ -900,7 +909,7 @@ class CapaMixin(ScorableXBlockMixin, CapaFields):
         elif self.showanswer == SHOWANSWER.ANSWERED:
             # NOTE: this is slightly different from 'attempted' -- resetting the problems
             # makes lcp.done False, but leaves attempts unchanged.
-            return self.lcp.done
+            return self.is_correct()
         elif self.showanswer == SHOWANSWER.CLOSED:
             return self.closed()
         elif self.showanswer == SHOWANSWER.FINISHED:
@@ -921,17 +930,11 @@ class CapaMixin(ScorableXBlockMixin, CapaFields):
 
         Limits access to the correct/incorrect flags, messages, and problem score.
         """
-        if self.show_correctness == SHOW_CORRECTNESS.NEVER:
-            return False
-        elif self.runtime.user_is_staff:
-            # This is after the 'never' check because admins can see correctness
-            # unless the problem explicitly prevents it
-            return True
-        elif self.show_correctness == SHOW_CORRECTNESS.PAST_DUE:
-            return self.is_past_due()
-
-        # else: self.show_correctness == SHOW_CORRECTNESS.ALWAYS
-        return True
+        return ShowCorrectness.correctness_available(
+            show_correctness=self.show_correctness,
+            due_date=self.close_date,
+            has_staff_access=self.runtime.user_is_staff,
+        )
 
     def update_score(self, data):
         """
@@ -1127,16 +1130,18 @@ class CapaMixin(ScorableXBlockMixin, CapaFields):
 
         return answers
 
-    def publish_grade(self, only_if_higher=None):
+    def publish_grade(self, score=None, only_if_higher=None):
         """
         Publishes the student's current grade to the system as an event
         """
+        if not score:
+            score = self.score
         self.runtime.publish(
             self,
             'grade',
             {
-                'value': self.score.raw_earned,
-                'max_value': self.score.raw_possible,
+                'value': score.raw_earned,
+                'max_value': score.raw_possible,
                 'only_if_higher': only_if_higher,
             }
         )
@@ -1237,8 +1242,12 @@ class CapaMixin(ScorableXBlockMixin, CapaFields):
             # Otherwise, display just an error message,
             # without a stack trace
             else:
-                # Translators: {msg} will be replaced with a problem's error message.
-                msg = inst.message
+                escaped_message = cgi.escape(inst.args[0])
+                try:
+                    # only return the error value of the exception
+                    msg = escaped_message.split("\\n")[-2].split(": ", 1)[1]
+                except IndexError:
+                    msg = escaped_message
 
             return {'success': msg}
 
@@ -1612,7 +1621,6 @@ class CapaMixin(ScorableXBlockMixin, CapaFields):
         orig_score = self.get_score()
         event_info['orig_score'] = orig_score.raw_earned
         event_info['orig_total'] = orig_score.raw_possible
-
         try:
             calculated_score = self.calculate_score()
 
@@ -1630,8 +1638,7 @@ class CapaMixin(ScorableXBlockMixin, CapaFields):
         # rescoring should have no effect on attempts, so don't
         # need to increment here, or mark done.  Just save.
         self.set_state_from_lcp()
-        self.set_score(calculated_score)
-        self.publish_grade(only_if_higher)
+        self.publish_grade(score=calculated_score, only_if_higher=only_if_higher)
 
         event_info['new_score'] = calculated_score.raw_earned
         event_info['new_total'] = calculated_score.raw_possible

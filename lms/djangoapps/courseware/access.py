@@ -10,30 +10,17 @@ Note: The access control logic in this file does NOT check for enrollment in
   If enrollment is to be checked, use get_course_with_access in courseware.courses.
   It is a wrapper around has_access that additionally checks for enrollment.
 """
-from datetime import datetime
 import logging
-import pytz
+from datetime import datetime
 
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
-from django.utils.timezone import UTC
-
+from pytz import UTC
 from opaque_keys.edx.keys import CourseKey, UsageKey
-
-from util import milestones_helpers as milestones_helpers
 from xblock.core import XBlock
 
-from xmodule.course_module import (
-    CourseDescriptor,
-    CATALOG_VISIBILITY_CATALOG_AND_ABOUT,
-    CATALOG_VISIBILITY_ABOUT,
-)
-from xmodule.error_module import ErrorDescriptor
-from xmodule.x_module import XModule
-from xmodule.partitions.partitions import NoSuchUserPartitionError, NoSuchUserPartitionGroupError
-
 from courseware.access_response import (
-    MilestoneError,
+    MilestoneAccessError,
     MobileAvailabilityError,
     VisibilityError,
 )
@@ -43,7 +30,8 @@ from courseware.access_utils import (
     adjust_start_date,
     check_start_date,
     debug,
-    in_preview_mode
+    in_preview_mode,
+    check_course_open_for_learner,
 )
 from courseware.masquerade import get_masquerade_role, is_masquerading_as_student
 from lms.djangoapps.ccx.custom_exception import CCXLocatorValidationException
@@ -59,16 +47,20 @@ from student.roles import (
     CourseInstructorRole,
     CourseStaffRole,
     GlobalStaff,
-    SupportStaffRole,
     OrgInstructorRole,
     OrgStaffRole,
+    SupportStaffRole
 )
+from util import milestones_helpers as milestones_helpers
 from util.milestones_helpers import (
-    get_pre_requisite_courses_not_completed,
     any_unfulfilled_milestones,
-    is_prerequisite_courses_enabled,
+    get_pre_requisite_courses_not_completed,
+    is_prerequisite_courses_enabled
 )
-from ccx_keys.locator import CCXLocator
+from xmodule.course_module import CATALOG_VISIBILITY_ABOUT, CATALOG_VISIBILITY_CATALOG_AND_ABOUT, CourseDescriptor
+from xmodule.error_module import ErrorDescriptor
+from xmodule.partitions.partitions import NoSuchUserPartitionError, NoSuchUserPartitionGroupError
+from xmodule.x_module import XModule
 
 log = logging.getLogger(__name__)
 
@@ -184,31 +176,6 @@ def has_staff_access_to_preview_mode(user, course_key):
     return has_admin_access_to_course or is_masquerading_as_student(user, course_key)
 
 
-def _can_access_descriptor_with_start_date(user, descriptor, course_key):  # pylint: disable=invalid-name
-    """
-    Checks if a user has access to a descriptor based on its start date.
-
-    If there is no start date specified, grant access.
-    Else, check if we're past the start date.
-
-    Note:
-        We do NOT check whether the user is staff or if the descriptor
-        is detached... it is assumed both of these are checked by the caller.
-
-    Arguments:
-        user (User): the user whose descriptor access we are checking.
-        descriptor (AType): the descriptor for which we are checking access,
-            where AType is CourseDescriptor, CourseOverview, or any other class
-            that represents a descriptor and has the attributes .location, .id,
-            .start, and .days_early_for_beta.
-
-    Returns:
-        AccessResponse: The result of this access check. Possible results are
-            ACCESS_GRANTED or a StartDateError.
-    """
-    return check_start_date(user, descriptor.days_early_for_beta, descriptor.start, course_key)
-
-
 def _can_view_courseware_with_prerequisites(user, course):  # pylint: disable=invalid-name
     """
     Checks if a user has access to a course based on its prerequisites.
@@ -305,9 +272,9 @@ def _can_enroll_courselike(user, courselike):
         debug("Deny: invitation only")
         return ACCESS_DENIED
 
-    now = datetime.now(UTC())
-    enrollment_start = courselike.enrollment_start or datetime.min.replace(tzinfo=pytz.UTC)
-    enrollment_end = courselike.enrollment_end or datetime.max.replace(tzinfo=pytz.UTC)
+    now = datetime.now(UTC)
+    enrollment_start = courselike.enrollment_start or datetime.min.replace(tzinfo=UTC)
+    enrollment_end = courselike.enrollment_end or datetime.max.replace(tzinfo=UTC)
     if reg_method_ok and enrollment_start < now < enrollment_end:
         debug("Allow: in enrollment period")
         return ACCESS_GRANTED
@@ -344,7 +311,8 @@ def _has_access_course(user, action, courselike):
         """
         response = (
             _visible_to_nonstaff_users(courselike) and
-            _can_access_descriptor_with_start_date(user, courselike, courselike.id)
+            check_course_open_for_learner(user, courselike) and
+            _can_view_courseware_with_prerequisites(user, courselike)
         )
 
         return (
@@ -390,8 +358,6 @@ def _has_access_course(user, action, courselike):
 
     checkers = {
         'load': can_load,
-        'view_courseware_with_prerequisites':
-            lambda: _can_view_courseware_with_prerequisites(user, courselike),
         'load_mobile': lambda: can_load() and _can_load_course_on_mobile(user, courselike),
         'enroll': can_enroll,
         'see_exists': see_exists,
@@ -530,7 +496,7 @@ def _has_access_descriptor(user, action, descriptor, course_key=None):
             _can_access_descriptor_with_milestones(user, descriptor, course_key) and
             (
                 _has_detached_class_tag(descriptor) or
-                _can_access_descriptor_with_start_date(user, descriptor, course_key)
+                check_start_date(user, descriptor.days_early_for_beta, descriptor.start, course_key)
             )
         )
 
@@ -805,7 +771,7 @@ def _has_fulfilled_all_milestones(user, course_id):
         course_id: ID of the course to check
         user_id: ID of the user to check
     """
-    return MilestoneError() if any_unfulfilled_milestones(course_id, user.id) else ACCESS_GRANTED
+    return MilestoneAccessError() if any_unfulfilled_milestones(course_id, user.id) else ACCESS_GRANTED
 
 
 def _has_fulfilled_prerequisites(user, course_id):
@@ -817,7 +783,7 @@ def _has_fulfilled_prerequisites(user, course_id):
         user: user to check
         course_id: ID of the course to check
     """
-    return MilestoneError() if get_pre_requisite_courses_not_completed(user, course_id) else ACCESS_GRANTED
+    return MilestoneAccessError() if get_pre_requisite_courses_not_completed(user, course_id) else ACCESS_GRANTED
 
 
 def _has_catalog_visibility(course, visibility_type):

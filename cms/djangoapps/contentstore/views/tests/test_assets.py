@@ -1,29 +1,30 @@
 """
 Unit tests for the asset upload endpoint.
 """
+import json
 from datetime import datetime
 from io import BytesIO
-from pytz import UTC
-from PIL import Image
-import json
-from mock import patch
+
+import mock
+from ddt import data, ddt
 from django.conf import settings
+from django.test.utils import override_settings
+from mock import patch
+from opaque_keys.edx.locations import AssetLocation
+from opaque_keys.edx.locator import CourseLocator
+from PIL import Image
+from pytz import UTC
 
 from contentstore.tests.utils import CourseTestCase
-from contentstore.views import assets
 from contentstore.utils import reverse_course_url
+from contentstore.views import assets
+from static_replace import replace_static_urls
 from xmodule.assetstore import AssetMetadata
 from xmodule.contentstore.content import StaticContent
 from xmodule.contentstore.django import contentstore
-from xmodule.modulestore.django import modulestore
 from xmodule.modulestore import ModuleStoreEnum
+from xmodule.modulestore.django import modulestore
 from xmodule.modulestore.xml_importer import import_course_from_xml
-from django.test.utils import override_settings
-from opaque_keys.edx.locations import SlashSeparatedCourseKey, AssetLocation
-from static_replace import replace_static_urls
-import mock
-from ddt import ddt
-from ddt import data
 
 TEST_DATA_DIR = settings.COMMON_TEST_DATA_ROOT
 
@@ -80,7 +81,7 @@ class BasicAssetsTestCase(AssetsTestCase):
 
     def test_static_url_generation(self):
 
-        course_key = SlashSeparatedCourseKey('org', 'class', 'run')
+        course_key = CourseLocator('org', 'class', 'run')
         location = course_key.make_asset_key('asset', 'my_file_name.jpg')
         path = StaticContent.get_static_path_from_location(location)
         self.assertEquals(path, '/static/my_file_name.jpg')
@@ -173,6 +174,15 @@ class PaginationTestCase(AssetsTestCase):
         self.assert_correct_filter_response(self.url, 'asset_type', 'OTHER')
         self.assert_correct_filter_response(
             self.url, 'asset_type', 'Documents')
+        self.assert_correct_filter_response(
+            self.url, 'asset_type', 'Documents,Images')
+        self.assert_correct_filter_response(
+            self.url, 'asset_type', 'Documents,OTHER')
+
+        #Verify invalid request parameters
+        self.assert_invalid_parameters_error(self.url, 'asset_type', 'edX')
+        self.assert_invalid_parameters_error(self.url, 'asset_type', 'edX, OTHER')
+        self.assert_invalid_parameters_error(self.url, 'asset_type', 'edX, Images')
 
         # Verify querying outside the range of valid pages
         self.assert_correct_asset_response(
@@ -246,24 +256,46 @@ class PaginationTestCase(AssetsTestCase):
         """
         Get from the url w/ a filter option and ensure items honor that filter
         """
-        requested_file_types = settings.FILES_AND_UPLOAD_TYPE_FILTERS.get(
-            filter_value, None)
+
+        filter_value_split = filter_value.split(',')
+
+        requested_file_extensions = []
+        all_file_extensions = []
+
+        for requested_filter in filter_value_split:
+            if requested_filter == 'OTHER':
+                for file_type in settings.FILES_AND_UPLOAD_TYPE_FILTERS:
+                    all_file_extensions.extend(file_type)
+            else:
+                file_extensions = settings.FILES_AND_UPLOAD_TYPE_FILTERS.get(
+                    requested_filter, None)
+                if file_extensions is not None:
+                    requested_file_extensions.extend(file_extensions)
+
         resp = self.client.get(
             url + '?' + filter_type + '=' + filter_value, HTTP_ACCEPT='application/json')
         json_response = json.loads(resp.content)
         assets_response = json_response['assets']
+
         if filter_value is not '':
             content_types = [asset['content_type'].lower()
                              for asset in assets_response]
-            if filter_value is 'OTHER':
-                all_file_type_extensions = []
-                for file_type in settings.FILES_AND_UPLOAD_TYPE_FILTERS:
-                    all_file_type_extensions.extend(file_type)
+            if 'OTHER' in filter_value_split:
                 for content_type in content_types:
-                    self.assertNotIn(content_type, all_file_type_extensions)
+                    # content_type is either not any defined type (i.e. OTHER) or is a defined type (if multiple
+                    # parameters including OTHER are used)
+                    self.assertTrue(content_type in requested_file_extensions or content_type not in all_file_extensions)
             else:
                 for content_type in content_types:
-                    self.assertIn(content_type, requested_file_types)
+                    self.assertIn(content_type, requested_file_extensions)
+
+    def assert_invalid_parameters_error(self, url, filter_type, filter_value):
+        """
+        Get from the url w/ invalid filter option(s) and ensure error is received
+        """
+        resp = self.client.get(
+            url + '?' + filter_type + '=' + filter_value, HTTP_ACCEPT='application/json')
+        self.assertEquals(resp.status_code, 400)
 
 
 @ddt
@@ -348,7 +380,7 @@ class AssetToJsonTestCase(AssetsTestCase):
     def test_basic(self):
         upload_date = datetime(2013, 6, 1, 10, 30, tzinfo=UTC)
         content_type = 'image/jpg'
-        course_key = SlashSeparatedCourseKey('org', 'class', 'run')
+        course_key = CourseLocator('org', 'class', 'run')
         location = course_key.make_asset_key('asset', 'my_file_name.jpg')
         thumbnail_location = course_key.make_asset_key('thumbnail', 'my_file_name_thumb.jpg')
 
@@ -357,10 +389,10 @@ class AssetToJsonTestCase(AssetsTestCase):
 
         self.assertEquals(output["display_name"], "my_file")
         self.assertEquals(output["date_added"], "Jun 01, 2013 at 10:30 UTC")
-        self.assertEquals(output["url"], "/c4x/org/class/asset/my_file_name.jpg")
-        self.assertEquals(output["external_url"], "lms_base_url/c4x/org/class/asset/my_file_name.jpg")
+        self.assertEquals(output["url"], "/asset-v1:org+class+run+type@asset+block@my_file_name.jpg")
+        self.assertEquals(output["external_url"], "lms_base_url/asset-v1:org+class+run+type@asset+block@my_file_name.jpg")
         self.assertEquals(output["portable_url"], "/static/my_file_name.jpg")
-        self.assertEquals(output["thumbnail"], "/c4x/org/class/thumbnail/my_file_name_thumb.jpg")
+        self.assertEquals(output["thumbnail"], "/asset-v1:org+class+run+type@thumbnail+block@my_file_name_thumb.jpg")
         self.assertEquals(output["id"], unicode(location))
         self.assertEquals(output['locked'], True)
 

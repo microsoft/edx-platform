@@ -119,7 +119,11 @@ define(['jquery', 'underscore', 'gettext', 'js/views/modals/base_modal', 'common
             getTitle: function() {
                 var displayName = this.xblockInfo.get('display_name');
                 if (!displayName) {
-                    displayName = gettext('Component');
+                    if (this.xblockInfo.isVertical()) {
+                        displayName = gettext('Unit');
+                    } else {
+                        displayName = gettext('Component');
+                    }
                 }
                 return interpolate(this.options.titleFormat, {title: displayName}, true);
             },
@@ -135,8 +139,8 @@ define(['jquery', 'underscore', 'gettext', 'js/views/modals/base_modal', 'common
 
             changeMode: function(event) {
                 this.removeCheatsheetVisibility();
-                var parent = $(event.target.parentElement),
-                    mode = parent.data('mode');
+                var $parent = $(event.target.parentElement),
+                    mode = $parent.data('mode');
                 event.preventDefault();
                 this.selectMode(mode);
             },
@@ -192,12 +196,12 @@ define(['jquery', 'underscore', 'gettext', 'js/views/modals/base_modal', 'common
             },
 
             removeCheatsheetVisibility: function() {
-                var cheatsheet = $('article.simple-editor-open-ended-cheatsheet');
-                if (cheatsheet.length === 0) {
-                    cheatsheet = $('article.simple-editor-cheatsheet');
+                var $cheatsheet = $('article.simple-editor-open-ended-cheatsheet');
+                if ($cheatsheet.length === 0) {
+                    $cheatsheet = $('article.simple-editor-cheatsheet');
                 }
-                if (cheatsheet.hasClass('shown')) {
-                    cheatsheet.removeClass('shown');
+                if ($cheatsheet.hasClass('shown')) {
+                    $cheatsheet.removeClass('shown');
                     $('.modal-content').removeClass('cheatsheet-is-shown');
                 }
             }

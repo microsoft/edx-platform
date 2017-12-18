@@ -1,14 +1,13 @@
 """Tests of comprehensive theming."""
 
 from django.conf import settings
-from django.test import TestCase
-
-from path import path           # pylint: disable=no-name-in-module
 from django.contrib import staticfiles
+from django.test import TestCase
+from path import path  # pylint: disable=no-name-in-module
 
 import edxmako
 from openedx.core.djangoapps.theming.tests.test_util import with_comprehensive_theme
-from openedx.core.lib.tempdir import mkdtemp_clean, create_symlink, delete_symlink
+from openedx.core.lib.tempdir import create_symlink, delete_symlink, mkdtemp_clean
 
 
 class TestComprehensiveTheming(TestCase):
@@ -31,8 +30,6 @@ class TestComprehensiveTheming(TestCase):
         self.assertEqual(resp.status_code, 200)
         # This string comes from footer.html
         self.assertContains(resp, "super-ugly")
-        # This string comes from header.html
-        self.assertContains(resp, "This file is only for demonstration, and is horrendous!")
 
     def test_theme_outside_repo(self):
         # Need to create a temporary theme, and defer decorating the function

@@ -1,53 +1,48 @@
 """
 External Auth Views
 """
+import fnmatch
 import functools
 import json
 import logging
 import random
 import re
 import string
-import fnmatch
 import unicodedata
 import urllib
-
 from textwrap import dedent
-from openedx.core.djangoapps.external_auth.models import ExternalAuthMap
-from openedx.core.djangoapps.external_auth.djangostore import DjangoOpenIDStore
 
+import django_openid_auth.views as openid_views
 from django.conf import settings
 from django.contrib.auth import REDIRECT_FIELD_NAME, authenticate, login
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 from django.core.urlresolvers import reverse
 from django.core.validators import validate_email
-from django.core.exceptions import ValidationError
-
-if settings.FEATURES.get('AUTH_USE_CAS'):
-    from django_cas.views import login as django_cas_login
-
-from student.helpers import get_next_url_for_login_page
-from student.models import UserProfile
-
-from django.http import HttpResponse, HttpResponseRedirect, HttpResponseForbidden
-from django.utils.http import urlquote, is_safe_url
+from django.http import HttpResponse, HttpResponseForbidden, HttpResponseRedirect
 from django.shortcuts import redirect
+from django.utils.http import is_safe_url, urlquote
 from django.utils.translation import ugettext as _
-
-from edxmako.shortcuts import render_to_response, render_to_string
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
-
-import django_openid_auth.views as openid_views
 from django_openid_auth import auth as openid_auth
+from opaque_keys.edx.keys import CourseKey
 from openid.consumer.consumer import SUCCESS
-
-from openid.server.server import Server, ProtocolError, UntrustedReturnURL
-from openid.server.trustroot import TrustRoot
 from openid.extensions import ax, sreg
+from openid.server.server import ProtocolError, Server, UntrustedReturnURL
+from openid.server.trustroot import TrustRoot
 from ratelimitbackend.exceptions import RateLimitException
 
 import student.views
+from edxmako.shortcuts import render_to_response, render_to_string
+from openedx.core.djangoapps.external_auth.djangostore import DjangoOpenIDStore
+from openedx.core.djangoapps.external_auth.models import ExternalAuthMap
+from openedx.core.djangoapps.site_configuration.helpers import get_value
+from student.helpers import get_next_url_for_login_page
+from student.models import UserProfile
 from xmodule.modulestore.django import modulestore
-from opaque_keys.edx.locations import SlashSeparatedCourseKey
+
+if settings.FEATURES.get('AUTH_USE_CAS'):
+    from django_cas.views import login as django_cas_login
 
 log = logging.getLogger("edx.external_auth")
 AUDIT_LOG = logging.getLogger("audit")
@@ -177,7 +172,7 @@ def _external_login_or_signup(request,
                         "an external login like WebAuth or Shibboleth. "
                         "Please contact {tech_support_email} for support."
                     ).format(
-                        tech_support_email=settings.TECH_SUPPORT_EMAIL,
+                        tech_support_email=get_value('email_from_address', settings.TECH_SUPPORT_EMAIL),
                     )
                     return default_render_failure(request, failure_msg)
             except User.DoesNotExist:
@@ -558,7 +553,7 @@ def course_specific_login(request, course_id):
        Dispatcher function for selecting the specific login method
        required by the course
     """
-    course_key = SlashSeparatedCourseKey.from_deprecated_string(course_id)
+    course_key = CourseKey.from_string(course_id)
     course = modulestore().get_course(course_key)
     if not course:
         # couldn't find the course, will just return vanilla signin page
@@ -581,7 +576,7 @@ def course_specific_register(request, course_id):
         Dispatcher function for selecting the specific registration method
         required by the course
     """
-    course_key = SlashSeparatedCourseKey.from_deprecated_string(course_id)
+    course_key = CourseKey.from_string(course_id)
     course = modulestore().get_course(course_key)
 
     if not course:

@@ -2,7 +2,7 @@
 Helpers methods for site configuration.
 """
 from django.conf import settings
-from openedx.core.djangoapps.site_configuration.models import SiteConfiguration
+
 from microsite_configuration import microsite
 
 
@@ -19,6 +19,8 @@ def get_current_site_configuration():
     from openedx.core.djangoapps.theming.helpers import get_current_site
     site = get_current_site()
 
+    # Import is placed here to avoid model import at project startup.
+    from openedx.core.djangoapps.site_configuration.models import SiteConfiguration
     try:
         return getattr(site, "configuration", None)
     except SiteConfiguration.DoesNotExist:
@@ -182,6 +184,8 @@ def get_value_for_org(org, val_name, default=None):
     """
     # Here we first look for the asked org inside site configuration, and if org is not present in site configuration
     # then we go ahead and look it inside microsite configuration.
+    # Import is placed here to avoid model import at project startup.
+    from openedx.core.djangoapps.site_configuration.models import SiteConfiguration
     if SiteConfiguration.has_org(org):
         return SiteConfiguration.get_value_for_org(org, val_name, default)
     else:
@@ -211,6 +215,8 @@ def get_all_orgs():
     Returns:
         A list of all organizations present in either microsite configuration or site configuration.
     """
+    # Import is placed here to avoid model import at project startup.
+    from openedx.core.djangoapps.site_configuration.models import SiteConfiguration
     site_configuration_orgs = SiteConfiguration.get_all_orgs()
     microsite_orgs = microsite.get_all_orgs()
 

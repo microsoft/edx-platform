@@ -6,20 +6,23 @@ import datetime
 import unittest
 
 import ddt
+from django.conf import settings
 from mock import patch
 from nose.tools import raises
 from pytz import UTC
-from django.conf import settings
 
 from course_modes.models import CourseMode
+from course_modes.tests.factories import CourseModeFactory
 from enrollment import data
 from enrollment.errors import (
-    UserNotFoundError, CourseEnrollmentClosedError,
-    CourseEnrollmentFullError, CourseEnrollmentExistsError,
+    CourseEnrollmentClosedError,
+    CourseEnrollmentExistsError,
+    CourseEnrollmentFullError,
+    UserNotFoundError
 )
 from openedx.core.lib.exceptions import CourseNotFoundError
-from student.tests.factories import UserFactory, CourseModeFactory
-from student.models import CourseEnrollment, EnrollmentClosedError, CourseFullError, AlreadyEnrolledError
+from student.models import AlreadyEnrolledError, CourseEnrollment, CourseFullError, EnrollmentClosedError
+from student.tests.factories import UserFactory
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
 

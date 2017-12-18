@@ -3,21 +3,21 @@
 Unit tests for instructor.enrollment methods.
 """
 
-from abc import ABCMeta
 import json
+from abc import ABCMeta
 
-from django.conf import settings
-from django.utils.translation import get_language
-from django.utils.translation import override as override_language
 import mock
+from ccx_keys.locator import CCXLocator
+from django.conf import settings
+from django.utils.translation import override as override_language
+from django.utils.translation import get_language
 from mock import patch
 from nose.plugins.attrib import attr
-from opaque_keys.edx.locations import SlashSeparatedCourseKey
+from opaque_keys.edx.locator import CourseLocator
 
 from capa.tests.response_xml_factory import MultipleChoiceResponseXMLFactory
-from ccx_keys.locator import CCXLocator
 from courseware.models import StudentModule
-from grades.new.subsection_grade_factory import SubsectionGradeFactory
+from grades.subsection_grade_factory import SubsectionGradeFactory
 from grades.tests.utils import answer_problem
 from lms.djangoapps.ccx.tests.factories import CcxFactory
 from lms.djangoapps.course_blocks.api import get_course_blocks
@@ -25,18 +25,17 @@ from lms.djangoapps.instructor.enrollment import (
     EmailEnrollmentState,
     enroll_email,
     get_email_params,
+    render_message_to_string,
     reset_student_attempts,
     send_beta_role_email,
-    unenroll_email,
-    render_message_to_string,
+    unenroll_email
 )
 from openedx.core.djangolib.testing.utils import CacheIsolationTestCase, get_mock_request
-from student.models import CourseEnrollment, CourseEnrollmentAllowed
+from student.models import CourseEnrollment, CourseEnrollmentAllowed, anonymous_id_for_user
 from student.roles import CourseCcxCoachRole
 from student.tests.factories import AdminFactory, UserFactory
 from submissions import api as sub_api
-from student.models import anonymous_id_for_user
-from xmodule.modulestore.tests.django_utils import SharedModuleStoreTestCase, TEST_DATA_SPLIT_MODULESTORE
+from xmodule.modulestore.tests.django_utils import TEST_DATA_SPLIT_MODULESTORE, SharedModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
 
 
@@ -45,7 +44,7 @@ class TestSettableEnrollmentState(CacheIsolationTestCase):
     """ Test the basis class for enrollment tests. """
     def setUp(self):
         super(TestSettableEnrollmentState, self).setUp()
-        self.course_key = SlashSeparatedCourseKey('Robot', 'fAKE', 'C-%-se-%-ID')
+        self.course_key = CourseLocator('Robot', 'fAKE', 'C--se--ID')
 
     def test_mes_create(self):
         """
@@ -76,7 +75,7 @@ class TestEnrollmentChangeBase(CacheIsolationTestCase):
 
     def setUp(self):
         super(TestEnrollmentChangeBase, self).setUp()
-        self.course_key = SlashSeparatedCourseKey('Robot', 'fAKE', 'C-%-se-%-ID')
+        self.course_key = CourseLocator('Robot', 'fAKE', 'C--se--ID')
 
     def _run_state_change_test(self, before_ideal, after_ideal, action):
         """

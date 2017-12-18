@@ -241,8 +241,9 @@
                         totalScore
                     );
                 }
-            } else if (attemptsUsed === 0 || totalScore === 0) {
+            } else if ((attemptsUsed === 0 || totalScore === 0) && curScore === 0) {
                 // Render 'x point(s) possible' if student has not yet attempted question
+                // But if staff has overridden score to a non-zero number, show it
                 if (graded) {
                     progressTemplate = ngettext(
                         // Translators: %(num_points)s is the number of points possible (examples: 1, 3, 10).;
@@ -485,8 +486,8 @@
             this.focus_on_notification('submit');
         };
 
-        Problem.prototype.focus_on_hint_notification = function() {
-            this.focus_on_notification('hint');
+        Problem.prototype.focus_on_hint_notification = function(hintIndex) {
+            this.$('.notification-hint .notification-message > ol > li.hint-index-' + hintIndex).focus();
         };
 
         Problem.prototype.focus_on_save_notification = function() {
@@ -766,7 +767,6 @@
             this.gentleAlertNotification.hide();
             this.saveNotification.hide();
             this.showAnswerNotification.hide();
-
         };
 
         Problem.prototype.gentle_alert = function(msg) {
@@ -1311,7 +1311,7 @@
                         that.hintButton.attr({disabled: 'disabled'});
                     }
                     that.el.find('.notification-hint').show();
-                    that.focus_on_hint_notification();
+                    that.focus_on_hint_notification(nextIndex);
                 } else {
                     that.gentle_alert(response.msg);
                 }

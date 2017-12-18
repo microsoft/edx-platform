@@ -5,7 +5,6 @@ import sys
 import subprocess
 
 from paver import tasks
-from paver.easy import sh
 
 from pavelib.utils.process import kill_process
 
@@ -61,6 +60,14 @@ class TestSuite(object):
         """
         return None
 
+    @staticmethod
+    def is_success(exit_code):
+        """
+        Determine if the given exit code represents a success of the test
+        suite.  By default, only a zero counts as a success.
+        """
+        return exit_code == 0
+
     def run_test(self):
         """
         Runs a self.cmd in a subprocess and waits for it to finish.
@@ -88,12 +95,10 @@ class TestSuite(object):
 
         try:
             process = subprocess.Popen(cmd, **kwargs)
-            process.communicate()
+            return self.is_success(process.wait())
         except KeyboardInterrupt:
             kill_process(process)
             sys.exit(1)
-        else:
-            return process.returncode == 0
 
     def run_suite_tests(self):
         """

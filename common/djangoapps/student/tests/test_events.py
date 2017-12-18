@@ -2,15 +2,14 @@
 """
 Test that various events are fired for models in the student app.
 """
+import mock
+from django.db.utils import IntegrityError
 from django.test import TestCase
-
 from django_countries.fields import Country
 
 from student.models import PasswordHistory
 from student.tests.factories import UserFactory
 from student.tests.tests import UserSettingsEventTestMixin
-import mock
-from django.db.utils import IntegrityError
 
 
 class TestUserProfileEvents(UserSettingsEventTestMixin, TestCase):
@@ -131,7 +130,7 @@ class TestUserEvents(UserSettingsEventTestMixin, TestCase):
         """
         Verify that we don't emit events for related fields.
         """
-        self.user.passwordhistory_set.add(PasswordHistory(password='new_password'))
+        self.user.passwordhistory_set.create(password='new_password')
         self.user.save()
         self.assert_no_events_were_emitted()
 

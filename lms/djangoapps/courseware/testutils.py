@@ -5,13 +5,15 @@ Common test utilities for courseware functionality
 
 from abc import ABCMeta, abstractmethod
 from datetime import datetime, timedelta
+from urllib import urlencode
+
 import ddt
 from mock import patch
-from urllib import urlencode
 
 from lms.djangoapps.courseware.field_overrides import OverrideModulestoreFieldData
 from lms.djangoapps.courseware.url_helpers import get_redirect_url
-from student.tests.factories import AdminFactory, UserFactory, CourseEnrollmentFactory
+from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
+from student.tests.factories import AdminFactory, CourseEnrollmentFactory, UserFactory
 from xmodule.modulestore import ModuleStoreEnum
 from xmodule.modulestore.django import modulestore
 from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory, check_mongo_calls
@@ -103,6 +105,7 @@ class RenderXBlockTestMixin(object):
                 category='html',
                 data="<p>Test HTML Content<p>"
             )
+        CourseOverview.load_from_module_store(self.course.id)
 
         # block_name_to_be_tested can be `html_block` or `vertical_block`.
         # These attributes help ensure the positive and negative tests are in sync.

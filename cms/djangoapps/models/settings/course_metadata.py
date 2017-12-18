@@ -1,12 +1,12 @@
 """
 Django module for Course Metadata class -- manages advanced settings and related parameters
 """
+from django.conf import settings
+from django.utils.translation import ugettext as _
 from xblock.fields import Scope
+
 from xblock_django.models import XBlockStudioConfigurationFlag
 from xmodule.modulestore.django import modulestore
-
-from django.utils.translation import ugettext as _
-from django.conf import settings
 
 
 class CourseMetadata(object):
@@ -26,6 +26,7 @@ class CourseMetadata(object):
         'end',
         'enrollment_start',
         'enrollment_end',
+        'certificate_available_date',
         'tabs',
         'graceperiod',
         'show_timezone',
@@ -57,6 +58,7 @@ class CourseMetadata(object):
         'show_correctness',
         'chrome',
         'default_tab',
+        'highlights_enabled_for_messaging',
     ]
 
     @classmethod
@@ -96,6 +98,11 @@ class CourseMetadata(object):
             filtered_list.append('enable_ccx')
             filtered_list.append('ccx_connector')
 
+        # Do not show "Issue Open Badges" in Studio Advanced Settings
+        # if the feature is disabled.
+        if not settings.FEATURES.get('ENABLE_OPENBADGES'):
+            filtered_list.append('issue_badges')
+
         # If the XBlockStudioConfiguration table is not being used, there is no need to
         # display the "Allow Unsupported XBlocks" setting.
         if not XBlockStudioConfigurationFlag.is_enabled():
@@ -126,10 +133,16 @@ class CourseMetadata(object):
         for field in descriptor.fields.values():
             if field.scope != Scope.settings:
                 continue
+
+            field_help = _(field.help)                  # pylint: disable=translation-of-non-string
+            help_args = field.runtime_options.get('help_format_args')
+            if help_args is not None:
+                field_help = field_help.format(**help_args)
+
             result[field.name] = {
                 'value': field.read_json(descriptor),
                 'display_name': _(field.display_name),    # pylint: disable=translation-of-non-string
-                'help': _(field.help),                    # pylint: disable=translation-of-non-string
+                'help': field_help,
                 'deprecated': field.runtime_options.get('deprecated', False)
             }
         return result

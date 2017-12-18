@@ -881,7 +881,7 @@ class XModule(HTMLSnippet, XModuleMixin):
                 request_post[key] = map(FileObjForWebobFiles, request.POST.getall(key))
 
         response_data = self.handle_ajax(suffix, request_post)
-        return Response(response_data, content_type='application/json')
+        return Response(response_data, content_type='application/json', charset='UTF-8')
 
     def get_child(self, usage_id):
         if usage_id in self._child_cache:
@@ -1270,7 +1270,7 @@ class ConfigurableFragmentWrapper(object):
 # the Runtime part of its interface. This function mostly matches the
 # Runtime.handler_url interface.
 #
-# The monkey-patching happens in (lms|cms)/startup.py
+# The monkey-patching happens in cms/djangoapps/xblock_config/apps.py and lms/djangoapps/lms_xblock/apps.py
 def descriptor_global_handler_url(block, handler_name, suffix='', query='', thirdparty=False):  # pylint: disable=unused-argument
     """
     See :meth:`xblock.runtime.Runtime.handler_url`.
@@ -1282,7 +1282,7 @@ def descriptor_global_handler_url(block, handler_name, suffix='', query='', thir
 # we can refactor modulestore to split out the FieldData half of its interface from
 # the Runtime part of its interface. This function matches the Runtime.local_resource_url interface
 #
-# The monkey-patching happens in (lms|cms)/startup.py
+# The monkey-patching happens in cms/djangoapps/xblock_config/apps.py and lms/djangoapps/lms_xblock/apps.py
 def descriptor_global_local_resource_url(block, uri):  # pylint: disable=invalid-name, unused-argument
     """
     See :meth:`xblock.runtime.Runtime.local_resource_url`.
@@ -1632,7 +1632,8 @@ class XMLParsingSystem(DescriptorSystem):
         """
         if isinstance(value, UsageKey):
             return value
-        return course_key.make_usage_key_from_deprecated_string(value)
+        usage_key = UsageKey.from_string(value)
+        return usage_key.map_into_course(course_key)
 
     def _convert_reference_fields_to_keys(self, xblock):
         """

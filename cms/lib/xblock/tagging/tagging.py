@@ -3,16 +3,15 @@
 Structured Tagging based on XBlockAsides
 """
 
-from xblock.core import XBlockAside, XBlock
-from xblock.fragment import Fragment
-from xblock.fields import Scope, Dict
-from xmodule.x_module import AUTHOR_VIEW
-from xmodule.capa_module import CapaModule
-from edxmako.shortcuts import render_to_string
 from django.conf import settings
 from webob import Response
-from .models import TagCategories
+from xblock.core import XBlock, XBlockAside
+from xblock.fields import Dict, Scope
+from xblock.fragment import Fragment
 
+from edxmako.shortcuts import render_to_string
+from xmodule.capa_module import CapaModule
+from xmodule.x_module import AUTHOR_VIEW
 
 _ = lambda text: text
 
@@ -29,6 +28,8 @@ class StructuredTagsAside(XBlockAside):
         """
         Return available tags
         """
+        # Import is placed here to avoid model import at project startup.
+        from .models import TagCategories
         return TagCategories.objects.all()
 
     def _get_studio_resource_url(self, relative_url):

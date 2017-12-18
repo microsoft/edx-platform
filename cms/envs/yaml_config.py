@@ -17,6 +17,7 @@ defined in the environment:
 import yaml
 
 from .common import *
+from openedx.core.lib.derived import derive_settings
 from openedx.core.lib.logsettings import get_logger_config
 from util.config_parse import convert_tokens
 import os
@@ -59,7 +60,6 @@ CONFIG_PREFIX = SERVICE_VARIANT + "." if SERVICE_VARIANT else ""
 #
 
 DEBUG = False
-TEMPLATE_DEBUG = False
 
 EMAIL_BACKEND = 'django_ses.SESBackend'
 SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
@@ -107,7 +107,7 @@ CELERY_RESULT_BACKEND = 'djcelery.backends.cache:CacheBackend'
 
 # When the broker is behind an ELB, use a heartbeat to refresh the
 # connection and to detect if it has been dropped.
-BROKER_HEARTBEAT = 10.0
+BROKER_HEARTBEAT = 60.0
 BROKER_HEARTBEAT_CHECKRATE = 2
 
 # Each worker should only fetch one message at a time
@@ -169,10 +169,10 @@ if STATIC_URL_BASE:
     STATIC_URL = STATIC_URL_BASE.encode('ascii')
     if not STATIC_URL.endswith("/"):
         STATIC_URL += "/"
-    STATIC_URL += EDX_PLATFORM_REVISION + "/"
+    STATIC_URL += 'studio/'
 
 if STATIC_ROOT_BASE:
-    STATIC_ROOT = path(STATIC_ROOT_BASE) / EDX_PLATFORM_REVISION
+    STATIC_ROOT = path(STATIC_ROOT_BASE) / 'studio'
 
 
 # Cache used for location mapping -- called many times with the same key/value
@@ -194,7 +194,7 @@ if SESSION_COOKIE_NAME:
 
 # Additional installed apps
 for app in ADDL_INSTALLED_APPS:
-    INSTALLED_APPS += (app,)
+    INSTALLED_APPS.append(app)
 
 
 LOGGING = get_logger_config(LOG_DIR,
@@ -204,12 +204,14 @@ LOGGING = get_logger_config(LOG_DIR,
                             service_variant=SERVICE_VARIANT)
 
 if AUTH_USE_CAS:
-    AUTHENTICATION_BACKENDS = (
+    AUTHENTICATION_BACKENDS = [
         'django.contrib.auth.backends.ModelBackend',
         'django_cas.backends.CASBackend',
-    )
-    INSTALLED_APPS += ('django_cas',)
-    MIDDLEWARE_CLASSES += ('django_cas.middleware.CASMiddleware',)
+    ]
+
+    INSTALLED_APPS.append('django_cas')
+
+    MIDDLEWARE_CLASSES.append('django_cas.middleware.CASMiddleware')
     if CAS_ATTRIBUTE_CALLBACK:
         import importlib
         CAS_USER_DETAILS_RESOLVER = getattr(
@@ -256,4 +258,13 @@ BROKER_USE_SSL = ENV_TOKENS.get('CELERY_BROKER_USE_SSL', False)
 
 ######################## CUSTOM COURSES for EDX CONNECTOR ######################
 if FEATURES.get('CUSTOM_COURSES_EDX'):
-    INSTALLED_APPS += ('openedx.core.djangoapps.ccxcon',)
+    INSTALLED_APPS.append('openedx.core.djangoapps.ccxcon.apps.CCXConnectorConfig')
+
+########################## Extra middleware classes  #######################
+
+# Allow extra middleware classes to be added to the app through configuration.
+MIDDLEWARE_CLASSES.extend(ENV_TOKENS.get('EXTRA_MIDDLEWARE_CLASSES', []))
+
+########################## Derive Any Derived Settings  #######################
+
+derive_settings(__name__)

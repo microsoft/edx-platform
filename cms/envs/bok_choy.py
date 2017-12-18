@@ -21,7 +21,7 @@ from openedx.core.release import RELEASE_LINE
 # Unlike in prod, we use the JSON files stored in this repo.
 # This is a convenience for ensuring (a) that we can consistently find the files
 # and (b) that the files are the same in Jenkins as in local dev.
-os.environ['SERVICE_VARIANT'] = 'bok_choy'
+os.environ['SERVICE_VARIANT'] = 'bok_choy_docker' if 'BOK_CHOY_HOSTNAME' in os.environ else 'bok_choy'
 os.environ['CONFIG_ROOT'] = path(__file__).abspath().dirname()
 
 from .aws import *  # pylint: disable=wildcard-import, unused-wildcard-import
@@ -57,12 +57,15 @@ DEBUG = True
 # Serve static files at /static directly from the staticfiles directory under test root
 # Note: optimized files for testing are generated with settings from test_static_optimized
 STATIC_URL = "/static/"
-STATICFILES_FINDERS = (
+STATICFILES_FINDERS = [
     'django.contrib.staticfiles.finders.FileSystemFinder',
-)
+]
 STATICFILES_DIRS = [
     (TEST_ROOT / "staticfiles" / "cms").abspath(),
 ]
+
+DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+MEDIA_ROOT = TEST_ROOT / "uploads"
 
 WEBPACK_LOADER['DEFAULT']['STATS_FILE'] = TEST_ROOT / "staticfiles" / "cms" / "webpack-stats.json"
 
@@ -97,6 +100,13 @@ FEATURES['ENABLE_MOBILE_REST_API'] = True  # Enable video bumper in Studio
 FEATURES['ENABLE_VIDEO_BUMPER'] = True  # Enable video bumper in Studio settings
 
 FEATURES['ENABLE_ENROLLMENT_TRACK_USER_PARTITION'] = True
+
+# Whether archived courses (courses with end dates in the past) should be
+# shown in Studio in a separate list.
+FEATURES['ENABLE_SEPARATE_ARCHIVED_COURSES'] = True
+
+# Enable support for OpenBadges accomplishments
+FEATURES['ENABLE_OPENBADGES'] = True
 
 # Enable partner support link in Studio footer
 PARTNER_SUPPORT_EMAIL = 'partner-support@example.com'

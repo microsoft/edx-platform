@@ -1,37 +1,45 @@
 """Tests covering utilities for integrating with the catalog service."""
 # pylint: disable=missing-docstring
 import copy
-import uuid
 
+import ddt
 import mock
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.test import TestCase
-
-from openedx.core.djangoapps.catalog.cache import PROGRAM_CACHE_KEY_TPL, PROGRAM_UUIDS_CACHE_KEY
-from openedx.core.djangoapps.catalog.models import CatalogIntegration
-from openedx.core.djangoapps.catalog.tests.factories import CourseRunFactory, ProgramFactory, ProgramTypeFactory
-from openedx.core.djangoapps.catalog.tests.mixins import CatalogIntegrationMixin
-from openedx.core.djangoapps.catalog.utils import (
-    get_programs,
-    get_program_types,
-    get_programs_with_type,
-    get_course_runs,
-)
-from openedx.core.djangolib.testing.utils import CacheIsolationTestCase, skip_unless_lms
+from django.test import TestCase, override_settings
 from student.tests.factories import UserFactory
 
+from openedx.core.djangoapps.catalog.cache import PROGRAM_CACHE_KEY_TPL, SITE_PROGRAM_UUIDS_CACHE_KEY_TPL
+from openedx.core.djangoapps.catalog.models import CatalogIntegration
+from openedx.core.djangoapps.catalog.tests.factories import CourseFactory, CourseRunFactory, ProgramFactory, ProgramTypeFactory
+from openedx.core.djangoapps.catalog.tests.mixins import CatalogIntegrationMixin
+from openedx.core.djangoapps.catalog.utils import (
+    get_course_runs,
+    get_course_runs_for_course,
+    get_course_run_details,
+    get_currency_data,
+    get_program_types,
+    get_programs,
+    get_programs_with_type
+)
+from openedx.core.djangoapps.site_configuration.tests.factories import SiteFactory
+from openedx.core.djangolib.testing.utils import CacheIsolationTestCase, skip_unless_lms
 
 UTILS_MODULE = 'openedx.core.djangoapps.catalog.utils'
 User = get_user_model()  # pylint: disable=invalid-name
 
 
 @skip_unless_lms
+@mock.patch(UTILS_MODULE + '.logger.info')
 @mock.patch(UTILS_MODULE + '.logger.warning')
 class TestGetPrograms(CacheIsolationTestCase):
     ENABLED_CACHES = ['default']
 
-    def test_get_many(self, mock_warning):
+    def setUp(self):
+        super(TestGetPrograms, self).setUp()
+        self.site = SiteFactory()
+
+    def test_get_many(self, mock_warning, mock_info):
         programs = ProgramFactory.create_batch(3)
 
         # Cache details for 2 of 3 programs.
@@ -40,29 +48,30 @@ class TestGetPrograms(CacheIsolationTestCase):
         }
         cache.set_many(partial_programs, None)
 
-        # When called before UUIDs are cached, the function should return an empty
-        # list and log a warning.
-        self.assertEqual(get_programs(), [])
-        mock_warning.assert_called_once_with('Program UUIDs are not cached.')
+        # When called before UUIDs are cached, the function should return an
+        # empty list and log a warning.
+        self.assertEqual(get_programs(self.site), [])
+        mock_warning.assert_called_once_with('Failed to get program UUIDs from the cache.')
         mock_warning.reset_mock()
 
         # Cache UUIDs for all 3 programs.
         cache.set(
-            PROGRAM_UUIDS_CACHE_KEY,
+            SITE_PROGRAM_UUIDS_CACHE_KEY_TPL.format(domain=self.site.domain),
             [program['uuid'] for program in programs],
             None
         )
 
-        actual_programs = get_programs()
+        actual_programs = get_programs(self.site)
 
-        # The 2 cached programs should be returned while a warning should be logged
-        # for the missing one.
+        # The 2 cached programs should be returned while info and warning
+        # messages should be logged for the missing one.
         self.assertEqual(
             set(program['uuid'] for program in actual_programs),
             set(program['uuid'] for program in partial_programs.values())
         )
+        mock_info.assert_called_with('Failed to get details for 1 programs. Retrying.')
         mock_warning.assert_called_with(
-            'Details for program {uuid} are not cached.'.format(uuid=programs[2]['uuid'])
+            'Failed to get details for program {uuid} from the cache.'.format(uuid=programs[2]['uuid'])
         )
         mock_warning.reset_mock()
 
@@ -80,7 +89,7 @@ class TestGetPrograms(CacheIsolationTestCase):
         }
         cache.set_many(all_programs, None)
 
-        actual_programs = get_programs()
+        actual_programs = get_programs(self.site)
 
         # All 3 programs should be returned.
         self.assertEqual(
@@ -93,13 +102,50 @@ class TestGetPrograms(CacheIsolationTestCase):
             key = PROGRAM_CACHE_KEY_TPL.format(uuid=program['uuid'])
             self.assertEqual(program, all_programs[key])
 
-    def test_get_one(self, mock_warning):
+    @mock.patch(UTILS_MODULE + '.cache')
+    def test_get_many_with_missing(self, mock_cache, mock_warning, mock_info):
+        programs = ProgramFactory.create_batch(3)
+
+        all_programs = {
+            PROGRAM_CACHE_KEY_TPL.format(uuid=program['uuid']): program for program in programs
+        }
+
+        partial_programs = {
+            PROGRAM_CACHE_KEY_TPL.format(uuid=program['uuid']): program for program in programs[:2]
+        }
+
+        def fake_get_many(keys):
+            if len(keys) == 1:
+                return {PROGRAM_CACHE_KEY_TPL.format(uuid=programs[-1]['uuid']): programs[-1]}
+            else:
+                return partial_programs
+
+        mock_cache.get.return_value = [program['uuid'] for program in programs]
+        mock_cache.get_many.side_effect = fake_get_many
+
+        actual_programs = get_programs(self.site)
+
+        # All 3 cached programs should be returned. An info message should be
+        # logged about the one that was initially missing, but the code should
+        # be able to stitch together all the details.
+        self.assertEqual(
+            set(program['uuid'] for program in actual_programs),
+            set(program['uuid'] for program in all_programs.values())
+        )
+        self.assertFalse(mock_warning.called)
+        mock_info.assert_called_with('Failed to get details for 1 programs. Retrying.')
+
+        for program in actual_programs:
+            key = PROGRAM_CACHE_KEY_TPL.format(uuid=program['uuid'])
+            self.assertEqual(program, all_programs[key])
+
+    def test_get_one(self, mock_warning, _mock_info):
         expected_program = ProgramFactory()
         expected_uuid = expected_program['uuid']
 
-        self.assertEqual(get_programs(uuid=expected_uuid), None)
+        self.assertEqual(get_programs(self.site, uuid=expected_uuid), None)
         mock_warning.assert_called_once_with(
-            'Details for program {uuid} are not cached.'.format(uuid=expected_uuid)
+            'Failed to get details for program {uuid} from the cache.'.format(uuid=expected_uuid)
         )
         mock_warning.reset_mock()
 
@@ -109,15 +155,75 @@ class TestGetPrograms(CacheIsolationTestCase):
             None
         )
 
-        actual_program = get_programs(uuid=expected_uuid)
+        actual_program = get_programs(self.site, uuid=expected_uuid)
         self.assertEqual(actual_program, expected_program)
         self.assertFalse(mock_warning.called)
 
 
 @skip_unless_lms
+@ddt.ddt
+class TestGetProgramsWithType(TestCase):
+    def setUp(self):
+        super(TestGetProgramsWithType, self).setUp()
+        self.site = SiteFactory()
+
+        # We have seen what seem like flaky tests for these, but can't debug them due to the diff being too large.
+        # If you fix the flakiness of the tests this could go away as well.
+        self.maxDiff = None
+
+    @mock.patch(UTILS_MODULE + '.get_programs')
+    @mock.patch(UTILS_MODULE + '.get_program_types')
+    def test_get_programs_with_type(self, mock_get_program_types, mock_get_programs):
+        """Verify get_programs_with_type returns the expected list of programs."""
+        programs_with_program_type = []
+        programs = ProgramFactory.create_batch(2)
+        program_types = []
+
+        for program in programs:
+            program_type = ProgramTypeFactory(name=program['type'])
+            program_types.append(program_type)
+
+            program_with_type = copy.deepcopy(program)
+            program_with_type['type'] = program_type
+            programs_with_program_type.append(program_with_type)
+
+        mock_get_programs.return_value = programs
+        mock_get_program_types.return_value = program_types
+
+        actual = get_programs_with_type(self.site)
+        self.assertEqual(actual, programs_with_program_type)
+
+    @ddt.data(False, True)
+    @mock.patch(UTILS_MODULE + '.get_programs')
+    @mock.patch(UTILS_MODULE + '.get_program_types')
+    def test_get_programs_with_type_include_hidden(self, include_hidden, mock_get_program_types, mock_get_programs):
+        """Verify get_programs_with_type returns the expected list of programs with include_hidden parameter."""
+        programs_with_program_type = []
+        programs = [ProgramFactory(hidden=False), ProgramFactory(hidden=True)]
+        program_types = []
+
+        for program in programs:
+            if program['hidden'] and not include_hidden:
+                continue
+
+            program_type = ProgramTypeFactory(name=program['type'])
+            program_types.append(program_type)
+
+            program_with_type = copy.deepcopy(program)
+            program_with_type['type'] = program_type
+            programs_with_program_type.append(program_with_type)
+
+        mock_get_programs.return_value = programs
+        mock_get_program_types.return_value = program_types
+
+        actual = get_programs_with_type(self.site, include_hidden=include_hidden)
+        self.assertEqual(actual, programs_with_program_type)
+
+
 @mock.patch(UTILS_MODULE + '.get_edx_api_data')
 class TestGetProgramTypes(CatalogIntegrationMixin, TestCase):
     """Tests covering retrieval of program types from the catalog service."""
+    @override_settings(COURSE_CATALOG_API_URL='https://api.example.com/v1/')
     def test_get_program_types(self, mock_get_edx_api_data):
         """Verify get_program_types returns the expected list of program types."""
         program_types = ProgramTypeFactory.create_batch(3)
@@ -135,6 +241,29 @@ class TestGetProgramTypes(CatalogIntegrationMixin, TestCase):
         program = program_types[0]
         data = get_program_types(name=program['name'])
         self.assertEqual(data, program)
+
+
+@mock.patch(UTILS_MODULE + '.get_edx_api_data')
+class TestGetCurrency(CatalogIntegrationMixin, TestCase):
+    """Tests covering retrieval of currency data from the catalog service."""
+    @override_settings(COURSE_CATALOG_API_URL='https://api.example.com/v1/')
+    def test_get_currency_data(self, mock_get_edx_api_data):
+        """Verify get_currency_data returns the currency data."""
+        currency_data = {
+            "code": "CAD",
+            "rate": 1.257237,
+            "symbol": "$"
+        }
+        mock_get_edx_api_data.return_value = currency_data
+
+        # Catalog integration is disabled.
+        data = get_currency_data()
+        self.assertEqual(data, [])
+
+        catalog_integration = self.create_catalog_integration()
+        UserFactory(username=catalog_integration.service_username)
+        data = get_currency_data()
+        self.assertEqual(data, currency_data)
 
 
 @skip_unless_lms
@@ -158,7 +287,7 @@ class TestGetCourseRuns(CatalogIntegrationMixin, TestCase):
         for arg in (self.catalog_integration, 'course_runs'):
             self.assertIn(arg, args)
 
-        self.assertEqual(kwargs['api']._store['base_url'], self.catalog_integration.internal_api_url)  # pylint: disable=protected-access
+        self.assertEqual(kwargs['api']._store['base_url'], self.catalog_integration.get_internal_api_url())  # pylint: disable=protected-access
 
         querystring = {
             'page_size': 20,
@@ -205,3 +334,42 @@ class TestGetCourseRuns(CatalogIntegrationMixin, TestCase):
         self.assertTrue(mock_get_edx_api_data.called)
         self.assert_contract(mock_get_edx_api_data.call_args)
         self.assertEqual(data, catalog_course_runs)
+
+    def test_get_course_runs_by_course(self, mock_get_edx_api_data):
+        """
+        Test retrievals of run from a Course.
+        """
+        catalog_course_runs = CourseRunFactory.create_batch(10)
+        catalog_course = CourseFactory(course_runs=catalog_course_runs)
+        mock_get_edx_api_data.return_value = catalog_course
+
+        data = get_course_runs_for_course(course_uuid=str(catalog_course['uuid']))
+        self.assertTrue(mock_get_edx_api_data.called)
+        self.assertEqual(data, catalog_course_runs)
+
+
+@skip_unless_lms
+@mock.patch(UTILS_MODULE + '.get_edx_api_data')
+class TestGetCourseRunDetails(CatalogIntegrationMixin, TestCase):
+    """
+    Tests covering retrieval of information about a specific course run from the catalog service.
+    """
+    def setUp(self):
+        super(TestGetCourseRunDetails, self).setUp()
+        self.catalog_integration = self.create_catalog_integration(cache_ttl=1)
+        self.user = UserFactory(username=self.catalog_integration.service_username)
+
+    def test_get_course_run_details(self, mock_get_edx_api_data):
+        """
+        Test retrieval of details about a specific course run
+        """
+        course_run = CourseRunFactory()
+        course_run_details = {
+            'content_language': course_run['content_language'],
+            'weeks_to_complete': course_run['weeks_to_complete'],
+            'max_effort': course_run['max_effort']
+        }
+        mock_get_edx_api_data.return_value = course_run_details
+        data = get_course_run_details(course_run['key'], ['content_language', 'weeks_to_complete', 'max_effort'])
+        self.assertTrue(mock_get_edx_api_data.called)
+        self.assertEqual(data, course_run_details)

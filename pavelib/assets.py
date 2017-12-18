@@ -3,25 +3,27 @@ Asset compilation and collection.
 """
 
 from __future__ import print_function
-from datetime import datetime
-from functools import wraps
-from threading import Timer
+
 import argparse
 import glob
 import os
 import traceback
+from datetime import datetime
+from functools import wraps
+from threading import Timer
 
 from paver import tasks
-from paver.easy import sh, path, task, cmdopts, needs, consume_args, call_task, no_help
-from watchdog.observers.polling import PollingObserver
+from paver.easy import call_task, cmdopts, consume_args, needs, no_help, path, sh, task
 from watchdog.events import PatternMatchingEventHandler
-
-from .utils.envs import Env
-from .utils.cmd import cmd, django_cmd
-from .utils.timer import timed
-from .utils.process import run_background_process
+from watchdog.observers.api import DEFAULT_OBSERVER_TIMEOUT
+from watchdog.observers import Observer
 
 from openedx.core.djangoapps.theming.paver_helpers import get_theme_paths
+
+from .utils.cmd import cmd, django_cmd
+from .utils.envs import Env
+from .utils.process import run_background_process
+from .utils.timer import timed
 
 # setup baseline paths
 
@@ -41,25 +43,27 @@ SYSTEMS = {
 COMMON_LOOKUP_PATHS = [
     path("common/static"),
     path("common/static/sass"),
+    path('node_modules/@edx'),
     path('node_modules'),
-    path('node_modules/edx-pattern-library/node_modules'),
 ]
 
 # A list of NPM installed libraries that should be copied into the common
 # static directory.
 NPM_INSTALLED_LIBRARIES = [
-    'backbone/backbone.js',
     'backbone.paginator/lib/backbone.paginator.js',
-    'moment-timezone/builds/moment-timezone-with-data.js',
-    'moment/min/moment-with-locales.js',
+    'backbone/backbone.js',
+    'bootstrap/dist/js/bootstrap.bundle.js',
+    'hls.js/dist/hls.js',
     'jquery-migrate/dist/jquery-migrate.js',
     'jquery.scrollto/jquery.scrollTo.js',
     'jquery/dist/jquery.js',
+    'moment-timezone/builds/moment-timezone-with-data.js',
+    'moment/min/moment-with-locales.js',
     'picturefill/dist/picturefill.js',
     'requirejs/require.js',
     'underscore.string/dist/underscore.string.js',
     'underscore/underscore.js',
-    'hls.js/dist/hls.js',
+    'which-country/index.js'
 ]
 
 # A list of NPM installed developer libraries that should be copied into the common
@@ -70,7 +74,9 @@ NPM_INSTALLED_DEVELOPER_LIBRARIES = [
 ]
 
 # Directory to install static vendor files
-NPM_VENDOR_DIRECTORY = path("common/static/common/js/vendor")
+NPM_JS_VENDOR_DIRECTORY = path('common/static/common/js/vendor')
+NPM_CSS_VENDOR_DIRECTORY = path("common/static/common/css/vendor")
+NPM_CSS_DIRECTORY = path("common/static/common/css")
 
 # system specific lookup path additions, add sass dirs if one system depends on the sass files for other systems
 SASS_LOOKUP_DEPENDENCIES = {
@@ -78,7 +84,10 @@ SASS_LOOKUP_DEPENDENCIES = {
 }
 
 # Collectstatic log directory setting
-COLLECTSTATIC_LOG_DIR_ARG = "collect_log_dir"
+COLLECTSTATIC_LOG_DIR_ARG = 'collect_log_dir'
+
+# Webpack command
+WEBPACK_COMMAND = 'STATIC_ROOT_LMS={static_root_lms} STATIC_ROOT_CMS={static_root_cms} $(npm bin)/webpack {options}'
 
 
 def get_sass_directories(system, theme_dir=None):
@@ -583,8 +592,42 @@ def _compile_sass(system, theme, debug, force, timing_info):
                 source_comments=source_comments,
                 output_style=output_style,
             )
+
+        # For Sass files without explicit RTL versions, generate
+        # an RTL version of the CSS using the rtlcss library.
+        for sass_file in glob.glob(sass_source_dir + '/**/*.scss'):
+            if should_generate_rtl_css_file(sass_file):
+                source_css_file = sass_file.replace(sass_source_dir, css_dir).replace('.scss', '.css')
+                target_css_file = source_css_file.replace('.css', '-rtl.css')
+                sh("rtlcss {source_file} {target_file}".format(
+                    source_file=source_css_file,
+                    target_file=target_css_file,
+                ))
+
+        # Capture the time taken
+        if not dry_run:
             duration = datetime.now() - start
             timing_info.append((sass_source_dir, css_dir, duration))
+    return True
+
+
+def should_generate_rtl_css_file(sass_file):
+    """
+    Returns true if a Sass file should have an RTL version generated.
+    """
+    # Don't generate RTL CSS for partials
+    if path(sass_file).name.startswith('_'):
+        return False
+
+    # Don't generate RTL CSS if the file is itself an RTL version
+    if sass_file.endswith('-rtl.scss'):
+        return False
+
+    # Don't generate RTL CSS if there is an explicit Sass version for RTL
+    rtl_sass_file = path(sass_file.replace('.scss', '-rtl.scss'))
+    if rtl_sass_file.exists():
+        return False
+
     return True
 
 
@@ -597,10 +640,14 @@ def process_npm_assets():
         Copies a vendor library to the shared vendor directory.
         """
         library_path = 'node_modules/{library}'.format(library=library)
+        if library.endswith('.css') or library.endswith('.css.map'):
+            vendor_dir = NPM_CSS_VENDOR_DIRECTORY
+        else:
+            vendor_dir = NPM_JS_VENDOR_DIRECTORY
         if os.path.exists(library_path):
             sh('/bin/cp -rf {library_path} {vendor_dir}'.format(
                 library_path=library_path,
-                vendor_dir=NPM_VENDOR_DIRECTORY,
+                vendor_dir=vendor_dir,
             ))
         elif not skip_if_missing:
             raise Exception('Missing vendor file {library_path}'.format(library_path=library_path))
@@ -611,7 +658,9 @@ def process_npm_assets():
         return
 
     # Ensure that the vendor directory exists
-    NPM_VENDOR_DIRECTORY.mkdir_p()
+    NPM_JS_VENDOR_DIRECTORY.mkdir_p()
+    NPM_CSS_DIRECTORY.mkdir_p()
+    NPM_CSS_VENDOR_DIRECTORY.mkdir_p()
 
     # Copy each file to the vendor directory, overwriting any existing file.
     print("Copying vendor files into static directory")
@@ -704,25 +753,49 @@ def execute_compile_sass(args):
         )
 
 
-def execute_webpack(prod, settings=None):
+@task
+@cmdopts([
+    ('settings=', 's', "Django settings (defaults to devstack)"),
+    ('watch', 'w', "Watch file system and rebuild on change (defaults to off)"),
+])
+@timed
+def webpack(options):
+    """
+    Run a Webpack build.
+    """
+    settings = getattr(options, 'settings', Env.DEVSTACK_SETTINGS)
+    static_root_lms = Env.get_django_setting("STATIC_ROOT", "lms", settings=settings)
+    static_root_cms = Env.get_django_setting("STATIC_ROOT", "cms", settings=settings)
+    config_path = Env.get_django_setting("WEBPACK_CONFIG_PATH", "lms", settings=settings)
+    environment = 'NODE_ENV={node_env} STATIC_ROOT_LMS={static_root_lms} STATIC_ROOT_CMS={static_root_cms}'.format(
+        node_env="production" if settings != Env.DEVSTACK_SETTINGS else "development",
+        static_root_lms=static_root_lms,
+        static_root_cms=static_root_cms
+    )
     sh(
         cmd(
-            "NODE_ENV={node_env} STATIC_ROOT_LMS={static_root_lms} STATIC_ROOT_CMS={static_root_cms} $(npm bin)/webpack"
-            .format(
-                node_env="production" if prod else "development",
-                static_root_lms=Env.get_django_setting("STATIC_ROOT", "lms", settings=settings),
-                static_root_cms=Env.get_django_setting("STATIC_ROOT", "cms", settings=settings)
+            '{environment} $(npm bin)/webpack --config={config_path}'.format(
+                environment=environment,
+                config_path=config_path
             )
         )
     )
 
 
 def execute_webpack_watch(settings=None):
+    """
+    Run the Webpack file system watcher.
+    """
+    # We only want Webpack to re-run on changes to its own entry points,
+    # not all JS files, so we use its own watcher instead of subclassing
+    # from Watchdog like the other watchers do.
     run_background_process(
-        "STATIC_ROOT_LMS={static_root_lms} STATIC_ROOT_CMS={static_root_cms} $(npm bin)/webpack --watch --watch-poll=200"
-        .format(
+        'STATIC_ROOT_LMS={static_root_lms} STATIC_ROOT_CMS={static_root_cms} $(npm bin)/webpack {options}'.format(
+            options='--watch --config={config_path}'.format(
+                config_path=Env.get_django_setting("WEBPACK_CONFIG_PATH", "lms", settings=settings)
+            ),
             static_root_lms=Env.get_django_setting("STATIC_ROOT", "lms", settings=settings),
-            static_root_cms=Env.get_django_setting("STATIC_ROOT", "cms", settings=settings)
+            static_root_cms=Env.get_django_setting("STATIC_ROOT", "cms", settings=settings),
         )
     )
 
@@ -764,6 +837,7 @@ def listfy(data):
     ('background', 'b', 'Background mode'),
     ('theme-dirs=', '-td', 'The themes dir containing all themes (defaults to None)'),
     ('themes=', '-t', 'The themes to add sass watchers for (defaults to None)'),
+    ('wait=', '-w', 'How long to pause between filesystem scans.')
 ])
 @timed
 def watch_assets(options):
@@ -777,6 +851,9 @@ def watch_assets(options):
     themes = get_parsed_option(options, 'themes')
     theme_dirs = get_parsed_option(options, 'theme_dirs', [])
 
+    default_wait = [unicode(DEFAULT_OBSERVER_TIMEOUT)]
+    wait = float(get_parsed_option(options, 'wait', default_wait)[0])
+
     if not theme_dirs and themes:
         # We can not add theme sass watchers without knowing the directory that contains the themes.
         raise ValueError('theme-dirs must be provided for watching theme sass.')
@@ -784,7 +861,7 @@ def watch_assets(options):
         theme_dirs = [path(_dir) for _dir in theme_dirs]
 
     sass_directories = get_watcher_dirs(theme_dirs, themes)
-    observer = PollingObserver()
+    observer = Observer(timeout=wait)
 
     CoffeeScriptWatcher().register(observer)
     SassWatcher().register(observer, sass_directories)
@@ -794,13 +871,12 @@ def watch_assets(options):
     print("Starting asset watcher...")
     observer.start()
 
-    # We only want Webpack to re-run on changes to its own entry points, not all JS files, so we use its own watcher
-    # instead of subclassing from Watchdog like the other watchers do
-    execute_webpack_watch(settings='devstack')
+    # Run the Webpack file system watcher too
+    execute_webpack_watch(settings=Env.DEVSTACK_SETTINGS)
 
     if not getattr(options, 'background', False):
         # when running as a separate process, the main thread needs to loop
-        # in order to allow for shutdown by contrl-c
+        # in order to allow for shutdown by control-c
         try:
             while True:
                 observer.join(2)
@@ -825,7 +901,7 @@ def update_assets(args):
         help="lms or studio",
     )
     parser.add_argument(
-        '--settings', type=str, default="devstack",
+        '--settings', type=str, default=Env.DEVSTACK_SETTINGS,
         help="Django settings module",
     )
     parser.add_argument(
@@ -852,13 +928,19 @@ def update_assets(args):
         '--collect-log', dest=COLLECTSTATIC_LOG_DIR_ARG, default=None,
         help="When running collectstatic, direct output to specified log directory",
     )
+    parser.add_argument(
+        '--wait', type=float, default=0.0,
+        help="How long to pause between filesystem scans"
+    )
     args = parser.parse_args(args)
     collect_log_args = {}
 
     process_xmodule_assets()
     process_npm_assets()
     compile_coffeescript()
-    execute_webpack(prod=(args.settings != "devstack"), settings=args.settings)
+
+    # Build Webpack
+    call_task('pavelib.assets.webpack', options={'settings': args.settings})
 
     # Compile sass for themes and system
     execute_compile_sass(args)
@@ -875,5 +957,10 @@ def update_assets(args):
     if args.watch:
         call_task(
             'pavelib.assets.watch_assets',
-            options={'background': not args.debug, 'theme_dirs': args.theme_dirs, 'themes': args.themes},
+            options={
+                'background': not args.debug,
+                'theme_dirs': args.theme_dirs,
+                'themes': args.themes,
+                'wait': [float(args.wait)]
+            },
         )

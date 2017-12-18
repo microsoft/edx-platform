@@ -13,10 +13,11 @@ from django.template import defaultfilters
 
 from ccx_keys.locator import CCXLocator
 from model_utils.models import TimeStampedModel
-from opaque_keys.edx.keys import CourseKey
 
 from config_models.models import ConfigurationModel
 from lms.djangoapps import django_comment_client
+from openedx.core.djangoapps.catalog.models import CatalogIntegration
+from openedx.core.djangoapps.lang_pref.api import get_closest_released_language
 from openedx.core.djangoapps.models.course_details import CourseDetails
 from static_replace.models import AssetBaseUrlConfig
 from xmodule import course_metadata_utils, block_metadata_utils
@@ -75,6 +76,7 @@ class CourseOverview(TimeStampedModel):
     has_any_active_web_certificate = BooleanField(default=False)
     cert_name_short = TextField()
     cert_name_long = TextField()
+    certificate_available_date = DateTimeField(default=None, null=True)
 
     # Grading
     lowest_passing_grade = DecimalField(max_digits=5, decimal_places=2, null=True)
@@ -100,6 +102,8 @@ class CourseOverview(TimeStampedModel):
     self_paced = BooleanField(default=False)
     marketing_url = TextField(null=True)
     eligible_for_financial_aid = BooleanField(default=True)
+
+    language = TextField(null=True)
 
     @classmethod
     def _create_or_update(cls, course):
@@ -170,6 +174,7 @@ class CourseOverview(TimeStampedModel):
         course_overview.has_any_active_web_certificate = (get_active_web_certificate(course) is not None)
         course_overview.cert_name_short = course.cert_name_short
         course_overview.cert_name_long = course.cert_name_long
+        course_overview.certificate_available_date = course.certificate_available_date
         course_overview.lowest_passing_grade = lowest_passing_grade
         course_overview.end_of_course_survey_url = course.end_of_course_survey_url
 
@@ -189,6 +194,9 @@ class CourseOverview(TimeStampedModel):
         course_overview.effort = CourseDetails.fetch_about_attribute(course.id, 'effort')
         course_overview.course_video_url = CourseDetails.fetch_video_url(course.id)
         course_overview.self_paced = course.self_paced
+
+        if not CatalogIntegration.is_enabled():
+            course_overview.language = course.language
 
         return course_overview
 
@@ -472,7 +480,9 @@ class CourseOverview(TimeStampedModel):
         return course_metadata_utils.may_certify_for_course(
             self.certificates_display_behavior,
             self.certificates_show_before_end,
-            self.has_ended()
+            self.has_ended(),
+            self.certificate_available_date,
+            self.self_paced
         )
 
     @property
@@ -483,18 +493,26 @@ class CourseOverview(TimeStampedModel):
         return json.loads(self._pre_requisite_courses_json)
 
     @classmethod
-    def get_select_courses(cls, course_keys):
+    def update_select_courses(cls, course_keys, force_update=False):
         """
-        Returns CourseOverview objects for the given course_keys.
-        """
-        course_overviews = []
+        A side-effecting method that updates CourseOverview objects for
+        the given course_keys.
 
+        Arguments:
+            course_keys (list[CourseKey]): Identifies for which courses to
+                return CourseOverview objects.
+            force_update (boolean): Optional parameter that indicates
+                whether the requested CourseOverview objects should be
+                forcefully updated (i.e., re-synched with the modulestore).
+        """
         log.info('Generating course overview for %d courses.', len(course_keys))
         log.debug('Generating course overview(s) for the following courses: %s', course_keys)
 
+        action = CourseOverview.load_from_module_store if force_update else CourseOverview.get_from_id
+
         for course_key in course_keys:
             try:
-                course_overviews.append(CourseOverview.get_from_id(course_key))
+                action(course_key)
             except Exception as ex:  # pylint: disable=broad-except
                 log.exception(
                     'An error occurred while generating course overview for %s: %s',
@@ -503,8 +521,6 @@ class CourseOverview(TimeStampedModel):
                 )
 
         log.info('Finished generating course overviews.')
-
-        return course_overviews
 
     @classmethod
     def get_all_courses(cls, orgs=None, filter_=None):
@@ -537,10 +553,7 @@ class CourseOverview(TimeStampedModel):
         """
         Returns all course keys from course overviews.
         """
-        return [
-            CourseKey.from_string(course_overview['id'])
-            for course_overview in CourseOverview.objects.values('id')
-        ]
+        return CourseOverview.objects.values_list('id', flat=True)
 
     def is_discussion_tab_enabled(self):
         """
@@ -597,6 +610,15 @@ class CourseOverview(TimeStampedModel):
             instructor: Instructor-led courses
         """
         return 'self' if self.self_paced else 'instructor'
+
+    @property
+    def closest_released_language(self):
+        """
+        Returns the language code that most closely matches this course' language and is fully
+        supported by the LMS, or None if there are no fully supported languages that
+        match the target.
+        """
+        return get_closest_released_language(self.language) if self.language else None
 
     def apply_cdn_to_urls(self, image_urls):
         """

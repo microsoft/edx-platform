@@ -1,38 +1,39 @@
 """
 Tests for the EdxNotes app.
 """
-from contextlib import contextmanager
-import ddt
 import json
-import jwt
-from mock import patch, MagicMock
-from nose.plugins.attrib import attr
-from unittest import skipUnless
-from datetime import datetime
 import urlparse
+from contextlib import contextmanager
+from datetime import datetime
+from unittest import skipUnless
 
+import ddt
+import jwt
+from django.conf import settings
+from django.contrib.auth.models import AnonymousUser
+from django.core.exceptions import ImproperlyConfigured
+from django.core.urlresolvers import reverse
+from django.test.client import RequestFactory
+from django.test.utils import override_settings
+from edx_oauth2_provider.tests.factories import ClientFactory
+from mock import MagicMock, patch
+from nose.plugins.attrib import attr
+from provider.oauth2.models import Client
+
+from courseware.model_data import FieldDataCache
+from courseware.module_render import get_module_for_descriptor
+from courseware.tabs import get_course_tab_list
 from edxmako.shortcuts import render_to_string
 from edxnotes import helpers
 from edxnotes.decorators import edxnotes
 from edxnotes.exceptions import EdxNotesParseError, EdxNotesServiceUnavailable
 from edxnotes.plugins import EdxNotesTab
-from django.conf import settings
-from django.core.urlresolvers import reverse
-from django.core.exceptions import ImproperlyConfigured
-from django.test.client import RequestFactory
-from django.test.utils import override_settings
-from edx_oauth2_provider.tests.factories import ClientFactory
-from provider.oauth2.models import Client
-from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
-from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
+from student.tests.factories import CourseEnrollmentFactory, UserFactory
 from xmodule.modulestore import ModuleStoreEnum
 from xmodule.modulestore.django import modulestore
+from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
+from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
 from xmodule.tabs import CourseTab
-from courseware.model_data import FieldDataCache
-from courseware.module_render import get_module_for_descriptor
-from courseware.tabs import get_course_tab_list
-from student.tests.factories import UserFactory, CourseEnrollmentFactory
-
 
 FEATURES = settings.FEATURES.copy()
 
@@ -72,11 +73,11 @@ class TestProblem(object):
 
     The purpose of this class is to imitate any problem.
     """
-    def __init__(self, course):
+    def __init__(self, course, user=None):
         self.system = MagicMock(is_author_mode=False)
         self.scope_ids = MagicMock(usage_id="test_usage_id")
-        self.user = UserFactory.create(username="Joe", email="joe@example.com", password="edx")
-        self.runtime = MagicMock(course_id=course.id, get_real_user=lambda anon_id: self.user)
+        user = user or UserFactory()
+        self.runtime = MagicMock(course_id=course.id, get_real_user=lambda __: user)
         self.descriptor = MagicMock()
         self.descriptor.runtime.modulestore.get_course.return_value = course
 
@@ -100,33 +101,38 @@ class EdxNotesDecoratorTest(ModuleStoreTestCase):
         ClientFactory(name="edx-notes")
         # Using old mongo because of locator comparison issues (see longer
         # note below in EdxNotesHelpersTest setUp.
-        self.course = CourseFactory.create(edxnotes=True, default_store=ModuleStoreEnum.Type.mongo)
-        self.user = UserFactory.create(username="Bob", email="bob@example.com", password="edx")
-        self.client.login(username=self.user.username, password="edx")
-        self.problem = TestProblem(self.course)
+        self.course = CourseFactory(edxnotes=True, default_store=ModuleStoreEnum.Type.mongo)
+        self.user = UserFactory()
+        self.client.login(username=self.user.username, password=UserFactory._DEFAULT_PASSWORD)
+        self.problem = TestProblem(self.course, self.user)
 
     @patch.dict("django.conf.settings.FEATURES", {'ENABLE_EDXNOTES': True})
-    @patch("edxnotes.decorators.get_public_endpoint", autospec=True)
-    @patch("edxnotes.decorators.get_token_url", autospec=True)
-    @patch("edxnotes.decorators.get_edxnotes_id_token", autospec=True)
-    @patch("edxnotes.decorators.generate_uid", autospec=True)
+    @patch("edxnotes.helpers.get_public_endpoint", autospec=True)
+    @patch("edxnotes.helpers.get_token_url", autospec=True)
+    @patch("edxnotes.helpers.get_edxnotes_id_token", autospec=True)
+    @patch("edxnotes.helpers.generate_uid", autospec=True)
     def test_edxnotes_enabled(self, mock_generate_uid, mock_get_id_token, mock_get_token_url, mock_get_endpoint):
         """
         Tests if get_html is wrapped when feature flag is on and edxnotes are
         enabled for the course.
         """
+        course = CourseFactory(edxnotes=True)
+        enrollment = CourseEnrollmentFactory(course_id=course.id)
+        user = enrollment.user
+        problem = TestProblem(course, user)
+
         mock_generate_uid.return_value = "uid"
         mock_get_id_token.return_value = "token"
         mock_get_token_url.return_value = "/tokenUrl"
         mock_get_endpoint.return_value = "/endpoint"
-        enable_edxnotes_for_the_course(self.course, self.user.id)
+        enable_edxnotes_for_the_course(course, user.id)
         expected_context = {
             "content": "original_get_html",
             "uid": "uid",
             "edxnotes_visibility": "true",
             "params": {
-                "usageId": u"test_usage_id",
-                "courseId": unicode(self.course.id).encode("utf-8"),
+                "usageId": "test_usage_id",
+                "courseId": course.id,
                 "token": "token",
                 "tokenUrl": "/tokenUrl",
                 "endpoint": "/endpoint",
@@ -135,7 +141,7 @@ class EdxNotesDecoratorTest(ModuleStoreTestCase):
             },
         }
         self.assertEqual(
-            self.problem.get_html(),
+            problem.get_html(),
             render_to_string("edxnotes_wrapper.html", expected_context),
         )
 
@@ -169,6 +175,13 @@ class EdxNotesDecoratorTest(ModuleStoreTestCase):
         self.course.advanced_modules = ["videoannotation", "imageannotation", "textannotation"]
         enable_edxnotes_for_the_course(self.course, self.user.id)
         self.assertEqual("original_get_html", self.problem.get_html())
+
+    @patch.dict("django.conf.settings.FEATURES", {"ENABLE_EDXNOTES": True})
+    def test_anonymous_user(self):
+        user = AnonymousUser()
+        problem = TestProblem(self.course, user)
+        enable_edxnotes_for_the_course(self.course, None)
+        assert problem.get_html() == "original_get_html"
 
 
 @attr(shard=3)
@@ -217,8 +230,8 @@ class EdxNotesHelpersTest(ModuleStoreTestCase):
             self.child_vertical = self.store.get_item(self.child_vertical.location)
             self.child_html_module = self.store.get_item(self.child_html_module.location)
 
-            self.user = UserFactory.create(username="Joe", email="joe@example.com", password="edx")
-            self.client.login(username=self.user.username, password="edx")
+            self.user = UserFactory()
+            self.client.login(username=self.user.username, password=UserFactory._DEFAULT_PASSWORD)
 
         self.request = RequestFactory().request()
         self.request.user = self.user
@@ -238,29 +251,17 @@ class EdxNotesHelpersTest(ModuleStoreTestCase):
         """
         Tests that edxnotes are disabled when Harvard Annotation Tool is enabled.
         """
-        self.course.advanced_modules = ["foo", "imageannotation", "boo"]
-        self.assertFalse(helpers.is_feature_enabled(self.course))
+        self.course.advanced_modules = ['imageannotation', 'textannotation', 'videoannotation']
+        assert not helpers.is_feature_enabled(self.course, self.user)
 
-        self.course.advanced_modules = ["foo", "boo", "videoannotation"]
-        self.assertFalse(helpers.is_feature_enabled(self.course))
-
-        self.course.advanced_modules = ["textannotation", "foo", "boo"]
-        self.assertFalse(helpers.is_feature_enabled(self.course))
-
-        self.course.advanced_modules = ["textannotation", "videoannotation", "imageannotation"]
-        self.assertFalse(helpers.is_feature_enabled(self.course))
-
-    @ddt.unpack
-    @ddt.data(
-        {'_edxnotes': True},
-        {'_edxnotes': False}
-    )
-    def test_is_feature_enabled(self, _edxnotes):
+    @ddt.data(True, False)
+    def test_is_feature_enabled(self, enabled):
         """
         Tests that is_feature_enabled shows correct behavior.
         """
-        self.course.edxnotes = _edxnotes
-        self.assertEqual(helpers.is_feature_enabled(self.course), _edxnotes)
+        course = CourseFactory(edxnotes=enabled)
+        enrollment = CourseEnrollmentFactory(course_id=course.id)
+        assert helpers.is_feature_enabled(course, enrollment.user) == enabled
 
     @ddt.data(
         helpers.get_public_endpoint,
@@ -691,21 +692,6 @@ class EdxNotesHelpersTest(ModuleStoreTestCase):
             helpers.preprocess_collection(self.user, self.course, initial_collection)
         )
 
-    def test_get_parent_unit(self):
-        """
-        Tests `get_parent_unit` method for the successful result.
-        """
-        parent = helpers.get_parent_unit(self.html_module_1)
-        self.assertEqual(parent.location, self.vertical.location)
-
-        parent = helpers.get_parent_unit(self.child_html_module)
-        self.assertEqual(parent.location, self.vertical_with_container.location)
-
-        self.assertIsNone(helpers.get_parent_unit(None))
-        self.assertIsNone(helpers.get_parent_unit(self.course))
-        self.assertIsNone(helpers.get_parent_unit(self.chapter))
-        self.assertIsNone(helpers.get_parent_unit(self.sequential))
-
     def test_get_module_context_sequential(self):
         """
         Tests `get_module_context` method for the sequential.
@@ -954,10 +940,10 @@ class EdxNotesViewsTest(ModuleStoreTestCase):
     def setUp(self):
         ClientFactory(name="edx-notes")
         super(EdxNotesViewsTest, self).setUp()
-        self.course = CourseFactory.create(edxnotes=True)
-        self.user = UserFactory.create(username="Bob", email="bob@example.com", password="edx")
-        CourseEnrollmentFactory.create(user=self.user, course_id=self.course.id)
-        self.client.login(username=self.user.username, password="edx")
+        self.course = CourseFactory(edxnotes=True)
+        self.user = UserFactory()
+        CourseEnrollmentFactory(user=self.user, course_id=self.course.id)
+        self.client.login(username=self.user.username, password=UserFactory._DEFAULT_PASSWORD)
         self.notes_page_url = reverse("edxnotes", args=[unicode(self.course.id)])
         self.notes_url = reverse("notes", args=[unicode(self.course.id)])
         self.get_token_url = reverse("get_token", args=[unicode(self.course.id)])
@@ -1151,38 +1137,27 @@ class EdxNotesPluginTest(ModuleStoreTestCase):
     def setUp(self):
         super(EdxNotesPluginTest, self).setUp()
         self.course = CourseFactory.create(edxnotes=True)
-        self.user = UserFactory.create(username="ma", email="ma@ma.info", password="edx")
+        self.user = UserFactory()
         CourseEnrollmentFactory.create(user=self.user, course_id=self.course.id)
 
-    def test_edxnotes_tab_with_unauthorized_user(self):
-        """
-        Verify EdxNotesTab visibility when user is unauthroized.
-        """
-        user = UserFactory.create(username="ma1", email="ma1@ma1.info", password="edx")
-        self.assertFalse(EdxNotesTab.is_enabled(self.course, user=user))
+    def test_edxnotes_tab_with_unenrolled_user(self):
+        user = UserFactory()
+        assert not EdxNotesTab.is_enabled(self.course, user=user)
 
-    @ddt.unpack
-    @ddt.data(
-        {'enable_edxnotes': False},
-        {'enable_edxnotes': True}
-    )
-    def test_edxnotes_tab_with_feature_flag(self, enable_edxnotes):
+    @ddt.data(True, False)
+    def test_edxnotes_tab_with_feature_flag(self, enabled):
         """
         Verify EdxNotesTab visibility when ENABLE_EDXNOTES feature flag is enabled/disabled.
         """
-        FEATURES['ENABLE_EDXNOTES'] = enable_edxnotes
+        FEATURES['ENABLE_EDXNOTES'] = enabled
         with override_settings(FEATURES=FEATURES):
-            self.assertEqual(EdxNotesTab.is_enabled(self.course), enable_edxnotes)
+            assert EdxNotesTab.is_enabled(self.course, self.user) == enabled
 
-    @ddt.unpack
-    @ddt.data(
-        {'harvard_notes_enabled': False},
-        {'harvard_notes_enabled': True}
-    )
+    @ddt.data(True, False)
     def test_edxnotes_tab_with_harvard_notes(self, harvard_notes_enabled):
         """
         Verify EdxNotesTab visibility when harvard notes feature is enabled/disabled.
         """
         with patch("edxnotes.plugins.is_harvard_notes_enabled") as mock_harvard_notes_enabled:
             mock_harvard_notes_enabled.return_value = harvard_notes_enabled
-            self.assertEqual(EdxNotesTab.is_enabled(self.course), not harvard_notes_enabled)
+            assert EdxNotesTab.is_enabled(self.course, self.user) == (not harvard_notes_enabled)

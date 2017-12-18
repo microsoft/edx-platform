@@ -51,28 +51,29 @@ What is supported:
             GET / PUT / DELETE HTTP methods respectively
 """
 
-import datetime
-from django.utils.timezone import UTC
-import logging
-import oauthlib.oauth1
-from oauthlib.oauth1.rfc5849 import signature
-import hashlib
 import base64
-import urllib
+import datetime
+import hashlib
+import logging
 import textwrap
-import bleach
-from lxml import etree
-from webob import Response
-import mock
+import urllib
 from xml.sax.saxutils import escape
 
+import bleach
+import mock
+import oauthlib.oauth1
+from pytz import UTC
+from lxml import etree
+from oauthlib.oauth1.rfc5849 import signature
+from pkg_resources import resource_string
+from webob import Response
+from xblock.core import List, Scope, String, XBlock
+from xblock.fields import Boolean, Float
+
 from xmodule.editing_module import MetadataOnlyEditingDescriptor
+from xmodule.lti_2_util import LTI20ModuleMixin, LTIError
 from xmodule.raw_module import EmptyDataRawDescriptor
 from xmodule.x_module import XModule, module_attr
-from xmodule.lti_2_util import LTI20ModuleMixin, LTIError
-from pkg_resources import resource_string
-from xblock.core import String, Scope, List, XBlock
-from xblock.fields import Boolean, Float
 
 log = logging.getLogger(__name__)
 
@@ -888,7 +889,7 @@ oauth_consumer_key="", oauth_signature="frVp4JuvT1mVXlxktiAUjQ7%2F1cw%3D"'}
             close_date = due_date + self.graceperiod  # pylint: disable=no-member
         else:
             close_date = due_date
-        return close_date is not None and datetime.datetime.now(UTC()) > close_date
+        return close_date is not None and datetime.datetime.now(UTC) > close_date
 
 
 class LTIDescriptor(LTIFields, MetadataOnlyEditingDescriptor, EmptyDataRawDescriptor):

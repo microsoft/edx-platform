@@ -2,62 +2,52 @@
 """
 Miscellaneous tests for the student app.
 """
-from datetime import datetime, timedelta
-import json
 import logging
 import unittest
+from datetime import datetime, timedelta
 from urllib import quote
 
 import ddt
+import pytz
+from config_models.models import cache
 from django.conf import settings
-from django.contrib.auth.models import User, AnonymousUser
+from django.contrib.auth.models import AnonymousUser, User
 from django.core.urlresolvers import reverse
 from django.test import TestCase, override_settings
 from django.test.client import Client
-import httpretty
 from markupsafe import escape
 from mock import Mock, patch
 from nose.plugins.attrib import attr
-from opaque_keys.edx.locations import SlashSeparatedCourseKey, CourseLocator
-from provider.constants import CONFIDENTIAL
+from opaque_keys.edx.keys import CourseKey
+from opaque_keys.edx.locations import CourseLocator
 from pyquery import PyQuery as pq
-import pytz
 
+import shoppingcart  # pylint: disable=import-error
 from bulk_email.models import Optout  # pylint: disable=import-error
 from certificates.models import CertificateStatuses  # pylint: disable=import-error
 from certificates.tests.factories import GeneratedCertificateFactory  # pylint: disable=import-error
-from config_models.models import cache
 from course_modes.models import CourseMode
+from course_modes.tests.factories import CourseModeFactory
 from lms.djangoapps.verify_student.models import SoftwareSecurePhotoVerification
-from openedx.core.djangoapps.catalog.tests.factories import (
-    generate_course_run_key,
-    ProgramFactory,
-    CourseFactory as CatalogCourseFactory,
-    CourseRunFactory,
-)
+from openedx.core.djangoapps.catalog.tests.factories import CourseFactory as CatalogCourseFactory
+from openedx.core.djangoapps.catalog.tests.factories import CourseRunFactory, ProgramFactory, generate_course_run_key
 from openedx.core.djangoapps.programs.tests.mixins import ProgramsApiConfigMixin
 from openedx.core.djangoapps.site_configuration.tests.mixins import SiteMixin
 from openedx.core.djangolib.testing.utils import CacheIsolationTestCase, skip_unless_lms
-import shoppingcart  # pylint: disable=import-error
 from student.models import (
-    anonymous_id_for_user, user_by_anonymous_id, CourseEnrollment,
-    unique_id_for_user, LinkedInAddToProfileConfiguration, UserAttribute
+    CourseEnrollment,
+    LinkedInAddToProfileConfiguration,
+    UserAttribute,
+    anonymous_id_for_user,
+    unique_id_for_user,
+    user_by_anonymous_id
 )
-from student.tests.factories import UserFactory, CourseModeFactory, CourseEnrollmentFactory
-from student.views import (
-    process_survey_link,
-    _cert_info,
-    complete_course_mode_info,
-)
+from student.tests.factories import CourseEnrollmentFactory, UserFactory
+from student.views import _cert_info, complete_course_mode_info, process_survey_link
 from util.model_utils import USER_SETTINGS_CHANGED_EVENT_NAME
 from util.testing import EventTestMixin
-from xmodule.modulestore.tests.django_utils import (
-    ModuleStoreTestCase,
-    ModuleStoreEnum,
-    SharedModuleStoreTestCase,
-)
+from xmodule.modulestore.tests.django_utils import ModuleStoreEnum, ModuleStoreTestCase, SharedModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory, check_mongo_calls
-
 
 log = logging.getLogger(__name__)
 
@@ -93,8 +83,6 @@ class CourseEndingTest(TestCase):
             _cert_info(user, course, None, course_mode),
             {
                 'status': 'processing',
-                'show_disabled_download_button': False,
-                'show_download_url': False,
                 'show_survey_button': False,
                 'can_unenroll': True,
             }
@@ -105,8 +93,6 @@ class CourseEndingTest(TestCase):
             _cert_info(user, course, cert_status, course_mode),
             {
                 'status': 'processing',
-                'show_disabled_download_button': False,
-                'show_download_url': False,
                 'show_survey_button': False,
                 'mode': None,
                 'linked_in_url': None,
@@ -115,14 +101,12 @@ class CourseEndingTest(TestCase):
         )
 
         cert_status = {'status': 'generating', 'grade': '0.67', 'mode': 'honor'}
-        with patch('lms.djangoapps.grades.new.course_grade_factory.CourseGradeFactory.read') as patch_persisted_grade:
+        with patch('lms.djangoapps.grades.course_grade_factory.CourseGradeFactory.read') as patch_persisted_grade:
             patch_persisted_grade.return_value = Mock(percent=1.0)
             self.assertEqual(
                 _cert_info(user, course, cert_status, course_mode),
                 {
                     'status': 'generating',
-                    'show_disabled_download_button': True,
-                    'show_download_url': False,
                     'show_survey_button': True,
                     'survey_url': survey_url,
                     'grade': '1.0',
@@ -137,8 +121,6 @@ class CourseEndingTest(TestCase):
             _cert_info(user, course, cert_status, course_mode),
             {
                 'status': 'generating',
-                'show_disabled_download_button': True,
-                'show_download_url': False,
                 'show_survey_button': True,
                 'survey_url': survey_url,
                 'grade': '0.67',
@@ -150,7 +132,8 @@ class CourseEndingTest(TestCase):
 
         download_url = 'http://s3.edx/cert'
         cert_status = {
-            'status': 'downloadable', 'grade': '0.67',
+            'status': 'downloadable',
+            'grade': '0.67',
             'download_url': download_url,
             'mode': 'honor'
         }
@@ -158,9 +141,7 @@ class CourseEndingTest(TestCase):
         self.assertEqual(
             _cert_info(user, course, cert_status, course_mode),
             {
-                'status': 'ready',
-                'show_disabled_download_button': False,
-                'show_download_url': True,
+                'status': 'downloadable',
                 'download_url': download_url,
                 'show_survey_button': True,
                 'survey_url': survey_url,
@@ -180,8 +161,6 @@ class CourseEndingTest(TestCase):
             _cert_info(user, course, cert_status, course_mode),
             {
                 'status': 'notpassing',
-                'show_disabled_download_button': False,
-                'show_download_url': False,
                 'show_survey_button': True,
                 'survey_url': survey_url,
                 'grade': '0.67',
@@ -201,8 +180,6 @@ class CourseEndingTest(TestCase):
             _cert_info(user, course2, cert_status, course_mode),
             {
                 'status': 'notpassing',
-                'show_disabled_download_button': False,
-                'show_download_url': False,
                 'show_survey_button': False,
                 'grade': '0.67',
                 'mode': 'honor',
@@ -214,14 +191,28 @@ class CourseEndingTest(TestCase):
         # test when the display is unavailable or notpassing, we get the correct results out
         course2.certificates_display_behavior = 'early_no_info'
         cert_status = {'status': 'unavailable'}
-        self.assertEqual(_cert_info(user, course2, cert_status, course_mode), {})
+        self.assertEqual(
+            _cert_info(user, course2, cert_status, course_mode),
+            {
+                'status': 'processing',
+                'show_survey_button': False,
+                'can_unenroll': True,
+            }
+        )
 
         cert_status = {
             'status': 'notpassing', 'grade': '0.67',
             'download_url': download_url,
             'mode': 'honor'
         }
-        self.assertEqual(_cert_info(user, course2, cert_status, course_mode), {})
+        self.assertEqual(
+            _cert_info(user, course2, cert_status, course_mode),
+            {
+                'status': 'processing',
+                'show_survey_button': False,
+                'can_unenroll': True,
+            }
+        )
 
     @ddt.data(
         (0.70, 0.60),
@@ -254,14 +245,12 @@ class CourseEndingTest(TestCase):
         else:
             cert_status = {'status': 'generating', 'mode': 'honor'}
 
-        with patch('lms.djangoapps.grades.new.course_grade_factory.CourseGradeFactory.read') as patch_persisted_grade:
+        with patch('lms.djangoapps.grades.course_grade_factory.CourseGradeFactory.read') as patch_persisted_grade:
             patch_persisted_grade.return_value = Mock(percent=persisted_grade)
             self.assertEqual(
                 _cert_info(user, course, cert_status, course_mode),
                 {
                     'status': 'generating',
-                    'show_disabled_download_button': True,
-                    'show_download_url': False,
                     'show_survey_button': True,
                     'survey_url': survey_url,
                     'grade': unicode(expected_grade),
@@ -287,14 +276,12 @@ class CourseEndingTest(TestCase):
         course_mode = 'honor'
         cert_status = {'status': 'generating', 'mode': 'honor'}
 
-        with patch('lms.djangoapps.grades.new.course_grade_factory.CourseGradeFactory.read') as patch_persisted_grade:
+        with patch('lms.djangoapps.grades.course_grade_factory.CourseGradeFactory.read') as patch_persisted_grade:
             patch_persisted_grade.return_value = None
             self.assertEqual(
                 _cert_info(user, course, cert_status, course_mode),
                 {
                     'status': 'processing',
-                    'show_disabled_download_button': False,
-                    'show_download_url': False,
                     'show_survey_button': False,
                     'can_unenroll': True,
                 }
@@ -525,6 +512,7 @@ class DashboardTest(ModuleStoreTestCase):
             expiration_datetime=datetime.now(pytz.UTC) - timedelta(days=1)
         )
 
+        self.course.certificate_available_date = datetime.now(pytz.UTC) - timedelta(days=1)
         CourseEnrollment.enroll(self.user, self.course.id, mode='honor')
 
         self.course.start = datetime.now(pytz.UTC) - timedelta(days=2)
@@ -761,8 +749,8 @@ class EnrollInCourseTest(EnrollmentEventTestMixin, CacheIsolationTestCase):
     @unittest.skipUnless(settings.ROOT_URLCONF == 'lms.urls', 'Test only valid in lms')
     def test_enrollment(self):
         user = User.objects.create_user("joe", "joe@joe.com", "password")
-        course_id = SlashSeparatedCourseKey("edX", "Test101", "2013")
-        course_id_partial = SlashSeparatedCourseKey("edX", "Test101", None)
+        course_id = CourseKey.from_string("edX/Test101/2013")
+        course_id_partial = CourseKey.from_string("edX/Test101/")
 
         # Test basic enrollment
         self.assertFalse(CourseEnrollment.is_enrolled(user, course_id))
@@ -808,7 +796,7 @@ class EnrollInCourseTest(EnrollmentEventTestMixin, CacheIsolationTestCase):
     def test_enrollment_non_existent_user(self):
         # Testing enrollment of newly unsaved user (i.e. no database entry)
         user = User(username="rusty", email="rusty@fake.edx.org")
-        course_id = SlashSeparatedCourseKey("edX", "Test101", "2013")
+        course_id = CourseLocator("edX", "Test101", "2013")
 
         self.assertFalse(CourseEnrollment.is_enrolled(user, course_id))
 
@@ -825,7 +813,7 @@ class EnrollInCourseTest(EnrollmentEventTestMixin, CacheIsolationTestCase):
     @unittest.skipUnless(settings.ROOT_URLCONF == 'lms.urls', 'Test only valid in lms')
     def test_enrollment_by_email(self):
         user = User.objects.create(username="jack", email="jack@fake.edx.org")
-        course_id = SlashSeparatedCourseKey("edX", "Test101", "2013")
+        course_id = CourseLocator("edX", "Test101", "2013")
 
         CourseEnrollment.enroll_by_email("jack@fake.edx.org", course_id)
         self.assertTrue(CourseEnrollment.is_enrolled(user, course_id))
@@ -863,8 +851,8 @@ class EnrollInCourseTest(EnrollmentEventTestMixin, CacheIsolationTestCase):
     @unittest.skipUnless(settings.ROOT_URLCONF == 'lms.urls', 'Test only valid in lms')
     def test_enrollment_multiple_classes(self):
         user = User(username="rusty", email="rusty@fake.edx.org")
-        course_id1 = SlashSeparatedCourseKey("edX", "Test101", "2013")
-        course_id2 = SlashSeparatedCourseKey("MITx", "6.003z", "2012")
+        course_id1 = CourseLocator("edX", "Test101", "2013")
+        course_id2 = CourseLocator("MITx", "6.003z", "2012")
 
         CourseEnrollment.enroll(user, course_id1)
         self.assert_enrollment_event_was_emitted(user, course_id1)
@@ -886,7 +874,7 @@ class EnrollInCourseTest(EnrollmentEventTestMixin, CacheIsolationTestCase):
     @unittest.skipUnless(settings.ROOT_URLCONF == 'lms.urls', 'Test only valid in lms')
     def test_activation(self):
         user = User.objects.create(username="jack", email="jack@fake.edx.org")
-        course_id = SlashSeparatedCourseKey("edX", "Test101", "2013")
+        course_id = CourseLocator("edX", "Test101", "2013")
         self.assertFalse(CourseEnrollment.is_enrolled(user, course_id))
 
         # Creating an enrollment doesn't actually enroll a student
@@ -923,7 +911,7 @@ class EnrollInCourseTest(EnrollmentEventTestMixin, CacheIsolationTestCase):
 
     def test_change_enrollment_modes(self):
         user = User.objects.create(username="justin", email="jh@fake.edx.org")
-        course_id = SlashSeparatedCourseKey("edX", "Test101", "2013")
+        course_id = CourseLocator("edX", "Test101", "2013")
 
         CourseEnrollment.enroll(user, course_id, "audit")
         self.assert_enrollment_event_was_emitted(user, course_id)

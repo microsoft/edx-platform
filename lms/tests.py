@@ -1,16 +1,19 @@
 """Tests for the lms module itself."""
 
+import logging
 import mimetypes
+
+from django.core.urlresolvers import reverse
+from django.test import TestCase
 from mock import patch
 
-from django.test import TestCase
-from django.core.urlresolvers import reverse
-
-from edxmako import add_lookup, LOOKUP
-from lms import startup
+from edxmako import LOOKUP, add_lookup
+from microsite_configuration import microsite
 from openedx.features.course_experience import course_home_url_name
-from xmodule.modulestore.tests.factories import CourseFactory
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
+from xmodule.modulestore.tests.factories import CourseFactory
+
+log = logging.getLogger(__name__)
 
 
 class LmsModuleTests(TestCase):
@@ -38,7 +41,7 @@ class TemplateLookupTests(TestCase):
         self.assertEqual(len([directory for directory in directories if 'external_module' in directory]), 1)
 
         # This should not clear the directories list
-        startup.enable_microsites()
+        microsite.enable_microsites(log)
         directories = LOOKUP['main'].directories
         self.assertEqual(len([directory for directory in directories if 'external_module' in directory]), 1)
 
@@ -55,6 +58,6 @@ class HelpModalTests(ModuleStoreTestCase):
         Simple test to make sure that you don't get a 500 error when the modal
         is enabled.
         """
-        url = reverse(course_home_url_name(), args=[self.course.id.to_deprecated_string()])
+        url = reverse(course_home_url_name(self.course.id), args=[self.course.id.to_deprecated_string()])
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)

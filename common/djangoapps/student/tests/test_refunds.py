@@ -1,32 +1,33 @@
 """
     Tests for enrollment refund capabilities.
 """
+import logging
+import unittest
 from datetime import datetime, timedelta
+
 import ddt
 import httpretty
-import logging
 import pytz
-import unittest
-
+# Explicitly import the cache from ConfigurationModel so we can reset it after each test
+from config_models.models import cache
 from django.conf import settings
 from django.core.urlresolvers import reverse
 from django.test.client import Client
 from django.test.utils import override_settings
+from edx_rest_api_client.exceptions import SlumberBaseException
 from mock import patch
+from slumber.exceptions import HttpClientError, HttpServerError
 
-from student.models import CourseEnrollment, CourseEnrollmentAttribute
-from student.tests.factories import UserFactory, CourseModeFactory
-from xmodule.modulestore.tests.factories import CourseFactory
-from xmodule.modulestore.tests.django_utils import SharedModuleStoreTestCase
-
-# These imports refer to lms djangoapps.
-# Their testcases are only run under lms.
 from certificates.models import CertificateStatuses, GeneratedCertificate  # pylint: disable=import-error
 from certificates.tests.factories import GeneratedCertificateFactory  # pylint: disable=import-error
+# These imports refer to lms djangoapps.
+# Their testcases are only run under lms.
+from course_modes.tests.factories import CourseModeFactory
 from openedx.core.djangoapps.commerce.utils import ECOMMERCE_DATE_FORMAT
-
-# Explicitly import the cache from ConfigurationModel so we can reset it after each test
-from config_models.models import cache
+from student.models import CourseEnrollment, CourseEnrollmentAttribute
+from student.tests.factories import UserFactory
+from xmodule.modulestore.tests.django_utils import SharedModuleStoreTestCase
+from xmodule.modulestore.tests.factories import CourseFactory
 
 log = logging.getLogger(__name__)
 TEST_API_URL = 'http://www-internal.example.com/api'
@@ -39,6 +40,8 @@ class RefundableTest(SharedModuleStoreTestCase):
     """
     Tests for dashboard utility functions
     """
+    USER_PASSWORD = 'test'
+    ORDER_NUMBER = 'EDX-100000'
 
     @classmethod
     def setUpClass(cls):
@@ -48,7 +51,7 @@ class RefundableTest(SharedModuleStoreTestCase):
     def setUp(self):
         """ Setup components used by each refund test."""
         super(RefundableTest, self).setUp()
-        self.user = UserFactory.create(username="jack", email="jack@fake.edx.org", password='test')
+        self.user = UserFactory.create(password=self.USER_PASSWORD)
         self.verified_mode = CourseModeFactory.create(
             course_id=self.course.id,
             mode_slug='verified',
@@ -74,26 +77,6 @@ class RefundableTest(SharedModuleStoreTestCase):
         self.verified_mode.expiration_datetime = datetime.now(pytz.UTC) - timedelta(days=1)
         self.verified_mode.save()
         self.assertTrue(self.enrollment.refundable())
-
-    def test_refundable_of_purchased_course(self):
-        """ Assert that courses without a verified mode are not refundable"""
-        self.client.login(username="jack", password="test")
-        course = CourseFactory.create()
-        CourseModeFactory.create(
-            course_id=course.id,
-            mode_slug='honor',
-            min_price=10,
-            currency='usd',
-            mode_display_name='honor',
-            expiration_datetime=datetime.now(pytz.UTC) + timedelta(days=1)
-        )
-        enrollment = CourseEnrollment.enroll(self.user, course.id, mode='honor')
-
-        # TODO: Until we can allow course administrators to define a refund period for paid for courses show_refund_option should be False. # pylint: disable=fixme
-        self.assertFalse(enrollment.refundable())
-
-        resp = self.client.post(reverse('student.views.dashboard', args=[]))
-        self.assertIn('You will not be refunded the amount you paid.', resp.content)
 
     @patch('student.models.CourseEnrollment.refund_cutoff_date')
     def test_refundable_when_certificate_exists(self, cutoff_date):
@@ -156,12 +139,11 @@ class RefundableTest(SharedModuleStoreTestCase):
         course_start = now + course_start_delta
         expected_date = now + expected_date_delta
         refund_period = timedelta(days=days)
-        order_number = 'OSCR-1000'
         expected_content = '{{"date_placed": "{date}"}}'.format(date=order_date.strftime(ECOMMERCE_DATE_FORMAT))
 
         httpretty.register_uri(
             httpretty.GET,
-            '{url}/orders/{order}/'.format(url=TEST_API_URL, order=order_number),
+            '{url}/orders/{order}/'.format(url=TEST_API_URL, order=self.ORDER_NUMBER),
             status=200, body=expected_content,
             adding_headers={'Content-Type': JSON}
         )
@@ -171,7 +153,7 @@ class RefundableTest(SharedModuleStoreTestCase):
             enrollment=self.enrollment,
             namespace='order',
             name='order_number',
-            value=order_number
+            value=self.ORDER_NUMBER
         ))
 
         with patch('student.models.EnrollmentRefundConfiguration.current') as config:
@@ -192,12 +174,11 @@ class RefundableTest(SharedModuleStoreTestCase):
         """ Order with mutiple refunds will not throw 500 error when dashboard page will access."""
         now = datetime.now(pytz.UTC).replace(microsecond=0)
         order_date = now + timedelta(days=1)
-        order_number = 'OSCR-1000'
         expected_content = '{{"date_placed": "{date}"}}'.format(date=order_date.strftime(ECOMMERCE_DATE_FORMAT))
 
         httpretty.register_uri(
             httpretty.GET,
-            '{url}/orders/{order}/'.format(url=TEST_API_URL, order=order_number),
+            '{url}/orders/{order}/'.format(url=TEST_API_URL, order=self.ORDER_NUMBER),
             status=200, body=expected_content,
             adding_headers={'Content-Type': JSON}
         )
@@ -208,9 +189,23 @@ class RefundableTest(SharedModuleStoreTestCase):
                 enrollment=self.enrollment,
                 namespace='order',
                 name='order_number',
-                value=order_number
+                value=self.ORDER_NUMBER
             ))
 
-        self.client.login(username="jack", password="test")
+        self.client.login(username=self.user.username, password=self.USER_PASSWORD)
         resp = self.client.post(reverse('student.views.dashboard', args=[]))
         self.assertEqual(resp.status_code, 200)
+
+    @ddt.data(HttpServerError, HttpClientError, SlumberBaseException)
+    @override_settings(ECOMMERCE_API_URL=TEST_API_URL)
+    def test_refund_cutoff_date_with_api_error(self, exception):
+        """ Verify that dashboard will not throw internal server error if HttpClientError
+        raised while getting order detail for ecommerce.
+        """
+        # importing this after overriding value of ECOMMERCE_API_URL
+        from lms.djangoapps.commerce.tests.mocks import mock_order_endpoint
+
+        self.client.login(username=self.user.username, password=self.USER_PASSWORD)
+        with mock_order_endpoint(order_number=self.ORDER_NUMBER, exception=exception, reset_on_exit=False):
+            response = self.client.post(reverse('student.views.dashboard', args=[]))
+            self.assertEqual(response.status_code, 200)

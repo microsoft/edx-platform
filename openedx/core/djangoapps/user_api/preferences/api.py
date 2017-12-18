@@ -15,14 +15,13 @@ from django.utils.translation import ugettext_noop
 from openedx.core.lib.time_zone_utils import get_display_time_zone
 from pytz import common_timezones, common_timezones_set, country_timezones
 from student.models import User, UserProfile
-from request_cache import get_request_or_stub
 from ..errors import (
     UserAPIInternalError, UserAPIRequestError, UserNotFound, UserNotAuthorized,
     PreferenceValidationError, PreferenceUpdateError, CountryCodeError
 )
 from ..helpers import intercept_errors, serializer_is_dirty
 from ..models import UserOrgTag, UserPreference
-from ..serializers import UserSerializer, RawUserPreferenceSerializer
+from ..serializers import RawUserPreferenceSerializer
 
 log = logging.getLogger(__name__)
 
@@ -72,18 +71,7 @@ def get_user_preferences(requesting_user, username=None):
          UserAPIInternalError: the operation failed due to an unexpected error.
     """
     existing_user = _get_authorized_user(requesting_user, username, allow_staff=True)
-
-    # Django Rest Framework V3 uses the current request to version
-    # hyperlinked URLS, so we need to retrieve the request and pass
-    # it in the serializer's context (otherwise we get an AssertionError).
-    # We're retrieving the request from the cache rather than passing it in
-    # as an argument because this is an implementation detail of how we're
-    # serializing data, which we want to encapsulate in the API call.
-    context = {
-        "request": get_request_or_stub()
-    }
-    user_serializer = UserSerializer(existing_user, context=context)
-    return user_serializer.data["preferences"]
+    return UserPreference.get_all_preferences(existing_user)
 
 
 @intercept_errors(UserAPIInternalError, ignore_errors=[UserAPIRequestError])
@@ -124,6 +112,7 @@ def update_user_preferences(requesting_user, update, user=None):
     for preference_key in update.keys():
         preference_value = update[preference_key]
         if preference_value is not None:
+            preference_value = unicode(preference_value)
             try:
                 serializer = create_user_preference_serializer(user, preference_key, preference_value)
                 validate_user_preference_serializer(serializer, preference_key, preference_value)
@@ -140,6 +129,7 @@ def update_user_preferences(requesting_user, update, user=None):
     for preference_key in update.keys():
         preference_value = update[preference_key]
         if preference_value is not None:
+            preference_value = unicode(preference_value)
             try:
                 serializer = serializers[preference_key]
 
@@ -163,7 +153,7 @@ def set_user_preference(requesting_user, preference_key, preference_value, usern
         requesting_user (User): The user requesting to modify account information. Only the user with username
             'username' has permissions to modify account information.
         preference_key (str): The key for the user preference.
-        preference_value (str): The value to be stored. Non-string values will be converted to strings.
+        preference_value (str): The value to be stored. Non-string values are converted to strings.
         username (str): Optional username specifying which account should be updated. If not specified,
             `requesting_user.username` is assumed.
 
@@ -177,6 +167,8 @@ def set_user_preference(requesting_user, preference_key, preference_value, usern
         UserAPIInternalError: the operation failed due to an unexpected error.
     """
     existing_user = _get_authorized_user(requesting_user, username)
+    if preference_value is not None:
+        preference_value = unicode(preference_value)
     serializer = create_user_preference_serializer(existing_user, preference_key, preference_value)
     validate_user_preference_serializer(serializer, preference_key, preference_value)
 

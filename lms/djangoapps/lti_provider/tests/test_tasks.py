@@ -4,12 +4,12 @@ Tests for the LTI outcome service handlers, both in outcomes.py and in tasks.py
 
 import ddt
 from django.test import TestCase
-from mock import patch, MagicMock
-from student.tests.factories import UserFactory
+from mock import MagicMock, patch
+from opaque_keys.edx.locator import BlockUsageLocator, CourseLocator
 
-from lti_provider.models import GradedAssignment, LtiConsumer, OutcomeService
 import lti_provider.tasks as tasks
-from opaque_keys.edx.locator import CourseLocator, BlockUsageLocator
+from lti_provider.models import GradedAssignment, LtiConsumer, OutcomeService
+from student.tests.factories import UserFactory
 
 
 class BaseOutcomeTest(TestCase):
@@ -101,7 +101,7 @@ class SendCompositeOutcomeTest(BaseOutcomeTest):
         )
         self.course_grade = MagicMock()
         self.course_grade_mock = self.setup_patch(
-            'lti_provider.tasks.CourseGradeFactory.create', self.course_grade
+            'lti_provider.tasks.CourseGradeFactory.read', self.course_grade
         )
         self.module_store = MagicMock()
         self.module_store.get_item = MagicMock(return_value=self.descriptor)

@@ -30,6 +30,10 @@
 
                  tpl: HtmlUtils.template(pageTpl),
 
+                 events: {
+                     'click .complete-program': 'trackPurchase'
+                 },
+
                  initialize: function(options) {
                      this.options = options;
                      this.programModel = new Backbone.Model(this.options.programData);
@@ -51,16 +55,25 @@
                      this.render();
                  },
 
+                 getUrl: function(base, programData) {
+                     if (programData.uuid) {
+                         return base + '&bundle=' + encodeURIComponent(programData.uuid);
+                     }
+                     return base;
+                 },
+
                  render: function() {
                      var completedCount = this.completedCourseCollection.length,
                          inProgressCount = this.inProgressCourseCollection.length,
                          remainingCount = this.remainingCourseCollection.length,
                          totalCount = completedCount + inProgressCount + remainingCount,
+                         buyButtonUrl = this.getUrl(this.options.urls.buy_button_url, this.options.programData),
                          data = {
                              totalCount: totalCount,
                              inProgressCount: inProgressCount,
                              remainingCount: remainingCount,
-                             completedCount: completedCount
+                             completedCount: completedCount,
+                             completeProgramURL: buyButtonUrl
                          };
                      data = $.extend(data, this.programModel.toJSON());
                      HtmlUtils.setHtml(this.$el, this.tpl(data));
@@ -77,7 +90,7 @@
                              el: '.js-course-list-remaining',
                              childView: CourseCardView,
                              collection: this.remainingCourseCollection,
-                             context: this.options
+                             context: $.extend(this.options, {collectionCourseStatus: 'remaining'})
                          }).render();
                      }
 
@@ -86,7 +99,7 @@
                              el: '.js-course-list-completed',
                              childView: CourseCardView,
                              collection: this.completedCourseCollection,
-                             context: this.options
+                             context: $.extend(this.options, {collectionCourseStatus: 'completed'})
                          }).render();
                      }
 
@@ -96,7 +109,9 @@
                              el: '.js-course-list-in-progress',
                              childView: CourseCardView,
                              collection: this.inProgressCourseCollection,
-                             context: $.extend(this.options, {enrolled: gettext('Enrolled')})
+                             context: $.extend(this.options,
+                               {enrolled: gettext('Enrolled'), collectionCourseStatus: 'in_progress'}
+                             )
                          }).render();
                      }
 
@@ -105,6 +120,15 @@
                          model: this.programModel,
                          courseModel: this.courseData,
                          certificateCollection: this.certificateCollection
+                     });
+                 },
+
+                 trackPurchase: function() {
+                     var data = this.options.programData;
+                     window.analytics.track('edx.bi.user.dashboard.program.purchase', {
+                         category: data.variant + ' bundle',
+                         label: data.title,
+                         uuid: data.uuid
                      });
                  }
              });

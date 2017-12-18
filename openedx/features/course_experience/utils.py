@@ -1,14 +1,15 @@
 """
 Common utilities for the course experience, including course outline.
 """
+from opaque_keys.edx.keys import CourseKey
+
 from lms.djangoapps.course_api.blocks.api import get_blocks
 from lms.djangoapps.course_blocks.utils import get_student_module_as_dict
-from opaque_keys.edx.keys import CourseKey
-from openedx.core.lib.cache_utils import memoized
+from request_cache.middleware import request_cached
 from xmodule.modulestore.django import modulestore
 
 
-@memoized
+@request_cached
 def get_course_outline_block_tree(request, course_id):
     """
     Returns the root block of the course outline, with children as blocks.
@@ -70,9 +71,9 @@ def get_course_outline_block_tree(request, course_id):
         block_types_filter=['course', 'chapter', 'sequential']
     )
 
-    course_outline_root_block = all_blocks['blocks'][all_blocks['root']]
-    populate_children(course_outline_root_block, all_blocks['blocks'])
-    set_last_accessed_default(course_outline_root_block)
-    mark_last_accessed(request.user, course_key, course_outline_root_block)
-
+    course_outline_root_block = all_blocks['blocks'].get(all_blocks['root'], None)
+    if course_outline_root_block:
+        populate_children(course_outline_root_block, all_blocks['blocks'])
+        set_last_accessed_default(course_outline_root_block)
+        mark_last_accessed(request.user, course_key, course_outline_root_block)
     return course_outline_root_block

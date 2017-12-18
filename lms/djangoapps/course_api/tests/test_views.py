@@ -7,9 +7,10 @@ from django.core.urlresolvers import reverse
 from django.test import RequestFactory
 from nose.plugins.attrib import attr
 
-from xmodule.modulestore.tests.django_utils import SharedModuleStoreTestCase, ModuleStoreTestCase
-from .mixins import CourseApiFactoryMixin, TEST_PASSWORD
+from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase, SharedModuleStoreTestCase
+
 from ..views import CourseDetailView
+from .mixins import TEST_PASSWORD, CourseApiFactoryMixin
 
 
 class CourseApiTestViewMixin(CourseApiFactoryMixin):
@@ -105,7 +106,7 @@ class CourseListViewTestCaseMultipleCourses(CourseApiTestViewMixin, ModuleStoreT
 
     def setUp(self):
         super(CourseListViewTestCaseMultipleCourses, self).setUp()
-        self.course = self.create_course()
+        self.course = self.create_course(mobile_available=False)
         self.url = reverse('course-list')
         self.staff_user = self.create_user(username='staff', is_staff=True)
         self.honor_user = self.create_user(username='honor', is_staff=False)
@@ -138,7 +139,7 @@ class CourseListViewTestCaseMultipleCourses(CourseApiTestViewMixin, ModuleStoreT
         self.setup_user(self.staff_user)
 
         # Create a second course to be filtered out of queries.
-        alternate_course = self.create_course(course='mobile', mobile_available=True)
+        alternate_course = self.create_course(course='mobile')
 
         test_cases = [
             (None, [alternate_course, self.course]),

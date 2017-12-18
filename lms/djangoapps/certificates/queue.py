@@ -1,33 +1,30 @@
 """Interface for adding certificate generation tasks to the XQueue. """
 import json
-import random
 import logging
-import lxml.html
-from lxml.etree import XMLSyntaxError, ParserError
+import random
 from uuid import uuid4
 
-from django.test.client import RequestFactory
+import lxml.html
 from django.conf import settings
 from django.core.urlresolvers import reverse
+from django.test.client import RequestFactory
+from lxml.etree import ParserError, XMLSyntaxError
 from requests.auth import HTTPBasicAuth
 
-from lms.djangoapps.grades.new.course_grade_factory import CourseGradeFactory
-from xmodule.modulestore.django import modulestore
-from capa.xqueue_interface import XQueueInterface
-from capa.xqueue_interface import make_xheader, make_hashkey
-from course_modes.models import CourseMode
-from student.models import UserProfile, CourseEnrollment
-from lms.djangoapps.verify_student.models import SoftwareSecurePhotoVerification
-
+from capa.xqueue_interface import XQueueInterface, make_hashkey, make_xheader
+from certificates.models import CertificateStatuses as status
 from certificates.models import (
     CertificateStatuses,
-    GeneratedCertificate,
-    certificate_status_for_student,
-    CertificateStatuses as status,
     CertificateWhitelist,
-    ExampleCertificate
+    ExampleCertificate,
+    GeneratedCertificate,
+    certificate_status_for_student
 )
-
+from course_modes.models import CourseMode
+from lms.djangoapps.grades.course_grade_factory import CourseGradeFactory
+from lms.djangoapps.verify_student.models import SoftwareSecurePhotoVerification
+from student.models import CourseEnrollment, UserProfile
+from xmodule.modulestore.django import modulestore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -238,6 +235,7 @@ class XQueueCertInterface(object):
             status.auditing,
             status.audit_passing,
             status.audit_notpassing,
+            status.unverified,
         ]
 
         cert_status = certificate_status_for_student(student, course_id)['status']
@@ -271,7 +269,7 @@ class XQueueCertInterface(object):
         self.request.session = {}
 
         is_whitelisted = self.whitelist.filter(user=student, course_id=course_id, whitelist=True).exists()
-        course_grade = CourseGradeFactory().create(student, course)
+        course_grade = CourseGradeFactory().read(student, course)
         enrollment_mode, __ = CourseEnrollment.enrollment_mode_for_user(student, course_id)
         mode_is_verified = enrollment_mode in GeneratedCertificate.VERIFIED_CERTS_MODES
         user_is_verified = SoftwareSecurePhotoVerification.user_is_verified(student)
@@ -512,7 +510,7 @@ class XQueueCertInterface(object):
         # for other certificates.  Although both tasks use the same queue,
         # we can distinguish whether the certificate was an example cert based
         # on which end-point XQueue uses once the task completes.
-        callback_url_path = reverse('certificates.views.update_example_certificate')
+        callback_url_path = reverse('update_example_certificate')
 
         try:
             self._send_to_xqueue(

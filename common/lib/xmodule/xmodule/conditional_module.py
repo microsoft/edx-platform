@@ -4,18 +4,20 @@ some xmodules by conditions.
 
 import json
 import logging
+
 from lazy import lazy
 from lxml import etree
 from pkg_resources import resource_string
 
-from xmodule.x_module import XModule, STUDENT_VIEW
-from xmodule.seq_module import SequenceDescriptor
-from xmodule.studio_editable import StudioEditableModule, StudioEditableDescriptor
-from xmodule.modulestore.exceptions import ItemNotFoundError
-from xmodule.validation import StudioValidation, StudioValidationMessage
-from xblock.fields import Scope, ReferenceList, String
+from opaque_keys.edx.locator import BlockUsageLocator
+from xblock.fields import ReferenceList, Scope, String
 from xblock.fragment import Fragment
 
+from xmodule.modulestore.exceptions import ItemNotFoundError
+from xmodule.seq_module import SequenceDescriptor
+from xmodule.studio_editable import StudioEditableDescriptor, StudioEditableModule
+from xmodule.validation import StudioValidation, StudioValidationMessage
+from xmodule.x_module import STUDENT_VIEW, XModule
 
 log = logging.getLogger('edx.' + __name__)
 
@@ -265,7 +267,11 @@ class ConditionalDescriptor(ConditionalFields, SequenceDescriptor, StudioEditabl
         if not self.sources_list:
             if 'sources' in self.xml_attributes and isinstance(self.xml_attributes['sources'], basestring):
                 self.sources_list = [
-                    self.location.course_key.make_usage_key_from_deprecated_string(item)
+                    # TODO: it is not clear why we are replacing the run here (which actually is a no-op
+                    # for old-style course locators. However, this is the implementation of
+                    # CourseLocator.make_usage_key_from_deprecated_string, which was previously
+                    # being called in this location.
+                    BlockUsageLocator.from_string(item).replace(run=self.location.course_key.run)
                     for item in ConditionalDescriptor.parse_sources(self.xml_attributes)
                 ]
 

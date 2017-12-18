@@ -13,13 +13,14 @@
 <%namespace name='static' file='static_content.html'/>
 
 <%block name="header_extras">
-% for template_name in ["asset"]:
-<script type="text/template" id="${template_name}-tpl">
-    <%static:include path="js/${template_name}.underscore" />
-</script>
-% endfor
+    % for template_name in ["asset"]:
+    <script type="text/template" id="${template_name}-tpl">
+        <%static:include path="js/${template_name}.underscore" />
+    </script>
+    % endfor
 </%block>
 
+% if not waffle_flag_enabled:
 <%block name="requirejs">
     require(["js/factories/asset_index"], function (AssetIndexFactory) {
         AssetIndexFactory({
@@ -30,37 +31,53 @@
         });
     });
 </%block>
+% endif
 
 <%block name="content">
 
 <div class="wrapper-mast wrapper">
     <header class="mast has-actions has-subtitle">
-        <h1 class="page-header">
+        <h3 class="page-header">
             <small class="subtitle">${_("Content")}</small>
-            <span class="sr">&gt; </span>${_("Files & Uploads")}
-        </h1>
+            <span class="sr">- </span>${_("Files & Uploads")}
+        </h3>
 
-        <nav class="nav-actions" aria-label="${_('Page Actions')}">
-            <h3 class="sr">${_("Page Actions")}</h3>
+        <div class="nav-actions">
             <ul>
                 <li class="nav-item">
                     <a href="#" class="button upload-button new-button"><span class="icon fa fa-plus" aria-hidden="true"></span> ${_("Upload New File")}</a>
                 </li>
             </ul>
-        </nav>
+        </div>
     </header>
 </div>
 
 <div class="wrapper-content wrapper">
-    <section class="content">
-        <article class="content-primary" role="main">
-            <div class="wrapper-assets" />
+    <div class="content">
+        <div class="content-primary">
+            % if waffle_flag_enabled:
+                <%static:studiofrontend page="AssetsPage" lang="en">
+                    {   
+                        "course": {
+                            "id": "${context_course.id | n, js_escaped_string}",
+                            "name": "${context_course.display_name_with_default | n, js_escaped_string}",
+                            "url_name": "${context_course.location.name | n, js_escaped_string}",
+                            "org": "${context_course.location.org | n, js_escaped_string}",
+                            "num": "${context_course.location.course | n, js_escaped_string}",
+                            "display_course_number": "${context_course.display_coursenumber | n, js_escaped_string}",
+                            "revision": "${context_course.location.revision | n, js_escaped_string}"
+                        }
+                    }
+                </%static:studiofrontend>
+            % else:
+                <div class="wrapper-assets"></div>
+            % endif
             <div class="ui-loading">
                 <p><span class="spin"><span class="icon fa fa-refresh" aria-hidden="true"></span></span> <span class="copy">${_("Loading")}</span></p>
             </div>
-        </article>
+        </div>
 
-        <aside class="content-supplementary" role="complementary">
+        <aside class="content-supplementary" role="complementary" aria-label="${_("Help adding Files and Uploads")}">
             <div class="bit">
                 <h3 class="title-3">${_("Adding Files for Your Course")}</h3>
 
@@ -84,14 +101,14 @@
             </div>
 
         </aside>
-    </section>
+    </div>
 </div>
 
 <div class="upload-modal modal">
     <a href="#" class="close-button"><span class="icon fa fa-times-circle" aria-hidden="true"></span> <span class="sr">${_('close')}</span></a>
     <div class="modal-body">
-        <h1 class="title">${_("Upload New File")}</h1>
-        <h2>${_("Max per-file size: {max_filesize}MB").format(max_filesize=max_file_size_in_mbs)}</h2>
+        <h2 class="title">${_("Upload New File")}</h2>
+        <p>${_("Max per-file size: {max_filesize}MB").format(max_filesize=max_file_size_in_mbs)}</p>
         <p class="file-name">
         <div class="progress-bar">
             <div class="progress-fill"></div>

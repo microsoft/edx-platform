@@ -36,7 +36,7 @@ ${static.get_page_title_breadcrumbs(course_name())}
 <%static:css group='style-course-vendor'/>
 <%static:css group='style-course'/>
 ## Utility: Notes
-% if is_edxnotes_enabled(course):
+% if is_edxnotes_enabled(course, request.user):
 <%static:css group='style-student-notes'/>
 % endif
 
@@ -69,17 +69,17 @@ ${HTML(fragment.foot_html())}
 
 </%block>
 
-<div class="course-wrapper">
+<div class="course-wrapper chromeless">
   <section class="course-content" id="course-content">
       <main id="main" tabindex="-1" aria-label="Content">
         ${HTML(fragment.body_html())}
       </main>
   </section>
 </div>
-% if course.show_calculator or is_edxnotes_enabled(course):
+% if course.show_calculator or is_edxnotes_enabled(course, request.user):
     <nav class="nav-utilities ${"has-utility-calculator" if course.show_calculator else ""}" aria-label="${_('Course Utilities')}">
       ## Utility: Notes
-      % if is_edxnotes_enabled(course):
+      % if is_edxnotes_enabled(course, request.user):
         <%include file="/edxnotes/toggle_notes.html" args="course=course"/>
       % endif
 
@@ -89,5 +89,3 @@ ${HTML(fragment.foot_html())}
       % endif
     </nav>
 % endif
-
-<%include file="../modal/accessible_confirm.html" />

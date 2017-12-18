@@ -16,22 +16,24 @@ from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
 from course_modes.models import CourseMode
+from enrollment import api
+from enrollment.errors import CourseEnrollmentError, CourseEnrollmentExistsError, CourseModeNotFoundError
 from openedx.core.djangoapps.cors_csrf.authentication import SessionAuthenticationCrossDomainCsrf
 from openedx.core.djangoapps.cors_csrf.decorators import ensure_csrf_cookie_cross_domain
 from openedx.core.djangoapps.embargo import api as embargo_api
 from openedx.core.djangoapps.user_api.preferences.api import update_email_opt_in
-from openedx.features.enterprise_support.api import enterprise_enabled, EnterpriseApiClient, EnterpriseApiException
 from openedx.core.lib.api.authentication import (
-    SessionAuthenticationAllowInactiveUser, OAuth2AuthenticationAllowInactiveUser,
+    OAuth2AuthenticationAllowInactiveUser,
+    SessionAuthenticationAllowInactiveUser
 )
 from openedx.core.lib.api.permissions import ApiKeyHeaderPermission, ApiKeyHeaderPermissionIsAuthenticated
 from openedx.core.lib.exceptions import CourseNotFoundError
 from openedx.core.lib.log_utils import audit_log
-from enrollment import api
-from enrollment.errors import (
-    CourseEnrollmentError,
-    CourseModeNotFoundError,
-    CourseEnrollmentExistsError
+from openedx.features.enterprise_support.api import (
+    ConsentApiServiceClient,
+    EnterpriseApiServiceClient,
+    EnterpriseApiException,
+    enterprise_enabled
 )
 from student.auth import user_has_role
 from student.models import User
@@ -71,9 +73,19 @@ class ApiKeyPermissionMixIn(object):
 
 class EnrollmentUserThrottle(UserRateThrottle, ApiKeyPermissionMixIn):
     """Limit the number of requests users can make to the enrollment API."""
-    rate = '40/minute'
+    THROTTLE_RATES = {
+        'user': '40/minute',
+        'staff': '600/minute',
+    }
 
     def allow_request(self, request, view):
+        # Use a special scope for staff to allow for a separate throttle rate
+        user = request.user
+        if user.is_authenticated() and (user.is_staff or user.is_superuser):
+            self.scope = 'staff'
+            self.rate = self.get_rate()
+            self.num_requests, self.duration = self.parse_rate(self.rate)
+
         return self.has_api_key_permissions(request) or super(EnrollmentUserThrottle, self).allow_request(request, view)
 
 
@@ -170,7 +182,7 @@ class EnrollmentView(APIView, ApiKeyPermissionMixIn):
 
         # TODO Implement proper permissions
         if request.user.username != username and not self.has_api_key_permissions(request) \
-                and not request.user.is_superuser:
+                and not request.user.is_staff:
             # Return a 404 instead of a 403 (Unauthorized). If one user is looking up
             # other users, do not let them deduce the existence of an enrollment.
             return Response(status=status.HTTP_404_NOT_FOUND)
@@ -583,28 +595,22 @@ class EnrollmentListView(APIView, ApiKeyPermissionMixIn):
                     }
                 )
 
-            enterprise_course_consent = request.data.get('enterprise_course_consent')
-            # Check if the enterprise_course_enrollment is a boolean
-            if has_api_key_permissions and enterprise_enabled() and enterprise_course_consent is not None:
-                if not isinstance(enterprise_course_consent, bool):
-                    return Response(
-                        status=status.HTTP_400_BAD_REQUEST,
-                        data={
-                            'message': (u"'{value}' is an invalid enterprise course consent value.").format(
-                                value=enterprise_course_consent
-                            )
-                        }
-                    )
+            explicit_linked_enterprise = request.data.get('linked_enterprise_customer')
+            if explicit_linked_enterprise and has_api_key_permissions and enterprise_enabled():
+                enterprise_api_client = EnterpriseApiServiceClient()
+                consent_client = ConsentApiServiceClient()
                 try:
-                    EnterpriseApiClient().post_enterprise_course_enrollment(
-                        username,
-                        unicode(course_id),
-                        enterprise_course_consent
-                    )
+                    enterprise_api_client.post_enterprise_course_enrollment(username, unicode(course_id), None)
                 except EnterpriseApiException as error:
                     log.exception("An unexpected error occurred while creating the new EnterpriseCourseEnrollment "
                                   "for user [%s] in course run [%s]", username, course_id)
                     raise CourseEnrollmentError(error.message)
+                kwargs = {
+                    'username': username,
+                    'course_id': unicode(course_id),
+                    'enterprise_customer_uuid': explicit_linked_enterprise,
+                }
+                consent_client.provide_consent(**kwargs)
 
             enrollment_attributes = request.data.get('enrollment_attributes')
             enrollment = api.get_enrollment(username, unicode(course_id))
@@ -640,11 +646,19 @@ class EnrollmentListView(APIView, ApiKeyPermissionMixIn):
                     unicode(course_id),
                     mode=mode,
                     is_active=is_active,
-                    enrollment_attributes=enrollment_attributes
+                    enrollment_attributes=enrollment_attributes,
+                    # If we are updating enrollment by authorized api caller, we should allow expired modes
+                    include_expired=has_api_key_permissions
                 )
             else:
                 # Will reactivate inactive enrollments.
-                response = api.add_enrollment(username, unicode(course_id), mode=mode, is_active=is_active)
+                response = api.add_enrollment(
+                    username,
+                    unicode(course_id),
+                    mode=mode,
+                    is_active=is_active,
+                    enrollment_attributes=enrollment_attributes
+                )
 
             email_opt_in = request.data.get('email_opt_in', None)
             if email_opt_in is not None:

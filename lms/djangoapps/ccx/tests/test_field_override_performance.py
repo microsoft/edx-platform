@@ -2,33 +2,39 @@
 """
 Performance tests for field overrides.
 """
-import ddt
 import itertools
-import mock
-from nose.plugins.skip import SkipTest
+from datetime import datetime
 
-from courseware.views.views import progress
+import ddt
+import mock
+from ccx_keys.locator import CCXLocator
 from courseware.field_overrides import OverrideFieldData
 from courseware.testutils import FieldOverrideTestMixin
-from datetime import datetime
+from courseware.views.views import progress
 from django.conf import settings
 from django.core.cache import caches
 from django.test.client import RequestFactory
 from django.test.utils import override_settings
+from lms.djangoapps.ccx.tests.factories import CcxFactory
 from nose.plugins.attrib import attr
+from nose.plugins.skip import SkipTest
 from opaque_keys.edx.keys import CourseKey
+from openedx.core.djangoapps.content.block_structure.api import get_course_in_cache
+from openedx.core.djangoapps.waffle_utils.testutils import WAFFLE_TABLES
 from pytz import UTC
 from request_cache.middleware import RequestCache
 from student.models import CourseEnrollment
 from student.tests.factories import UserFactory
 from xblock.core import XBlock
-from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase, \
-    TEST_DATA_SPLIT_MODULESTORE, TEST_DATA_MONGO_MODULESTORE
-from xmodule.modulestore.tests.factories import check_mongo_calls, CourseFactory, check_sum_of_calls
+from xmodule.modulestore.tests.django_utils import (
+    TEST_DATA_MONGO_MODULESTORE,
+    TEST_DATA_SPLIT_MODULESTORE,
+    ModuleStoreTestCase
+)
+from xmodule.modulestore.tests.factories import CourseFactory, check_mongo_calls, check_sum_of_calls
 from xmodule.modulestore.tests.utils import ProceduralCourseTestMixin
-from ccx_keys.locator import CCXLocator
-from lms.djangoapps.ccx.tests.factories import CcxFactory
-from openedx.core.djangoapps.content.block_structure.api import get_course_in_cache
+
+QUERY_COUNT_TABLE_BLACKLIST = WAFFLE_TABLES
 
 
 @attr(shard=3)
@@ -177,7 +183,7 @@ class FieldOverridePerformanceTestCase(FieldOverrideTestMixin, ProceduralCourseT
             # can actually take affect.
             OverrideFieldData.provider_classes = None
 
-            with self.assertNumQueries(sql_queries, using='default'):
+            with self.assertNumQueries(sql_queries, using='default', table_blacklist=QUERY_COUNT_TABLE_BLACKLIST):
                 with self.assertNumQueries(0, using='student_module_history'):
                     with self.assertMongoCallCount(mongo_reads):
                         with self.assertXBlockInstantiations(1):
@@ -188,7 +194,6 @@ class FieldOverridePerformanceTestCase(FieldOverrideTestMixin, ProceduralCourseT
     @override_settings(
         XBLOCK_FIELD_DATA_WRAPPERS=[],
         MODULESTORE_FIELD_OVERRIDE_PROVIDERS=[],
-        ENABLE_ENTERPRISE_INTEGRATION=False,
     )
     def test_field_overrides(self, overrides, course_width, enable_ccx, view_as_ccx):
         """
@@ -231,18 +236,18 @@ class TestFieldOverrideMongoPerformance(FieldOverridePerformanceTestCase):
         #     # of sql queries to default,
         #     # of mongo queries,
         # )
-        ('no_overrides', 1, True, False): (24, 1),
-        ('no_overrides', 2, True, False): (24, 1),
-        ('no_overrides', 3, True, False): (24, 1),
-        ('ccx', 1, True, False): (24, 1),
-        ('ccx', 2, True, False): (24, 1),
-        ('ccx', 3, True, False): (24, 1),
-        ('no_overrides', 1, False, False): (24, 1),
-        ('no_overrides', 2, False, False): (24, 1),
-        ('no_overrides', 3, False, False): (24, 1),
-        ('ccx', 1, False, False): (24, 1),
-        ('ccx', 2, False, False): (24, 1),
-        ('ccx', 3, False, False): (24, 1),
+        ('no_overrides', 1, True, False): (17, 1),
+        ('no_overrides', 2, True, False): (17, 1),
+        ('no_overrides', 3, True, False): (17, 1),
+        ('ccx', 1, True, False): (17, 1),
+        ('ccx', 2, True, False): (17, 1),
+        ('ccx', 3, True, False): (17, 1),
+        ('no_overrides', 1, False, False): (17, 1),
+        ('no_overrides', 2, False, False): (17, 1),
+        ('no_overrides', 3, False, False): (17, 1),
+        ('ccx', 1, False, False): (17, 1),
+        ('ccx', 2, False, False): (17, 1),
+        ('ccx', 3, False, False): (17, 1),
     }
 
 
@@ -254,19 +259,19 @@ class TestFieldOverrideSplitPerformance(FieldOverridePerformanceTestCase):
     __test__ = True
 
     TEST_DATA = {
-        ('no_overrides', 1, True, False): (24, 3),
-        ('no_overrides', 2, True, False): (24, 3),
-        ('no_overrides', 3, True, False): (24, 3),
-        ('ccx', 1, True, False): (24, 3),
-        ('ccx', 2, True, False): (24, 3),
-        ('ccx', 3, True, False): (24, 3),
-        ('ccx', 1, True, True): (25, 3),
-        ('ccx', 2, True, True): (25, 3),
-        ('ccx', 3, True, True): (25, 3),
-        ('no_overrides', 1, False, False): (24, 3),
-        ('no_overrides', 2, False, False): (24, 3),
-        ('no_overrides', 3, False, False): (24, 3),
-        ('ccx', 1, False, False): (24, 3),
-        ('ccx', 2, False, False): (24, 3),
-        ('ccx', 3, False, False): (24, 3),
+        ('no_overrides', 1, True, False): (17, 3),
+        ('no_overrides', 2, True, False): (17, 3),
+        ('no_overrides', 3, True, False): (17, 3),
+        ('ccx', 1, True, False): (17, 3),
+        ('ccx', 2, True, False): (17, 3),
+        ('ccx', 3, True, False): (17, 3),
+        ('ccx', 1, True, True): (18, 3),
+        ('ccx', 2, True, True): (18, 3),
+        ('ccx', 3, True, True): (18, 3),
+        ('no_overrides', 1, False, False): (17, 3),
+        ('no_overrides', 2, False, False): (17, 3),
+        ('no_overrides', 3, False, False): (17, 3),
+        ('ccx', 1, False, False): (17, 3),
+        ('ccx', 2, False, False): (17, 3),
+        ('ccx', 3, False, False): (17, 3),
     }

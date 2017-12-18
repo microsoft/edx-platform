@@ -7,15 +7,13 @@ that would have been used in the settings.
 """
 import collections
 
-from django.db import models
-from django.dispatch import receiver
-from django.db.models.signals import pre_save, pre_delete
-from django.db.models.base import ObjectDoesNotExist
 from django.contrib.sites.models import Site
-
+from django.db import models
+from django.db.models.base import ObjectDoesNotExist
+from django.db.models.signals import pre_delete, pre_save
+from django.dispatch import receiver
 from jsonfield.fields import JSONField
 from model_utils.models import TimeStampedModel
-from simple_history.models import HistoricalRecords
 
 
 class Microsite(models.Model):
@@ -116,9 +114,6 @@ class MicrositeOrganizationMapping(models.Model):
     organization = models.CharField(max_length=63, db_index=True, unique=True)
     microsite = models.ForeignKey(Microsite, db_index=True)
 
-    # for archiving
-    history = HistoricalRecords()
-
     def __unicode__(self):
         """String conversion"""
         return u'{microsite_key}: {organization}'.format(
@@ -155,9 +150,6 @@ class MicrositeTemplate(models.Model):
     microsite = models.ForeignKey(Microsite, db_index=True)
     template_uri = models.CharField(max_length=255, db_index=True)
     template = models.TextField()
-
-    # for archiving
-    history = HistoricalRecords()
 
     def __unicode__(self):
         """String conversion"""

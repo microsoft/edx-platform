@@ -1,33 +1,41 @@
 # -*- coding: utf-8 -*-
 """Helper functions for working with Programs."""
+import datetime
+import logging
 from collections import defaultdict
 from copy import deepcopy
-import datetime
+from itertools import chain
 from urlparse import urljoin
 
 from dateutil.parser import parse
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.urlresolvers import reverse
 from django.utils.functional import cached_property
+from edx_rest_api_client.exceptions import SlumberBaseException
 from opaque_keys.edx.keys import CourseKey
 from pytz import utc
-from itertools import chain
+from requests.exceptions import ConnectionError, Timeout
 
 from course_modes.models import CourseMode
+from entitlements.models import CourseEntitlement
 from lms.djangoapps.certificates import api as certificate_api
 from lms.djangoapps.commerce.utils import EcommerceService
 from lms.djangoapps.courseware.access import has_access
+from lms.djangoapps.grades.course_grade_factory import CourseGradeFactory
 from openedx.core.djangoapps.catalog.utils import get_programs
+from openedx.core.djangoapps.commerce.utils import ecommerce_api_client
 from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
 from openedx.core.djangoapps.credentials.utils import get_credentials
 from student.models import CourseEnrollment
 from util.date_utils import strftime_localized
 from xmodule.modulestore.django import modulestore
 
-
 # The datetime module's strftime() methods require a year >= 1900.
 DEFAULT_ENROLLMENT_START_DATE = datetime.datetime(1900, 1, 1, tzinfo=utc)
+
+log = logging.getLogger(__name__)
 
 
 def get_program_marketing_url(programs_config):
@@ -64,7 +72,8 @@ class ProgramProgressMeter(object):
             will only inspect this one program, not all programs the user may be
             engaged with.
     """
-    def __init__(self, user, enrollments=None, uuid=None):
+    def __init__(self, site, user, enrollments=None, uuid=None):
+        self.site = site
         self.user = user
 
         self.enrollments = enrollments or list(CourseEnrollment.enrollments_for_user(self.user))
@@ -82,17 +91,22 @@ class ProgramProgressMeter(object):
             # We can't use dict.keys() for this because the course run ids need to be ordered
             self.course_run_ids.append(enrollment_id)
 
+        self.entitlements = list(CourseEntitlement.unexpired_entitlements_for_user(self.user))
+        self.course_uuids = [str(entitlement.course_uuid) for entitlement in self.entitlements]
+
+        self.course_grade_factory = CourseGradeFactory()
+
         if uuid:
-            self.programs = [get_programs(uuid=uuid)]
+            self.programs = [get_programs(self.site, uuid=uuid)]
         else:
-            self.programs = attach_program_detail_url(get_programs())
+            self.programs = attach_program_detail_url(get_programs(self.site))
 
     def invert_programs(self):
         """Intersect programs and enrollments.
 
-        Builds a dictionary of program dict lists keyed by course run ID. The
-        resulting dictionary is suitable in applications where programs must be
-        filtered by the course runs they contain (e.g., the student dashboard).
+        Builds a dictionary of program dict lists keyed by course run ID and by course UUID.
+        The resulting dictionary is suitable in applications where programs must be
+        filtered by the course runs or courses they contain (e.g., the student dashboard).
 
         Returns:
             defaultdict, programs keyed by course run ID
@@ -101,6 +115,12 @@ class ProgramProgressMeter(object):
 
         for program in self.programs:
             for course in program['courses']:
+                course_uuid = course['uuid']
+                if course_uuid in self.course_uuids:
+                    program_list = inverted_programs[course_uuid]
+                    if program not in program_list:
+                        program_list.append(program)
+                    continue
                 for course_run in course['course_runs']:
                     course_run_id = course_run['key']
                     if course_run_id in self.course_run_ids:
@@ -132,6 +152,11 @@ class ProgramProgressMeter(object):
             for program in inverted_programs[course_run_id]:
                 # Dicts aren't a hashable type, so we can't use a set. Sets also
                 # aren't ordered, which is important here.
+                if program not in programs:
+                    programs.append(program)
+
+        for course_uuid in self.course_uuids:
+            for program in inverted_programs[course_uuid]:
                 if program not in programs:
                     programs.append(program)
 
@@ -197,23 +222,38 @@ class ProgramProgressMeter(object):
             completed, in_progress, not_started = [], [], []
 
             for course in program_copy['courses']:
+                entitlement = CourseEntitlement.objects.filter(user=self.user,
+                                                               course_uuid=course['uuid']).first()
+
                 if self._is_course_complete(course):
                     completed.append(course)
-                elif self._is_course_enrolled(course):
-                    course_in_progress = self._is_course_in_progress(now, course)
-                    if course_in_progress:
+                elif self._is_course_enrolled(course) or entitlement:
+                    # Show all currently enrolled courses and entitlements as in progress
+                    if entitlement:
+                        course['user_entitlement'] = entitlement.to_dict()
+                        course['enroll_url'] = reverse('entitlements_api:v1:enrollments', args=[str(entitlement.uuid)])
                         in_progress.append(course)
                     else:
-                        course['expired'] = not course_in_progress
-                        not_started.append(course)
+                        course_in_progress = self._is_course_in_progress(now, course)
+                        if course_in_progress:
+                            in_progress.append(course)
+                        else:
+                            course['expired'] = not course_in_progress
+                            not_started.append(course)
                 else:
                     not_started.append(course)
+
+            grades = {}
+            for run in self.course_run_ids:
+                grade = self.course_grade_factory.read(self.user, course_key=CourseKey.from_string(run))
+                grades[run] = grade.percent
 
             progress.append({
                 'uuid': program_copy['uuid'],
                 'completed': len(completed) if count_only else completed,
                 'in_progress': len(in_progress) if count_only else in_progress,
                 'not_started': len(not_started) if count_only else not_started,
+                'grades': grades,
             })
 
         return progress
@@ -238,7 +278,8 @@ class ProgramProgressMeter(object):
         Returns:
             bool, indicating whether the program is complete.
         """
-        return all(self._is_course_complete(course) for course in program['courses'])
+        return all(self._is_course_complete(course) for course in program['courses']) \
+            and len(program['courses']) > 0
 
     def _is_course_complete(self, course):
         """Check if a user has completed a course.
@@ -267,7 +308,12 @@ class ProgramProgressMeter(object):
                 # count towards completion of a course in a program). This may change
                 # in the future to make use of the more rigid set of "applicable seat
                 # types" associated with each program type in the catalog.
-                'type': course_run['type'],
+
+                # Runs of type 'credit' are counted as 'verified' since verified
+                # certificates are earned when credit runs are completed. LEARNER-1274
+                # tracks a cleaner way to do this using the discovery service's
+                # applicable_seat_types field.
+                'type': 'verified' if course_run['type'] == 'credit' else course_run['type'],
             }
 
         return any(reshape(course_run) in self.completed_course_runs for course_run in course['course_runs'])
@@ -312,7 +358,7 @@ class ProgramProgressMeter(object):
 
             course_data = {
                 'course_run_id': unicode(certificate['course_key']),
-                'type': certificate_type
+                'type': certificate_type,
             }
 
             if certificate_api.is_passing_status(certificate['status']):
@@ -358,6 +404,7 @@ class ProgramDataExtender(object):
     def extend(self):
         """Execute extension handlers, returning the extended data."""
         self._execute('_extend')
+        self._collect_one_click_purchase_eligibility_data()
         return self.data
 
     def _execute(self, prefix, *args):
@@ -428,11 +475,144 @@ class ProgramDataExtender(object):
             ecommerce = EcommerceService()
             sku = getattr(required_mode, 'sku', None)
             if ecommerce.is_enabled(self.user) and sku:
-                run_mode['upgrade_url'] = ecommerce.checkout_page_url(required_mode.sku)
+                run_mode['upgrade_url'] = ecommerce.get_checkout_page_url(required_mode.sku)
             else:
                 run_mode['upgrade_url'] = None
         else:
             run_mode['upgrade_url'] = None
+
+    def _attach_course_run_may_certify(self, run_mode):
+        run_mode['may_certify'] = self.course_overview.may_certify()
+
+    def _filter_out_courses_with_entitlements(self, courses):
+        """
+        Removes courses for which the current user already holds an applicable entitlement.
+
+        TODO:
+            Add a NULL value of enrollment_course_run to filter, as courses with entitlements spent on applicable
+            enrollments will already have been filtered out by _filter_out_courses_with_enrollments.
+
+        Arguments:
+            courses (list): Containing dicts representing courses in a program
+
+        Returns:
+            A subset of the given list of course dicts
+        """
+        course_uuids = set(course['uuid'] for course in courses)
+        # Filter the entitlements' modes with a case-insensitive match against applicable seat_types
+        entitlements = self.user.courseentitlement_set.filter(
+            mode__in=self.data['applicable_seat_types'],
+            course_uuid__in=course_uuids,
+        )
+        # Here we check the entitlements' expired_at_datetime property rather than filter by the expired_at attribute
+        # to ensure that the expiration status is as up to date as possible
+        entitlements = [e for e in entitlements if not e.expired_at_datetime]
+        courses_with_entitlements = set(unicode(entitlement.course_uuid) for entitlement in entitlements)
+        return [course for course in courses if course['uuid'] not in courses_with_entitlements]
+
+    def _filter_out_courses_with_enrollments(self, courses):
+        """
+        Removes courses for which the current user already holds an active and applicable enrollment
+        for one of that course's runs.
+
+        Arguments:
+            courses (list): Containing dicts representing courses in a program
+
+        Returns:
+            A subset of the given list of course dicts
+        """
+        enrollments = self.user.courseenrollment_set.filter(
+            is_active=True,
+            mode__in=self.data['applicable_seat_types']
+        )
+        course_runs_with_enrollments = set(unicode(enrollment.course_id) for enrollment in enrollments)
+        courses_without_enrollments = []
+        for course in courses:
+            if all(unicode(run['key']) not in course_runs_with_enrollments for run in course['course_runs']):
+                courses_without_enrollments.append(course)
+
+        return courses_without_enrollments
+
+    def _collect_one_click_purchase_eligibility_data(self):
+        """
+        Extend the program data with data about learner's eligibility for one click purchase,
+        discount data of the program and SKUs of seats that should be added to basket.
+        """
+        if 'professional' in self.data['applicable_seat_types']:
+            self.data['applicable_seat_types'].append('no-id-professional')
+        applicable_seat_types = set(seat for seat in self.data['applicable_seat_types'] if seat != 'credit')
+
+        is_learner_eligible_for_one_click_purchase = self.data['is_program_eligible_for_one_click_purchase']
+        skus = []
+        bundle_variant = 'full'
+
+        if is_learner_eligible_for_one_click_purchase:
+            courses = self.data['courses']
+            if not self.user.is_anonymous():
+                courses = self._filter_out_courses_with_enrollments(courses)
+                courses = self._filter_out_courses_with_entitlements(courses)
+
+            if len(courses) < len(self.data['courses']):
+                bundle_variant = 'partial'
+
+            for course in courses:
+                entitlement_product = False
+                for entitlement in course.get('entitlements', []):
+                    # We add the first entitlement product found with an applicable seat type because, at this time,
+                    # we are assuming that, for any given course, there is at most one paid entitlement available.
+                    if entitlement['mode'] in applicable_seat_types:
+                        skus.append(entitlement['sku'])
+                        entitlement_product = True
+                        break
+                if not entitlement_product:
+                    course_runs = course.get('course_runs', [])
+                    published_course_runs = [run for run in course_runs if run['status'] == 'published']
+                    if len(published_course_runs) == 1:
+                        for seat in published_course_runs[0]['seats']:
+                            if seat['type'] in applicable_seat_types and seat['sku']:
+                                skus.append(seat['sku'])
+                                break
+                    else:
+                        # If a course in the program has more than 1 published course run
+                        # learner won't be eligible for a one click purchase.
+                        skus = []
+                        break
+
+        if skus:
+            try:
+                api_user = self.user
+                if not self.user.is_authenticated():
+                    user = get_user_model()
+                    service_user = user.objects.get(username=settings.ECOMMERCE_SERVICE_WORKER_USERNAME)
+                    api_user = service_user
+
+                api = ecommerce_api_client(api_user)
+
+                # Make an API call to calculate the discounted price
+                discount_data = api.baskets.calculate.get(sku=skus)
+
+                program_discounted_price = discount_data['total_incl_tax']
+                program_full_price = discount_data['total_incl_tax_excl_discounts']
+                discount_data['is_discounted'] = program_discounted_price < program_full_price
+                discount_data['discount_value'] = program_full_price - program_discounted_price
+
+                self.data.update({
+                    'discount_data': discount_data,
+                    'full_program_price': discount_data['total_incl_tax'],
+                    'variant': bundle_variant
+                })
+            except (ConnectionError, SlumberBaseException, Timeout):
+                log.exception('Failed to get discount price for following product SKUs: %s ', ', '.join(skus))
+                self.data.update({
+                    'discount_data': {'is_discounted': False}
+                })
+        else:
+            is_learner_eligible_for_one_click_purchase = False
+
+        self.data.update({
+            'is_learner_eligible_for_one_click_purchase': is_learner_eligible_for_one_click_purchase,
+            'skus': skus,
+        })
 
 
 def get_certificates(user, extended_program):
@@ -454,7 +634,7 @@ def get_certificates(user, extended_program):
     for course in extended_program['courses']:
         for course_run in course['course_runs']:
             url = course_run.get('certificate_url')
-            if url:
+            if url and course_run.get('may_certify'):
                 certificates.append({
                     'type': 'course',
                     'title': course_run['title'],
@@ -464,18 +644,14 @@ def get_certificates(user, extended_program):
                 # We only want one certificate per course to be returned.
                 break
 
-    # A user can only have earned a program certificate if they've earned certificates
-    # in associated course runs. If they haven't earned any course run certificates,
-    # they can't have earned a program certificate, and we can save a network call
-    # to the credentials service.
-    if certificates:
-        program_credentials = get_credentials(user, program_uuid=extended_program['uuid'])
-        if program_credentials:
-            certificates.append({
-                'type': 'program',
-                'title': extended_program['title'],
-                'url': program_credentials[0]['certificate_url'],
-            })
+    program_credentials = get_credentials(user, program_uuid=extended_program['uuid'])
+    # only include a program certificate if a certificate is available for every course
+    if program_credentials and (len(certificates) == len(extended_program['courses'])):
+        certificates.append({
+            'type': 'program',
+            'title': extended_program['title'],
+            'url': program_credentials[0]['certificate_url'],
+        })
 
     return certificates
 
@@ -494,13 +670,13 @@ class ProgramMarketingDataExtender(ProgramDataExtender):
     def __init__(self, program_data, user):
         super(ProgramMarketingDataExtender, self).__init__(program_data, user)
 
-        # Aggregate dict of instructors for the program keyed by name
-        self.instructors = {}
+        # Aggregate list of instructors for the program keyed by name
+        self.instructors = []
 
         # Values for programs' price calculation.
-        self.data['avg_price_per_course'] = 0
+        self.data['avg_price_per_course'] = 0.0
         self.data['number_of_courses'] = 0
-        self.data['full_program_price'] = 0
+        self.data['full_program_price'] = 0.0
 
     def _extend_program(self):
         """Aggregates data from the program data structure."""
@@ -508,27 +684,44 @@ class ProgramMarketingDataExtender(ProgramDataExtender):
             uuid=self.data['uuid']
         )
         program_instructors = cache.get(cache_key)
-        is_learner_eligible_for_one_click_purchase = self.data['is_program_eligible_for_one_click_purchase']
 
         for course in self.data['courses']:
             self._execute('_collect_course', course)
             if not program_instructors:
                 for course_run in course['course_runs']:
                     self._execute('_collect_instructors', course_run)
-            if is_learner_eligible_for_one_click_purchase:
-                is_learner_eligible_for_one_click_purchase = not any(
-                    course_run['is_enrolled'] for course_run in course['course_runs']
-                )
 
         if not program_instructors:
             # We cache the program instructors list to avoid repeated modulestore queries
-            program_instructors = self.instructors.values()
+            program_instructors = self.instructors
             cache.set(cache_key, program_instructors, 3600)
 
-        self.data.update({
-            'instructors': program_instructors,
-            'is_learner_eligible_for_one_click_purchase': is_learner_eligible_for_one_click_purchase,
-        })
+        if 'instructor_ordering' not in self.data:
+            # If no instructor ordering is set in discovery, it doesn't populate this key
+            self.data['instructor_ordering'] = []
+
+        sorted_instructor_names = [
+            ' '.join(filter(None, (instructor['given_name'], instructor['family_name'])))
+            for instructor in self.data['instructor_ordering']
+        ]
+        instructors_to_be_sorted = [
+            instructor for instructor in program_instructors
+            if instructor['name'] in sorted_instructor_names
+        ]
+        instructors_to_not_be_sorted = [
+            instructor for instructor in program_instructors
+            if instructor['name'] not in sorted_instructor_names
+        ]
+        sorted_instructors = sorted(
+            instructors_to_be_sorted,
+            key=lambda item: sorted_instructor_names.index(item['name'])
+        )
+        self.data['instructors'] = sorted_instructors + instructors_to_not_be_sorted
+
+    def extend(self):
+        """Execute extension handlers, returning the extended data."""
+        self.data.update(super(ProgramMarketingDataExtender, self).extend())
+        return self.data
 
     @classmethod
     def _handlers(cls, prefix):
@@ -580,6 +773,7 @@ class ProgramMarketingDataExtender(ProgramDataExtender):
             course_instructors = getattr(course_descriptor, 'instructor_info', {})
 
             # Deduplicate program instructors using instructor name
-            self.instructors.update(
-                {instructor.get('name'): instructor for instructor in course_instructors.get('instructors', [])}
-            )
+            curr_instructors_names = [instructor.get('name', '').strip() for instructor in self.instructors]
+            for instructor in course_instructors.get('instructors', []):
+                if instructor.get('name', '').strip() not in curr_instructors_names:
+                    self.instructors.append(instructor)

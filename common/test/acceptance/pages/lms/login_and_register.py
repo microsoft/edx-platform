@@ -1,8 +1,10 @@
 """Login and Registration pages """
 
 from urllib import urlencode
+
 from bok_choy.page_object import PageObject, unguarded
-from bok_choy.promise import Promise, EmptyPromise
+from bok_choy.promise import EmptyPromise, Promise
+
 from common.test.acceptance.pages.lms import BASE_URL
 from common.test.acceptance.pages.lms.dashboard import DashboardPage
 
@@ -206,7 +208,7 @@ class CombinedLoginAndRegisterPage(PageObject):
 
         """
         # Fill in the form
-        self.wait_for_element_visibility('#register-email', 'Email field is shown')
+        self.wait_for_element_visibility('#register-honor_code', 'Honor code field is shown')
         if email:
             self.q(css="#register-email").fill(email)
         if full_name:
@@ -221,6 +223,8 @@ class CombinedLoginAndRegisterPage(PageObject):
             self.q(css="#register-favorite_movie").fill(favorite_movie)
         if terms_of_service:
             self.q(css="label[for='register-honor_code']").click()
+            self.q(css="#register-honor_code").click()
+            EmptyPromise(lambda: self.q(css='#register-honor_code:checked'), 'Honor code field is checked').fulfill()
 
         # Submit it
         self.q(css=".register-button").click()

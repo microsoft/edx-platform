@@ -3,6 +3,7 @@ LMS Course Home page object
 """
 
 from collections import OrderedDict
+
 from bok_choy.page_object import PageObject
 
 from .bookmarks import BookmarksPage
@@ -29,7 +30,25 @@ class CourseHomePage(CoursePage):
         self.outline = CourseOutlinePage(browser, self)
         self.preview = StaffPreviewPage(browser, self)
         # TODO: TNL-6546: Remove the following
-        self.unified_course_view = False
+        self.course_outline_page = False
+
+    def select_course_goal(self):
+        """ Click on a course goal in a message """
+        self.q(css='button.goal-option').first.click()
+        self.wait_for_ajax()
+
+    def is_course_goal_success_message_shown(self):
+        """ Verifies course goal success message appears. """
+        return self.q(css='.success-message').present
+
+    def is_course_goal_update_field_shown(self):
+        """ Verifies course goal success message appears. """
+        return self.q(css='.current-goal-container').visible
+
+    def is_course_goal_update_icon_shown(self, valid=True):
+        """ Verifies course goal success or error icon appears. """
+        correct_icon = 'check' if valid else 'close'
+        return self.q(css='.fa-{icon}'.format(icon=correct_icon)).present
 
     def click_bookmarks_button(self):
         """ Click on Bookmarks button """
@@ -44,6 +63,14 @@ class CourseHomePage(CoursePage):
         self.q(css=self.HEADER_RESUME_COURSE_SELECTOR).first.click()
         courseware_page = CoursewarePage(self.browser, self.course_id)
         courseware_page.wait_for_page()
+
+    def search_for_term(self, search_term):
+        """
+        Search within a class for a particular term.
+        """
+        self.q(css='.search-form > .search-input').fill(search_term)
+        self.q(css='.search-form .search-button').click()
+        return CourseSearchResultsPage(self.browser, self.course_id)
 
 
 class CourseOutlinePage(PageObject):
@@ -121,6 +148,13 @@ class CourseOutlinePage(PageObject):
             section_index = 1
 
         return len(self.q(css=self.SUBSECTION_TITLES_SELECTOR.format(section_index)))
+
+    @property
+    def num_units(self):
+        """
+        Return the number of units in the first subsection
+        """
+        return len(self.q(css='.sequence-list-wrapper ol li'))
 
     def go_to_section(self, section_title, subsection_title):
         """
@@ -216,11 +250,30 @@ class CourseOutlinePage(PageObject):
         courseware_page = CoursewarePage(self.browser, self.parent_page.course_id)
         courseware_page.wait_for_page()
 
-        # TODO: TNL-6546: Remove this if/visit_unified_course_view
-        if self.parent_page.unified_course_view:
-            courseware_page.nav.visit_unified_course_view()
+        # TODO: TNL-6546: Remove this if/visit_course_outline_page
+        if self.parent_page.course_outline_page:
+            courseware_page.nav.visit_course_outline_page()
 
         self.wait_for(
             promise_check_func=lambda: courseware_page.nav.is_on_section(section_title, subsection_title),
             description="Waiting for course page with section '{0}' and subsection '{1}'".format(section_title, subsection_title)
         )
+
+
+class CourseSearchResultsPage(CoursePage):
+    """
+    Course search page
+    """
+
+    # url = "courses/{course_id}/search/?query={query_string}"
+
+    def is_browser_on_page(self):
+        return self.q(css='.page-content > .search-results').present
+
+    def __init__(self, browser, course_id):
+        super(CourseSearchResultsPage, self).__init__(browser, course_id)
+        self.course_id = course_id
+
+    @property
+    def search_results(self):
+        return self.q(css='.search-results-item')

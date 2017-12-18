@@ -3,8 +3,10 @@ Views for the course_mode module
 """
 
 import decimal
+import json
 import urllib
 
+import waffle
 from babel.dates import format_datetime
 from django.contrib.auth.decorators import login_required
 from django.core.urlresolvers import reverse
@@ -12,23 +14,23 @@ from django.db import transaction
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.shortcuts import redirect
 from django.utils.decorators import method_decorator
-from django.utils.translation import get_language, to_locale, ugettext as _
+from django.utils.translation import ugettext as _
+from django.utils.translation import get_language, to_locale
 from django.views.generic.base import View
 from ipware.ip import get_ip
 from opaque_keys.edx.keys import CourseKey
-from opaque_keys.edx.locations import SlashSeparatedCourseKey
-from xmodule.modulestore.django import modulestore
 
-from lms.djangoapps.commerce.utils import EcommerceService
 from course_modes.models import CourseMode
 from courseware.access import has_access
 from edxmako.shortcuts import render_to_response
+from lms.djangoapps.commerce.utils import EcommerceService
+from lms.djangoapps.experiments.utils import get_experiment_user_metadata_context
+from openedx.core.djangoapps.catalog.utils import get_currency_data
 from openedx.core.djangoapps.embargo import api as embargo_api
-from openedx.features.enterprise_support import api as enterprise_api
 from student.models import CourseEnrollment
-from util.db import outer_atomic
-from util import organizations_helpers as organization_api
 from third_party_auth.decorators import tpa_hint_ends_existing_session
+from util.db import outer_atomic
+from xmodule.modulestore.django import modulestore
 
 
 class ChooseModeView(View):
@@ -98,10 +100,12 @@ class ChooseModeView(View):
             if ecommerce_service.is_enabled(request.user):
                 professional_mode = modes.get(CourseMode.NO_ID_PROFESSIONAL_MODE) or modes.get(CourseMode.PROFESSIONAL)
                 if purchase_workflow == "single" and professional_mode.sku:
-                    redirect_url = ecommerce_service.checkout_page_url(professional_mode.sku)
+                    redirect_url = ecommerce_service.get_checkout_page_url(professional_mode.sku)
                 if purchase_workflow == "bulk" and professional_mode.bulk_sku:
-                    redirect_url = ecommerce_service.checkout_page_url(professional_mode.bulk_sku)
+                    redirect_url = ecommerce_service.get_checkout_page_url(professional_mode.bulk_sku)
             return redirect(redirect_url)
+
+        course = modulestore().get_course(course_key)
 
         # If there isn't a verified mode available, then there's nothing
         # to do on this page.  Send the user to the dashboard.
@@ -110,12 +114,14 @@ class ChooseModeView(View):
 
         # If a user has already paid, redirect them to the dashboard.
         if is_active and (enrollment_mode in CourseMode.VERIFIED_MODES + [CourseMode.NO_ID_PROFESSIONAL_MODE]):
+            # If the course has started redirect to course home instead
+            if course.has_started():
+                return redirect(reverse('openedx.course_experience.course_home', kwargs={'course_id': course_key}))
             return redirect(reverse('dashboard'))
 
         donation_for_course = request.session.get("donation_for_course", {})
         chosen_price = donation_for_course.get(unicode(course_key), None)
 
-        course = modulestore().get_course(course_key)
         if CourseEnrollment.is_enrollment_closed(request.user, course):
             locale = to_locale(get_language())
             enrollment_end_date = format_datetime(course.enrollment_end, 'short', locale=locale)
@@ -150,34 +156,17 @@ class ChooseModeView(View):
             "responsive": True,
             "nav_hidden": True,
         }
+        context.update(
+            get_experiment_user_metadata_context(
+                course,
+                request.user,
+            )
+        )
 
         title_content = _("Congratulations!  You are now enrolled in {course_name}").format(
             course_name=course.display_name_with_default_escaped
         )
-        enterprise_learner_data = enterprise_api.get_enterprise_learner_data(site=request.site, user=request.user)
-        if enterprise_learner_data:
-            is_course_in_enterprise_catalog = enterprise_api.is_course_in_enterprise_catalog(
-                site=request.site,
-                course_id=course_id,
-                enterprise_catalog_id=enterprise_learner_data[0]['enterprise_customer']['catalog']
-            )
 
-            if is_course_in_enterprise_catalog:
-                partner_names = partner_name = course.display_organization \
-                    if course.display_organization else course.org
-                enterprise_name = enterprise_learner_data[0]['enterprise_customer']['name']
-                organizations = organization_api.get_course_organizations(course_id=course.id)
-                if organizations:
-                    partner_names = ' and '.join([org.get('name', partner_name) for org in organizations])
-
-                title_content = _("Welcome, {username}! You are about to enroll in {course_name},"
-                                  " from {partner_names}, sponsored by {enterprise_name}. Please select your enrollment"
-                                  " information below.").format(
-                    username=request.user.username,
-                    course_name=course.display_name_with_default_escaped,
-                    partner_names=partner_names,
-                    enterprise_name=enterprise_name
-                )
         context["title_content"] = title_content
 
         if "verified" in modes:
@@ -198,6 +187,14 @@ class ChooseModeView(View):
                 context["sku"] = verified_mode.sku
                 context["bulk_sku"] = verified_mode.bulk_sku
 
+        context['currency_data'] = []
+        if waffle.switch_is_active('local_currency'):
+            if 'edx-price-l10n' not in request.COOKIES:
+                currency_data = get_currency_data()
+                try:
+                    context['currency_data'] = json.dumps(currency_data)
+                except TypeError:
+                    pass
         return render_to_response("course_modes/choose.html", context)
 
     @method_decorator(tpa_hint_ends_existing_session)
@@ -218,7 +215,7 @@ class ChooseModeView(View):
             below the minimum, otherwise redirects to the verification flow.
 
         """
-        course_key = SlashSeparatedCourseKey.from_deprecated_string(course_id)
+        course_key = CourseKey.from_string(course_id)
         user = request.user
 
         # This is a bit redundant with logic in student.views.change_enrollment,
@@ -241,10 +238,16 @@ class ChooseModeView(View):
             # system, such as third-party discovery.  These workflows result in learners arriving
             # directly at this screen, and they will not necessarily be pre-enrolled in the audit mode.
             CourseEnrollment.enroll(request.user, course_key, CourseMode.AUDIT)
+            # If the course has started redirect to course home instead
+            if course.has_started():
+                return redirect(reverse('openedx.course_experience.course_home', kwargs={'course_id': course_key}))
             return redirect(reverse('dashboard'))
 
         if requested_mode == 'honor':
             CourseEnrollment.enroll(user, course_key, mode=requested_mode)
+            # If the course has started redirect to course home instead
+            if course.has_started():
+                return redirect(reverse('openedx.course_experience.course_home', kwargs={'course_id': course_key}))
             return redirect(reverse('dashboard'))
 
         mode_info = allowed_modes[requested_mode]

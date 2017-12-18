@@ -1,17 +1,18 @@
 """
 Acceptance tests for the certificate web view feature.
 """
-from common.test.acceptance.tests.helpers import UniqueCourseTest, EventsTestMixin, load_data_str, get_element_padding
 from nose.plugins.attrib import attr
-from common.test.acceptance.fixtures.course import CourseFixture, XBlockFixtureDesc, CourseUpdateDesc
+
 from common.test.acceptance.fixtures.certificates import CertificateConfigFixture
-from common.test.acceptance.pages.lms.auto_auth import AutoAuthPage
+from common.test.acceptance.fixtures.course import CourseFixture, CourseUpdateDesc, XBlockFixtureDesc
+from common.test.acceptance.pages.common.auto_auth import AutoAuthPage
 from common.test.acceptance.pages.lms.certificate_page import CertificatePage
 from common.test.acceptance.pages.lms.course_home import CourseHomePage
 from common.test.acceptance.pages.lms.course_info import CourseInfoPage
 from common.test.acceptance.pages.lms.courseware import CoursewarePage
 from common.test.acceptance.pages.lms.progress import ProgressPage
 from common.test.acceptance.pages.lms.tab_nav import TabNavPage
+from common.test.acceptance.tests.helpers import EventsTestMixin, UniqueCourseTest, get_element_padding, load_data_str
 
 
 @attr(shard=5)
@@ -31,7 +32,7 @@ class CertificateWebViewTest(EventsTestMixin, UniqueCourseTest):
             'course_title': 'Course title override',
             'signatories': [],
             'version': 1,
-            'is_active': True
+            'is_active': True,
         }
         course_settings = {'certificates': test_certificate_config}
         self.course_fixture = CourseFixture(
@@ -42,7 +43,8 @@ class CertificateWebViewTest(EventsTestMixin, UniqueCourseTest):
             settings=course_settings
         )
         self.course_fixture.add_advanced_settings({
-            "cert_html_view_enabled": {"value": "true"}
+            "cert_html_view_enabled": {"value": "true"},
+            "certificates_display_behavior": {"value": "early_with_info"},
         })
         self.course_fixture.install()
         self.user_id = "99"  # we have created a user with this id in fixture
@@ -127,7 +129,8 @@ class CertificateProgressPageTest(UniqueCourseTest):
         )
 
         self.course_fixture.add_advanced_settings({
-            "cert_html_view_enabled": {"value": "true"}
+            "cert_html_view_enabled": {"value": "true"},
+            "certificates_show_before_end": {"value": "true"}
         })
 
         self.course_fixture.add_update(
@@ -175,7 +178,7 @@ class CertificateProgressPageTest(UniqueCourseTest):
         """
         Scenario: View Certificate option should be present on Course Progress menu if the user is
         awarded a certificate.
-        And their should be no padding around the box containing certificate info. (See SOL-1196 for details on this)
+        And there should be no padding around the box containing certificate info. (See SOL-1196 for details on this)
 
         As a Student
         Given there is a course with certificate configuration

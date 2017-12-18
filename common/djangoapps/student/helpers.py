@@ -1,27 +1,24 @@
 """Helpers for the student app. """
-from datetime import datetime
 import logging
-import urllib
 import mimetypes
+import urllib
+import urlparse
+from datetime import datetime
 
 from django.conf import settings
-from django.core.urlresolvers import reverse, NoReverseMatch
+from django.core.urlresolvers import NoReverseMatch, reverse
 from django.utils import http
-from oauth2_provider.models import (
-    AccessToken as dot_access_token,
-    RefreshToken as dot_refresh_token
-)
-from provider.oauth2.models import (
-    AccessToken as dop_access_token,
-    RefreshToken as dop_refresh_token
-)
+from oauth2_provider.models import AccessToken as dot_access_token
+from oauth2_provider.models import RefreshToken as dot_refresh_token
+from provider.oauth2.models import AccessToken as dop_access_token
+from provider.oauth2.models import RefreshToken as dop_refresh_token
 from pytz import UTC
 
 import third_party_auth
-from lms.djangoapps.verify_student.models import VerificationDeadline, SoftwareSecurePhotoVerification
 from course_modes.models import CourseMode
+from lms.djangoapps.verify_student.models import SoftwareSecurePhotoVerification, VerificationDeadline
+from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 from openedx.core.djangoapps.theming.helpers import get_themes
-
 
 # Enumeration of per-course verification statuses
 # we display on the student dashboard.
@@ -34,7 +31,7 @@ VERIFY_STATUS_NEED_TO_REVERIFY = "verify_need_to_reverify"
 
 DISABLE_UNENROLL_CERT_STATES = [
     'generating',
-    'ready',
+    'downloadable',
 ]
 
 
@@ -245,6 +242,8 @@ def get_next_url_for_login_page(request):
 
     Otherwise, we go to the ?next= query param or to the dashboard if nothing else is
     specified.
+
+    If THIRD_PARTY_AUTH_HINT is set, then `tpa_hint=<hint>` is added as a query parameter.
     """
     redirect_to = get_redirect_to(request)
     if not redirect_to:
@@ -252,6 +251,7 @@ def get_next_url_for_login_page(request):
             redirect_to = reverse('dashboard')
         except NoReverseMatch:
             redirect_to = reverse('home')
+
     if any(param in request.GET for param in POST_AUTH_PARAMS):
         # Before we redirect to next/dashboard, we need to handle auto-enrollment:
         params = [(param, request.GET[param]) for param in POST_AUTH_PARAMS if param in request.GET]
@@ -260,6 +260,23 @@ def get_next_url_for_login_page(request):
         # Note: if we are resuming a third party auth pipeline, then the next URL will already
         # be saved in the session as part of the pipeline state. That URL will take priority
         # over this one.
+
+    # Append a tpa_hint query parameter, if one is configured
+    tpa_hint = configuration_helpers.get_value(
+        "THIRD_PARTY_AUTH_HINT",
+        settings.FEATURES.get("THIRD_PARTY_AUTH_HINT", '')
+    )
+    if tpa_hint:
+        # Don't add tpa_hint if we're already in the TPA pipeline (prevent infinite loop),
+        # and don't overwrite any existing tpa_hint params (allow tpa_hint override).
+        running_pipeline = third_party_auth.pipeline.get(request)
+        (scheme, netloc, path, query, fragment) = list(urlparse.urlsplit(redirect_to))
+        if not running_pipeline and 'tpa_hint' not in query:
+            params = urlparse.parse_qs(query)
+            params['tpa_hint'] = [tpa_hint]
+            query = urllib.urlencode(params, doseq=True)
+            redirect_to = urlparse.urlunsplit((scheme, netloc, path, query, fragment))
+
     return redirect_to
 
 
@@ -280,7 +297,7 @@ def get_redirect_to(request):
     # get information about a user on edx.org. In any such case drop the parameter.
     if redirect_to:
         mime_type, _ = mimetypes.guess_type(redirect_to, strict=False)
-        if not http.is_safe_url(redirect_to):
+        if not http.is_safe_url(redirect_to, host=request.get_host()):
             log.warning(
                 u'Unsafe redirect parameter detected after login page: %(redirect_to)r',
                 {"redirect_to": redirect_to}
@@ -310,8 +327,9 @@ def get_redirect_to(request):
             redirect_to = None
         else:
             themes = get_themes()
+            next_path = urlparse.urlparse(redirect_to).path
             for theme in themes:
-                if theme.theme_dir_name in redirect_to:
+                if theme.theme_dir_name in next_path:
                     log.warning(
                         u'Redirect to theme content detected after login page: %(redirect_to)r',
                         {"redirect_to": redirect_to}
