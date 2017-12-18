@@ -4,11 +4,8 @@ Classes that override default django-oauth-toolkit behavior
 from __future__ import unicode_literals
 
 from datetime import datetime
-<<<<<<< HEAD
 
-=======
 from django.conf import settings
->>>>>>> b65bdea... OAuth Restricted Application APIs (#174)
 from django.contrib.auth import authenticate, get_user_model
 from django.db.models.signals import pre_save
 from django.dispatch import receiver

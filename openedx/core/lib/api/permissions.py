@@ -4,21 +4,14 @@ API library for Django REST Framework permissions-oriented workflows
 
 from django.conf import settings
 from django.http import Http404
-<<<<<<< HEAD
-from opaque_keys import InvalidKeyError
-from opaque_keys.edx.keys import CourseKey
-from rest_framework import permissions
 
-from openedx.core.lib.log_utils import audit_log
-from student.roles import CourseInstructorRole, CourseStaffRole
-=======
 from oauth2_provider.ext.rest_framework.permissions import TokenHasScope
 from rest_framework import permissions
 
 from opaque_keys import InvalidKeyError
 from opaque_keys.edx.keys import CourseKey
 from provider.oauth2.models import AccessToken as DOPAccessToken
-from student.roles import CourseStaffRole, CourseInstructorRole
+from student.roles import CourseInstructorRole, CourseStaffRole
 from openedx.core.lib.log_utils import audit_log
 from openedx.core.djangoapps.oauth_dispatch.models import RestrictedApplication
 
@@ -114,7 +107,6 @@ class OAuth2RestrictedApplicatonPermission(TokenHasScope):
             )
 
         return has_permission
->>>>>>> b65bdea... OAuth Restricted Application APIs (#174)
 
 
 class ApiKeyHeaderPermission(permissions.BasePermission):

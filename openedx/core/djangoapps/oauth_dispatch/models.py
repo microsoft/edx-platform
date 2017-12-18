@@ -6,15 +6,12 @@ from datetime import datetime
 
 from django.db import models
 from oauth2_provider.settings import oauth2_settings
-<<<<<<< HEAD
 from pytz import utc
-=======
 from oauth2_provider.models import AccessToken
 
 # define default separator used to store lists
 # IMPORTANT: Do not change this after data has been populated in database
 _DEFAULT_SEPARATOR = ' '
->>>>>>> b65bdea... OAuth Restricted Application APIs (#174)
 
 
 class RestrictedApplication(models.Model):

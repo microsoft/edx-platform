@@ -17,13 +17,10 @@ from rest_framework.test import APITestCase
 
 from capa.tests.response_xml_factory import MultipleChoiceResponseXMLFactory
 from lms.djangoapps.courseware.tests.factories import GlobalStaffFactory, StaffFactory
-<<<<<<< HEAD
 from lms.djangoapps.grades.tests.utils import mock_passing_grade
-=======
 from lms.djangoapps.grades.tests.utils import mock_get_score
 from openedx.core.djangoapps.oauth_dispatch.models import RestrictedApplication
 from openedx.core.djangoapps.oauth_dispatch.tests.test_views import _DispatchingViewTestCase
->>>>>>> b65bdea... OAuth Restricted Application APIs (#174)
 from student.tests.factories import CourseEnrollmentFactory, UserFactory
 from xmodule.modulestore import ModuleStoreEnum
 from xmodule.modulestore.tests.django_utils import TEST_DATA_SPLIT_MODULESTORE, SharedModuleStoreTestCase

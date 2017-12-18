@@ -5,11 +5,8 @@ Tests for DOT Adapter
 import unittest
 from datetime import timedelta
 
-<<<<<<< HEAD
-=======
 import ddt
 from mock import patch
->>>>>>> b65bdea... OAuth Restricted Application APIs (#174)
 from django.conf import settings
 from django.test import TestCase
 from django.utils.timezone import now

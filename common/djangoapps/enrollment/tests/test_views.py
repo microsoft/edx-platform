@@ -26,17 +26,14 @@ from course_modes.models import CourseMode
 from course_modes.tests.factories import CourseModeFactory
 from enrollment import api
 from enrollment.errors import CourseEnrollmentError
-<<<<<<< HEAD
 from enrollment.views import EnrollmentUserThrottle
 from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
 from openedx.core.djangoapps.embargo.models import Country, CountryAccessRule, RestrictedCourse
 from openedx.core.djangoapps.embargo.test_utils import restrict_course
-=======
 from opaque_keys.edx.keys import CourseKey
 from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
 from openedx.core.djangoapps.oauth_dispatch.models import RestrictedApplication
 from openedx.core.djangoapps.oauth_dispatch.tests.test_views import _DispatchingViewTestCase
->>>>>>> b65bdea... OAuth Restricted Application APIs (#174)
 from openedx.core.djangoapps.user_api.models import UserOrgTag
 from openedx.core.lib.django_test_client_utils import get_absolute_url
 from openedx.features.enterprise_support.tests.mixins.enterprise import EnterpriseServiceMockMixin

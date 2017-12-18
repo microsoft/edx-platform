@@ -6,12 +6,9 @@ import json
 import unittest
 
 import ddt
-<<<<<<< HEAD
 import httpretty
 from Cryptodome.PublicKey import RSA
-=======
 from mock import patch
->>>>>>> b65bdea... OAuth Restricted Application APIs (#174)
 from django.conf import settings
 from django.core.urlresolvers import reverse
 from django.test import RequestFactory, TestCase, override_settings

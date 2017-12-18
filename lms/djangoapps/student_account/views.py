@@ -678,28 +678,3 @@ def account_settings_context(request):
         } for state in auth_states if state.provider.display_for_login or state.has_account]
 
     return context
-<<<<<<< HEAD
-=======
-
-
-def cookies_api(request):
-    """Getting the common API URL from the settings page
-       If the URL is not None or not empty then returning the response
-       Replacing the locale with the user locale value in the API URL
-    """
-    if settings.API_COOKIE_URL is not None or settings.API_COOKIE_URL != "":
-        try:
-            locale_var = request.LANGUAGE_CODE
-            end_point = settings.API_COOKIE_URL
-            parse_url = urlparse.urlparse(end_point)
-            i = parse_url.path.index('/', 1)
-            updated_path = '/' + locale_var + '/' + parse_url.path[1 + i:]
-            addr = urlparse.urlunparse((parse_url.scheme, parse_url.netloc, updated_path, parse_url.params, parse_url.query, parse_url.fragment))
-            response = requests.get(addr)
-            return JsonResponse(json.loads(response.content))
-
-        except:
-            message = 'Failed in calling cookies api {}'.format(settings.API_COOKIE_URL)
-            log.error(message)
-            return HttpResponseBadRequest(message)
->>>>>>> b65bdea... OAuth Restricted Application APIs (#174)
