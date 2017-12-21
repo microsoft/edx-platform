@@ -439,7 +439,7 @@ def delete_user_account(user_id):
         username = User.objects.get(id=user_id).username
     except Exception:
         raise UserNotFound()
-    
+
     existing_user, existing_user_profile = _get_user_and_profile(username)
     if not existing_user.is_active:
         raise UserNotFound()

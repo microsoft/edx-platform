@@ -3,7 +3,7 @@ LTI Provider view functions
 """
 
 from django.conf import settings
-from django.http import HttpResponseBadRequest, HttpResponseForbidden, Http404, HttpResponse, HttpResponseNotAllowed, HttpResponseNotFound
+from django.http import HttpResponseBadRequest, HttpResponseForbidden, Http404, HttpResponse, HttpResponseNotAllowed
 from django.views.decorators.csrf import csrf_exempt
 import logging
 import json
@@ -275,26 +275,26 @@ def users_delete_user_account(request):
         return HttpResponseBadRequest()
 
     # Get the consumer information from either the instance GUID or the consumer key
-    # try:
-    #     lti_consumer = LtiConsumer.get_or_supplement(None, params["oauth_consumer_key"])
-    # except LtiConsumer.DoesNotExist:
-    #     return HttpResponseForbidden()
-    #
-    # # Check the OAuth signature on the message
-    # if not SignatureValidator(lti_consumer).verify(request):
-    #     return HttpResponseForbidden()
+    try:
+        lti_consumer = LtiConsumer.get_or_supplement(None, params["oauth_consumer_key"])
+    except LtiConsumer.DoesNotExist:
+        return HttpResponseForbidden()
+
+    # Check the OAuth signature on the message
+    if not SignatureValidator(lti_consumer).verify(request):
+        return HttpResponseForbidden()
 
     puid = params["puid"]
     # First verify the mapping is already exist sanity check
     try:
         social_auth_mapping = UserSocialAuthMapping.objects.get(puid=puid)
     except UserSocialAuthMapping.DoesNotExist:
-        return HttpResponseNotFound("PUID not found")
+        raise Http404
 
     user_id = social_auth_mapping.user_id
     try:
         delete_user_account(user_id)
     except Exception:
-        return HttpResponseNotFound("User not found.")
+        raise Http404
 
     return HttpResponse("User deleted successfully")
