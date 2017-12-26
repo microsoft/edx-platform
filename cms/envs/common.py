@@ -802,6 +802,7 @@ VIDEO_UPLOAD_PIPELINE = {
     'BUCKET': '',
     'ROOT_PATH': '',
     'CONCURRENT_UPLOAD_LIMIT': 4,
+    'CLOUD': 'aws'
 }
 
 ############################ APPS #####################################
@@ -1067,6 +1068,9 @@ OPTIONAL_APPS = (
 
     # Organizations App (http://github.com/edx/edx-organizations)
     'organizations',
+
+    # Azure video upload feature
+    'azure_video_pipeline',
 )
 
 

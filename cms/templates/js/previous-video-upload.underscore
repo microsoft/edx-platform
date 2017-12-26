@@ -1,4 +1,17 @@
-<td class="name-col"><%- client_video_id %></td>
+<td class="name-col">
+    <span><%- client_video_id %></span>
+    <div><% if (countTranscripts) { %>
+        <a href="#" class="js-toggle-transcripts">
+            <span class="link-transcripts link-show-transcripts" role="button" data-tooltip="<%- gettext('Show transcripts') %>"><%- gettext('Show transcripts') %></span>
+            <span class="link-transcripts link-hide-transcripts" role="button" data-tooltip="<%- gettext('Hide transcripts') %>"><%- gettext('Hide transcripts') %></span>
+        </a>
+        <% } else if (status_value == 'file_complete' && storageService == 'azure') { %>
+        <a href="#" class="js-add-transcript">
+            <span class="link-transcripts" role="button" data-tooltip="<%- gettext('Add transcripts') %>"><%- gettext('Add transcripts') %></span>
+        </a>
+        <% } %>
+    </div>
+</td>
 <td class="duration-col"><%- duration %></td>
 <td class="date-col"><%- created %></td>
 <td class="video-id-col"><%- edx_video_id %></td>

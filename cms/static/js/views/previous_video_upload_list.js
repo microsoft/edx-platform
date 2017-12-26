@@ -12,7 +12,9 @@ define(
                 this.itemViews = this.collection.map(function(model) {
                     return new PreviousVideoUploadView({
                         videoHandlerUrl: options.videoHandlerUrl,
-                        model: model
+                        transcriptHandlerUrl: options.transcriptHandlerUrl,
+                        model: model,
+                        storageService: options.storageService
                     });
                 });
             },

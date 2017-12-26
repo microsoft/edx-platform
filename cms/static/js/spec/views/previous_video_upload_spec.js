@@ -1,21 +1,32 @@
 define(
-    ['jquery', 'underscore', 'backbone', 'js/views/previous_video_upload', 'common/js/spec_helpers/template_helpers',
-     'common/js/spec_helpers/view_helpers'],
+    [
+        'jquery',
+        'underscore',
+        'backbone',
+        'js/views/previous_video_upload',
+        'common/js/spec_helpers/template_helpers',
+        'common/js/spec_helpers/view_helpers'
+    ],
     function($, _, Backbone, PreviousVideoUploadView, TemplateHelpers, ViewHelpers) {
         'use strict';
         describe('PreviousVideoUploadView', function() {
-            var render = function(modelData) {
+            var previousVideoUploadView = function(modelData) {
                 var defaultData = {
                         client_video_id: 'foo.mp4',
                         duration: 42,
                         created: '2014-11-25T23:13:05',
                         edx_video_id: 'dummy_id',
-                        status: 'uploading'
+                        status: 'uploading',
+                        status_value: ''
                     },
-                    view = new PreviousVideoUploadView({
+                    viewItem = new PreviousVideoUploadView({
                         model: new Backbone.Model($.extend({}, defaultData, modelData)),
                         videoHandlerUrl: '/videos/course-v1:org.0+course_0+Run_0'
                     });
+                return viewItem;
+            };
+            var render = function(modelData) {
+                var view = previousVideoUploadView(modelData);
                 return view.render().$el;
             };
 
@@ -27,7 +38,69 @@ define(
             it('should render video name correctly', function() {
                 var testName = 'test name';
                 var $el = render({client_video_id: testName});
-                expect($el.find('.name-col').text()).toEqual(testName);
+                expect($el.find('.name-col>span').text()).toEqual(testName);
+            });
+
+            it('called renderTranscripts if video status is equal to file_complete and storageService is equal to azure',
+                function() {
+                    var view = previousVideoUploadView({status_value: 'file_complete'});
+                    view.storageService = 'azure';
+                    view.renderTranscripts = jasmine.createSpy();
+
+                    view.render();
+
+                    expect(view.renderTranscripts).toHaveBeenCalled();
+                }
+            );
+
+            it('should render transcripts video info', function() {
+                var view = previousVideoUploadView({});
+                view.transcriptsCollection = new Backbone.Collection([
+                    {
+                        name: 'transcript1.vtt',
+                        language: 'en'
+                    },
+                    {
+                        name: 'transcript2.vtt',
+                        language: 'fr'
+                    }
+                ]);
+
+                view.renderTranscripts();
+
+                expect(view.transcriptsView.$('.js-transcript-container div').length).toEqual(2);
+                expect(
+                    view.transcriptsView.$('.js-transcript-container div:first').text().trim()
+                ).toEqual('transcript1.vtt (en)');
+                expect(
+                    view.transcriptsView.$('.js-transcript-container div:last').text().trim()
+                ).toEqual('transcript2.vtt (fr)');
+            });
+
+            it('should render correct link for transcripts adding', function() {
+                var view = previousVideoUploadView({status_value: 'file_complete'});
+                view.storageService = 'azure';
+                view.render();
+
+                expect(view.$('.js-add-transcript').length).toEqual(1);
+            });
+
+            it('should render correct link for transcripts toggle', function() {
+                var view = previousVideoUploadView({status_value: 'file_complete'});
+                view.storageService = 'azure';
+                view.transcriptsCollection = new Backbone.Collection([
+                    {
+                        name: 'transcript1.vtt',
+                        language: 'en'
+                    },
+                    {
+                        name: 'transcript2.vtt',
+                        language: 'fr'
+                    }
+                ]);
+                view.render();
+
+                expect(view.$('.js-toggle-transcripts').length).toEqual(1);
             });
 
             _.each(
