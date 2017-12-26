@@ -94,6 +94,8 @@
             'catch': 'js/vendor/ova/catch/js/catch',
             'handlebars': 'js/vendor/ova/catch/js/handlebars-1.1.2',
             'lang_edx': 'js/src/lang_edx',
+            'azure-storage.common': 'js/vendor/azure-storage.common',
+            'azure-storage.blob': 'js/vendor/azure-storage.blob',
             // end of Annotation tool files
 
             // externally hosted files
@@ -306,6 +308,9 @@
                     'rangeslider', 'share-annotator', 'richText-annotator', 'reply-annotator',
                     'tags-annotator', 'flagging-annotator', 'grouping-annotator', 'diacritic-annotator',
                     'openseadragon', 'jquery-Watch', 'catch', 'handlebars', 'URI']
+            },
+            'azure-storage.blob': {
+                deps: ['jquery', 'azure-storage.common']
             }
             // end of annotation tool files
         }

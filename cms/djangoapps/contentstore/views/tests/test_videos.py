@@ -12,13 +12,18 @@ from StringIO import StringIO
 import pytz
 
 from django.conf import settings
+from django.http import HttpResponseNotFound, HttpResponseNotAllowed
 from django.test.utils import override_settings
-from mock import Mock, patch
+from mock import Mock, patch, PropertyMock
 
 from edxval.api import create_profile, create_video, get_video_info
 
 from contentstore.models import VideoUploadConfig
-from contentstore.views.videos import KEY_EXPIRATION_IN_SECONDS, StatusDisplayStrings, convert_video_status
+from contentstore.views.videos import (
+    KEY_EXPIRATION_IN_SECONDS, StatusDisplayStrings, convert_video_status, storage_service_bucket,
+    storage_service_key, get_storage_service, get_supported_video_formats, _get_and_validate_course,
+    _get_index_videos, video_transcripts_json, video_transcript_post, video_transcripts_handler,
+    video_encrypt)
 from contentstore.tests.utils import CourseTestCase
 from contentstore.utils import reverse_course_url
 from xmodule.modulestore.tests.factories import CourseFactory
@@ -29,7 +34,9 @@ class VideoUploadTestMixin(object):
     Test cases for the video upload feature
     """
     def get_url_for_course_key(self, course_key, kwargs=None):
-        """Return video handler URL for the given course"""
+        """
+        Return video handler URL for the given course.
+        """
         return reverse_course_url(self.VIEW_NAME, course_key, kwargs)
 
     def setUp(self):
@@ -170,7 +177,9 @@ class VideoUploadTestMixin(object):
 @patch.dict("django.conf.settings.FEATURES", {"ENABLE_VIDEO_UPLOAD_PIPELINE": True})
 @override_settings(VIDEO_UPLOAD_PIPELINE={"BUCKET": "test_bucket", "ROOT_PATH": "test_root"})
 class VideosHandlerTestCase(VideoUploadTestMixin, CourseTestCase):
-    """Test cases for the main video upload endpoint"""
+    """
+    Test cases for the main video upload endpoint.
+    """
 
     VIEW_NAME = "videos_handler"
 
@@ -184,7 +193,7 @@ class VideosHandlerTestCase(VideoUploadTestMixin, CourseTestCase):
             original_video = self.previous_uploads[-(i + 1)]
             self.assertEqual(
                 set(response_video.keys()),
-                set(["edx_video_id", "client_video_id", "created", "duration", "status"])
+                set(["edx_video_id", "client_video_id", "created", "duration", "status", "status_value"])
             )
             dateutil.parser.parse(response_video["created"])
             for field in ["edx_video_id", "client_video_id", "duration"]:
@@ -261,9 +270,9 @@ class VideosHandlerTestCase(VideoUploadTestMixin, CourseTestCase):
         )
     )
     @ddt.unpack
-    def test_video_supported_file_formats(self, files, expected_status, mock_conn, mock_key):
+    def test_video_supported_file_formats_aws(self, files, expected_status, mock_conn, mock_key):
         """
-        Test that video upload works correctly against supported and unsupported file formats.
+        Test that video upload works correctly against supported and unsupported file formats on AWS backend.
         """
         bucket = Mock()
         mock_conn.return_value = Mock(get_bucket=Mock(return_value=bucket))
@@ -292,6 +301,59 @@ class VideosHandlerTestCase(VideoUploadTestMixin, CourseTestCase):
         else:
             self.assertIn('error', response)
             self.assertEqual(response['error'], "Request 'files' entry contain unsupported content_type")
+
+    @patch("contentstore.views.videos.get_media_service_client")
+    @ddt.data(
+        (
+            [
+                {
+                    "file_name": "supported-1.mp4",
+                    "content_type": "video/mp4",
+                }
+            ],
+            200
+        ),
+        (
+            [
+                {
+                    "file_name": "unsupported-on-azure-0.mov",
+                    "content_type": "video/quicktime",
+                },
+                {
+                    "file_name": "unsupported-1.txt",
+                    "content_type": "text/plain",
+                },
+                {
+                    "file_name": "unsupported-2.png",
+                    "content_type": "image/png",
+                },
+            ],
+            400
+        )
+    )
+    @ddt.unpack
+    def test_video_supported_file_formats_azure(self, files, expected_status, get_azure_ms_mock):
+        """
+        Test that video upload works correctly against supported and unsupported file formats on Azure backend.
+        """
+
+        with patch("contentstore.views.videos.STORAGE_SERVICE", 'azure'):
+            get_azure_ms_mock.return_value = Mock(generate_url=Mock(return_value="test_url"))
+
+            # Check supported formats
+            response = self.client.post(
+                self.url,
+                json.dumps({"files": files}),
+                content_type="application/json"
+            )
+            self.assertEqual(response.status_code, expected_status)
+            response = json.loads(response.content)
+
+            if expected_status == 200:
+                self.assertNotIn('error', response)
+            else:
+                self.assertIn('error', response)
+                self.assertEqual(response['error'], "Request 'files' entry contain unsupported content_type")
 
     @override_settings(AWS_ACCESS_KEY_ID='test_key_id', AWS_SECRET_ACCESS_KEY='test_secret')
     @patch('boto.s3.connection.S3Connection')
@@ -590,3 +652,363 @@ class VideoUrlsCsvTestCase(VideoUploadTestMixin, CourseTestCase):
             response["Content-Disposition"],
             "attachment; filename=video_urls.csv; filename*=utf-8''n%C3%B3n-%C3%A4scii_video_urls.csv"
         )
+
+
+@patch.dict("django.conf.settings.FEATURES", {"ENABLE_VIDEO_UPLOAD_PIPELINE": True})
+@override_settings(VIDEO_UPLOAD_PIPELINE={"CLOUD": "azure"})
+class AzureVideoUploadsTestCase(CourseTestCase):
+    """
+    Test cases for Azure video upload backend.
+    """
+
+    def test_get_storage_service_with_azure(self):
+        self.assertEquals(get_storage_service(), 'azure')
+
+    def test_get_supported_video_formats_with_azure(self):
+        self.assertEquals(get_supported_video_formats(), {'.mp4': 'video/mp4'})
+
+    @patch('contentstore.views.videos.get_course_and_check_access')
+    @patch('contentstore.views.videos.CourseKey.from_string')
+    def test_get_and_validate_course(self, course_from_string_mock, get_course_and_check_access_mock):
+        # arrange
+        user_mock = Mock()
+        course_key_mock = Mock()
+        course_from_string_mock.return_value = course_key_mock
+        get_course_and_check_access_mock.return_value = self.course
+        # act
+        course = _get_and_validate_course('test_course_key_string', user_mock)
+        # assert
+        course_from_string_mock.assert_called_once_with('test_course_key_string')
+        get_course_and_check_access_mock.assert_called_once_with(course_key_mock, user_mock)
+        self.assertIs(course, self.course)
+
+    @patch('contentstore.views.videos._get_videos')
+    def test_get_index_videos(self, get_videos_mock):
+        # arrange
+        test_video = dict(zip(
+            ["edx_video_id", "client_video_id", "created", "duration", "status", "status_value"],
+            [1, 2, 3, 4, 5, 6]
+        ))
+        get_videos_mock.return_value = [test_video]
+        # act
+        video_info_list = _get_index_videos(self.course)
+        # assert
+        self.assertDictEqual(
+            {"edx_video_id": 1, "client_video_id": 2, "created": 3, "duration": 4, "status": 5, "status_value": 6},
+            video_info_list[0]
+        )
+
+    @patch('contentstore.views.videos.get_media_service_client')
+    def test_storage_service_bucket_with_azure(self, get_azure_ms_mock):
+        # arrange
+        bucket_mock = 'test_bucket'
+        get_azure_ms_mock.return_value(bucket_mock)
+        # act
+        with patch("contentstore.views.videos.STORAGE_SERVICE", 'azure'):
+            _ = storage_service_bucket(self.course)
+
+        # assert
+        get_azure_ms_mock.assert_called_once_with(self.course.org)
+
+    def test_storage_service_key_with_azure(self):
+        # arrange
+        asset_mock = Mock()
+        bucket_mock = Mock(create_asset=Mock(return_value=asset_mock))
+        # act
+        with patch("contentstore.views.videos.STORAGE_SERVICE", 'azure'):
+            bucket = storage_service_key(bucket_mock, 'test_file_name')
+
+        # assert
+        bucket_mock.create_asset.assert_called_once_with('test_file_name')
+        self.assertIs(bucket.asset, asset_mock)
+
+
+@patch.dict("django.conf.settings.FEATURES", {"ENABLE_VIDEO_UPLOAD_PIPELINE": True})
+@patch("contentstore.views.videos.STORAGE_SERVICE", 'azure')
+class VideoTranscriptsTestCase(CourseTestCase):
+    """
+    Test cases for the transcripts upload endpoint.
+    """
+
+    def setUp(self):
+        super(VideoTranscriptsTestCase, self).setUp()
+
+        self.transcript_mock = Mock()
+        type(self.transcript_mock).content = PropertyMock(return_value='test-file.name')
+        type(self.transcript_mock).language = PropertyMock(return_value='test_language')
+
+    def test_video_transcripts_json(self):
+        # arrange
+        video_mock = Mock()
+        video_mock.subtitles.all.return_value = [self.transcript_mock]
+        # act
+        json_response = video_transcripts_json(video_mock)
+        # assert
+        video_mock.subtitles.all.assert_called_once()
+        self.assertEqual(json_response.status_code, 200)
+        self.assertEqual(
+            json.loads(json_response.content)["transcripts"], [{"name": "test-file.name", "language": "test_language"}]
+        )
+
+    @patch("contentstore.views.videos.Subtitle")
+    @patch("contentstore.views.videos.get_media_service_client")
+    def test_video_transcripts_post(self, get_azure_ms_mock, subtitle_mock):
+        # arrange
+        media_service_mock = Mock()
+        get_azure_ms_mock.return_value = media_service_mock
+        subtitle_mock.objects.create.return_value = self.transcript_mock
+
+        transcript_file_mock = Mock()
+        type(transcript_file_mock).name = PropertyMock(return_value="test-file.name")
+
+        request_mock, course_mock, video_mock = Mock(), Mock(), Mock()
+        request_mock.FILES.get.return_value = transcript_file_mock
+        request_mock.POST.get.return_value = "test_language"
+        type(course_mock).org = PropertyMock(return_value="test_org")
+        type(video_mock).edx_video_id = PropertyMock(return_value="test_video_id")
+        # act
+        json_response = video_transcript_post(request_mock, course_mock, video_mock)
+        # assert
+        request_mock.FILES.get.assert_called_once_with('transcript_file')
+        get_azure_ms_mock.assert_called_once_with("test_org")
+        media_service_mock.upload_video_transcript.assert_called_once_with(
+            "test_video_id", transcript_file=transcript_file_mock
+        )
+        subtitle_mock.objects.create.assert_called_once_with(
+            video=video_mock, language="test_language", content="test-file.name"
+        )
+        self.assertEqual(json_response.status_code, 200)
+        self.assertEqual(json.loads(json_response.content)["status"], "ok")
+        self.assertEqual(
+            json.loads(json_response.content)["transcript"], {"name": "test-file.name", "language": "test_language"}
+        )
+
+    def test_video_transcripts_handler_require_http_methods_get_or_post(self):
+        # arrange
+        request_mock = Mock(method="NotGETandNotPOST")
+        type(request_mock).META = PropertyMock(return_value={"CONTENT_TYPE": []})
+        request_mock.user.is_authenticated.return_value = True
+        # act
+        response = video_transcripts_handler(request_mock, "test_course_key_string", "test_video_id")
+        # assert
+        self.assertIsInstance(response, HttpResponseNotAllowed)
+
+    @patch("contentstore.views.videos._get_and_validate_course")
+    def test_video_transcripts_handler_no_course(self, get_and_validate_course_mock):
+        # arrange
+        request_mock = Mock(method="GET")
+        type(request_mock).META = PropertyMock(return_value={"CONTENT_TYPE": []})
+        type(request_mock).user = PropertyMock(return_value=self.user)
+        course_key_string_mock = Mock()
+        get_and_validate_course_mock.return_value = None
+        # act
+        response = video_transcripts_handler(request_mock, course_key_string_mock, "test_edx_video_id")
+        # assert
+        get_and_validate_course_mock.assert_called_once_with(course_key_string_mock, self.user)
+        self.assertIsInstance(response, HttpResponseNotFound)
+
+    @patch("contentstore.views.videos.video_transcripts_json")
+    @patch("contentstore.views.videos.Video")
+    @patch("contentstore.views.videos._get_and_validate_course")
+    def test_video_transcripts_handler_get_positive(
+            self, get_and_validate_course_mock, video_model_mock, video_transcripts_json_mock
+    ):
+        # arrange
+        request_mock = Mock(method="GET")
+        type(request_mock).META = PropertyMock(return_value={"HTTP_ACCEPT": ['application/json']})
+        type(request_mock).user = PropertyMock(return_value=self.user)
+        course_key_string_mock = Mock()
+        get_and_validate_course_mock.return_value = Mock()
+        video_transcripts_json_mock.return_value = "some_json"
+
+        video_mock = Mock()
+        qs_mock = Mock()
+        qs_mock.get.return_value = video_mock
+        video_model_mock.objects.prefetch_related.return_value = qs_mock
+        # act
+        response = video_transcripts_handler(request_mock, course_key_string_mock, "test_edx_video_id")
+        # assert
+        get_and_validate_course_mock.assert_called_once_with(course_key_string_mock, self.user)
+        qs_mock.get.assert_called_once_with(edx_video_id="test_edx_video_id")
+        video_transcripts_json_mock.assert_called_once_with(video_mock)
+        self.assertEquals(response, "some_json")
+
+    @patch("contentstore.views.videos.video_transcript_post")
+    @patch("contentstore.views.videos.Video")
+    @patch("contentstore.views.videos._get_and_validate_course")
+    def test_video_transcripts_handler_post_positive(
+            self, get_and_validate_course_mock, video_model_mock, video_transcript_post_mock
+    ):
+        # arrange
+        request_mock = Mock(method="POST")
+        type(request_mock).META = PropertyMock(return_value={"HTTP_ACCEPT": ['application/json']})
+        type(request_mock).user = PropertyMock(return_value=self.user)
+        course_key_string_mock = Mock()
+        get_and_validate_course_mock.return_value = course_mock = Mock()
+        video_transcript_post_mock.return_value = "some_json"
+
+        video_mock = Mock()
+        qs_mock = Mock()
+        qs_mock.get.return_value = video_mock
+        video_model_mock.objects.prefetch_related.return_value = qs_mock
+        # act
+        response = video_transcripts_handler(request_mock, course_key_string_mock, "test_edx_video_id")
+        # assert
+        get_and_validate_course_mock.assert_called_once_with(course_key_string_mock, self.user)
+        qs_mock.get.assert_called_once_with(edx_video_id="test_edx_video_id")
+        video_transcript_post_mock.assert_called_once_with(request_mock, course_mock, video_mock)
+        self.assertEquals(response, "some_json")
+
+
+@patch.dict("django.conf.settings.FEATURES", {"ENABLE_VIDEO_UPLOAD_PIPELINE": True})
+@patch("contentstore.views.videos.STORAGE_SERVICE", 'azure')
+class VideoEncryptTestCase(CourseTestCase):
+    """
+    Test cases for the encrypt/decrypt a video file in azure.
+    """
+    @patch("contentstore.views.videos._get_and_validate_course",
+           return_value=Mock(org='org_name'))
+    @patch("contentstore.views.videos.Video.objects.get",
+           return_value=Mock(status='file_complete', edx_video_id='edx_video_id'))
+    @patch("contentstore.views.videos.encrypt_file",
+           return_value='file_encrypted')
+    @patch("contentstore.views.videos.update_video_status")
+    def test_video_encrypt_positive_when_encrypt_equal_true(self,
+                                                            update_video_status,
+                                                            encrypt_file,
+                                                            video_get,
+                                                            get_and_validate_course):
+        # arrange
+        request_mock = Mock(method="POST")
+        type(request_mock).META = PropertyMock(return_value={"HTTP_ACCEPT": ['application/json']})
+        type(request_mock).user = PropertyMock(return_value=self.user)
+        type(request_mock).json = PropertyMock(return_value={'encrypt': True})
+        # act
+        response = video_encrypt(request_mock, "course_key", "edx_video_id")
+        # assert
+        get_and_validate_course.assert_called_once_with(
+            'course_key',
+            request_mock.user
+        )
+        video_get.assert_called_once_with(
+            edx_video_id='edx_video_id',
+            courses__course_id='course_key',
+            courses__is_hidden=False
+        )
+        encrypt_file.assert_called_once_with(
+            'edx_video_id',
+            'org_name'
+        )
+        update_video_status.assert_called_once_with(
+            'edx_video_id',
+            'file_encrypted'
+        )
+        self.assertEquals(response.status_code, 200)
+        self.assertEquals(json.loads(response.content), {'status': 'ok', 'status_value': 'file_encrypted'})
+
+    @patch("contentstore.views.videos._get_and_validate_course",
+           return_value=Mock(org='org_name'))
+    @patch("contentstore.views.videos.Video.objects.get",
+           return_value=Mock(status='file_encrypted', edx_video_id='edx_video_id'))
+    @patch("contentstore.views.videos.remove_encryption",
+           return_value='file_complete')
+    @patch("contentstore.views.videos.update_video_status")
+    def test_video_encrypt_positive_when_encrypt_equal_false(self,
+                                                             update_video_status,
+                                                             remove_encryption,
+                                                             video_get,
+                                                             get_and_validate_course):
+        # arrange
+        request_mock = Mock(method="POST")
+        type(request_mock).META = PropertyMock(return_value={"HTTP_ACCEPT": ['application/json']})
+        type(request_mock).user = PropertyMock(return_value=self.user)
+        type(request_mock).json = PropertyMock(return_value={'encrypt': False})
+        # act
+        response = video_encrypt(request_mock, "course_key", "edx_video_id")
+        # assert
+        get_and_validate_course.assert_called_once_with(
+            'course_key',
+            request_mock.user
+        )
+        video_get.assert_called_once_with(
+            edx_video_id='edx_video_id',
+            courses__course_id='course_key',
+            courses__is_hidden=False
+        )
+        remove_encryption.assert_called_once_with(
+            'edx_video_id',
+            'org_name'
+        )
+        update_video_status.assert_called_once_with(
+            'edx_video_id',
+            'file_complete'
+        )
+        self.assertEquals(response.status_code, 200)
+        self.assertEquals(json.loads(response.content), {'status': 'ok', 'status_value': 'file_complete'})
+
+    def test_video_encrypt_when_storage_service_no_equal_azure(self):
+        # arrange
+        request_mock = Mock(method="POST")
+        type(request_mock).META = PropertyMock(return_value={"HTTP_ACCEPT": ['application/json']})
+        type(request_mock).user = PropertyMock(return_value=self.user)
+
+        # act
+        with patch("contentstore.views.videos.STORAGE_SERVICE", 'some_storage'):
+            response = video_encrypt(request_mock, "course_key", "edx_video_id")
+
+        # assert
+        self.assertEquals(response.status_code, 400)
+
+    @patch("contentstore.views.videos._get_and_validate_course")
+    @patch("contentstore.views.videos.Video.objects.get")
+    def test_video_encrypt_when_encrypt_does_not_exist(self, video_get, get_and_validate_course):
+        # arrange
+        request_mock = Mock(method="POST")
+        type(request_mock).META = PropertyMock(return_value={"HTTP_ACCEPT": ['application/json']})
+        type(request_mock).user = PropertyMock(return_value=self.user)
+
+        # act
+        response = video_encrypt(request_mock, "course_key", "edx_video_id")
+
+        # assert
+        self.assertEquals(response.status_code, 400)
+
+    @patch("contentstore.views.videos._get_and_validate_course",
+           return_value=Mock(org='org_name'))
+    @patch("contentstore.views.videos.Video.objects.get",
+           return_value=Mock(status='file_complete', edx_video_id='edx_video_id'))
+    @patch("contentstore.views.videos.encrypt_file",
+           return_value='encryption_error')
+    @patch("contentstore.views.videos.update_video_status")
+    def test_video_encrypt_when_encryption_error(self,
+                                                 update_video_status,
+                                                 encrypt_file,
+                                                 video_get,
+                                                 get_and_validate_course):
+        # arrange
+        request_mock = Mock(method="POST")
+        type(request_mock).META = PropertyMock(return_value={"HTTP_ACCEPT": ['application/json']})
+        type(request_mock).user = PropertyMock(return_value=self.user)
+        type(request_mock).json = PropertyMock(return_value={'encrypt': True})
+        # act
+        response = video_encrypt(request_mock, "course_key", "edx_video_id")
+        # assert
+        get_and_validate_course.assert_called_once_with(
+            'course_key',
+            request_mock.user
+        )
+        video_get.assert_called_once_with(
+            edx_video_id='edx_video_id',
+            courses__course_id='course_key',
+            courses__is_hidden=False
+        )
+        encrypt_file.assert_called_once_with(
+            'edx_video_id',
+            'org_name'
+        )
+        update_video_status.assert_called_once_with(
+            'edx_video_id',
+            'encryption_error'
+        )
+        self.assertEquals(response.status_code, 400)
+        self.assertEquals(json.loads(response.content), {'error': 'Something went wrong. Encryption process failed.'})

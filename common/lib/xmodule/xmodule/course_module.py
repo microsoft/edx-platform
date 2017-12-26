@@ -6,6 +6,7 @@ import logging
 from cStringIO import StringIO
 from datetime import datetime
 
+from django.conf import settings
 import requests
 from lazy import lazy
 from lxml import etree
@@ -1301,6 +1302,11 @@ class CourseDescriptor(CourseFields, SequenceDescriptor, LicenseMixin):
         """
         Returns whether the video pipeline advanced setting is configured for this course.
         """
+        # Azure video upload backend doesn't use 'course_video_upload_token' setting, but still needs
+        # it to be resolved as configured:
+        if settings.VIDEO_UPLOAD_PIPELINE.get("CLOUD", "") == 'azure':
+            return True
+
         return (
             self.video_upload_pipeline is not None and
             'course_video_upload_token' in self.video_upload_pipeline

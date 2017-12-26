@@ -14,6 +14,9 @@
                 <th><%- gettext("Video ID") %></th>
                 <th><%- gettext("Status") %></th>
                 <th><%- gettext("Action") %></th>
+                <% if (storageService == 'azure') { %>
+                <th><%- gettext("Encrypt") %></th>
+                <% } %>
             </tr>
         </thead>
         <tbody class="js-table-body"></tbody>

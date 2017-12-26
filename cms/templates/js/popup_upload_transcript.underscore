@@ -1,0 +1,17 @@
+<div class="modal-transcript" role="dialog" aria-modal="true" aria-labelledby="dialog-label">
+    <div class="modal-body">
+        <h2 id="dialog-label"><%- gettext('Upload New Transcript') %></h2>
+        <label><%- gettext('Transcript Languages') %></label>
+        <select class="js-select-language" data-tooltip="<%- gettext('Pick transcript language') %>">
+            <option></option>
+            <% _.each(languages, function(language) { %>
+            <option value="<%- language[0] %>"><%- language[1] %></option>
+            <% }) %>
+        </select>
+    </div>
+    <div class="modal-actions">
+        <button class="close-button js-close-popup" role="button"><%- gettext('Close') %></button>
+        <button class="next-button js-upload-transcript" disabled role="button" aria-disabled=true><%- gettext('Next')
+        %></button>
+    </div>
+</div>

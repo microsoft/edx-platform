@@ -4,8 +4,9 @@ import unittest
 from datetime import datetime, timedelta
 
 import itertools
+
 from fs.memoryfs import MemoryFS
-from mock import Mock, patch
+from mock import Mock, patch, PropertyMock
 from pytz import utc
 from xblock.runtime import KvsFieldData, DictKeyValueStore
 
@@ -388,3 +389,24 @@ class CourseDescriptorTestCase(unittest.TestCase):
         Test CourseDescriptor.number.
         """
         self.assertEqual(self.course.number, COURSE)
+
+
+class VideoUploadCourseDescriptorTestCase(unittest.TestCase):
+    """
+    Tests for a video upload features from CourseDescriptor.
+    """
+
+    def setUp(self):
+        """
+        Initialize dummy testing course.
+        """
+        super(VideoUploadCourseDescriptorTestCase, self).setUp()
+        self.course = get_dummy_course(start=_TODAY)
+
+    @patch('xmodule.course_module.settings')
+    def test_video_pipeline_configured_if_azure_backend(self, settings_mock):
+        """
+        Test CourseDescriptor.video_pipeline_configured if video upload backend is Azure.
+        """
+        type(settings_mock).VIDEO_UPLOAD_PIPELINE = PropertyMock(return_value={'CLOUD': 'azure'})
+        self.assertTrue(self.course.video_pipeline_configured)

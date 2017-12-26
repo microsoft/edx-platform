@@ -10,11 +10,13 @@ from uuid import uuid4
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse, HttpResponseNotFound
+from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
+from django.http import HttpResponse, HttpResponseNotFound, HttpResponseBadRequest
 from django.utils.translation import ugettext as _, ugettext_noop
-from django.views.decorators.http import require_GET, require_http_methods
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
 import rfc6266
 
+from azure_video_pipeline.utils import get_media_service_client, encrypt_file, remove_encryption
 from edxval.api import (
     create_video,
     get_videos_for_course,
@@ -23,7 +25,10 @@ from edxval.api import (
     remove_video_for_course,
     update_video_status
 )
+from edxval.models import Video, Subtitle
 from opaque_keys.edx.keys import CourseKey
+from openedx.core.djangoapps.lang_pref.api import all_languages
+from requests import HTTPError
 
 from contentstore.models import VideoUploadConfig
 from contentstore.utils import reverse_course_url
@@ -33,19 +38,31 @@ from util.json_request import expect_json, JsonResponse
 from .course import get_course_and_check_access
 
 
-__all__ = ["videos_handler", "video_encodings_download"]
+__all__ = ["videos_handler", "video_encodings_download", "video_transcripts_handler", "video_encrypt"]
 
 LOGGER = logging.getLogger(__name__)
-
 
 # Default expiration, in seconds, of one-time URLs used for uploading videos.
 KEY_EXPIRATION_IN_SECONDS = 86400
 
-VIDEO_SUPPORTED_FILE_FORMATS = {
-    '.mp4': 'video/mp4',
-    '.mov': 'video/quicktime',
-}
 
+def get_storage_service():
+    return settings.VIDEO_UPLOAD_PIPELINE.get("CLOUD", "aws")
+
+
+def get_supported_video_formats():
+    azure_formats = {
+        '.mp4': 'video/mp4',
+    }
+    aws_formats = {
+        '.mp4': 'video/mp4',
+        '.mov': 'video/quicktime',
+    }
+    return azure_formats if get_storage_service() == 'azure' else aws_formats
+
+
+STORAGE_SERVICE = get_storage_service()
+VIDEO_SUPPORTED_FILE_FORMATS = get_supported_video_formats()
 VIDEO_UPLOAD_MAX_FILE_SIZE_GB = 5
 
 # maximum time for video to remain in upload state
@@ -68,8 +85,12 @@ class StatusDisplayStrings(object):
     _UPLOAD_COMPLETED = ugettext_noop("Uploaded")
     # Translators: This is the status for a video that the servers have failed to process
     _FAILED = ugettext_noop("Failed")
+    # Translators: This is the status for a video that the servers video processing have failed
+    _PROCESSING_FAILED = ugettext_noop("Processing Failed")
     # Translators: This is the status for a video that is cancelled during upload by user
     _CANCELLED = ugettext_noop("Cancelled")
+    # Translators: This is the status for a video that is cancelled during processing
+    _PROCESSING_CANCELLED = ugettext_noop("Processing Cancelled")
     # Translators: This is the status for a video which has failed
     # due to being flagged as a duplicate by an external or internal CMS
     _DUPLICATE = ugettext_noop("Failed Duplicate")
@@ -88,9 +109,11 @@ class StatusDisplayStrings(object):
         "ingest": _IN_PROGRESS,
         "transcode_queue": _IN_PROGRESS,
         "transcode_active": _IN_PROGRESS,
+        "transcode_failed": _PROCESSING_FAILED,
         "file_delivered": _COMPLETE,
         "file_complete": _COMPLETE,
         "upload_completed": _UPLOAD_COMPLETED,
+        "transcode_cancelled": _PROCESSING_CANCELLED,
         "file_corrupt": _FAILED,
         "pipeline_error": _FAILED,
         "upload_failed": _FAILED,
@@ -100,6 +123,9 @@ class StatusDisplayStrings(object):
         "youtube_duplicate": _YOUTUBE_DUPLICATE,
         "invalid_token": _INVALID_TOKEN,
         "imported": _IMPORTED,
+        "file_encrypted": _COMPLETE,
+        "encryption_error": _FAILED,
+        "decryption_error": _FAILED
     }
 
     @staticmethod
@@ -245,10 +271,13 @@ def _get_and_validate_course(course_key_string, user):
     course = get_course_and_check_access(course_key, user)
 
     if (
-            settings.FEATURES["ENABLE_VIDEO_UPLOAD_PIPELINE"] and
-            getattr(settings, "VIDEO_UPLOAD_PIPELINE", None) and
-            course and
-            course.video_pipeline_configured
+            (settings.FEATURES["ENABLE_VIDEO_UPLOAD_PIPELINE"] and
+             course and
+             getattr(settings, "VIDEO_UPLOAD_PIPELINE", None) and
+             course.video_pipeline_configured) or
+            (settings.FEATURES["ENABLE_VIDEO_UPLOAD_PIPELINE"] and
+             STORAGE_SERVICE == "azure" and
+             course)
     ):
         return course
     else:
@@ -293,6 +322,7 @@ def _get_videos(course):
 
     # convert VAL's status to studio's Video Upload feature status.
     for video in videos:
+        video["status_value"] = video["status"]
         video["status"] = convert_video_status(video)
 
     return videos
@@ -305,7 +335,9 @@ def _get_index_videos(course):
     return list(
         {
             attr: video[attr]
-            for attr in ["edx_video_id", "client_video_id", "created", "duration", "status"]
+            for attr in [
+                "edx_video_id", "client_video_id", "created", "duration", "status", "status_value"
+            ]
         }
         for video in _get_videos(course)
     )
@@ -324,7 +356,10 @@ def videos_index_html(course):
             "previous_uploads": _get_index_videos(course),
             "concurrent_upload_limit": settings.VIDEO_UPLOAD_PIPELINE.get("CONCURRENT_UPLOAD_LIMIT", 0),
             "video_supported_file_formats": VIDEO_SUPPORTED_FILE_FORMATS.keys(),
-            "video_upload_max_file_size": VIDEO_UPLOAD_MAX_FILE_SIZE_GB
+            "video_upload_max_file_size": VIDEO_UPLOAD_MAX_FILE_SIZE_GB,
+            "storage_service": STORAGE_SERVICE,
+            "transcript_handler_url": reverse_course_url("video_transcripts_handler", unicode(course.id)),
+            "languages": all_languages()
         }
     )
 
@@ -382,8 +417,8 @@ def videos_post(course, request):
     if error:
         return JsonResponse({"error": error}, status=400)
 
-    bucket = storage_service_bucket()
-    course_video_upload_token = course.video_upload_pipeline["course_video_upload_token"]
+    bucket = storage_service_bucket(course)
+    course_video_upload_token = course.video_upload_pipeline.get("course_video_upload_token")
     req_files = request.json["files"]
     resp_files = []
 
@@ -425,26 +460,34 @@ def videos_post(course, request):
     return JsonResponse({"files": resp_files}, status=200)
 
 
-def storage_service_bucket():
+def storage_service_bucket(course=None):
     """
     Returns an S3 bucket for video uploads.
     """
-    conn = s3.connection.S3Connection(
-        settings.AWS_ACCESS_KEY_ID,
-        settings.AWS_SECRET_ACCESS_KEY
-    )
-    return conn.get_bucket(settings.VIDEO_UPLOAD_PIPELINE["BUCKET"])
+    if STORAGE_SERVICE == 'azure':
+        return get_media_service_client(course.org)
+    else:
+        conn = s3.connection.S3Connection(
+            settings.AWS_ACCESS_KEY_ID,
+            settings.AWS_SECRET_ACCESS_KEY
+        )
+        return conn.get_bucket(settings.VIDEO_UPLOAD_PIPELINE["BUCKET"])
 
 
 def storage_service_key(bucket, file_name):
     """
     Returns an S3 key to the given file in the given bucket.
     """
-    key_name = "{}/{}".format(
-        settings.VIDEO_UPLOAD_PIPELINE.get("ROOT_PATH", ""),
-        file_name
-    )
-    return s3.key.Key(bucket, key_name)
+    if STORAGE_SERVICE == 'azure':
+        asset = bucket.create_asset(file_name)
+        bucket.asset = asset
+        return bucket
+    else:
+        key_name = "{}/{}".format(
+            settings.VIDEO_UPLOAD_PIPELINE.get("ROOT_PATH", ""),
+            file_name
+        )
+        return s3.key.Key(bucket, key_name)
 
 
 def send_video_status_update(updates):
@@ -463,3 +506,128 @@ def is_status_update_request(request_data):
     Returns True if `request_data` contains status update else False.
     """
     return any('status' in update for update in request_data)
+
+
+@expect_json
+@login_required
+@require_http_methods(("GET", "POST",))
+def video_transcripts_handler(request, course_key_string, edx_video_id=None):
+    if STORAGE_SERVICE != 'azure':
+        return HttpResponseBadRequest()
+
+    course = _get_and_validate_course(course_key_string, request.user)
+
+    if not course:
+        return HttpResponseNotFound()
+
+    try:
+        video = Video.objects.prefetch_related("subtitles").get(edx_video_id=edx_video_id)
+    except Video.DoesNotExist:
+        return HttpResponseBadRequest()
+
+    if request.method == "GET" and "application/json" in request.META.get("HTTP_ACCEPT", ""):
+        return video_transcripts_json(video)
+
+    if request.method == "POST":
+        return video_transcript_post(request, course, video)
+
+    return HttpResponseBadRequest()
+
+
+def video_transcripts_json(video):
+    transcripts = [
+        {'name': transcript.content, 'language': transcript.language} for transcript in video.subtitles.all()
+    ]
+    return JsonResponse(
+        {"transcripts": transcripts},
+        status=200
+    )
+
+
+def video_transcript_post(request, course, video):
+    transcript_file = request.FILES.get('transcript_file')
+
+    try:
+        transcript_file.name.encode('ascii')
+    except UnicodeEncodeError:
+        error_msg = 'The file name for %s must contain only ASCII characters.' % transcript_file.name
+        return JsonResponse({'error': error_msg}, status=400)
+
+    media_service = get_media_service_client(course.org)
+
+    try:
+        media_service.upload_video_transcript(
+            video.edx_video_id,
+            transcript_file=transcript_file
+        )
+    except (MultipleObjectsReturned, ObjectDoesNotExist) as e:
+        return JsonResponse({"error": e.message}, status=400)
+    except HTTPError:
+        return JsonResponse(status=400)
+
+    transcript = Subtitle.objects.create(
+        video=video,
+        language=request.POST.get('language'),
+        content=transcript_file.name
+
+    )
+    return JsonResponse(
+        {'status': 'ok', 'transcript': {'name': transcript.content, 'language': transcript.language}},
+        status=200
+    )
+
+
+@expect_json
+@login_required
+@require_POST
+def video_encrypt(request, course_key_string, edx_video_id):
+
+    if STORAGE_SERVICE != 'azure':
+        return JsonResponse(status=400)
+
+    course = _get_and_validate_course(course_key_string, request.user)
+
+    if not course:
+        return HttpResponseNotFound()
+
+    try:
+        video = Video.objects.get(
+            edx_video_id=edx_video_id,
+            courses__course_id=course_key_string,
+            courses__is_hidden=False
+        )
+    except Video.DoesNotExist:
+        return HttpResponseNotFound()
+
+    encrypt = request.json.get('encrypt')
+
+    if encrypt is None:
+        return JsonResponse(
+            {"error": _("Request object is not JSON or does not contain 'encrypt")},
+            status=400
+        )
+
+    if encrypt and video.status == 'file_complete':
+        status = encrypt_file(video.edx_video_id, course.org)
+    elif not encrypt and video.status == 'file_encrypted':
+        status = remove_encryption(video.edx_video_id, course.org)
+    else:
+        return HttpResponseBadRequest()
+
+    update_video_status(video.edx_video_id, status)
+
+    if status in ['file_complete', 'file_encrypted']:
+        return JsonResponse(
+            {'status': 'ok', 'status_value': status},
+            status=200
+        )
+    else:
+        error_messages = {
+            'file_corrupt': _('Target Video is no longer available on Azure'),
+            'encryption_error': _('Something went wrong. Encryption process failed.'),
+            'decryption_error': _('Something went wrong. Decryption process failed.'),
+        }
+        return JsonResponse(
+            {"error": error_messages.get(status, '')},
+            status=400
+        )

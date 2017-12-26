@@ -11,7 +11,8 @@ define(
                         duration: 42,
                         created: '2014-11-25T23:13:05',
                         edx_video_id: 'dummy_id',
-                        status: 'uploading'
+                        status: 'uploading',
+                        status_value: ''
                     };
                     var collection = new Backbone.Collection(
                         _.map(
