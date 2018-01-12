@@ -1,12 +1,9 @@
+import base64
+import json
+import logging
+import urlparse
 from binascii import a2b_base64
 
-import base64
-
-import urlparse
-
-import json
-
-import logging
 from Crypto import Random
 from Crypto.Cipher import PKCS1_OAEP
 from Crypto.PublicKey import RSA
@@ -14,15 +11,15 @@ from Crypto.Util.asn1 import DerSequence
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.utils.translation import ugettext as _
+from edxval.models import Video
 from requests import HTTPError
 
+from openedx.core.djangoapps.lang_pref.api import all_languages
 from .media_service import (
     AssetDeliveryProtocol, AssetDeliveryPolicyConfigurationKey, AccessPolicyPermissions, AssetDeliveryPolicyType,
     ContentKeyType, KeyDeliveryType, MediaServiceClient, LocatorTypes
 )
-
 from .models import AzureOrgProfile
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -210,3 +207,95 @@ def encrypt_content_key_with_public_key(protection_key):
     content_key = Random.new().read(16)
     encrypted_content_key = cipherrsa.encrypt(content_key)
     return content_key, base64.b64encode(encrypted_content_key)
+
+
+def _drop_http_or_https(url):
+    """
+    In order to avoid mixing HTTP/HTTPS which can cause some warnings to appear in some browsers.
+    """
+    return url.replace("https:", "").replace("http:", "")
+
+
+def get_captions_info(video, path_locator_sas):
+    data = []
+    if path_locator_sas:
+        for subtitle in video.subtitles.all():
+            data.append({
+                'download_url': '/{}?'.format(subtitle.content).join(path_locator_sas.split('?')),
+                'file_name': subtitle.content,
+                'language': subtitle.language,
+                'language_title': dict(all_languages()).get(subtitle.language)
+            })
+    return data
+
+
+def get_video_info(video, path_locator_on_demand, path_locator_sas, asset_files):
+    download_video_url = ''
+
+    if path_locator_sas and video.status == 'file_complete':
+        file_size = 0
+        for asset_file in asset_files:
+            try:
+                content_file_size = int(asset_file.get('ContentFileSize', 0))
+            except ValueError:
+                content_file_size = 0
+
+            if asset_file.get('Name', '').endswith('.mp4') and content_file_size > file_size:
+                name_file = asset_file['Name']
+                file_size = content_file_size
+                download_video_url = u'/{}?'.format(name_file).join(path_locator_sas.split('?'))
+
+    return {
+        'smooth_streaming_url': u'{}{}/manifest'.format(
+            path_locator_on_demand, video.client_video_id.replace('mp4', 'ism')
+        ) if path_locator_on_demand else '',
+        'download_video_url': download_video_url,
+    }
+
+
+def get_captions_and_video_info(edx_video_id, organization):
+    """
+    Gather Azure locators for video and captions by given edx_video_id and Organization.
+
+    :param edx_video_id:
+    :param organization:
+    :return: (dict)
+    """
+    error_message = _("Target Video is no longer available on Azure or is corrupted in some way.")
+    captions = []
+    video_info = {}
+    asset_files = None
+
+    try:
+        video = Video.objects.get(edx_video_id=edx_video_id)
+    except Video.DoesNotExist:
+        asset = None
+        LOGGER.exception('There is no Video with such video ID!')
+    else:
+        media_service = get_media_service_client(organization)
+        asset = media_service.get_input_asset_by_video_id(edx_video_id, 'ENCODED')
+
+    if asset:
+        locator_on_demand = media_service.get_asset_locators(asset['Id'], LocatorTypes.OnDemandOrigin)
+        locator_sas = media_service.get_asset_locators(asset['Id'], LocatorTypes.SAS)
+
+        if locator_on_demand:
+            error_message = ''
+            path_locator_on_demand = _drop_http_or_https(locator_on_demand.get('Path'))
+            path_locator_sas = None
+
+            if locator_sas:
+                path_locator_sas = _drop_http_or_https(locator_sas.get('Path'))
+                captions = get_captions_info(video, path_locator_sas)
+                asset_files = media_service.get_asset_files(asset['Id'])
+            else:
+                error_message = _("To be able to use captions/transcripts auto-fetching, "
+                                  "AMS Asset should be published properly "
+                                  "(in addition to 'streaming' locator a 'progressive' "
+                                  "locator must be created as well).")
+
+            video_info = get_video_info(video, path_locator_on_demand, path_locator_sas, asset_files)
+
+    return {'error_message': error_message,
+            'video_info': video_info,
+            'captions': captions}

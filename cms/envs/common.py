@@ -586,6 +586,8 @@ PIPELINE_CSS = {
             'css/vendor/jquery.qtip.min.css',
             'js/vendor/markitup/skins/simple/style.css',
             'js/vendor/markitup/sets/wiki/style.css',
+            'css/vendor/azure-media-player/azuremediaplayer.min.css',
+            'css/vendor/azure-media-player/player.css',
         ],
         'output_filename': 'css/cms-style-vendor.css',
     },

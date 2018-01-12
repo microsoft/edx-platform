@@ -1,0 +1,9 @@
+<div class="azuremediaplayer">
+  <video id="intro-player" class="amp-default-skin amp-big-play-centered video-wrapper"
+         data-setup='{ "controls": true, "autoplay": false, "logo": {"enabled": false}, "height": 312 }'>
+    <source src="${source_url}" type="application/vnd.ms-sstr+xml"/>
+    % for caption in captions:
+    <track kind="subtitles" src="${caption[u'url']}" srclang="${caption[u'lang']}" label="${caption[u'label']}" />
+    % endfor
+  </video>
+</div>

@@ -12,8 +12,8 @@ from azure_video_pipeline.utils import (
     remove_encryption, encrypt_file, remove_access_policies_and_locators,
     create_content_key_and_associate_with_encoded_asset, create_authorization_policy_and_associate_with_content_key,
     create_delivery_policy_and_associate_with_encoded_asset, create_access_policies_and_locators,
-    remove_delivery_policy_link_from_asset_and_delivery_policy
-)
+    remove_delivery_policy_link_from_asset_and_delivery_policy,
+    get_video_info, get_captions_info, _drop_http_or_https)
 import mock
 
 
@@ -406,3 +406,110 @@ class UtilsTests(unittest.TestCase):
         media_service.delete_delivery_policy.assert_called_once_with(
             'delivery_policy_id'
         )
+
+    def test_get_video_info(self):
+        # arrange
+        video = mock.Mock(client_video_id='video_name.mp4', status='file_complete')
+        path_locator_on_demand = '//ma.streaming.mediaservices.windows.net/locator_id/'
+        path_locator_sas = '//sa.blob.core.windows.net/asset-locator_id?sv=2012-02-12&sr=c'
+        asset_files = [
+            {
+                "Name": "fileNameIsm.ism",
+                "MimeType": "application/octet-stream",
+                "ContentFileSize": 10
+            },
+            {
+                "Name": "fileName_1.mp4",
+                "MimeType": "video/mp4",
+                "ContentFileSize": 10
+            },
+            {
+                "Name": "fileName_2.mp4",
+                "MimeType": "video/mp4",
+                "ContentFileSize": 20
+            }
+        ]
+        # act
+        video_info = get_video_info(video, path_locator_on_demand, path_locator_sas, asset_files)
+
+        # assert
+        expected_video_info = {
+            'smooth_streaming_url': '//ma.streaming.mediaservices.windows.net/locator_id/video_name.ism/manifest',
+            'download_video_url': '//sa.blob.core.windows.net/asset-locator_id/fileName_2.mp4?sv=2012-02-12&sr=c'
+        }
+
+        self.assertEqual(video_info, expected_video_info)
+
+    def test_get_video_info_if_path_locator_on_demand_is_not_defined(self):
+        # arrange
+        video = mock.Mock(client_video_id='video_name.mp4', status='file_complete')
+        path_locator_on_demand = ''
+        path_locator_sas = '//sa.blob.core.windows.net/asset-locator_id?sv=2012-02-12&sr=c'
+        asset_files = [
+            {
+                "Name": "fileNameIsm.ism",
+                "MimeType": "application/octet-stream",
+                "ContentFileSize": 10
+            },
+            {
+                "Name": "fileName_1.mp4",
+                "MimeType": "video/mp4",
+                "ContentFileSize": 10
+            },
+            {
+                "Name": "fileName_2.mp4",
+                "MimeType": "video/mp4",
+                "ContentFileSize": 20
+            }
+        ]
+        # act
+        video_info = get_video_info(video, path_locator_on_demand, path_locator_sas, asset_files)
+
+        # assert
+        expected_video_info = {
+            'smooth_streaming_url': '',
+            'download_video_url': '//sa.blob.core.windows.net/asset-locator_id/fileName_2.mp4?sv=2012-02-12&sr=c'
+        }
+        self.assertEqual(video_info, expected_video_info)
+
+    def test_get_video_info_if_path_locator_sas_is_not_defined(self):
+        # arrange
+        video = mock.Mock(client_video_id='video_name.mp4')
+        path_locator_on_demand = '//ma.streaming.mediaservices.windows.net/locator_id/'
+        path_locator_sas = ''
+        asset_files = [
+            {
+                "Name": "fileNameIsm.ism",
+                "MimeType": "application/octet-stream",
+                "ContentFileSize": 10
+            },
+            {
+                "Name": "fileName_1.mp4",
+                "MimeType": "video/mp4",
+                "ContentFileSize": 10
+            },
+            {
+                "Name": "fileName_2.mp4",
+                "MimeType": "video/mp4",
+                "ContentFileSize": 20
+            }
+        ]
+        # act
+        video_info = get_video_info(video, path_locator_on_demand, path_locator_sas, asset_files)
+        captions_info = get_captions_info(video, path_locator_sas)
+
+        # assert
+        expected_video_info = {
+            'smooth_streaming_url': '//ma.streaming.mediaservices.windows.net/locator_id/video_name.ism/manifest',
+            'download_video_url': ''
+        }
+        self.assertEqual(video_info, expected_video_info)
+        self.assertEqual(captions_info, [])
+
+    def test_drop_http_or_https(self):
+        # act
+        http_url = _drop_http_or_https('http://ma.streaming.mediaservices.windows.net/locator_id/')
+        https_url = _drop_http_or_https('https://ma.streaming.mediaservices.windows.net/locator_id/')
+        # assert
+        self.assertEqual(http_url, '//ma.streaming.mediaservices.windows.net/locator_id/')
+        self.assertEqual(https_url, '//ma.streaming.mediaservices.windows.net/locator_id/')

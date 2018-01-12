@@ -1,9 +1,10 @@
 define(['js/views/validation', 'codemirror', 'underscore', 'jquery', 'jquery.ui', 'js/utils/date_utils',
     'js/models/uploads', 'js/views/uploads', 'js/views/license', 'js/models/license',
-    'common/js/components/views/feedback_notification', 'jquery.timepicker', 'date', 'gettext',
-    'js/views/learning_info', 'js/views/instructor_info', 'edx-ui-toolkit/js/utils/string-utils'],
-       function(ValidatingView, CodeMirror, _, $, ui, DateUtils, FileUploadModel,
-                FileUploadDialog, LicenseView, LicenseModel, NotificationView,
+    'common/js/components/views/feedback_notification', 'js/views/settings/intro_video_youtube',
+    'js/views/settings/intro_video_azure','jquery.timepicker', 'date',
+    'gettext', 'js/views/learning_info', 'js/views/instructor_info', 'edx-ui-toolkit/js/utils/string-utils'],
+       function(ValidatingView, CodeMirror, _, $, ui, DateUtils, FileUploadModel, FileUploadDialog,
+                LicenseView, LicenseModel, NotificationView, IntroVideoYouTubeView, IntroVideoAzureView,
                 timepicker, date, gettext, LearningInfoView, InstructorInfoView, StringUtils) {
            var DetailsView = ValidatingView.extend({
     // Model class is CMS.Models.Settings.CourseDetails
@@ -14,7 +15,6 @@ define(['js/views/validation', 'codemirror', 'underscore', 'jquery', 'jquery.ui'
                    'change input': 'updateModel',
                    'change textarea': 'updateModel',
                    'change select': 'updateModel',
-                   'click .remove-course-introduction-video': 'removeVideo',
                    'focus #course-overview': 'codeMirrorize',
                    'mouseover .timezone': 'updateTime',
         // would love to move to a general superclass, but event hashes don't inherit in backbone :-(
@@ -32,6 +32,7 @@ define(['js/views/validation', 'codemirror', 'underscore', 'jquery', 'jquery.ui'
                    this.$el.find('#course-organization').val(this.model.get('org'));
                    this.$el.find('#course-number').val(this.model.get('course_id'));
                    this.$el.find('#course-name').val(this.model.get('run'));
+                   this.$el.find('#intro-video-source').val(this.model.get('intro_video_source'));
                    this.$el.find('.set-date').datepicker({'dateFormat': 'm/d/yy'});
 
         // Avoid showing broken image on mistyped/nonexistent image
@@ -71,6 +72,20 @@ define(['js/views/validation', 'codemirror', 'underscore', 'jquery', 'jquery.ui'
                        el: $('.course-instructor-details-fields'),
                        model: this.model
                    });
+
+                   this.intro_video_youtube_view = new IntroVideoYouTubeView({
+                       el: $('#field-body-course-introduction-video'),
+                       model: this.model,
+                       parent: this
+                   });
+                   this.intro_video_azure_view = new IntroVideoAzureView({
+                       el: $('#field-body-course-introduction-video'),
+                       model: this.model,
+                       parent: this,
+                       courseVideos: options.courseVideos,
+                       videoDataHandlerUrl: options.videoDataHandlerUrl
+                   });
+
                },
 
                render: function() {
@@ -96,13 +111,6 @@ define(['js/views/validation', 'codemirror', 'underscore', 'jquery', 'jquery.ui'
                    this.$el.find('#' + this.fieldToSelectorMap.description).val(this.model.get('description'));
 
                    this.$el.find('#' + this.fieldToSelectorMap['short_description']).val(this.model.get('short_description'));
-
-                   this.$el.find('.current-course-introduction-video iframe').attr('src', this.model.videosourceSample());
-                   this.$el.find('#' + this.fieldToSelectorMap['intro_video']).val(this.model.get('intro_video') || '');
-                   if (this.model.has('intro_video')) {
-                       this.$el.find('.remove-course-introduction-video').show();
-                   }
-                   else this.$el.find('.remove-course-introduction-video').hide();
 
                    this.$el.find('#' + this.fieldToSelectorMap['effort']).val(this.model.get('effort'));
 
@@ -150,6 +158,12 @@ define(['js/views/validation', 'codemirror', 'underscore', 'jquery', 'jquery.ui'
                    this.licenseView.render();
                    this.learning_info_view.render();
                    this.instructor_info_view.render();
+                   // YouTube or Azure video player:
+                   if (this.model.get('intro_video_source') === 'youtube') {
+                       this.intro_video_youtube_view.render();
+                   } else {
+                       this.intro_video_azure_view.render();
+                   }
 
                    return this;
                },
@@ -166,6 +180,7 @@ define(['js/views/validation', 'codemirror', 'underscore', 'jquery', 'jquery.ui'
                    'description': 'course-description',
                    'short_description': 'course-short-description',
                    'intro_video': 'course-introduction-video',
+                   'intro_video_source': 'intro-video-source',
                    'effort': 'course-effort',
                    'course_image_asset_path': 'course-image-url',
                    'banner_image_asset_path': 'banner-image-url',
@@ -220,6 +235,7 @@ define(['js/views/validation', 'codemirror', 'underscore', 'jquery', 'jquery.ui'
                updateModel: function(event) {
                    var value;
                    var index = event.currentTarget.getAttribute('data-index');
+                   var lang = event.currentTarget.getAttribute('data-lang');
                    switch (event.currentTarget.id) {
                    case 'course-learning-info-' + index:
                        value = $(event.currentTarget).val();
@@ -290,7 +306,37 @@ define(['js/views/validation', 'codemirror', 'underscore', 'jquery', 'jquery.ui'
                            else {
                                this.$el.find('.remove-course-introduction-video').hide();
                            }
-                       }, this), 1000);
+                           this.intro_video_youtube_view.render();
+                       }, this), 2000);
+                       break;
+                   case 'course-video-list':
+                       this.clearValidationErrors();
+                       this.intro_video_azure_view.reset();
+                       var value = $(event.currentTarget).val();
+                       this.model.set('intro_video_id', value);
+                       this.render();
+                       break;
+                   case 'intro-video-source':
+                       this.clearValidationErrors();
+                       var value = $(event.currentTarget).val();
+                       this.model.set('intro_video_source', value);
+                       if (value === 'youtube') {
+                           this.intro_video_azure_view.reset();
+                       } else {
+                           this.intro_video_youtube_view.reset();
+                       }
+                       this.render();
+                       break;
+                   case 'captions-' + lang:
+                       var checkedCaptions = $("input[type=checkbox]:checked.intro-captions");
+                       var captions = _.map(checkedCaptions, function(captionInput) {
+                           return captionInput.dataset;
+                       });
+                       if (captions) {
+                           this.model.set('intro_video_captions', JSON.stringify(captions));
+                       } else {
+                           this.model.set('intro_video_captions',  JSON.stringify([]));
+                       }
                        break;
                    case 'course-pace-self-paced':
             // Fallthrough to handle both radio buttons
@@ -325,15 +371,6 @@ define(['js/views/validation', 'codemirror', 'underscore', 'jquery', 'jquery.ui'
                    this.imageTimer = setTimeout(function() {
                        $(previewSelector).attr('src', $(imagePathInputElement).val());
                    }, 1000);
-               },
-               removeVideo: function(event) {
-                   event.preventDefault();
-                   if (this.model.has('intro_video')) {
-                       this.model.set_videosource(null);
-                       this.$el.find('.current-course-introduction-video iframe').attr('src', '');
-                       this.$el.find('#' + this.fieldToSelectorMap['intro_video']).val('');
-                       this.$el.find('.remove-course-introduction-video').hide();
-                   }
                },
                codeMirrors: {},
                codeMirrorize: function(e, forcedTarget) {

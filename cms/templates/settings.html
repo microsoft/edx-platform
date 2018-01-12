@@ -25,6 +25,9 @@
 
 <%block name="jsextra">
   <link rel="stylesheet" type="text/css" href="${static.url('js/vendor/timepicker/jquery.timepicker.css')}" />
+  <link rel="stylesheet" type="text/css"
+        href="https://amp.azure.net/libs/amp/1.8.1/skins/amp-default/azuremediaplayer.min.css" />
+  <script type="text/javascript" src="${static.url('js/vendor/azure-media-player/player.js')}"></script>
 
   <script type="text/javascript">
 window.CMS = window.CMS || {};
@@ -37,7 +40,9 @@ CMS.URL.UPLOAD_ASSET = '${upload_asset_url | n, js_escaped_string}'
     require(["js/factories/settings"], function(SettingsFactory) {
         SettingsFactory(
             "${details_url | n, js_escaped_string}",
-            ${show_min_grade_warning | n, dump_js_escaped_json}
+            "${video_data_handler | n, js_escaped_string}",
+            ${show_min_grade_warning | n, dump_js_escaped_json},
+            JSON.parse(${course_videos_json | n, dump_js_escaped_json}),
         );
     });
 </%block>
@@ -446,24 +451,32 @@ CMS.URL.UPLOAD_ASSET = '${upload_asset_url | n, js_escaped_string}'
                 % endif
 
                 % if about_page_editable:
+                <!-- intro video -->
                 <li class="field video" id="field-course-introduction-video">
-                  <label for="course-introduction-video">${_("Course Introduction Video")}</label>
-                  <div class="input input-existing">
-                    <div class="current current-course-introduction-video">
-                      <iframe width="618" height="350" title="${_('Course Introduction Video')}" src="" frameborder="0" allowfullscreen></iframe>
-                    </div>
-                    <div class="actions">
-                      <a href="#" class="remove-item remove-course-introduction-video remove-video-data"><span class="delete-icon"></span>${_("Delete Current Video")}</a>
-                    </div>
+                  <label for="video-thumbnail-image-url">${_("Course Introduction Video")}</label>
+                  % if settings.FEATURES.get('ENABLE_VIDEO_UPLOAD_PIPELINE'):
+                  <div>
+                    <select name="intro-video-source" id="intro-video-source">
+                      <option value="youtube" id="intro-video-source-youtube" selected>
+                        ${_("YouTube")}
+                      </option>
+                      <option value="azure" id="intro-video-source-azure">
+                        ${_("Azure")}
+                      </option>
+                    </select>
+                    <span class="tip">
+                      ${_("Currently, there are two media services available to set the introduction video from")}:
+                    </span>
                   </div>
-
-                  <div class="input">
-                    ## Translators: This is the placeholder text for a field that requests a YouTube video ID for a course video
-                    <input type="text"  dir="ltr" class="long new-course-introduction-video add-video-data" id="course-introduction-video" value="" placeholder="${_("your YouTube video's ID")}" autocomplete="off" />
-                    <span class="tip tip-stacked">${_("Enter your YouTube video's ID (along with any restriction parameters)")}</span>
+                  % endif
+                  <br>
+                  <div id="field-body-course-introduction-video">
+                    <!-- INTRO VIDEO PLAYER RENDERS HERE -->
                   </div>
                 </li>
-                  % endif
+                <!-- intro video ends -->
+                % endif
+
               </ol>
             </div>
 

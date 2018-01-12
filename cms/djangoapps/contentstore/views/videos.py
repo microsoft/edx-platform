@@ -2,6 +2,7 @@
 Views related to the video upload feature
 """
 from datetime import datetime, timedelta
+import json
 import logging
 
 from boto import s3
@@ -16,7 +17,9 @@ from django.utils.translation import ugettext as _, ugettext_noop
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 import rfc6266
 
-from azure_video_pipeline.utils import get_media_service_client, encrypt_file, remove_encryption
+from azure_video_pipeline.utils import (
+    get_media_service_client, encrypt_file, LocatorTypes, remove_encryption, get_captions_and_video_info
+)
 from edxval.api import (
     create_video,
     get_videos_for_course,
@@ -27,6 +30,7 @@ from edxval.api import (
 )
 from edxval.models import Video, Subtitle
 from opaque_keys.edx.keys import CourseKey
+
 from openedx.core.djangoapps.lang_pref.api import all_languages
 from requests import HTTPError
 
@@ -38,7 +42,10 @@ from util.json_request import expect_json, JsonResponse
 from .course import get_course_and_check_access
 
 
-__all__ = ["videos_handler", "video_encodings_download", "video_transcripts_handler", "video_encrypt"]
+__all__ = [
+    "videos_handler", "video_encodings_download", "video_transcripts_handler", "video_encrypt",
+    "video_data_handler"
+]
 
 LOGGER = logging.getLogger(__name__)
 
@@ -59,6 +66,21 @@ def get_supported_video_formats():
         '.mov': 'video/quicktime',
     }
     return azure_formats if get_storage_service() == 'azure' else aws_formats
+
+
+def get_course_videos_data(course_key):
+    """
+    Get course videos data.
+
+    :param course_key:
+    :return: json: course videos
+    """
+    videos_qs = Video.objects.filter(
+        courses__course_id=course_key,
+        courses__is_hidden=False,
+        status__in=["file_complete", "file_encrypted"]
+    ).order_by('-created', 'edx_video_id').values('edx_video_id', 'client_video_id')
+    return json.dumps(list(videos_qs))
 
 
 STORAGE_SERVICE = get_storage_service()
@@ -631,3 +653,19 @@ def video_encrypt(request, course_key_string, edx_video_id):
             {"error": error_messages.get(status, '')},
             status=400
         )
+
+
+@expect_json
+@login_required
+@require_http_methods("GET")
+def video_data_handler(request, course_key_string, edx_video_id):
+    """
+    The restful handler to get Azure video data.
+
+    GET
+        json: return json representing the video's streaming and downloading urls (locators) and
+        captions data (language code, label and url)
+    """
+    course = _get_and_validate_course(course_key_string, request.user)
+    video_data = get_captions_and_video_info(edx_video_id, course.org)
+    return JsonResponse(video_data, status=200)

@@ -194,6 +194,15 @@
     }
   }
 }
+.view-video-uploads .wrapper .assets-library .actions-list .action-item .action-button.encrypted {
+  padding: 8px 10px;
+  color: #fff;
+  background: #7f7f7f;
+  &:hover {
+    background: #7f7f7f;
+  }
+
+}
 
 .modal-cover-transcript {
 	@extend %ui-depth3;

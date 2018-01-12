@@ -119,3 +119,28 @@ Those videos may be picked up again with new manifests published.
 
 Currently, the `AES-128 clear key` protection type is supported.
 For more information about content protection, please, refer to the [Azure Media Services documentation](https://docs.microsoft.com/en-us/azure/media-services/media-services-content-protection-overview)
+
+## Course introduction video enhancements
+
+While course initial setup it is possible to add introduction video via Studio's main menu > Settings > Schedule & Details:
+
+![Introduction video](doc/img/course_details.png)
+
+Standard OpenEdx platform has ability to set course introduction video from YouTube service.
+Provided enhancements add ability to use videos uploaded via Video Uploads page as course introduction video.
+New dropdown switch appears in `Course Introduction Video` section if platform is configured to store videos on Azure.
+
+![Standard introduction video](doc/img/intro_video_youtube.png)
+
+To use Azure uploaded file as introduction video one should switch to `Azure` and choose video from automatically listed course videos.
+
+![Azure introduction video](doc/img/intro_video_azure.png)
+
+As soon as video is chosen it renders in Azure Media Player above.
+Video's subtitles can be optionally enabled.
+
+![Azure introduction video subtitles](doc/img/intro_video_azure_subtitles.png)
+
+After changes are saved the new branded Azure introduction video is available from the LMS course `About` page:
+
+![Lms introduction video view](doc/img/lms_intro_video_azure.png)

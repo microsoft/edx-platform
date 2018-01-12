@@ -14,9 +14,16 @@ from openedx.core.lib.courses import course_image_url
   ## (https://developers.facebook.com/docs/opengraph/howtos/maximizing-distribution-media-content#tags)
   <meta property="og:title" content="${course.display_name_with_default_escaped}" />
   <meta property="og:description" content="${get_course_about_section(request, course, 'short_description')}" />
+  ## AzureMediaPlayer styles
+  <link rel="stylesheet" type="text/css"
+        href="https://amp.azure.net/libs/amp/1.8.1/skins/amp-default/azuremediaplayer.min.css" />
 </%block>
 
 <%block name="js_extra">
+  ## AzureMediaPlayer static files
+  <script src="https://amp.azure.net/libs/amp/1.8.1/azuremediaplayer.min.js"></script>
+  <script type="text/javascript" src="${static.url('js/vendor/azure-media-player/player.js')}"></script>
+
   ## CourseTalk widget js script
   % if show_coursetalk_widget:
       <script src="//d3q6qq2zt8nhwv.cloudfront.net/s/js/widgets/coursetalk-read-reviews.js"></script>

@@ -1,0 +1,65 @@
+/* Copyright (c) Microsoft Corporation. All Rights Reserved.
+ * Licensed under the MIT license. See LICENSE file on the project webpage for details.
+ */
+
+.azure-media-player-toggle-button-style {
+    top: 9px;
+    outline: none;
+    cursor: pointer;
+    float: left;
+    text-align: center;
+    vertical-align: middle;
+    margin: 0;
+    padding-top: 9px;
+    height: 28px;
+    width: 28px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    float: right;
+    font-size: 13px;
+}
+
+.amp-default-skin .vjs-control-bar .azure-media-player-toggle-button-style.amp-subtitles-control:before {
+    font-size: 13px;
+}
+
+.azuremediaplayer {
+    border: 0 !important;
+}
+
+.xmodule_display.xmodule_VideoModule .video .subtitles {
+   padding-left: 10px;
+}
+
+.azure-media-player-toggle-button-style:hover {
+    background-color: rgba(255, 255, 255, .1);
+}
+
+.xmodule_display.xmodule_SequenceModule .sequence-nav ol li button.seq_video .icon:before {
+    content: "\f008" !important;
+}
+
+.amp-default-skin.vjs-fullscreen {
+    height: 100% !important;
+}
+
+.xmodule_display.xmodule_VideoModule .video .video-wrapper {
+   margin-right: 0 !important;
+}
+
+.azuremediaplayer .vjs-text-track-display {
+   bottom: 5em !important;
+}
+
+.amp-default-skin.vjs-has-started.vjs-user-inactive.vjs-playing .vjs-control-bar {
+   transition: visibility 5s linear, opacity 5s linear;
+}
+
+li.video-tracks.video-download-button {
+   margin-left:10px !important;
+}
+
+/* "closed" is toggled by user action. Transcripts will appear when "closed" class is removed. */
+.closed .subtitles {
+    display: none;
+}

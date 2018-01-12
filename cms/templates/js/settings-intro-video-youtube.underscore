@@ -1,0 +1,30 @@
+<div class="input input-existing">
+    <% if (!model.intro_video) { %>
+    <div> Selected video will be rendered here...</div>
+    <% } else { %>
+    <div class="current current-course-introduction-video">
+          <iframe width="100%" height="480"
+                  title=<%= gettext("Course Introduction Video") %>
+                  src="" frameborder="0"
+                  allowfullscreen>
+          </iframe>
+    </div>
+    <div class="actions">
+        <a href="#" class="remove-item remove-course-introduction-video remove-video-data">
+            <span class="delete-icon"></span><%= gettext("Delete Current Video") %>
+        </a>
+    </div>
+    <% }; %>
+</div>
+
+<div class="input">
+    <% //Translators: This is the placeholder text for a field that requests a YouTube video ID for a course video %>
+    <input type="text" dir="ltr" class="long new-course-introduction-video add-video-data"
+           id="course-introduction-video"
+           value="" placeholder="<%= gettext("your YouTube video's ID") %>"
+           autocomplete="off"
+    />
+    <span class="tip tip-stacked">
+        <%= gettext("Enter your YouTube video's ID (along with any restriction parameters)") %>
+    </span>
+</div>
