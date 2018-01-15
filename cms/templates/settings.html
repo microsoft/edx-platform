@@ -457,11 +457,11 @@ CMS.URL.UPLOAD_ASSET = '${upload_asset_url | n, js_escaped_string}'
                   % if settings.FEATURES.get('ENABLE_VIDEO_UPLOAD_PIPELINE'):
                   <div>
                     <select name="intro-video-source" id="intro-video-source">
-                      <option value="youtube" id="intro-video-source-youtube" selected>
-                        ${_("YouTube")}
-                      </option>
-                      <option value="azure" id="intro-video-source-azure">
+                      <option value="azure" id="intro-video-source-azure" selected>
                         ${_("Azure")}
+                      </option>
+                      <option value="youtube" id="intro-video-source-youtube">
+                        ${_("YouTube")}
                       </option>
                     </select>
                     <span class="tip">

@@ -64,7 +64,7 @@ class CourseDetails(object):
         self.intro_video_captions = ''
         self.intro_video_id = ''
         self.intro_video_manifest = ''
-        self.intro_video_source = 'youtube'
+        self.intro_video_source = 'azure' if settings.FEATURES.get('ENABLE_VIDEO_UPLOAD_PIPELINE') else 'youtube'
         self.effort = None  # hours/week
         self.license = "all-rights-reserved"  # default course license is all rights reserved
         self.course_image_name = ""
