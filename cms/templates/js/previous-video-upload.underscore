@@ -15,7 +15,6 @@
     </div>
     <% } %>
 </td>
-<td class="duration-col"><%- duration %></td>
 <td class="date-col"><%- created %></td>
 <td class="video-id-col"><%- edx_video_id %></td>
 <td class="status-col"><%- status %></td>

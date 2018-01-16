@@ -9,7 +9,6 @@
         <thead>
             <tr>
                 <th><%- gettext("Name") %></th>
-                <th><%- gettext("Duration") %></th>
                 <th><%- gettext("Date Added") %></th>
                 <th><%- gettext("Video ID") %></th>
                 <th><%- gettext("Status") %></th>
