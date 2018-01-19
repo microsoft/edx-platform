@@ -423,6 +423,7 @@ define([
                 var arrayUploadUrl;
                 var blobService;
                 var speedSummary;
+                var timerId;
                 var uploadUrl = uploadData.url,
                     view = this,
                     finishedOrError = false,
@@ -460,7 +461,7 @@ define([
 
                 this.setStatus(uploadData.cid, ActiveVideoUpload.STATUS_UPLOADING);
 
-                var timerId = setInterval(function() {
+                timerId = setInterval(function() {
                     if (!finishedOrError) {
                         view.refreshProgress(speedSummary, uploadData.cid);
                     } else {
@@ -471,7 +472,7 @@ define([
                 this.refreshProgress(speedSummary, uploadData.cid);
             },
 
-            refreshProgress: function (speedSummary, cid) {
+            refreshProgress: function(speedSummary, cid) {
                 var progress = speedSummary.getCompletePercent() / 100;
                 this.setProgress(cid, progress);
             }

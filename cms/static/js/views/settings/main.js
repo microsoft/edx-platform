@@ -1,7 +1,7 @@
 define(['js/views/validation', 'codemirror', 'underscore', 'jquery', 'jquery.ui', 'js/utils/date_utils',
     'js/models/uploads', 'js/views/uploads', 'js/views/license', 'js/models/license',
     'common/js/components/views/feedback_notification', 'js/views/settings/intro_video_youtube',
-    'js/views/settings/intro_video_azure','jquery.timepicker', 'date',
+    'js/views/settings/intro_video_azure', 'jquery.timepicker', 'date',
     'gettext', 'js/views/learning_info', 'js/views/instructor_info', 'edx-ui-toolkit/js/utils/string-utils'],
        function(ValidatingView, CodeMirror, _, $, ui, DateUtils, FileUploadModel, FileUploadDialog,
                 LicenseView, LicenseModel, NotificationView, IntroVideoYouTubeView, IntroVideoAzureView,
@@ -233,7 +233,9 @@ define(['js/views/validation', 'codemirror', 'underscore', 'jquery', 'jquery.ui'
                    $(e.currentTarget).attr('title', currentTimeText);
                },
                updateModel: function(event) {
-                   var value;
+                   var value,
+                       $checkedCaptions,
+                       captions;
                    var index = event.currentTarget.getAttribute('data-index');
                    var lang = event.currentTarget.getAttribute('data-lang');
                    switch (event.currentTarget.id) {
@@ -288,7 +290,7 @@ define(['js/views/validation', 'codemirror', 'underscore', 'jquery', 'jquery.ui'
                        }
                        break;
                    case 'pre-requisite-course':
-                       var value = $(event.currentTarget).val();
+                       value = $(event.currentTarget).val();
                        value = value == '' ? [] : [value];
                        this.model.set('pre_requisite_courses', value);
                        break;
@@ -312,13 +314,13 @@ define(['js/views/validation', 'codemirror', 'underscore', 'jquery', 'jquery.ui'
                    case 'course-video-list':
                        this.clearValidationErrors();
                        this.intro_video_azure_view.reset();
-                       var value = $(event.currentTarget).val();
+                       value = $(event.currentTarget).val();
                        this.model.set('intro_video_id', value);
                        this.render();
                        break;
                    case 'intro-video-source':
                        this.clearValidationErrors();
-                       var value = $(event.currentTarget).val();
+                       value = $(event.currentTarget).val();
                        this.model.set('intro_video_source', value);
                        if (value === 'youtube') {
                            this.intro_video_azure_view.reset();
@@ -328,14 +330,14 @@ define(['js/views/validation', 'codemirror', 'underscore', 'jquery', 'jquery.ui'
                        this.render();
                        break;
                    case 'captions-' + lang:
-                       var checkedCaptions = $("input[type=checkbox]:checked.intro-captions");
-                       var captions = _.map(checkedCaptions, function(captionInput) {
+                       $checkedCaptions = $('input[type=checkbox]:checked.intro-captions');
+                       captions = _.map($checkedCaptions, function(captionInput) {
                            return captionInput.dataset;
                        });
                        if (captions) {
                            this.model.set('intro_video_captions', JSON.stringify(captions));
                        } else {
-                           this.model.set('intro_video_captions',  JSON.stringify([]));
+                           this.model.set('intro_video_captions', JSON.stringify([]));
                        }
                        break;
                    case 'course-pace-self-paced':

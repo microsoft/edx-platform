@@ -3,6 +3,7 @@ define([
     'underscore',
     'text!templates/settings-intro-video-azure.underscore'
 ], function(BaseView, _, introVideoTemplate) {
+    'use strict';
     var IntroVideoView = BaseView.extend({
         defaultFailureMessage: gettext('This may be happening because of an error with our server or your internet connection. Try refreshing the page or making sure you are online.'),  // eslint-disable-line max-len
 
@@ -15,7 +16,8 @@ define([
         },
 
         render: function() {
-            var videoInfo = true;
+            var videoInfo = true,
+                captionEnabled;
 
             if (!this.captions) {
                 this.getIntroVideoData(this.model.get('intro_video_id'));
@@ -23,7 +25,7 @@ define([
             }
 
             // helper to use in template
-            var captionEnabled = function(caption) {
+            captionEnabled = function(caption) {
                 var result = _.filter(JSON.parse(this.model.intro_video_captions), function(parsedCaption) {
                     return parsedCaption.lang === caption.language;
                 });
@@ -59,8 +61,7 @@ define([
                 } catch (error) {
                     errorMsg = this.defaultFailureMessage;
                 }
-                console.error(errorMsg);
-            })
+            });
         },
 
         reset: function() {

@@ -10,8 +10,8 @@
         </select>
     </div>
     <div class="modal-actions">
-        <button class="close-button js-close-popup" role="button"><%- gettext('Close') %></button>
-        <button class="next-button js-upload-transcript" disabled role="button" aria-disabled=true><%- gettext('Next')
+        <button class="close-button js-close-popup" role="button"><%- gettext('Cancel') %></button>
+        <button class="next-button js-upload-transcript" disabled role="button" aria-disabled=true><%- gettext('Select file to upload')
         %></button>
     </div>
 </div>

@@ -183,7 +183,7 @@ class CourseDetails(object):
             store.update_item(about_item, user_id, allow_not_found=True)
 
     @classmethod
-    def update_about_video(cls, course, video_id, user_id, video_source, captions=None):
+    def update_about_video(cls, course, video_id, user_id, video_source='youtube', captions=None):
         """
         Updates the Course's about video to the given video ID.
         """

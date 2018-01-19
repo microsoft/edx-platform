@@ -28,10 +28,10 @@
                 var o = options;
 
                 $(this).click(function(e) {
-                    $('.modal').hide();
                     var modal_id = $(this).attr('href');
                     var azurePlayer = $('#intro-player').find('video')[0];
-                    if (typeof azurePlayer !== "undefined") {
+                    $('.modal').hide();
+                    if (typeof azurePlayer !== 'undefined') {
                         azurePlayer.play();
                         // do not perform cloning of Azure Media Player, please.
                     } else if ($(modal_id).hasClass('video-modal')) {
@@ -101,14 +101,14 @@
             });
 
             function close_modal(modal_id, e) {
+                var azurePlayer = $('#intro-player').find('video')[0];
                 $('#lean_overlay').fadeOut(200);
                 $('iframe', modal_id).attr('src', '');
                 $(modal_id).css({'display': 'none'});
                 if (modal_id == '#modal_clone') {
                     $(modal_id).remove();
                 }
-                var azurePlayer = $('#intro-player').find('video')[0];
-                if (typeof azurePlayer !== "undefined") { azurePlayer.pause() };
+                if (typeof azurePlayer !== 'undefined') { azurePlayer.pause(); }
                 e.preventDefault();
             }
         }

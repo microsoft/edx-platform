@@ -18,7 +18,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 import rfc6266
 
 from azure_video_pipeline.utils import (
-    get_media_service_client, encrypt_file, LocatorTypes, remove_encryption, get_captions_and_video_info
+    all_languages_microsoft, get_media_service_client, encrypt_file, remove_encryption, get_captions_and_video_info
 )
 from edxval.api import (
     create_video,
@@ -31,7 +31,6 @@ from edxval.api import (
 from edxval.models import Video, Subtitle
 from opaque_keys.edx.keys import CourseKey
 
-from openedx.core.djangoapps.lang_pref.api import all_languages
 from requests import HTTPError
 
 from contentstore.models import VideoUploadConfig
@@ -381,7 +380,7 @@ def videos_index_html(course):
             "video_upload_max_file_size": VIDEO_UPLOAD_MAX_FILE_SIZE_GB,
             "storage_service": STORAGE_SERVICE,
             "transcript_handler_url": reverse_course_url("video_transcripts_handler", unicode(course.id)),
-            "languages": all_languages()
+            "languages": all_languages_microsoft()
         }
     )
 
@@ -557,8 +556,10 @@ def video_transcripts_handler(request, course_key_string, edx_video_id=None):
 
 
 def video_transcripts_json(video):
+    all_languages = dict(all_languages_microsoft())
     transcripts = [
-        {'name': transcript.content, 'language': transcript.language} for transcript in video.subtitles.all()
+        {'name': transcript.content, 'language': all_languages.get(transcript.language, transcript.language)}
+        for transcript in video.subtitles.all()
     ]
     return JsonResponse(
         {"transcripts": transcripts},
@@ -594,7 +595,13 @@ def video_transcript_post(request, course, video):
 
     )
     return JsonResponse(
-        {'status': 'ok', 'transcript': {'name': transcript.content, 'language': transcript.language}},
+        {
+            'status': 'ok',
+            'transcript': {
+                'name': transcript.content,
+                'language': dict(all_languages_microsoft()).get(transcript.language, transcript.language)
+            }
+        },
         status=200
     )
 

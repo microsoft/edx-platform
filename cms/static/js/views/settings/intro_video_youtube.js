@@ -3,6 +3,7 @@ define([
     'underscore',
     'text!templates/settings-intro-video-youtube.underscore'
 ], function(BaseView, _, introVideoTemplate) {
+    'use strict';
     var defaultIntroVideoData = {};
 
     var IntroVideoView = BaseView.extend({
@@ -25,7 +26,7 @@ define([
                 this.$el.find('.remove-course-introduction-video').show();
             } else {
                 this.$el.find('.remove-course-introduction-video').hide();
-            };
+            }
             return this;
         },
 

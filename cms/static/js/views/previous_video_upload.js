@@ -78,13 +78,18 @@ define(
             },
 
             removeVideo: function(event) {
-                var videoView = this;
+                var videoView = this,
+                    message = gettext('Removing a video from this list does not affect course content. Any content that uses a previously uploaded video ID continues to display in the course.');  // eslint-disable-line max-len
 
                 event.preventDefault();
 
+                if (this.storageService === 'azure') {
+                    message = gettext('Removing a video from this list does not affect course content. This will not delete the video file from Azure storage and it will continue to play if included in a course unit. You can update the video or remove the URL link from the course if needed.');  // eslint-disable-line max-len
+                }
+
                 ViewUtils.confirmThenRunOperation(
                     gettext('Are you sure you want to remove this video from the list?'),
-                    gettext('Removing a video from this list does not affect course content. Any content that uses a previously uploaded video ID continues to display in the course.'),  // eslint-disable-line max-len
+                    message,
                     gettext('Remove'),
                     function() {
                         ViewUtils.runOperationShowingMessage(
