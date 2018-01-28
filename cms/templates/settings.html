@@ -456,7 +456,7 @@ CMS.URL.UPLOAD_ASSET = '${upload_asset_url | n, js_escaped_string}'
                   <label for="video-thumbnail-image-url">${_("Course Introduction Video")}</label>
                   % if settings.FEATURES.get('ENABLE_VIDEO_UPLOAD_PIPELINE'):
                   <div>
-                    <select name="intro-video-source" id="intro-video-source">
+                    <select name="intro-video-source" id="intro-video-source" aria-labelledby="aria-labelledby-intro-video-source">
                       <option value="azure" id="intro-video-source-azure" selected>
                         ${_("Azure")}
                       </option>
@@ -464,6 +464,7 @@ CMS.URL.UPLOAD_ASSET = '${upload_asset_url | n, js_escaped_string}'
                         ${_("YouTube")}
                       </option>
                     </select>
+                    <span id="aria-labelledby-intro-video-source" class="sr">${_("There are two available storage Azure and Youtube")}</span>
                     <span class="tip">
                       ${_("Currently, there are two media services available to set the introduction video from")}:
                     </span>

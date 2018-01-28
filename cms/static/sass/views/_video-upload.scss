@@ -165,7 +165,7 @@
   }
 
   .link-transcripts {
-    color: #b2b2b2;
+    color: #0075B4;
   }
 
   .link-hide-transcripts {
@@ -215,19 +215,24 @@
 }
 
 .modal-transcript {
-	@extend %ui-depth4;
-	position: fixed;
-	top: 120px;
-	left: 50%;
-	width: 400px;
-	height: 240px;
-	margin-left: -200px;
-	background: $white;
+    @extend %ui-depth4;
+    position: fixed;
+    top: 120px;
+    left: 50%;
+    width: 400px;
+    height: 240px;
+    margin-left: -200px;
+    background: $white;
+    pointer-events: auto;
 
 	.modal-body {
 		height: 160px;
 		padding: 40px;
 		overflow-y: scroll;
+
+        select {
+          max-width: 100%;
+        }
 	}
 
 	.modal-actions {

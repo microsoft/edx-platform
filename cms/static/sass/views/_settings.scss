@@ -271,6 +271,10 @@
             display: inline-block;
           }
         }
+
+        select {
+          max-width: 100%;
+        }
       }
 
       .field-group {

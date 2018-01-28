@@ -8,16 +8,19 @@
     <table class="assets-table">
         <thead>
             <tr>
-                <th><%- gettext("Name") %></th>
-                <th><%- gettext("Date Added") %></th>
-                <th><%- gettext("Video ID") %></th>
-                <th><%- gettext("Status") %></th>
-                <th><%- gettext("Action") %></th>
+                <th class="th-video-uploads"><%- gettext("Name") %></th>
+                <% if (storageService != 'azure') { %>
+                <th class="th-video-uploads"><%- gettext("Duration") %></th>
+                <% } %>
+                <th class="th-video-uploads"><%- gettext("Date Added") %></th>
+                <th class="th-video-uploads"><%- gettext("Video ID") %></th>
+                <th class="th-video-uploads"><%- gettext("Status") %></th>
+                <th class="th-video-uploads"><%- gettext("Action") %></th>
                 <% if (storageService == 'azure') { %>
-                <th><%- gettext("Encrypt") %></th>
+                <th class="th-video-uploads"><%- gettext("Encrypt") %></th>
                 <% } %>
             </tr>
         </thead>
-        <tbody class="js-table-body"></tbody>
+        <tbody class="js-table-body previous-uploads-table-body"></tbody>
     </table>
 </div>

@@ -68,12 +68,12 @@ define(
 
                 view.renderTranscripts();
 
-                expect(view.transcriptsView.$('.js-transcript-container div').length).toEqual(2);
+                expect(view.transcriptsView.$('.js-transcript-container div.transcript-view').length).toEqual(2);
                 expect(
-                    view.transcriptsView.$('.js-transcript-container div:first').text().trim()
+                    view.transcriptsView.$('.js-transcript-container div.transcript-view:first div').text().trim()
                 ).toEqual('transcript1.vtt (en)');
                 expect(
-                    view.transcriptsView.$('.js-transcript-container div:last').text().trim()
+                    view.transcriptsView.$('.js-transcript-container div.transcript-view:last div').text().trim()
                 ).toEqual('transcript2.vtt (fr)');
             });
 

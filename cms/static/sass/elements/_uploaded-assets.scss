@@ -58,6 +58,10 @@
           padding-left: ($baseline*0.75);
           padding-right: ($baseline*0.75);
         }
+
+        &.th-video-uploads {
+          color: #4C4C4C;
+        }
       }
 
       td {
@@ -70,6 +74,14 @@
         box-shadow: 0 2px 2px $shadow-l1;
         border: 1px solid $gray-l4;
         background: $white;
+
+        &.previous-uploads-table-body {
+          tr {
+            &:hover {
+              background-color: #E6F6FF;
+            }
+          }
+        }
 
         tr {
           @include transition(all $tmg-f2 ease-in-out 0s);
@@ -142,6 +154,10 @@
           @include transition(all $tmg-f2 ease-in-out 0s);
           @extend %t-copy-sub2;
           color: $gray-l2;
+
+          &.date-added {
+            color: #4C4C4C;
+          }
         }
 
         .embed-col {

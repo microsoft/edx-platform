@@ -4,18 +4,26 @@
     <div>
         <% if (countTranscripts) { %>
         <a href="#" class="js-toggle-transcripts">
-            <span class="link-transcripts link-show-transcripts" role="button" data-tooltip="<%- gettext('Show transcripts') %>"><%- gettext('Show transcripts') %></span>
-            <span class="link-transcripts link-hide-transcripts" role="button" data-tooltip="<%- gettext('Hide transcripts') %>"><%- gettext('Hide transcripts') %></span>
+            <span class="link-transcripts link-show-transcripts" data-tooltip="<%- gettext('Show transcripts') %>" aria-hidden="true"><%- gettext('Show transcripts') %></span>
+            <span class="sr link-show-transcripts"><%- StringUtils.interpolate(gettext("Show transcripts for {video_name}"), {video_name: client_video_id}) %></span>
+            <span class="link-transcripts link-hide-transcripts" data-tooltip="<%- gettext('Hide transcripts') %>" aria-hidden="true"><%- gettext('Hide transcripts') %></span>
+            <span class="sr link-hide-transcripts"><%- StringUtils.interpolate(gettext("Hide transcripts for {video_name}"), {video_name: client_video_id}) %></span>
         </a>
         <% } else if ($.inArray(status_value, ['file_complete', 'file_encrypted']) != -1 ) { %>
         <a href="#" class="js-add-transcript">
-            <span class="link-transcripts" role="button" data-tooltip="<%- gettext('Add transcripts') %>"><%- gettext('Add transcripts') %></span>
+            <span class="link-transcripts" data-tooltip="<%- gettext('Add transcripts') %>" aria-hidden="true"><%- gettext('Add transcripts') %></span>
+            <span class="sr"><%- StringUtils.interpolate(gettext("Add transcripts for {video_name}"), {video_name: client_video_id}) %></span>
         </a>
         <% } %>
     </div>
     <% } %>
 </td>
-<td class="date-col"><%- created %></td>
+
+<% if (storageService != 'azure') { %>
+<td class="duration-col"><%- duration %></td>
+<% } %>
+
+<td class="date-col date-added"><%- created %></td>
 <td class="video-id-col"><%- edx_video_id %></td>
 <td class="status-col"><%- status %></td>
 <td class="actions-col">
@@ -33,9 +41,14 @@
     <% if ($.inArray(status_value, ['file_complete', 'file_encrypted']) != -1 ) { %>
     <ul class="actions-list">
         <li class="action-item action-lock">
-            <a href="#" data-tooltip="<%- gettext('Lock/unlock file') %>" class="action-button js-lock-unlock-file <% if (status_value == 'file_encrypted') { %>encrypted<% } %>">
+            <a href="#" data-tooltip="<%- gettext('Encrypt/unencrypt file') %>" class="action-button js-lock-unlock-file <% if (status_value == 'file_encrypted') { %>encrypted<% } %>">
                 <span class="icon fa fa-unlock-alt" aria-hidden="true"></span>
                 <span class="icon fa fa-lock" aria-hidden="true"></span>
+                <% if (status_value == 'file_encrypted') { %>
+                <span class="sr"><%- StringUtils.interpolate(gettext("Unencrypt {video_name} video"), {video_name: client_video_id}) %></span>
+                <% } else { %>
+                <span class="sr"><%- StringUtils.interpolate(gettext("Encrypt {video_name} video"), {video_name: client_video_id}) %></span>
+                <% } %>
             </a>
         </li>
     </ul>

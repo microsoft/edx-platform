@@ -5,24 +5,30 @@ define(
      'edx-ui-toolkit/js/utils/html-utils',
      'js/models/active_video_upload',
      'js/views/popup_upload_transcript',
+     'text!templates/previous-transcripts-video-upload-list.underscore',
      'text!templates/previous-transcripts-video-upload.underscore',
      'jquery.fileupload'],
 
     function(_, Backbone, BaseView, HtmlUtils, ActiveTranscriptUpload, PopupUploadTranscriptView,
-             previousTranscriptsVideoUploadTemplate) {
+             previousTranscriptsVideoUploadListTemplate, previousTranscriptsVideoUploadTemplate) {
         'use strict';
 
         var TranscriptView = BaseView.extend({
             tagName: 'div',
+            className: 'transcript-view',
 
             initialize: function(options) {  // eslint-disable-line no-unused-vars
-                this.template = HtmlUtils.template('<%- name %> (<%- language %>)<br />');
+                this.template = HtmlUtils.template(previousTranscriptsVideoUploadTemplate);
+                this.clientVideoId = options.clientVideoId;
             },
 
             render: function() {
+                var data = this.model.attributes;
+                data['clientVideoId'] = this.clientVideoId;
+                data['viewId'] = this.cid;
                 HtmlUtils.setHtml(
                     this.$el,
-                    this.template(this.model.attributes)
+                    this.template(data)
                 );
                 return this;
             }
@@ -42,12 +48,14 @@ define(
             initialize: function(options) {
                 this.transcriptHandlerUrl = options.transcriptHandlerUrl;
                 this.edxVideoId = options.edxVideoId;
+                this.clientVideoId = options.clientVideoId;
                 this.supportedFileFormats = ['.vtt'];
                 this.maxFileSize = 10000000;
-                this.template = HtmlUtils.template(previousTranscriptsVideoUploadTemplate);
+                this.template = HtmlUtils.template(previousTranscriptsVideoUploadListTemplate);
                 this.itemViews = this.collection.map(function(model) {
                     return new TranscriptView({
-                        model: model
+                        model: model,
+                        clientVideoId: options.clientVideoId
                     });
                 });
 
@@ -58,7 +66,7 @@ define(
                 var $transcriptContainer;
                 HtmlUtils.setHtml(
                     this.$el,
-                    this.template({transcripts: this.collection.toJSON()})
+                    this.template({clientVideoId: this.clientVideoId})
                 );
 
                 $transcriptContainer = this.$el.find('.js-transcript-container');
@@ -101,6 +109,7 @@ define(
                     uploadTranscript: this.uploadTranscript.bind(this)
                 });
                 $('body').append(this.popupUploadTranscriptView.render().$el);
+                this.popupUploadTranscriptView.$('.modal-transcript').first().focus();
             },
 
             fileUploadAdd: function(event, uploadData) {

@@ -1,18 +1,2 @@
-<td class="name-col js-transcript-container"></td>
-<td></td>
-<td></td>
-<td></td>
-<td></td>
-<td>
-    <ul class="actions-list">
-        <li class="action-item">
-            <a href="#" data-tooltip="<%- gettext('Add transcripts') %>" class="action-button js-add-transcript">
-                <span class="icon fa fa-plus" aria-hidden="true" role="button" aria-label="<%- gettext('Add transcripts') %>"></span>
-            </a>
-        </li>
-    </ul>
-    <form class="file-transcript-upload-form">
-        <input type="file" class="sr js-file-transcript-input" name="transcript_file">
-        <input type="text" class="sr js-language-input" name="language" value="en">
-    </form>
-</td>
+<div aria-labelledby="aria-labelledby-<%- viewId %>"><%- name %> (<%- language %>)</div>
+<span id="aria-labelledby-<%- viewId %>" class="sr"><%- StringUtils.interpolate(gettext("{name} {language} for {video_name}"), {name: name, language: language, video_name: clientVideoId}) %></span>

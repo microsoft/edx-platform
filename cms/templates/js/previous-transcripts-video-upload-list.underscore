@@ -1,0 +1,19 @@
+<td class="name-col js-transcript-container"></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td>
+    <ul class="actions-list">
+        <li class="action-item">
+            <a href="#" data-tooltip="<%- gettext('Add transcripts') %>" class="action-button js-add-transcript">
+                <span class="icon fa fa-plus"></span>
+                <span class="sr"><%- StringUtils.interpolate(gettext("Add transcripts for {video_name}"), {video_name: clientVideoId}) %></span>
+            </a>
+        </li>
+    </ul>
+    <form class="file-transcript-upload-form">
+        <input type="file" class="sr js-file-transcript-input" name="transcript_file">
+        <input type="text" class="sr js-language-input" name="language" value="en">
+    </form>
+</td>

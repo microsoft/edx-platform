@@ -30,6 +30,7 @@ define(
                     this.$el,
                     this.template({languages: languages})
                 );
+                this.activeElement = document.activeElement;
                 return this;
             },
 
@@ -46,6 +47,7 @@ define(
 
             closePopup: function(event) {
                 event.preventDefault();
+                this.activeElement.focus();
                 this.remove();
             }
         });

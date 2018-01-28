@@ -72,7 +72,8 @@ define(
                 this.transcriptsView = new PreviousTranscriptsVideoUploadView({
                     collection: this.transcriptsCollection,
                     transcriptHandlerUrl: this.transcriptHandlerUrl,
-                    edxVideoId: this.model.get('edx_video_id')
+                    edxVideoId: this.model.get('edx_video_id'),
+                    clientVideoId: this.model.get('client_video_id')
                 });
                 this.$el.after(this.transcriptsView.render().$el);
             },
@@ -123,8 +124,6 @@ define(
             },
 
             toggleTranscripts: function(event) {
-                var isHidden = this.transcriptsView.$el.find('.fa-plus').attr('aria-hidden');
-                this.transcriptsView.$el.find('.fa-plus').attr('aria-hidden', !isHidden);
                 event.preventDefault();
                 this.transcriptsView.$el.toggleClass('is-hidden');
 
