@@ -596,7 +596,6 @@ def video_transcript_post(request, course, video):
     )
     return JsonResponse(
         {
-            'status': 'ok',
             'transcript': {
                 'name': transcript.content,
                 'language': dict(all_languages_microsoft()).get(transcript.language, transcript.language)
