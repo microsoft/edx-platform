@@ -224,7 +224,8 @@ def get_captions_info(video, path_locator_sas):
                 'download_url': '/{}?'.format(subtitle.content).join(path_locator_sas.split('?')),
                 'file_name': subtitle.content,
                 'language': subtitle.language,
-                'language_title': dict(all_languages_microsoft()).get(subtitle.language, subtitle.language)
+                'language_title': dict(all_languages_microsoft()).get(subtitle.language, subtitle.language),
+                'id': subtitle.id
             })
     return data
 

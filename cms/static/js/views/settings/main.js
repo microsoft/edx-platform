@@ -6,6 +6,7 @@ define(['js/views/validation', 'codemirror', 'underscore', 'jquery', 'jquery.ui'
        function(ValidatingView, CodeMirror, _, $, ui, DateUtils, FileUploadModel, FileUploadDialog,
                 LicenseView, LicenseModel, NotificationView, IntroVideoYouTubeView, IntroVideoAzureView,
                 timepicker, date, gettext, LearningInfoView, InstructorInfoView, StringUtils) {
+           'use strict';
            var DetailsView = ValidatingView.extend({
     // Model class is CMS.Models.Settings.CourseDetails
                events: {

@@ -43,6 +43,7 @@ define([
                 this.postUrl = options.postUrl;
                 this.videoSupportedFileFormats = options.videoSupportedFileFormats;
                 this.videoUploadMaxFileSizeInGB = options.videoUploadMaxFileSizeInGB;
+                this.videoMaxLengthFileName = options.videoMaxLengthFileName;
                 this.storageService = options.storageService;
                 this.onFileUploadDone = options.onFileUploadDone;
                 if (options.uploadButton) {
@@ -364,6 +365,11 @@ define([
                         )
                         .replace('{filename}', fileName)
                         .replace('{maxFileSizeInGB}', self.videoUploadMaxFileSizeInGB);
+                    } else if (self.storageService === 'azure' && fileName.length > self.videoMaxLengthFileName) {
+                        error = gettext(
+                            'The filename length can not exceed {maxLengthFileName} symbols.'
+                        )
+                        .replace('{maxLengthFileName}', self.videoMaxLengthFileName);
                     }
 
                     if (error) {

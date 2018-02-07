@@ -48,18 +48,18 @@
                 </div>
 
                 <% if (captions.length) { %>
-                <% _.forEach(captions, function(caption) { %>
+                <% _.forEach(captions, function(caption, index) { %>
                 <div class="show-data">
                     <div class="heading">
                         <input type="checkbox"
-                               id="captions-<%= caption.language%>"
+                               id="captions-<%= index%>"
                                class="intro-captions"
                                data-lang="<%= caption.language%>"
                                data-label="<%= caption.language_title%>"
                                data-url="<%= caption.download_url%>"
                             <%= captionEnabled(caption) ? 'checked' : '' %> />
-                        <label for="captions-<%= caption.language%>">
-                            <%= caption.language_title %>  (<%= caption.language %>)
+                        <label for="captions-<%= index%>">
+                            <%= caption.file_name %>  (<%= caption.language_title %>)
                         </label>
                     </div>
                 </div>

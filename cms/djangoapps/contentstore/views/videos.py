@@ -85,6 +85,7 @@ def get_course_videos_data(course_key):
 STORAGE_SERVICE = get_storage_service()
 VIDEO_SUPPORTED_FILE_FORMATS = get_supported_video_formats()
 VIDEO_UPLOAD_MAX_FILE_SIZE_GB = 5
+VIDEO_MAX_LENGTH_FILE_NAME = 36
 
 # maximum time for video to remain in upload state
 MAX_UPLOAD_HOURS = 24
@@ -378,6 +379,7 @@ def videos_index_html(course):
             "concurrent_upload_limit": settings.VIDEO_UPLOAD_PIPELINE.get("CONCURRENT_UPLOAD_LIMIT", 0),
             "video_supported_file_formats": VIDEO_SUPPORTED_FILE_FORMATS.keys(),
             "video_upload_max_file_size": VIDEO_UPLOAD_MAX_FILE_SIZE_GB,
+            "video_max_length_file_name": VIDEO_MAX_LENGTH_FILE_NAME,
             "storage_service": STORAGE_SERVICE,
             "transcript_handler_url": reverse_course_url("video_transcripts_handler", unicode(course.id)),
             "languages": all_languages_microsoft()

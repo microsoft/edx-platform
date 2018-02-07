@@ -12,6 +12,7 @@ define([
         previousUploads,
         videoSupportedFileFormats,
         videoUploadMaxFileSizeInGB,
+        videoMaxLengthFileName,
         storageService,
         transcriptHandlerUrl
     ) {
@@ -21,6 +22,7 @@ define([
                 uploadButton: uploadButton,
                 videoSupportedFileFormats: videoSupportedFileFormats,
                 videoUploadMaxFileSizeInGB: videoUploadMaxFileSizeInGB,
+                videoMaxLengthFileName: videoMaxLengthFileName,
                 storageService: storageService,
                 onFileUploadDone: function(activeVideos) {
                     $.ajax({

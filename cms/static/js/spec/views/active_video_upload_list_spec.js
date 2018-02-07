@@ -42,6 +42,7 @@ define(
                 this.uploadButton = $('<button>');
                 this.videoSupportedFileFormats = ['.mp4', '.mov'];
                 this.videoUploadMaxFileSizeInGB = 5;
+                this.videoMaxLengthFileName = 36;
                 this.storageService = 's3';
                 this.view = new ActiveVideoUploadListView({
                     concurrentUploadLimit: concurrentUploadLimit,
@@ -49,6 +50,7 @@ define(
                     uploadButton: this.uploadButton,
                     videoSupportedFileFormats: this.videoSupportedFileFormats,
                     videoUploadMaxFileSizeInGB: this.videoUploadMaxFileSizeInGB,
+                    videoMaxLengthFileName: this.videoMaxLengthFileName,
                     storageService: this.storageService
                 });
                 this.view.render();
@@ -388,6 +390,30 @@ define(
                             StringUtils.interpolate(
                                 '{fileName} is not in a supported file format. Supported file formats are {supportedFormats}.',  // eslint-disable-line max-len
                                 {fileName: files[index].name, supportedFormats: self.videoSupportedFileFormats.join(' and ')}  // eslint-disable-line max-len
+                            )
+                        );
+                    });
+                });
+            });
+
+            describe('filename length', function() {
+                it('should fail upload for not correct filename length', function() {
+                    var files = [
+                            {name: 'test-max_length_123456789012345678901.mp4', size: 0}
+                        ],
+                        unSupportedFiles = {
+                            files: files
+                        },
+                        self = this;
+                    this.view.storageService = 'azure';
+                    this.view.$uploadForm.fileupload('add', unSupportedFiles);
+                    _.each(this.view.itemViews, function(uploadView) {
+                        verifyUploadViewInfo(
+                            uploadView,
+                            'Your file could not be uploaded',
+                            StringUtils.interpolate(
+                                'The filename length can not exceed {maxLengthFileName} symbols.',
+                                {maxLengthFileName: self.videoMaxLengthFileName}
                             )
                         );
                     });

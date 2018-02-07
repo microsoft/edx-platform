@@ -778,7 +778,6 @@ class VideoTranscriptsTestCase(CourseTestCase):
             video=video_mock, language="test_language", content="test-file.name"
         )
         self.assertEqual(json_response.status_code, 200)
-        self.assertEqual(json.loads(json_response.content)["status"], "ok")
         self.assertEqual(
             json.loads(json_response.content)["transcript"], {"name": "test-file.name", "language": "test_language"}
         )

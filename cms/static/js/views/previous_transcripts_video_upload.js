@@ -24,8 +24,8 @@ define(
 
             render: function() {
                 var data = this.model.attributes;
-                data['clientVideoId'] = this.clientVideoId;
-                data['viewId'] = this.cid;
+                data.clientVideoId = this.clientVideoId;
+                data.viewId = this.cid;
                 HtmlUtils.setHtml(
                     this.$el,
                     this.template(data)

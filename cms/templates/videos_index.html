@@ -36,6 +36,7 @@
             $contentWrapper.data("previous-uploads"),
             ${video_supported_file_formats | n, dump_js_escaped_json},
             ${video_upload_max_file_size | n, dump_js_escaped_json},
+            ${video_max_length_file_name | n, dump_js_escaped_json},
             ${storage_service | n, dump_js_escaped_json},
             ${transcript_handler_url | n, dump_js_escaped_json}
         );

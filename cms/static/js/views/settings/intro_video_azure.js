@@ -54,13 +54,6 @@ define([
                 this.model.set('intro_video_manifest', responseData.video_info.smooth_streaming_url);
                 this.captions = responseData.captions;
                 this.render();
-            }).fail(function(response) {
-                var errorMsg;
-                try {
-                    errorMsg = JSON.parse(response.responseText).error;
-                } catch (error) {
-                    errorMsg = this.defaultFailureMessage;
-                }
             });
         },
 
