@@ -43,6 +43,7 @@ from ratelimitbackend.exceptions import RateLimitException
 from social.apps.django_app import utils as social_utils
 from social.backends import oauth as social_oauth
 from social.exceptions import AuthException, AuthAlreadyAssociated
+from social.apps.django_app.default.models import UserSocialAuth
 
 from edxmako.shortcuts import render_to_response, render_to_string
 
@@ -101,6 +102,7 @@ from util.milestones_helpers import (
 
 from util.password_policy_validators import validate_password_strength
 import third_party_auth
+from third_party_auth.models import UserSocialAuthMapping
 from third_party_auth import pipeline, provider
 from student.helpers import (
     check_verify_status_by_course,
@@ -586,6 +588,22 @@ def dashboard(request):
 
     """
     user = request.user
+    enable_msa_migration = configuration_helpers.get_value("ENABLE_MSA_MIGRATION")
+    if enable_msa_migration:
+        is_redirection = None
+        try:
+            # Check to see user social entry for this user
+            social_auth_users = UserSocialAuth.objects.filter(user__username=user)
+            if social_auth_users:
+                try:
+                    social_auth_users_mapping = UserSocialAuthMapping.objects.get(uid=social_auth_users[0].uid)
+                except UserSocialAuthMapping.DoesNotExist:
+                    is_redirection = 1
+        except UserSocialAuth.DoesNotExist:
+            is_redirection = None
+        if is_redirection:
+            external_redirect_url = configuration_helpers.get_value('external_login_api') + configuration_helpers.get_value('LMS_ROOT_URL') + request.path
+            return redirect(external_redirect_url)
 
     platform_name = configuration_helpers.get_value("platform_name", settings.PLATFORM_NAME)
     enable_verified_certificates = configuration_helpers.get_value(
