@@ -16,6 +16,9 @@ from rest_framework.test import APITestCase
 from capa.tests.response_xml_factory import MultipleChoiceResponseXMLFactory
 from edx_oauth2_provider.tests.factories import AccessTokenFactory, ClientFactory
 from lms.djangoapps.courseware.tests.factories import GlobalStaffFactory, StaffFactory
+from openedx.core.djangoapps.api_admin.tests.factories import (
+    ApiAccessRequestFactory, ApplicationFactory
+)
 from student.tests.factories import CourseEnrollmentFactory, UserFactory
 from xmodule.modulestore import ModuleStoreEnum
 from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
@@ -201,6 +204,8 @@ class CurrentGradeViewTest(GradeViewTestMixin, APITestCase):
         """
         self.client.logout()
         self.client.login(username=self.staff.username, password=self.password)
+        ApiAccessRequestFactory(user=self.user, status=ApiAccessRequest.APPROVED)
+        application = ApplicationFactory(user=self.user)
         resp = self.client.get(self.get_url('IDoNotExist'))
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
         self.assertIn('error_code', resp.data)  # pylint: disable=no-member
@@ -237,6 +242,8 @@ class CurrentGradeViewTest(GradeViewTestMixin, APITestCase):
         """
         Test the grade for a user who has not answered any test.
         """
+        ApiAccessRequestFactory(user=self.user, status=ApiAccessRequest.APPROVED)
+        application = ApplicationFactory(user=self.user)
         resp = self.client.get(self.get_url(self.student.username))
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         expected_data = [{
@@ -277,6 +284,8 @@ class CurrentGradeViewTest(GradeViewTestMixin, APITestCase):
                 'course_id': 'course-v1:MITx+8.MechCX+2014_T1',
             }
         )
+		ApiAccessRequestFactory(user=self.user, status=ApiAccessRequest.APPROVED)
+        application = ApplicationFactory(user=self.user)
         url = "{0}?username={1}".format(base_url, self.student.username)
         resp = self.client.get(url)
         self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
@@ -301,6 +310,8 @@ class CurrentGradeViewTest(GradeViewTestMixin, APITestCase):
                 'passed': grade['letter_grade'] is not None,
 
             }
+			ApiAccessRequestFactory(user=self.user, status=ApiAccessRequest.APPROVED)
+            application = ApplicationFactory(user=self.user)
             mock_grade.return_value = MagicMock(**grade_fields)
             resp = self.client.get(self.get_url(self.student.username))
 
