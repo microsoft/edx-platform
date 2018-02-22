@@ -284,7 +284,7 @@ class CurrentGradeViewTest(GradeViewTestMixin, APITestCase):
                 'course_id': 'course-v1:MITx+8.MechCX+2014_T1',
             }
         )
-		ApiAccessRequestFactory(user=self.user, status=ApiAccessRequest.APPROVED)
+        ApiAccessRequestFactory(user=self.user, status=ApiAccessRequest.APPROVED)
         application = ApplicationFactory(user=self.user)
         url = "{0}?username={1}".format(base_url, self.student.username)
         resp = self.client.get(url)
@@ -310,7 +310,7 @@ class CurrentGradeViewTest(GradeViewTestMixin, APITestCase):
                 'passed': grade['letter_grade'] is not None,
 
             }
-			ApiAccessRequestFactory(user=self.user, status=ApiAccessRequest.APPROVED)
+            ApiAccessRequestFactory(user=self.user, status=ApiAccessRequest.APPROVED)
             application = ApplicationFactory(user=self.user)
             mock_grade.return_value = MagicMock(**grade_fields)
             resp = self.client.get(self.get_url(self.student.username))
