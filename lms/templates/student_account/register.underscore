@@ -63,16 +63,15 @@
                 <span class="text"><%- gettext("Complete Registration") %></span>
             </h2>
         </div>
-        <span class="description-text"><%- gettext("Please complete the following fields to register for an account.") %></span>
-        <span class="description-text"><%- gettext("Required fields are noted by an asterisk (*).") %></span>
+        <p class="description-text"><strong><%- gettext("Verify your Microsoft account information") %></strong></p>
+        <p class="description-text-small"><%- gettext("If this is not the account you want to use, ") %><a target="_blank" href="/logout?msa_only=true">sign in with a different account</a></p>
     <% } %>
 
     <%= context.fields %>
 
     <button type="submit" class="action action-primary action-update js-register register-button">
-        <%- gettext("Create my " + context.platformName + " account") %>
+        <%- gettext("Complete registration") %>
     </button>
-    <p class="note">* <%- gettext("Required field") %></p>
 </form>
 
 <div class="toggle-form">

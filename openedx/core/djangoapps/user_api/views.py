@@ -416,10 +416,13 @@ class RegistrationView(APIView):
 
         if configuration_helpers.get_value('ENABLE_MSA_MIGRATION', False):
             name_instructions = name_instructions + \
-                u"You can update this information from your <br>" + \
+                u" You can update this information from your <br>" + \
                 u"{link_start}Microsoft Account Settings{link_end}.".format(
                     link_start=u'<a href="https://account.microsoft.com">', link_end=u'</a>'
-                )
+                ) + \
+                u'<hr/>' + \
+                u'<p class="description-text"><strong>Provide additional information</strong></p>' + \
+                u'<p class="description-text-small">Required fields are marked with an asterisk (*).</p>'
 
         name_instructions = _(name_instructions)
 
@@ -451,9 +454,8 @@ class RegistrationView(APIView):
         username_instructions = _(
             # Translators: These instructions appear on the registration form, immediately
             # below a field meant to hold the user's public username.
-            u"The name that will identify you in your courses - "
-            u"{bold_start}(cannot be changed later){bold_end}"
-        ).format(bold_start=u'<strong>', bold_end=u'</strong>')
+            u"The name that will identify you in your courses - (cannot be changed later)"
+        )
 
         # Translators: This example username is used as a placeholder in
         # a field on the registration form meant to hold the user's username.

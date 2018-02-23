@@ -19,6 +19,11 @@
         font-family: $sans-serif;
     }
 
+    hr {
+        margin-top: 40px;
+        margin-bottom: 20px;
+    }
+    
     .instructions {
         @extend %t-copy-base;
     }
@@ -113,6 +118,13 @@
     .description-text {
         @extend %t-copy-sub1;
         text-align: center;
+    }
+    
+    .description-text-small {
+        @extend .description-text;
+        margin-top: 0px;
+        padding-bottom: 10px;
+        font-size: 12px;
     }
 
     %nav-btn-base {

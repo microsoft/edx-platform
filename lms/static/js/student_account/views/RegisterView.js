@@ -80,9 +80,8 @@
                     if (this.errorMessage) {
                         this.renderErrors(formErrorsTitle, [this.errorMessage]);
                     } else if (this.currentProvider) {
-                        if (!this.msaMigrationEnabled) {
-                            this.renderAuthWarning();
-                        }
+                        this.renderAuthWarning();
+                        
                         // Don't allow user to edit email or name
                         this.$form.find('#register-email, #register-name').prop('disabled', true).addClass('disabled');
                     }
