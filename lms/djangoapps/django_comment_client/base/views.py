@@ -5,7 +5,6 @@ import random
 import time
 import urlparse
 
-from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.core import exceptions
@@ -140,15 +139,10 @@ def track_voted_event(request, course, obj, vote_value, undo_vote=False):
         obj_type = 'thread'
     else:
         obj_type = 'response'
-
-    target_username = obj.get('username')
-    if settings.FEATURES.get('SQUELCH_PII_IN_LOGS', False):
-        target_username = obj.get('user_id')
-
     event_name = _EVENT_NAME_TEMPLATE.format(obj_type=obj_type, action_name='voted')
     event_data = {
         'commentable_id': obj.commentable_id,
-        'target_username': target_username,
+        'target_username': obj.get('username'),
         'undo_vote': undo_vote,
         'vote_value': vote_value,
     }
