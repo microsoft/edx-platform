@@ -44,6 +44,7 @@ from social.apps.django_app import utils as social_utils
 from social.apps.django_app.default.models import UserSocialAuth
 from social.backends import oauth as social_oauth
 from social.exceptions import AuthException, AuthAlreadyAssociated
+from social.apps.django_app.default.models import UserSocialAuth
 
 from edxmako.shortcuts import render_to_response, render_to_string
 
@@ -103,6 +104,7 @@ from util.milestones_helpers import (
 from util.password_policy_validators import validate_password_strength
 import third_party_auth
 from third_party_auth.models import UserSocialAuthMapping, OAuth2ProviderConfig
+
 from third_party_auth import pipeline, provider
 from student.helpers import (
     check_verify_status_by_course,
@@ -1292,13 +1294,13 @@ def login_user(request, error=""):  # pylint: disable=too-many-statements,unused
     if msa_migration_enabled:
         if msa_migration_pipeline_status in ('EMAIL_LOOKUP', 'REGISTER_NEW_USER'):
             if user_found_by_email_lookup:
-                # User has already migrated to Microsoft Account (MSA),
+                # User has already migrated to Microsoft account (MSA),
                 # redirect them through that flow.
                 meta = user_found_by_email_lookup.profile.get_meta()
                 if meta.get(settings.MSA_ACCOUNT_MIGRATION_COMPLETED_KEY):
                     msa_migration_pipeline_status = 'LOGIN_MIGRATED'
                 else:
-                    # User has not migrated to Microsoft Account,
+                    # User has not migrated to Microsoft account,
                     # return successfully found user to show password field.
                     msa_migration_pipeline_status = 'LOGIN_NOT_MIGRATED'
             else:
@@ -2680,7 +2682,7 @@ class LogoutView(TemplateView):
     def dispatch(self, request, *args, **kwargs):  # pylint: disable=missing-docstring
 
         # If this is from the MSA migration confirmation page,
-        # only log the user out of their Microsoft Account
+        # only log the user out of their Microsoft account
         is_true = lambda value: bool(value) and value.lower() not in ('false', '0')
         msa_only = is_true(request.GET.get('msa_only'))
         msa_migration_enabled = configuration_helpers.get_value("ENABLE_MSA_MIGRATION")
@@ -2744,21 +2746,13 @@ class LogoutView(TemplateView):
         client_id = provider.get_setting("KEY")
         lms_root_url = configuration_helpers.get_value('LMS_ROOT_URL')
 
-        referer = request.META.get('HTTP_REFERER', lms_root_url)
-        if referer:
-            referer_path = urlsplit(referer).path
-        else:
-            referer_path = '/'
-
         if msa_only:
             redirect_url = '{}/account/link?auto=true'.format(lms_root_url)
-        elif referer_path == '/register':
-            if request.GET.get('next', '') != '/login':
-                redirect_url = referer
-            else:
-                redirect_url = '{}/login'.format(lms_root_url)
         else:
             redirect_url = lms_root_url
+            next_url = request.GET.get('next')
+            if next_url:
+                redirect_url = urljoin(redirect_url, next_url)
         return redirect("https://login.live.com/oauth20_logout.srf?client_id={}&redirect_uri={}".format(client_id, redirect_url))
 
     def get_context_data(self, **kwargs):

@@ -465,7 +465,7 @@ def link_account(request):
     if third_party_auth.is_enabled():
         duplicate_provider = [m.message for m in messages.get_messages(request)]
         if len(duplicate_provider) > 0:
-            context['duplicate_provider'] = 'This Microsoft Account is already in use by a different account.'
+            context['duplicate_provider'] = 'This Microsoft account is already in use by a different account.'
 
         auth_states = pipeline.get_provider_user_states(user)
         context['auth']['providers'] = [{
