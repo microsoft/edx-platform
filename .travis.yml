@@ -27,6 +27,7 @@ branches:
   - oxa/dev.fic
   - oxa/ci
 
+
 before_install:
   # Login and fetch container from Azure container registry
   - docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
