@@ -26,6 +26,7 @@ branches:
   - oxa/dev.fic_msa
   - oxa/dev.fic
   - oxa/ci
+  - msa2dev_quality
 
 
 before_install:
