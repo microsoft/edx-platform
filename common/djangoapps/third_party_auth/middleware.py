@@ -9,6 +9,7 @@ from social.exceptions import AuthCanceled
 from . import pipeline
 from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 
+
 class ExceptionMiddleware(SocialAuthExceptionMiddleware):
     """Custom middleware that handles conditional redirection."""
 
