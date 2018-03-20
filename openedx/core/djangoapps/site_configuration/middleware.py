@@ -150,5 +150,4 @@ class AccountLinkingMiddleware(object):
         REDIRECT_URLS = [compile(expr) for expr in account_linking_redirect_urls]
         path = request.path_info.lstrip('/')
         if any(m.match(path) for m in REDIRECT_URLS) and path != redirect_to.lstrip('/'):
-            print("entered into redirection {}".format(redirect_to))
             return redirect(redirect_to)
