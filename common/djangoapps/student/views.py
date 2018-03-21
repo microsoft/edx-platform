@@ -2691,7 +2691,9 @@ class LogoutView(TemplateView):
 
         # Get the list of authorized clients before we clear the session.
         self.oauth_client_ids = request.session.get(edx_oauth2_provider.constants.AUTHORIZED_CLIENTS_SESSION_KEY, [])
-        user_has_microsoft_account = UserSocialAuth.objects.filter(user=request.user.id, provider="live").exists()
+        
+        requesting_user = User.objects.get(request.user.username)
+        user_has_microsoft_account = UserSocialAuth.objects.filter(user=requesting_user, provider="live").exists()
 
         logout(request)
 
