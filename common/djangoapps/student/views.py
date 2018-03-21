@@ -2691,6 +2691,7 @@ class LogoutView(TemplateView):
 
         # Get the list of authorized clients before we clear the session.
         self.oauth_client_ids = request.session.get(edx_oauth2_provider.constants.AUTHORIZED_CLIENTS_SESSION_KEY, [])
+        user_has_microsoft_account = UserSocialAuth.objects.filter(user=request.user, provider="live").exists()
 
         logout(request)
 
@@ -2703,7 +2704,7 @@ class LogoutView(TemplateView):
         # Clear the cookie used by the edx.org marketing site
         delete_logged_in_cookies(response)
 
-        if third_party_auth.is_enabled() and msa_migration_enabled:
+        if third_party_auth.is_enabled() and msa_migration_enabled and user_has_microsoft_account:
             # If this was a normal logout request, also log the user out of their Microsoft Account
             return self._do_microsoft_account_logout(request)
 
