@@ -144,9 +144,7 @@ class AccountLinkingMiddleware(object):
             True if user is privileged
             False if user is just a learner
         """
-        user_is_course_staff = CourseAccessRole.objects.filter(
-            user_id=user.id, role__in=['staff', 'instructor']
-        ).exists()
+        user_is_course_staff = CourseAccessRole.objects.filter(user_id=user.id).exists()
 
         return user.is_authenticated() and not (
             user_is_course_staff or user.is_staff or user.is_superuser
