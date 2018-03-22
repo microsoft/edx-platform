@@ -123,7 +123,7 @@ class AccountLinkingMiddleware(object):
         If the site is configured to restrict not logged in users to the DEFAULT_ACCOUNT_LINK_EXEMPT_URLS
         from accessing pages, wrap the next view with the django login_required middleware
         """
-        if self._is_staff_or_superuser(request.user) and configuration_helpers.get_value("ENABLE_MSA_MIGRATION"):
+        if configuration_helpers.get_value("ENABLE_MSA_MIGRATION") and not self._is_staff_or_superuser(request.user):
             # Check if user has associated a Microsoft account
             try:
                 UserSocialAuth.objects.get(user=request.user, provider="live")
@@ -146,7 +146,7 @@ class AccountLinkingMiddleware(object):
         """
         user_is_course_staff = CourseAccessRole.objects.filter(user_id=user.id).exists()
 
-        return user.is_authenticated() and not (
+        return user.is_authenticated() and (
             user_is_course_staff or user.is_staff or user.is_superuser
         )
 
