@@ -2695,8 +2695,7 @@ class LogoutView(TemplateView):
         try:
             requesting_user = User.objects.get(username=request.user.username)
             meta = requesting_user.profile.get_meta()
-            if msa_migration_enabled and meta.get(settings.MSA_ACCOUNT_MIGRATION_STATUS_KEY):
-                user_has_started_migration = True
+            user_has_started_migration = msa_migration_enabled and meta.get(settings.MSA_ACCOUNT_MIGRATION_STATUS_KEY)
         except User.DoesNotExist:
             user_has_started_migration = False
 
