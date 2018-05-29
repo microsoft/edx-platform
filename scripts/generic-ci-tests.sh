@@ -54,7 +54,7 @@ set -e
 # or else no tests will be executed.
 SHARD=${SHARD:="all"}
 NUMBER_OF_BOKCHOY_THREADS=${NUMBER_OF_BOKCHOY_THREADS:=1}
-export LETTUCE_BROWSER='firefox'
+export LETTUCE_BROWSER='chrome'
 
 # Clean up previous builds
 git clean -qxfd
