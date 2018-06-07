@@ -5,7 +5,7 @@ Test of custom django-oauth-toolkit behavior
 # pylint: disable=protected-access
 import datetime
 import unittest
-
+from django.test.utils import override_settings
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -82,6 +82,7 @@ class CustomValidationTestCase(TestCase):
 
 
 @unittest.skipUnless(settings.ROOT_URLCONF == 'lms.urls', 'Test only valid in lms')
+@override_settings(OAUTH2_PROVIDER_APPLICATION_MODEL='oauth_dispatch.ScopedApplication')
 class CustomAuthorizationViewTestCase(TestCase):
     """
     Test custom authorization view works.

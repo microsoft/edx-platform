@@ -10,7 +10,8 @@ from django.test import TestCase
 from django.utils.timezone import now
 
 import ddt
-from oauth2_provider import models
+from openedx.core.djangoapps.oauth_dispatch import models
+
 from student.tests.factories import UserFactory
 
 # oauth_dispatch is not in CMS' INSTALLED_APPS so these imports will error during test collection
@@ -59,13 +60,13 @@ class DOTAdapterTestCase(TestCase):
         ))
 
     @ddt.data(
-        ('confidential', models.Application.CLIENT_CONFIDENTIAL),
-        ('public', models.Application.CLIENT_PUBLIC),
+        ('confidential', models.ScopedApplication.CLIENT_CONFIDENTIAL),
+        ('public', models.ScopedApplication.CLIENT_PUBLIC),
     )
     @ddt.unpack
     def test_create_client(self, client_name, client_type):
         client = getattr(self, '{}_client'.format(client_name))
-        self.assertIsInstance(client, models.Application)
+        self.assertIsInstance(client, models.ScopedApplication)
         self.assertEqual(client.client_id, '{}-client-id'.format(client_name))
         self.assertEqual(client.client_type, client_type)
 
@@ -76,13 +77,13 @@ class DOTAdapterTestCase(TestCase):
         """
         client = self.adapter.get_client(
             redirect_uris=DUMMY_REDIRECT_URL,
-            client_type=models.Application.CLIENT_CONFIDENTIAL
+            client_type=models.ScopedApplication.CLIENT_CONFIDENTIAL
         )
-        self.assertIsInstance(client, models.Application)
-        self.assertEqual(client.client_type, models.Application.CLIENT_CONFIDENTIAL)
+        self.assertIsInstance(client, models.ScopedApplication)
+        self.assertEqual(client.client_type, models.ScopedApplication.CLIENT_CONFIDENTIAL)
 
     def test_get_client_not_found(self):
-        with self.assertRaises(models.Application.DoesNotExist):
+        with self.assertRaises(models.ScopedApplication.DoesNotExist):
             self.adapter.get_client(client_id='not-found')
 
     def test_get_client_for_token(self):
