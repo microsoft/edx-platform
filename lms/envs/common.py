@@ -410,6 +410,9 @@ FEATURES = {
     # Making the display of course discovery and dashboard tabs configurable
     'ENABLE_COURSE_DISCOVERY': True,
     'ENABLE_DASHBOARD_TABS': True,
+
+    # Set this to True to enable Azure Media Service XBlock installed for embed video player
+    'ENABLE_AZURE_MEDIA_SERVICES_XBLOCK': False,
 }
 
 # Settings for the course reviews tool template and identification key, set either to None to disable course reviews
