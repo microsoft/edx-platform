@@ -2,7 +2,8 @@ from django.conf import settings
 from django.conf.urls import patterns, include, url
 # There is a course creators admin table.
 from ratelimitbackend import admin
-
+import contentstore.views
+import contentstore
 from cms.djangoapps.contentstore.views.program import ProgramAuthoringView, ProgramsIdTokenView
 from cms.djangoapps.contentstore.views.organization import OrganizationListView
 
@@ -77,6 +78,8 @@ urlpatterns += patterns(
     url(r'^$', 'howitworks', name='homepage'),
     url(r'^howitworks$', 'howitworks'),
     url(r'^signup$', 'signup', name='signup'),
+    url(r'^register$', contentstore.views.signup),
+    url(r'^login$', contentstore.views.login_page),
     url(r'^signin$', 'login_page', name='login'),
     url(r'^login$', 'login_page', name='login1'),
     url(r'^request_course_creator$', 'request_course_creator', name='request_course_creator'),
@@ -177,6 +180,12 @@ if settings.FEATURES.get('CERTIFICATES_HTML_VIEW'):
         url(r'^certificates/{}$'.format(settings.COURSE_KEY_PATTERN),
             'contentstore.views.certificates.certificates_list_handler')
     )
+# Third-party auth.
+if settings.FEATURES.get('ENABLE_THIRD_PARTY_AUTH'):
+    urlpatterns += [
+        url(r'', include('third_party_auth.urls')),
+        url(r'api/third_party_auth/', include('third_party_auth.api.urls')),
+    ]
 
 # Maintenance Dashboard
 urlpatterns += patterns(

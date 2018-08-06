@@ -451,6 +451,21 @@ MICROSITE_DATABASE_TEMPLATE_CACHE_TTL = ENV_TOKENS.get(
     "MICROSITE_DATABASE_TEMPLATE_CACHE_TTL", MICROSITE_DATABASE_TEMPLATE_CACHE_TTL
 )
 
+##### Third-party auth options ################################################
+if FEATURES.get('ENABLE_THIRD_PARTY_AUTH'):
+    tmp_backends = ENV_TOKENS.get('THIRD_PARTY_AUTH_BACKENDS', [
+        'social.backends.google.GoogleOAuth2',
+        'social.backends.linkedin.LinkedinOAuth2',
+        'social.backends.facebook.FacebookOAuth2',
+        'social.backends.azuread.AzureADOAuth2',
+    ])
+
+    AUTHENTICATION_BACKENDS = list(tmp_backends) + list(AUTHENTICATION_BACKENDS)
+    del tmp_backends
+
+    # The reduced session expiry time during the third party login pipeline. (Value in seconds)
+    SOCIAL_AUTH_PIPELINE_TIMEOUT = ENV_TOKENS.get('SOCIAL_AUTH_PIPELINE_TIMEOUT', 600)
+
 ############################ OAUTH2 Provider ###################################
 
 # OpenID Connect issuer ID. Normally the URL of the authentication endpoint.
