@@ -202,7 +202,7 @@ class LogoutTests(TestCase):
     def assert_logout_redirects_to_root(self):
         """ Verify logging out redirects the user to the homepage. """
         response = self.client.get(reverse('logout'))
-        self.assertRedirects(response, '/', fetch_redirect_response=False)
+        self.assertRedirects(response, '/login', fetch_redirect_response=False)
 
     def assert_logout_redirects_with_target(self):
         """ Verify logging out with a redirect_url query param redirects the user to the target. """
@@ -225,7 +225,7 @@ class LogoutTests(TestCase):
         response = self.assert_session_logged_out(client)
         expected = {
             'logout_uris': [client.logout_uri + '?no_redirect=1'],  # pylint: disable=no-member
-            'target': '/',
+            'target': '/login',
         }
         self.assertDictContainsSubset(expected, response.context_data)  # pylint: disable=no-member
 
@@ -237,7 +237,7 @@ class LogoutTests(TestCase):
         response = self.assert_session_logged_out(client, HTTP_REFERER=client.logout_uri)  # pylint: disable=no-member
         expected = {
             'logout_uris': [],
-            'target': '/',
+            'target': '/login',
         }
         self.assertDictContainsSubset(expected, response.context_data)  # pylint: disable=no-member
 
