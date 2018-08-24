@@ -8,6 +8,7 @@ from social.backends.oauth import OAuthAuth
 from social.strategies.django_strategy import DjangoStrategy
 from .provider import Registry
 
+
 class ConfigurationModelStrategy(DjangoStrategy):
     """
     A DjangoStrategy customized to load settings from ConfigurationModels
