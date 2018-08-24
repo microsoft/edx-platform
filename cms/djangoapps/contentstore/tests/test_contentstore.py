@@ -18,7 +18,6 @@ from unittest import SkipTest
 
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.middleware.csrf import _compare_salted_tokens
 from django.test import TestCase
 from django.test.utils import override_settings
 
@@ -2195,7 +2194,7 @@ class SigninPageTestCase(TestCase):
         #       ...
         #       </fieldset>
         #       ...
-        # </form>
+        #</form>
         response = self.client.get("/signin")
         csrf_token = response.cookies.get("csrftoken")
         form = lxml.html.fromstring(response.content).get_element_by_id("login_form")
@@ -2204,8 +2203,7 @@ class SigninPageTestCase(TestCase):
         self.assertIsNotNone(csrf_token)
         self.assertIsNotNone(csrf_token.value)
         self.assertIsNotNone(csrf_input_field)
-
-        self.assertTrue(_compare_salted_tokens(csrf_token.value, csrf_input_field.attrib["value"]))
+        self.assertEqual(csrf_token.value, csrf_input_field.attrib["value"])
 
 
 def _create_course(test, course_key, course_data):

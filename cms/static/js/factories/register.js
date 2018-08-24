@@ -1,7 +1,7 @@
 define(['jquery', 'jquery.cookie'], function($) {
     'use strict';
     return function(options) {
-        var registerForm = $('form#register_form');
+        var $registerForm = $('form#register_form');
         $('form :input')
             .focus(function() {
                 $('label[for="' + this.id + '"]').addClass('is-focused');
@@ -10,7 +10,7 @@ define(['jquery', 'jquery.cookie'], function($) {
                 $('label').removeClass('is-focused');
             });
 
-        registerForm.submit(function(event) {
+        $registerForm.submit(function(event) {
             event.preventDefault();
             var submit_data = $('#register_form').serialize();
 
@@ -38,7 +38,7 @@ define(['jquery', 'jquery.cookie'], function($) {
 
         if (options.autoSubmitRegForm) {
             $('body').hide();
-            registerForm.submit();
+            $registerForm.submit();
         }
     };
 });
