@@ -2184,7 +2184,7 @@ class SigninPageTestCase(TestCase):
     other script.
     """
 
-    @patch.dict(settings.FEATURES, {'ONLY_THIRD_PARTY_AUTH': True})
+    @patch.dict(settings.FEATURES, {'ONLY_THIRD_PARTY_AUTH': False})
     def test_csrf_token_is_present_in_form(self):
         # Expected html:
         # <form>
