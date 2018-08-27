@@ -2200,7 +2200,7 @@ class SigninPageTestCase(TestCase):
         csrf_token = response.cookies.get("csrftoken")
         form = lxml.html.fromstring(response.content).get_element_by_id("login_form")
         csrf_input_field = form.find(".//input[@name='csrfmiddlewaretoken']")
-
+        print lxml.html.tostring(form)
         self.assertIsNotNone(csrf_token)
         self.assertIsNotNone(csrf_token.value)
         self.assertIsNotNone(csrf_input_field)

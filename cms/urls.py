@@ -80,7 +80,7 @@ urlpatterns += patterns(
     url(r'^signup$', 'signup', name='signup'),
     url(r'^register$', 'signup'),
     url(r'^signin$', 'login_page', name='login'),
-    url(r'^login$', 'login_page'),
+    url(r'^login$', 'login_page', name='login1'),
     url(r'^request_course_creator$', 'request_course_creator', name='request_course_creator'),
 
     url(r'^course_team/{}(?:/(?P<email>.+))?$'.format(COURSELIKE_KEY_PATTERN), 'course_team_handler'),
