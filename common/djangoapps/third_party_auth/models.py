@@ -16,6 +16,7 @@ from django.utils import timezone
 from django.utils.translation import ugettext_lazy as _
 import json
 import logging
+import re
 from provider.utils import long_token
 from provider.oauth2.models import Client
 from social.backends.base import BaseAuth
@@ -68,6 +69,11 @@ def clean_json(value, of_type):
     if not isinstance(value_python, of_type):
         raise ValidationError("Expected a JSON {}".format(of_type))
     return json.dumps(value_python, indent=4)
+
+
+def clean_username(username=''):
+    """ Simple helper method to ensure a username is compatible with our system requirements. """
+    return re.sub(r'[^-\w]+', '_', username)[:30]
 
 
 class AuthNotConfigured(SocialAuthBaseException):
@@ -221,6 +227,7 @@ class ProviderConfig(ConfigurationModel):
         return {
             'email': details.get('email', ''),
             'name': details.get('fullname', ''),
+            'username': clean_username(pipeline_kwargs.get('username') or '')
         }
 
     def get_authentication_backend(self):
