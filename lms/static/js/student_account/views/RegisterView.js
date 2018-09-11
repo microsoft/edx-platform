@@ -142,7 +142,15 @@
                                 function(errorList) {
                                     return _.map(
                                         errorList,
-                                        function(errorItem) { return '<li>' + errorItem.user_message + '</li>'; }
+                                        function(errorItem) {
+                                            if (errorItem.user_message === 'Full Name') {
+                                                return "<li>Please ensure your Microsoft account contains both" +
+                                                    " a first name and last name on your " +
+                                                    "<a href='https://account.microsoft.com'>account settings</a>" +
+                                                    " prior to registering for this site.</li>";
+                                            }
+                                            return '<li>' + errorItem.user_message + '</li>';
+                                        }
                                     );
                                 }
                             )
