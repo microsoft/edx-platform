@@ -89,6 +89,11 @@
                         this.renderAuthWarning();
                         // Don't allow user to edit email or name
                         this.$form.find('#register-email, #register-name').prop('disabled', true).addClass('disabled');
+                        if (jQuery.trim($('#register-name').val()).length === 0) {
+                            this.renderErrors(formErrorsTitle, ['<li>Please ensure your Microsoft account contains both a first name and last name on your <a href="https://account.microsoft.com">account settings</a> prior to registering for this site.</li>']); // eslint-disable-line max-len
+                            this.$form.find('label[for=register-name], #register-name').addClass('error');
+                            this.toggleDisableButton(true);
+                        }
                     }
                     if (this.autoSubmit) {
                         $(this.el).hide();
