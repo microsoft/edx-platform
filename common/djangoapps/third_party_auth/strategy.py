@@ -2,11 +2,10 @@
 A custom Strategy for python-social-auth that allows us to fetch configuration from
 ConfigurationModels rather than django.settings
 """
-from .pipeline import get as get_pipeline_from_request
+from .models import OAuth2ProviderConfig
 from .pipeline import AUTH_ENTRY_CUSTOM
 from social.backends.oauth import OAuthAuth
 from social.strategies.django_strategy import DjangoStrategy
-from .provider import Registry
 
 
 class ConfigurationModelStrategy(DjangoStrategy):
@@ -26,10 +25,9 @@ class ConfigurationModelStrategy(DjangoStrategy):
             setting 'name' is configured via LTIProviderConfig.
         """
         if isinstance(backend, OAuthAuth):
-            providers = [p for p in Registry.displayed_for_login() if p.backend_name == backend.name]
-            if not providers:
+            provider_config = OAuth2ProviderConfig.current(backend.name)
+            if not provider_config.enabled_for_current_site:
                 raise Exception("Can't fetch setting of a disabled backend/provider.")
-            provider_config = providers[0]
             try:
                 return provider_config.get_setting(name)
             except KeyError:
@@ -42,15 +40,6 @@ class ConfigurationModelStrategy(DjangoStrategy):
                 error_url = AUTH_ENTRY_CUSTOM[auth_entry].get('error_url')
                 if error_url:
                     return error_url
-
-        # Special case: we want to get this particular setting directly from the provider database
-        # entry if possible; if we don't have the information, fall back to the default behavior.
-        if name == 'MAX_SESSION_LENGTH':
-            running_pipeline = get_pipeline_from_request(self.request) if self.request else None
-            if running_pipeline is not None:
-                provider_config = Registry.get_from_pipeline(running_pipeline)
-                if provider_config:
-                    return provider_config.max_session_length
 
         # At this point, we know 'name' is not set in a [OAuth2|LTI|SAML]ProviderConfig row.
         # It's probably a global Django setting like 'FIELDS_STORED_IN_SESSION':

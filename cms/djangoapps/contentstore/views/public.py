@@ -7,9 +7,7 @@ from django.core.context_processors import csrf
 from django.core.urlresolvers import reverse
 from django.shortcuts import redirect
 from django.conf import settings
-import third_party_auth
-from student.helpers import auth_pipeline_urls
-from third_party_auth import pipeline, provider
+
 from edxmako.shortcuts import render_to_response
 
 from openedx.core.djangoapps.external_auth.views import (
@@ -36,28 +34,7 @@ def signup(request):
         # and registration is disabled.
         return redirect_with_get('login', request.GET, False)
 
-    context = {
-        'csrf': csrf_token,
-        'email': '',
-        'name': '',
-        'running_pipeline': None,
-        'pipeline_urls': auth_pipeline_urls(pipeline.AUTH_ENTRY_REGISTER, redirect_url=reverse("home")),
-        'selected_provider': '',
-        'username': '',
-    }
-
-    # If third-party auth is enabled, prepopulate the form with data from the
-    # selected provider.
-    if third_party_auth.is_enabled() and pipeline.running(request):
-        running_pipeline = pipeline.get(request)
-        current_provider = provider.Registry.get_from_pipeline(running_pipeline)
-        if current_provider is not None:
-            overrides = current_provider.get_register_form_data(running_pipeline.get('kwargs'))
-            overrides['running_pipeline'] = running_pipeline
-            overrides['selected_provider'] = current_provider
-            context.update(overrides)
-
-    return render_to_response('register.html', context)
+    return render_to_response('register.html', {'csrf': csrf_token})
 
 
 @ssl_login_shortcut

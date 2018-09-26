@@ -209,10 +209,3 @@
   </a>
 </div>
 </%block>
-<%block name="jsextra">
-  % if static.get_value('ONLY_THIRD_PARTY_AUTH', settings.FEATURES.get('ONLY_THIRD_PARTY_AUTH', False)):
-  <script type="text/javascript">
-window.location.href = "/signin";
-  </script>
-  % endif
-</%block>
