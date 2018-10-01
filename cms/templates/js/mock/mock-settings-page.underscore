@@ -204,6 +204,19 @@
       </div>
     </li>
 
+    <li class="field video" id="field-course-introduction-video">
+      <label for="intro-video-source">Course Introduction Video"</label>
+      <div>
+        <select name="intro-video-source" id="intro-video-source" aria-labelledby="aria-labelledby-intro-video-source">
+          <option value="azure">Azure</option>
+          <option value="youtube">YouTube"</option>
+        </select>
+        <span id="aria-labelledby-intro-video-source" class="sr">There are two available storage Azure and Youtube</span>
+        <span class="tip">Currently, there are two media services available to set the introduction video from:</span>
+      </div>
+      <div id="field-body-course-introduction-video"></div>
+    </li>
+
   </ol>
 </section>
 

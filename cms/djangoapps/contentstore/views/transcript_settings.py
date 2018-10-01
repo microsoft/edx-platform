@@ -2,10 +2,11 @@
 Views related to the transcript preferences feature
 """
 import os
-import json
+import requests
 import logging
 
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
 from django.core.files.base import ContentFile
 from django.http import HttpResponseNotFound, HttpResponse
 from django.utils.translation import ugettext as _
@@ -18,14 +19,17 @@ from edxval.api import (
     get_video_transcript_data,
     update_transcript_credentials_state_for_org,
 )
+from edxval.models import Video, VideoTranscript
 from opaque_keys.edx.keys import CourseKey
 
+from azure_video_pipeline.utils import get_media_service_client, get_transcript_file_name
+from contentstore.views.course import get_course_and_check_access
 from openedx.core.djangoapps.video_config.models import VideoTranscriptEnabledFlag
 from openedx.core.djangoapps.video_pipeline.api import update_3rd_party_transcription_service_credentials
 from student.auth import has_studio_write_access
 from util.json_request import JsonResponse, expect_json
 
-from contentstore.views.videos import TranscriptProvider
+from contentstore.views.videos import TranscriptProvider, get_storage_service
 from xmodule.video_module.transcripts_utils import Transcript, TranscriptsGenerationException
 
 __all__ = [
@@ -186,6 +190,8 @@ def validate_transcript_upload_data(data, files):
     missing = [attr for attr in must_have_attrs if attr not in data]
     if missing:
         error = _(u'The following parameters are required: {missing}.').format(missing=', '.join(missing))
+    elif not data['new_language_code']:
+        error = _(u'The following parameters are required: Language.')
     elif (
         data['language_code'] != data['new_language_code'] and
         data['new_language_code'] in get_available_transcript_languages(video_id=data['edx_video_id'])
@@ -223,30 +229,40 @@ def transcript_upload_handler(request):
         language_code = request.POST['language_code']
         new_language_code = request.POST['new_language_code']
         transcript_file = request.FILES['file']
-        try:
-            # Convert SRT transcript into an SJSON format
-            # and upload it to S3.
-            sjson_subs = Transcript.convert(
-                content=transcript_file.read(),
-                input_format=Transcript.SRT,
-                output_format=Transcript.SJSON
+
+        if get_storage_service() == 'azure':
+            response = transcript_add(
+                course_key,
+                request.user,
+                edx_video_id,
+                transcript_file,
+                new_language_code
             )
-            create_or_update_video_transcript(
-                video_id=edx_video_id,
-                language_code=language_code,
-                metadata={
-                    'provider': TranscriptProvider.CUSTOM,
-                    'file_format': Transcript.SJSON,
-                    'language_code': new_language_code
-                },
-                file_data=ContentFile(sjson_subs),
-            )
-            response = JsonResponse(status=201)
-        except (TranscriptsGenerationException, UnicodeDecodeError):
-            response = JsonResponse(
-                {'error': _(u'There is a problem with this transcript file. Try to upload a different file.')},
-                status=400
-            )
+        else:
+            try:
+                # Convert SRT transcript into an SJSON format
+                # and upload it to S3.
+                sjson_subs = Transcript.convert(
+                    content=transcript_file.read(),
+                    input_format=Transcript.SRT,
+                    output_format=Transcript.SJSON
+                )
+                create_or_update_video_transcript(
+                    video_id=edx_video_id,
+                    language_code=language_code,
+                    metadata={
+                        'provider': TranscriptProvider.CUSTOM,
+                        'file_format': Transcript.SJSON,
+                        'language_code': new_language_code
+                    },
+                    file_data=ContentFile(sjson_subs),
+                )
+                response = JsonResponse(status=201)
+            except (TranscriptsGenerationException, UnicodeDecodeError):
+                response = JsonResponse(
+                    {'error': _(u'There is a problem with this transcript file. Try to upload a different file.')},
+                    status=400
+                )
 
     return response
 
@@ -276,3 +292,29 @@ def transcript_delete_handler(request, course_key_string, edx_video_id, language
     delete_video_transcript(video_id=edx_video_id, language_code=language_code)
 
     return JsonResponse(status=200)
+
+
+def transcript_add(course_key, user, edx_video_id, transcript_file, language_code):
+    course = get_course_and_check_access(course_key, user)
+
+    video = Video.objects.filter(edx_video_id=edx_video_id).first()
+
+    if video:
+        transcript_file.name = get_transcript_file_name(video, language_code)
+        media_service = get_media_service_client(course.org)
+
+        try:
+            media_service.upload_video_transcript(
+                edx_video_id,
+                transcript_file=transcript_file
+            )
+        except (MultipleObjectsReturned, ObjectDoesNotExist) as e:
+            return JsonResponse({"error": e.message}, status=400)
+        except requests.HTTPError as e:
+            return JsonResponse({"error": e.message}, status=400)
+
+        VideoTranscript.objects.create(
+            video=video,
+            language_code=language_code,
+        )
+    return JsonResponse(status=201)

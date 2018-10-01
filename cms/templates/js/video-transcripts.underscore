@@ -18,6 +18,15 @@
     <% selectedLanguageCodes = _.keys(_.omit(transcripts, transcriptLanguageCode)); %>
     <div class='video-transcript-content' data-edx-video-id="<%- edxVideoID %>" data-language-code="<%- transcriptLanguageCode %>">
         <div class='transcript-upload-status-container'></div>
+        <% if (availableStorageService == 'azure') { %>
+        <% transcriptLanguage = _.find(transcriptAvailableLanguages, function(t){ return t.language_code === transcriptLanguageCode}); %>
+        <strong class='transcript-title'><%- StringUtils.interpolate(
+                gettext('{transcriptClientTitle}_{transcriptLanguageCode}.{fileExtension} ({transcriptLanguageTitle})'),
+                {transcriptClientTitle: transcriptClientTitle,
+                 transcriptLanguageCode: transcriptLanguageCode,
+                 fileExtension: transcriptFileFormat,
+                 transcriptLanguageTitle: transcriptLanguage && transcriptLanguage.language_text || transcriptLanguageCode }) %></strong>
+        <% } else { %>
         <strong class='transcript-title'><%- StringUtils.interpolate(gettext('{transcriptClientTitle}_{transcriptLanguageCode}.{fileExtension}'), {transcriptClientTitle: transcriptClientTitle, transcriptLanguageCode: transcriptLanguageCode, fileExtension: transcriptFileFormat}) %></strong>
         <select class='transcript-language-menu'>
             <option value=''>Select Language</option>
@@ -40,7 +49,33 @@
             <span class='transcript-actions-separator'> | </span>
             <button class="button-link delete-transcript-button"><%- gettext('Delete') %></button>
         </div>
+        <% } %>
+
     </div>
 <% }) %>
+
+<% if (availableStorageService === 'azure') { %>
+<button class="button-link add-transcripts-button">
+    <strong>
+        <span aria-hidden="true" class="add-transcripts-button-text"><%- gettext('Add transcripts') %></span>
+        <span class="sr"><%- StringUtils.interpolate(gettext("Add transcripts for {video_name}"), {video_name: clientVideoID}) %></span>
+    </strong>
+</button>
+<div class='video-transcript-content js-form-add-transcript hidden' data-edx-video-id="<%- edxVideoID %>" data-language-code="">
+        <div class='transcript-upload-status-container'></div>
+        <select class='transcript-language-menu'>
+            <option value=''>Select Language</option>
+            <% _.each(transcriptAvailableLanguages, function(availableLanguage){ %>
+                <option value='<%- availableLanguage.language_code %>'><%- availableLanguage.language_text %></option>
+            <% }) %>
+        </select>
+        <input class="upload-transcript-input hidden" type="file" name="file" accept=".<%- transcriptFileFormat %>"/>
+        <div class='transcript-actions'>
+            <button class="button-link upload-transcript-button"><%- gettext('Add') %></button>
+            <span class='transcript-actions-separator'> | </span>
+            <button class="button-link cancel-transcript-button"><%- gettext('Cancel') %></button>
+        </div>
+    </div>
 </div>
+<% } %>
 </div>

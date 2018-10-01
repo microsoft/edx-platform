@@ -1,0 +1,74 @@
+<div class="input input-existing">
+
+    <% if (!videoInfo && !model.intro_video_id) { %>
+    <div> Selected video will be rendered here...</div>
+    <% } else if (!videoInfo) { %>
+    <div><b><span style="color:#edbd3c;"><%= gettext("Checking for video file...")%></span></b></div>
+    <% } else if (model.intro_video_id) { %>
+    <div class="tc-wrapper">
+        <div class="azuremediaplayer">
+            <video class="amp-default-skin amp-big-play-centered video-wrapper"
+                   data-setup='{ "controls": true, "autoplay": false, "logo": {"enabled": false}, "height": 480 }'>
+                <source
+                    src="<%= model.intro_video_manifest %>"
+
+                    type="application/vnd.ms-sstr+xml"
+                />
+                <% _.forEach(JSON.parse(model.intro_video_captions), function(caption) { %>
+                    <track kind="subtitles" src="<%= caption.url %>" srclang="<%= caption.lang %>" label="<%= caption.label %>" /> %>
+                <% }); %>
+            </video>
+        </div>
+    </div>
+    <script src="//amp.azure.net/libs/amp/2.1.5/azuremediaplayer.min.js"></script>
+    <% }; %>
+</div>
+
+<div>
+    <% if (model.intro_video_source === 'azure') { %>
+        <% if (!courseVideos.length) { %>
+            <div><b><span style="color:#edbd3c;"><%= gettext("There are no uploaded videos yet!")%></span></b></div>
+            <div><span><%= gettext("Please, refer to <b>'Video Uploads'</b> page (Main menu > Content > Video Uploads) to upload some. Or switch to 'YouTube' option.")
+            %></span></div>
+        <% } else { %>
+            <select name="course-video-list" id="course-video-list">
+                <option id="video-list-none" value="">
+                    <%= model.intro_video_id ? gettext("Delete current video") : gettext("Please, choose the video from available ones") %>
+                </option>
+                <% _.forEach(courseVideos, function(video) { %>
+                <option id="<% video.edx_video_id %>" value="<%= video.edx_video_id %>"<%if (video.edx_video_id === model.intro_video_id) {%> selected<%}%>>
+                    <span><%= video.client_video_id %></span> [ video ID: <%= video.edx_video_id %> ]
+                </option>
+                <% }); %>
+            </select>
+
+            <% if (videoInfo) { %>
+                <div>
+                    <span class="tip tip-inline"><%= gettext("Azure introduction video file.")%></span>
+                </div>
+
+                <% if (captions.length) { %>
+                <% _.forEach(captions, function(caption, index) { %>
+                <div class="show-data">
+                    <div class="heading">
+                        <input type="checkbox"
+                               id="captions-<%= index%>"
+                               class="intro-captions"
+                               data-index="<%= index%>"
+                               data-lang="<%= caption.language%>"
+                               data-label="<%= caption.language_title%>"
+                               data-url="<%= caption.download_url%>"
+                            <%= captionEnabled(caption) ? 'checked' : '' %> />
+                        <label for="captions-<%= index%>">
+                            <%= caption.file_name %>  (<%= caption.language_title %>)
+                        </label>
+                    </div>
+                </div>
+                <% }); %>
+                <span class="tip tip-inline"><%= gettext("Subtitles for introduction video.")%></span>
+                <% }; %>
+            <% }; %>
+        <% }; %>
+    <% }; %>
+
+</div>

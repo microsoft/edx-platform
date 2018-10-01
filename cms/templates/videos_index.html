@@ -38,12 +38,14 @@
             $contentWrapper.data("previous-uploads"),
             ${video_supported_file_formats | n, dump_js_escaped_json},
             ${video_upload_max_file_size | n, dump_js_escaped_json},
+            ${video_max_length_file_name | n, dump_js_escaped_json},
             ${active_transcript_preferences | n, dump_js_escaped_json},
             ${transcript_credentials | n, dump_js_escaped_json},
             ${video_transcript_settings | n, dump_js_escaped_json},
             ${is_video_transcript_enabled | n, dump_js_escaped_json},
             ${video_image_settings | n, dump_js_escaped_json},
-            ${transcript_available_languages | n, dump_js_escaped_json}
+            ${transcript_available_languages | n, dump_js_escaped_json},
+            ${available_storage_service | n, dump_js_escaped_json},
         );
     });
 </%block>
@@ -58,7 +60,7 @@
             <span class="sr">&gt; </span>${_("Video Uploads")}
         </h1>
 
-        % if is_video_transcript_enabled :
+        % if is_video_transcript_enabled and available_storage_service != 'azure':
         <nav class="nav-actions" aria-label="${_('Page Actions')}">
             <h3 class="sr">${_("Page Actions")}</h3>
             <div class="nav-item">

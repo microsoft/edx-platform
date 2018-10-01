@@ -93,12 +93,13 @@ define(
                 return new File([new Blob([Array(size).join('i')], {type: type})], transcriptFileName);
             };
 
-            renderView = function(availableTranscripts) {
+            renderView = function(availableTranscripts, isVideoTranscriptEnabled=true, availableStorageService='aws') {
                 var videoViewIndex = 0,
                     videoData = {
                         client_video_id: clientVideoID,
                         edx_video_id: edxVideoID,
                         created: '2014-11-25T23:13:05',
+                        status_value: 'file_complete',
                         transcripts: availableTranscripts
                     },
                     videoCollection = new Backbone.Collection([new Backbone.Model(videoData)]);
@@ -108,7 +109,9 @@ define(
                     videoImageSettings: {},
                     videoTranscriptSettings: videoTranscriptSettings,
                     transcriptAvailableLanguages: transcriptAvailableLanguages,
-                    videoSupportedFileFormats: videoSupportedFileFormats
+                    videoSupportedFileFormats: videoSupportedFileFormats,
+                    isVideoTranscriptEnabled: isVideoTranscriptEnabled,
+                    availableStorageService: availableStorageService
                 });
                 videoListView.setElement($('.wrapper-assets'));
                 videoListView.render();
@@ -428,6 +431,91 @@ define(
                 // Verify transcript is rendered with correct info.
                 verifyTranscriptStateInfo($transcriptEl, languageCode);
             });
+
+            it('renders appropriate text when no transcript is available and storage is equal to azure', function() {
+                // Render view with no transcripts and storage is equal to azure
+                renderView([], true, 'azure');
+
+                // Verify transcript container is not hidden
+                expect(
+                    videoTranscriptsView.$el.find('.video-transcripts-wrapper').hasClass('hidden')
+                ).toEqual(false);
+
+                // Verify appropriate text is shown
+                expect(
+                    videoTranscriptsView.$el.find('.transcripts-empty-text').html()
+                ).toEqual('No transcript uploaded.');
+                expect(
+                    videoTranscriptsView.$el.find('.add-transcripts-button-text').html().trim()
+                ).toEqual('Add transcripts');
+            });
+
+            it('shows add transcripts form when clicked on add transcript button', function() {
+                // Render view with no transcripts and storage is equal to azure
+                renderView([], true, 'azure');
+
+                // Verify add transcripts button is not hidden
+                expect(
+                    videoTranscriptsView.$el.find('.add-transcripts-button').hasClass('hidden')
+                ).toEqual(false);
+
+                // Verify add transcripts form is hidden
+                expect(
+                    videoTranscriptsView.$el.find('.js-form-add-transcript').hasClass('hidden')
+                ).toEqual(true);
+
+                videoTranscriptsView.$el.find('.add-transcripts-button').click();
+
+                // Verify add transcripts button is hidden
+                expect(
+                    videoTranscriptsView.$el.find('.add-transcripts-button').hasClass('hidden')
+                ).toEqual(true);
+
+                // Verify add transcripts form is not hidden
+                expect(
+                    videoTranscriptsView.$el.find('.js-form-add-transcript').hasClass('hidden')
+                ).toEqual(false);
+            });
+
+            it('can add transcript', function() {
+                var newLanguageCode = 'es',
+                    newlanguageText = 'Spanish',
+                    requests = AjaxHelpers.requests(this),
+                    $transcriptEl;
+
+                // Render view with storage is equal to azure
+                renderView(['en'], true, 'azure');
+                expect(videoTranscriptsView.transcripts.length).toEqual(1);
+
+                // Select a language
+                videoTranscriptsView.$el.find('.transcript-language-menu').val(newLanguageCode);
+
+                videoTranscriptsView.$el.find('.upload-transcript-button').click();
+
+                // Add transcript to upload queue and send POST request to upload transcript.
+                videoTranscriptsView.$el.find('.upload-transcript-input').fileupload('add', {files: [createFakeTranscriptFile()]});
+
+                // Verify if POST request received for transcript upload
+                AjaxHelpers.expectRequest(
+                    requests,
+                    'POST',
+                    TRANSCRIPT_UPLOAD_URL
+                );
+
+                // Send successful upload response
+                AjaxHelpers.respondWithJson(requests, {});
+
+                // Verify transcripts length.
+                expect(videoTranscriptsView.transcripts.length).toEqual(2);
+
+                // Verify transcript is rendered.
+                $transcriptEl= videoTranscriptsView.$el.find('.video-transcript-content[data-language-code="' + newLanguageCode + '"]'); // eslint-disable-line max-len
+                expect($transcriptEl.find('.transcript-title').html()).toEqual(
+                    'Video client title n_' + newLanguageCode + '.' + TRANSCRIPT_DOWNLOAD_FILE_FORMAT +
+                    ' (' + newlanguageText + ')'
+                );
+            });
+
         });
     }
 );

@@ -599,6 +599,14 @@ RETIREMENT_SERVICE_WORKER_USERNAME = ENV_TOKENS.get(
 )
 RETIREMENT_STATES = ENV_TOKENS.get('RETIREMENT_STATES', RETIREMENT_STATES)
 
+####################### Configure Azure backend for Video Uploads ##########################
+AZURE_CLIENT_ID = AUTH_TOKENS.get('AZURE_CLIENT_ID')
+AZURE_CLIENT_SECRET = AUTH_TOKENS.get('AZURE_CLIENT_SECRET')
+AZURE_TENANT = AUTH_TOKENS.get('AZURE_TENANT')
+AZURE_REST_API_ENDPOINT = AUTH_TOKENS.get('AZURE_REST_API_ENDPOINT')
+AZURE_STORAGE_ACCOUNT_NAME = AUTH_TOKENS.get('AZURE_STORAGE_ACCOUNT_NAME')
+AZURE_STORAGE_KEY = AUTH_TOKENS.get('AZURE_STORAGE_KEY')
+
 ####################### Plugin Settings ##########################
 
 from openedx.core.djangoapps.plugins import plugin_settings, constants as plugin_constants
