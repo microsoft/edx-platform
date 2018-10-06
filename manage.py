@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python.
 """
 Usage: manage.py {lms|cms} [--settings env] ...
 
@@ -8,7 +8,7 @@ the first argument specifies which project to run (cms [Studio] or lms [Learning
 By default, those systems run in with a settings file appropriate for development. However,
 by passing the --settings flag, you can specify what environment specific settings file to use.
 
-Any arguments not understood by this manage.py will be passed to django-admin.py
+Any arguments not understood by this manage.py will be passed to django-admin.py.
 """
 
 # Patch the xml libs before anything else.
@@ -99,13 +99,13 @@ if __name__ == "__main__":
     os.environ.setdefault("SERVICE_VARIANT", edx_args.service_variant)
 
     enable_contracts = os.environ.get('ENABLE_CONTRACTS', False)
-    # can override with '--contracts' argument
+    # can override with '--contracts' argument.
     if not enable_contracts and not edx_args.contracts:
         contracts.disable_all()
 
     if edx_args.help:
         print "Django:"
-        # This will trigger django-admin.py to print out its help
+        # This will trigger django-admin.py to print out its help.
         django_args.append('--help')
 
     startup = importlib.import_module(edx_args.startup)
