@@ -14,12 +14,14 @@ define([
         previousUploads,
         videoSupportedFileFormats,
         videoUploadMaxFileSizeInGB,
+        videoMaxLengthFileName,
         activeTranscriptPreferences,
         transcriptOrganizationCredentials,
         videoTranscriptSettings,
         isVideoTranscriptEnabled,
         videoImageSettings,
-        transcriptAvailableLanguages
+        transcriptAvailableLanguages,
+        availableStorageService
     ) {
         var activeView = new ActiveVideoUploadListView({
                 postUrl: videoHandlerUrl,
@@ -27,11 +29,13 @@ define([
                 courseVideoSettingsButton: courseVideoSettingsButton,
                 videoSupportedFileFormats: videoSupportedFileFormats,
                 videoUploadMaxFileSizeInGB: videoUploadMaxFileSizeInGB,
+                videoMaxLengthFileName: videoMaxLengthFileName,
                 videoImageSettings: videoImageSettings,
                 activeTranscriptPreferences: activeTranscriptPreferences,
                 transcriptOrganizationCredentials: transcriptOrganizationCredentials,
                 videoTranscriptSettings: videoTranscriptSettings,
                 isVideoTranscriptEnabled: isVideoTranscriptEnabled,
+                availableStorageService: availableStorageService,
                 onFileUploadDone: function(activeVideos) {
                     $.ajax({
                         url: videoHandlerUrl,
@@ -55,7 +59,8 @@ define([
                                 videoImageSettings: videoImageSettings,
                                 videoTranscriptSettings: videoTranscriptSettings,
                                 transcriptAvailableLanguages: transcriptAvailableLanguages,
-                                videoSupportedFileFormats: videoSupportedFileFormats
+                                videoSupportedFileFormats: videoSupportedFileFormats,
+                                availableStorageService: availableStorageService
                             });
                         $contentWrapper.find('.wrapper-assets').replaceWith(updatedView.render().$el);
                     });
@@ -70,7 +75,8 @@ define([
                 videoImageSettings: videoImageSettings,
                 videoTranscriptSettings: videoTranscriptSettings,
                 transcriptAvailableLanguages: transcriptAvailableLanguages,
-                videoSupportedFileFormats: videoSupportedFileFormats
+                videoSupportedFileFormats: videoSupportedFileFormats,
+                availableStorageService: availableStorageService
             });
         $contentWrapper.append(activeView.render().$el);
         $contentWrapper.append(previousView.render().$el);

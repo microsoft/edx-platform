@@ -128,6 +128,8 @@
             'tooltip_manager': 'js/src/tooltip_manager',
             'draggabilly': 'js/vendor/draggabilly',
             'hls': 'common/js/vendor/hls',
+            'azure-storage.common': 'js/vendor/azure-storage.common',
+            'azure-storage.blob': 'js/vendor/azure-storage.blob',
 
             // Files needed for Annotations feature
             'annotator': 'js/vendor/ova/annotator-full',
@@ -361,6 +363,9 @@
                     'rangeslider', 'share-annotator', 'richText-annotator', 'reply-annotator',
                     'tags-annotator', 'flagging-annotator', 'grouping-annotator', 'diacritic-annotator',
                     'openseadragon', 'jquery-Watch', 'catch', 'handlebars', 'URI']
+            },
+            'azure-storage.blob': {
+                deps: ['jquery', 'azure-storage.common']
             }
             // end of annotation tool files
         }

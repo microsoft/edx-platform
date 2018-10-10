@@ -13,13 +13,15 @@ define(
             className: 'video-row',
 
             events: {
-                'click .remove-video-button.action-button': 'removeVideo'
+                'click .remove-video-button.action-button': 'removeVideo',
+                'click .js-lock-unlock-file': 'lockUnlockfile'
             },
 
             initialize: function(options) {
                 this.template = HtmlUtils.template(previousVideoUploadTemplate);
                 this.videoHandlerUrl = options.videoHandlerUrl;
                 this.videoImageUploadEnabled = options.videoImageSettings.video_image_upload_enabled;
+                this.availableStorageService = options.availableStorageService;
 
                 if (this.videoImageUploadEnabled) {
                     this.videoThumbnailView = new VideoThumbnailView({
@@ -44,7 +46,8 @@ define(
                 var renderedAttributes = {
                     videoImageUploadEnabled: this.videoImageUploadEnabled,
                     created: DateUtils.renderDate(this.model.get('created')),
-                    status: this.model.get('status')
+                    status: this.model.get('status'),
+                    availableStorageService: this.availableStorageService,
                 };
                 HtmlUtils.setHtml(
                     this.$el,
@@ -57,16 +60,29 @@ define(
                     this.videoThumbnailView.setElement(this.$('.thumbnail-col')).render();
                 }
                 this.videoTranscriptsView.setElement(this.$('.transcripts-col')).render();
+
+                if (this.availableStorageService === 'azure') {
+                    if ($.inArray(this.model.get('status_value'),
+                            ['upload_completed', 'upload', 'ingest', 'transcode_queue', 'transcode_active']) !== -1) {
+                        this.checkStatusVideo();
+                    }
+                }
                 return this;
             },
 
             removeVideo: function(event) {
-                var videoView = this;
+                var videoView = this,
+                    message = gettext('Removing a video from this list does not affect course content. Any content that uses a previously uploaded video ID continues to display in the course.');  // eslint-disable-line max-len
+
                 event.preventDefault();
+
+                if (this.availableStorageService === 'azure') {
+                    message = gettext('Removing a video from this list does not affect course content. This will not delete the video file from Azure storage and it will continue to play if included in a course unit. You can update the video or remove the URL link from the course if needed.');  // eslint-disable-line max-len
+                }
 
                 ViewUtils.confirmThenRunOperation(
                     gettext('Are you sure you want to remove this video from the list?'),
-                    gettext('Removing a video from this list does not affect course content. Any content that uses a previously uploaded video ID continues to display in the course.'),  // eslint-disable-line max-len
+                    message,
                     gettext('Remove'),
                     function() {
                         ViewUtils.runOperationShowingMessage(
@@ -82,6 +98,78 @@ define(
                         );
                     }
                 );
+            },
+
+            lockUnlockfile: function(event) {
+                var videoView = this,
+                    postData,
+                    title,
+                    runMessage;
+
+                event.preventDefault();
+
+                if (this.model.get('status_value') === 'file_complete') {
+                    title = gettext('Are you sure you want to add encryption to this video file?');
+                    runMessage = gettext('Adding encryption');
+                    postData = {encrypt: true};
+                } else {
+                    title = gettext('Are you sure you want to remove encryption from this video file?');
+                    runMessage = gettext('Removing encryption');
+                    postData = {encrypt: false};
+                }
+
+                ViewUtils.confirmThenRunOperation(
+                    title,
+                    gettext('If the current video file is used in "Azure-media-service" xBlock, please go to the xBlock and redefine the video file.'), // eslint-disable-line max-len,
+                    gettext('OK'),
+                    function() {
+                        ViewUtils.runOperationShowingMessage(
+                            runMessage,
+                            function() {
+                                return $.ajax({
+                                    url: videoView.videoHandlerUrl + '/encrypt/' + videoView.model.get('edx_video_id'),
+                                    type: 'POST',
+                                    data: JSON.stringify(postData),
+                                    contentType: 'application/json',
+                                    dataType: 'json'
+                                }).done(function(data) {
+                                    videoView.model.set('status_value', data.status_value);
+                                    videoView.$('.js-lock-unlock-file').toggleClass(
+                                        'encrypted',
+                                        data.status_value === 'file_encrypted'
+                                    );
+                                });
+                            }
+                        );
+                    }
+                );
+            },
+
+            checkStatusVideo: function() {
+                var view = this,
+                    video,
+                    intervalID;
+
+                intervalID = setInterval(function() {
+                    $.ajax({
+                        url: view.videoHandlerUrl + '/' + view.model.get('edx_video_id'),
+                        contentType: 'application/json',
+                        dataType: 'json',
+                        type: 'GET'
+                    }).done(function(responseData) {
+                        video = _.find(responseData.videos, function(v) {
+                            return v.edx_video_id === view.model.get('edx_video_id');
+                        });
+
+                        if (video && video.status_value !== view.model.get('status_value')) {
+                            clearInterval(intervalID);
+                            view.model.set(video);
+                            view.render();
+                        }
+                    }).fail(function() {
+                        clearInterval(intervalID);
+                    });
+                }, 20000);
             }
         });
 

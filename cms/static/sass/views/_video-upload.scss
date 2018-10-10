@@ -418,8 +418,16 @@
   }
 
   .assets-library {
-    .js-table-body .video-id-col {
-      word-break: break-all;
+    .js-table-body {
+      .video-id-col {
+        word-break: break-all;
+      }
+
+      .video-col {
+        a.action-button:hover {
+          color: #f9f9f9;
+        }
+      }
     }
 
     .assets-title {
@@ -466,13 +474,28 @@
         width: 10%;
       }
 
-      .actions-col {
+      .actions-col, .encrypt-col {
         width: 5%;
       }
 
       .video-head-col.thumbnail-col {
         width: 17% !important;
       }
+    }
+  }
+
+  .fa-lock {
+    display: none;
+  }
+
+  .encrypted {
+    .fa-unlock-alt {
+      display: none;
+    }
+
+    .fa-lock {
+      display: block;
+      padding: 5px 1px;
     }
   }
 
