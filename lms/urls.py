@@ -109,6 +109,11 @@ urlpatterns += (
     url(r'^dashboard/', include('learner_dashboard.urls')),
 )
 
+if settings.FEATURES["ENABLE_AZURE_MEDIA_SERVICES_XBLOCK"]:
+    urlpatterns += (
+        url(r'^embed_player/', include('azure_media_services.urls')),
+    )
+
 # TODO: This needs to move to a separate urls.py once the student_account and
 # student views below find a home together
 if settings.FEATURES["ENABLE_COMBINED_LOGIN_REGISTRATION"]:

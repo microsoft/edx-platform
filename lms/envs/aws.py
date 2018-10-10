@@ -194,12 +194,7 @@ if 'ENABLE_S3_GRADE_DOWNLOADS' in FEATURES:
 
 CMS_BASE = ENV_TOKENS.get('CMS_BASE', 'studio.edx.org')
 
-ALLOWED_HOSTS = [
-    # TODO: bbeggs remove this before prod, temp fix to get load testing running
-    "*",
-    ENV_TOKENS.get('LMS_BASE'),
-    FEATURES['PREVIEW_LMS_BASE'],
-]
+ALLOWED_HOSTS = ENV_TOKENS.get('LMS_ALLOWED_HOSTS')
 
 # allow for environments to specify what cookie name our login subsystem should use
 # this is to fix a bug regarding simultaneous logins between edx.org and edge.edx.org which can

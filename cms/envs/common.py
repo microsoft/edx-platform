@@ -222,6 +222,12 @@ FEATURES = {
 
     # Set this to False to facilitate cleaning up invalid xml from your modulestore.
     'ENABLE_XBLOCK_XML_VALIDATION': True,
+
+    # Set this to True to enable Azure Media Service XBlock installed for embed video player
+    'ENABLE_AZURE_MEDIA_SERVICES_XBLOCK': False,
+
+    # It disables main register/login form
+    'ONLY_THIRD_PARTY_AUTH': True,
 }
 
 ENABLE_JASMINE = False
@@ -829,6 +835,7 @@ INSTALLED_APPS = (
 
     # Monitor the status of services
     'openedx.core.djangoapps.service_status',
+    'third_party_auth',
 
     # Testing
     'django_nose',

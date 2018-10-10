@@ -13,6 +13,7 @@ from django.http import HttpResponseNotFound, HttpResponseServerError, Http404
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from util.cache import cache_if_anonymous
+from util.views import fix_crum_request
 
 valid_templates = []
 
@@ -70,23 +71,11 @@ def render_press_release(request, slug):
         return resp
 
 
+@fix_crum_request
 def render_404(request):
     return HttpResponseNotFound(render_to_string('static_templates/404.html', {}, request=request))
 
 
+@fix_crum_request
 def render_500(request):
     return HttpResponseServerError(render_to_string('static_templates/server-error.html', {}, request=request))
-
-
-def handler404(request):
-    response = render_to_response('static_templates/404.html', {},
-                                  context_instance=RequestContext(request))
-    response.status_code = 404
-    return response
-
-
-def handler500(request):
-    response = render_to_response('static_templates/server-error.html', {},
-                                  context_instance=RequestContext(request))
-    response.status_code = 500
-    return response

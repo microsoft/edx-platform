@@ -6,7 +6,7 @@ import shutil
 import lxml.html
 from lxml import etree
 import ddt
-
+from mock import patch
 from datetime import timedelta
 from fs.osfs import OSFS
 from json import loads
@@ -2184,6 +2184,7 @@ class SigninPageTestCase(TestCase):
     other script.
     """
 
+    @patch.dict(settings.FEATURES, {'ONLY_THIRD_PARTY_AUTH': False})
     def test_csrf_token_is_present_in_form(self):
         # Expected html:
         # <form>

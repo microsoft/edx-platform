@@ -1,6 +1,7 @@
 import json
 import logging
 from smtplib import SMTPException
+import crum
 import sys
 from functools import wraps
 
@@ -86,6 +87,21 @@ def require_global_staff(func):
                 )
             )
     return login_required(wrapped)
+
+
+def fix_crum_request(func):
+    """
+    A decorator that ensures that the 'crum' package (a middleware that stores and fetches the current request in
+    thread-local storage) can correctly fetch the current request. Under certain conditions, the current request cannot
+    be fetched by crum (e.g.: when HTTP errors are raised in our views via 'raise Http404', et. al.). This decorator
+    manually sets the current request for crum if it cannot be fetched.
+    """
+    @wraps(func)
+    def wrapper(request, *args, **kwargs):
+        if not crum.get_current_request():
+            crum.set_current_request(request=request)
+        return func(request, *args, **kwargs)
+    return wrapper
 
 
 @requires_csrf_token

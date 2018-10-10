@@ -130,11 +130,7 @@ LMS_ROOT_URL = ENV_TOKENS.get('LMS_ROOT_URL')
 
 SITE_NAME = ENV_TOKENS['SITE_NAME']
 
-ALLOWED_HOSTS = [
-    # TODO: bbeggs remove this before prod, temp fix to get load testing running
-    "*",
-    ENV_TOKENS.get('CMS_BASE')
-]
+ALLOWED_HOSTS = ENV_TOKENS.get('CMS_ALLOWED_HOSTS')
 
 LOG_DIR = ENV_TOKENS['LOG_DIR']
 
@@ -406,6 +402,22 @@ SESSION_INACTIVITY_TIMEOUT_IN_SECONDS = AUTH_TOKENS.get("SESSION_INACTIVITY_TIME
 
 ##### X-Frame-Options response header settings #####
 X_FRAME_OPTIONS = ENV_TOKENS.get('X_FRAME_OPTIONS', X_FRAME_OPTIONS)
+
+##### Third-party auth options ################################################
+if FEATURES.get('ENABLE_THIRD_PARTY_AUTH'):
+    tmp_backends = ENV_TOKENS.get('THIRD_PARTY_AUTH_BACKENDS', [
+        'social.backends.google.GoogleOAuth2',
+        'social.backends.linkedin.LinkedinOAuth2',
+        'social.backends.facebook.FacebookOAuth2',
+        'social.backends.azuread.AzureADOAuth2',
+    ])
+
+    AUTHENTICATION_BACKENDS = list(tmp_backends) + list(AUTHENTICATION_BACKENDS)
+    del tmp_backends
+
+    # The reduced session expiry time during the third party login pipeline. (Value in seconds)
+    SOCIAL_AUTH_PIPELINE_TIMEOUT = ENV_TOKENS.get('SOCIAL_AUTH_PIPELINE_TIMEOUT', 600)
+    SOCIAL_AUTH_OAUTH_SECRETS = AUTH_TOKENS.get('SOCIAL_AUTH_OAUTH_SECRETS', {})
 
 ##### ADVANCED_SECURITY_CONFIG #####
 ADVANCED_SECURITY_CONFIG = ENV_TOKENS.get('ADVANCED_SECURITY_CONFIG', {})
