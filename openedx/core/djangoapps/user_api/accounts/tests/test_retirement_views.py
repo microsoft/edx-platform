@@ -1063,7 +1063,7 @@ class TestAccountRetirementCleanup(RetirementTestCase):
         if data is None:
             data = {'usernames': self.usernames}
 
-        response = self.client.post(self.url, json.dumps(data), **self.headers)
+        response = self.client.delete(self.url, json.dumps(data), **self.headers)
         print(response)
         self.assertEqual(response.status_code, expected_status)
         return response

@@ -967,7 +967,7 @@ class AccountRetirementStatusView(ViewSet):
 
     def cleanup(self, request):
         """
-        POST /api/user/v1/accounts/retirement_cleanup/
+        DELETE /api/user/v1/accounts/update_retirement_status/
 
         {
             'usernames': ['user1', 'user2', ...]
