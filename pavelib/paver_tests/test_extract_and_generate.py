@@ -15,9 +15,9 @@ from polib import pofile
 from pytz import UTC
 
 from i18n import config
+from i18n import dummy
 from i18n import extract
 from i18n import generate
-from i18n import dummy
 
 
 class TestGenerate(TestCase):

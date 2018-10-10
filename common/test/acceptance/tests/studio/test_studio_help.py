@@ -100,7 +100,7 @@ class SignInHelpTest(AcceptanceTest):
         sign_in_page = self.index_page.click_sign_in()
         # The href we want to see in anchor help element.
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/getting_started/get_started.html'
+               'en/open-release-ficus.master/getting_started/get_started.html'
 
         # Assert that help link is correct.
         assert_nav_help_link(
@@ -134,7 +134,7 @@ class SignUpHelpTest(AcceptanceTest):
         sign_up_page = self.index_page.click_sign_up()
         # The href we want to see in anchor help element.
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/getting_started/get_started.html'
+               'en/open-release-ficus.master/getting_started/get_started.html'
 
         # Assert that help link is correct.
         assert_nav_help_link(
@@ -167,7 +167,7 @@ class HomeHelpTest(StudioCourseTest):
         """
         # The href we want to see in anchor help element.
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/getting_started/get_started.html'
+               'en/open-release-ficus.master/getting_started/get_started.html'
 
         # Assert that help link is correct.
         assert_nav_help_link(
@@ -188,7 +188,7 @@ class HomeHelpTest(StudioCourseTest):
         """
         # The href we want to see in anchor help element.
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/getting_started/get_started.html'
+               'en/open-release-ficus.master/getting_started/get_started.html'
 
         # Assert that help link is correct.
         assert_side_bar_help_link(
@@ -226,7 +226,7 @@ class NewCourseHelpTest(AcceptanceTest):
         """
         # The href we want to see in anchor help element.
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course' \
-               '/en/latest/getting_started/get_started.html'
+               '/en/open-release-ficus.master/getting_started/get_started.html'
 
         # Assert that help link is correct.
         assert_nav_help_link(
@@ -247,7 +247,7 @@ class NewCourseHelpTest(AcceptanceTest):
         """
         # The href we want to see in anchor help element.
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/getting_started/get_started.html'
+               'en/open-release-ficus.master/getting_started/get_started.html'
 
         # Assert that help link is correct.
         assert_side_bar_help_link(
@@ -285,7 +285,7 @@ class NewLibraryHelpTest(AcceptanceTest):
         """
         # The href we want to see in anchor help element.
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/getting_started/get_started.html'
+               'en/open-release-ficus.master/getting_started/get_started.html'
 
         # Assert that help link is correct.
         assert_nav_help_link(
@@ -306,7 +306,7 @@ class NewLibraryHelpTest(AcceptanceTest):
         """
         # The href we want to see in anchor help element.
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/getting_started/get_started.html'
+               'en/open-release-ficus.master/getting_started/get_started.html'
 
         # Assert that help link is correct.
         assert_side_bar_help_link(
@@ -344,7 +344,7 @@ class LibraryTabHelpTest(AcceptanceTest):
         click_css(self.dashboard_page, '#course-index-tabs .libraries-tab', 0, False)
         # The href we want to see in anchor help element.
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/getting_started/get_started.html'
+               'en/open-release-ficus.master/getting_started/get_started.html'
 
         # Assert that help link is correct.
         assert_nav_help_link(
@@ -378,7 +378,7 @@ class LibraryHelpTest(StudioLibraryTest):
         self.library_page.visit()
         # The href we want to see in anchor help element.
         href = "http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/" \
-               "en/latest/course_components/libraries.html"
+               "en/open-release-ficus.master/course_components/libraries.html"
 
         # Assert that help link is correct.
         assert_nav_help_link(
@@ -401,7 +401,7 @@ class LibraryHelpTest(StudioLibraryTest):
         self.library_page.visit()
         # The href we want to see in anchor help element.
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/course_components/libraries.html'
+               'en/open-release-ficus.master/course_components/libraries.html'
 
         # Assert that help link is correct.
         assert_side_bar_help_link(
@@ -426,7 +426,7 @@ class LibraryHelpTest(StudioLibraryTest):
         self.library_user_page.visit()
         # The href we want to see in anchor help element.
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/en/' \
-               'latest/course_components/libraries.html#give-other-users-access-to-your-library'
+               'open-release-ficus.master/course_components/libraries.html#give-other-users-access-to-your-library'
 
         # Assert that help link is correct.
         assert_nav_help_link(
@@ -458,7 +458,7 @@ class LibraryImportHelpTest(StudioLibraryTest):
         """
         # The href we want to see in anchor help element.
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/en/' \
-               'latest/course_components/libraries.html#import-a-library'
+               'open-release-ficus.master/course_components/libraries.html#import-a-library'
 
         # Assert that help link is correct.
         assert_nav_help_link(
@@ -479,7 +479,7 @@ class LibraryImportHelpTest(StudioLibraryTest):
         """
         # The href we want to see in anchor help element.
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/en/' \
-               'latest/course_components/libraries.html#import-a-library'
+               'open-release-ficus.master/course_components/libraries.html#import-a-library'
 
         # Assert that help link is correct.
         assert_side_bar_help_link(
@@ -512,7 +512,7 @@ class LibraryExportHelpTest(StudioLibraryTest):
         """
         # The href we want to see in anchor help element.
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/en/' \
-               'latest/course_components/libraries.html#export-a-library'
+               'open-release-ficus.master/course_components/libraries.html#export-a-library'
 
         # Assert that help link is correct.
         assert_nav_help_link(
@@ -533,7 +533,7 @@ class LibraryExportHelpTest(StudioLibraryTest):
         """
         # The href we want to see in anchor help element.
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/en/' \
-               'latest/course_components/libraries.html#export-a-library'
+               'open-release-ficus.master/course_components/libraries.html#export-a-library'
 
         # Assert that help link is correct.
         assert_side_bar_help_link(
@@ -568,7 +568,7 @@ class NewProgramHelpTest(ProgramsConfigMixin, AcceptanceTest):
         """
         self.program_page.click_new_program_button()
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course' \
-               '/en/latest/index.html'
+               '/en/open-release-ficus.master/index.html'
 
         # Assert that help link is correct.
         assert_nav_help_link(
@@ -604,7 +604,7 @@ class CourseOutlineHelpTest(StudioCourseTest):
         And help url should end with 'developing_course/course_outline.html'
         """
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course' \
-               '/en/latest/developing_course/course_outline.html'
+               '/en/open-release-ficus.master/developing_course/course_outline.html'
 
         # Assert that help link is correct.
         assert_nav_help_link(
@@ -624,7 +624,7 @@ class CourseOutlineHelpTest(StudioCourseTest):
         And help url should end with 'developing_course/course_outline.html'
         """
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course' \
-               '/en/latest/developing_course/course_outline.html'
+               '/en/open-release-ficus.master/developing_course/course_outline.html'
 
         # Assert that help link is correct.
         assert_side_bar_help_link(
@@ -662,7 +662,7 @@ class CourseUpdateHelpTest(StudioCourseTest):
         And help url should end with 'course_assets/handouts_updates.html'
         """
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/course_assets/handouts_updates.html'
+               'en/open-release-ficus.master/course_assets/handouts_updates.html'
 
         # Assert that help link is correct.
         assert_nav_help_link(
@@ -698,7 +698,7 @@ class AssetIndexHelpTest(StudioCourseTest):
         And help url should end with 'course_assets/course_files.html'
         """
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/course_assets/course_files.html'
+               'en/open-release-ficus.master/course_assets/course_files.html'
 
         # Assert that help link is correct.
         assert_nav_help_link(
@@ -718,7 +718,7 @@ class AssetIndexHelpTest(StudioCourseTest):
         And help url should end with 'course_assets/course_files.html'
         """
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/course_assets/course_files.html'
+               'en/open-release-ficus.master/course_assets/course_files.html'
 
         # Assert that help link is correct.
         assert_side_bar_help_link(
@@ -755,7 +755,7 @@ class CoursePagesHelpTest(StudioCourseTest):
         And help url should end with 'course_assets/pages.html'
         """
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/course_assets/pages.html'
+               'en/open-release-ficus.master/course_assets/pages.html'
 
         # Assert that help link is correct.
         assert_nav_help_link(
@@ -791,7 +791,7 @@ class UploadTextbookHelpTest(StudioCourseTest):
         And help url should end with 'course_assets/textbooks.html'
         """
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course' \
-               '/en/latest/course_assets/textbooks.html'
+               '/en/open-release-ficus.master/course_assets/textbooks.html'
 
         # Assert that help link is correct.
         assert_nav_help_link(
@@ -811,7 +811,7 @@ class UploadTextbookHelpTest(StudioCourseTest):
         And help url should end with 'course_assets/textbooks.html'
         """
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course' \
-               '/en/latest/course_assets/textbooks.html'
+               '/en/open-release-ficus.master/course_assets/textbooks.html'
 
         # Assert that help link is correct.
         assert_side_bar_help_link(
@@ -863,7 +863,7 @@ class StudioUnitHelpTest(ContainerBase):
         """
         unit_page = self.go_to_unit_page()
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course' \
-               '/en/latest/developing_course/course_units.html'
+               '/en/open-release-ficus.master/developing_course/course_units.html'
 
         # Assert that help link is correct.
         assert_nav_help_link(
@@ -901,7 +901,7 @@ class SettingsHelpTest(StudioCourseTest):
         And help url should end with 'set_up_course/setting_up_student_view.html'
         """
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course' \
-               '/en/latest/set_up_course/setting_up_student_view.html'
+               '/en/open-release-ficus.master/set_up_course/setting_up_student_view.html'
 
         # Assert that help link is correct.
         assert_nav_help_link(
@@ -939,7 +939,7 @@ class GradingPageHelpTest(StudioCourseTest):
         And help url should end with 'grading/index.html'
         """
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/grading/index.html'
+               'en/open-release-ficus.master/grading/index.html'
 
         # Assert that help link is correct.
         assert_nav_help_link(
@@ -977,7 +977,7 @@ class CourseTeamSettingsHelpTest(StudioCourseTest):
         And help url should end with 'set_up_course/course_staffing.html#add-course-team-members'
         """
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/set_up_course/course_staffing.html#add-course-team-members'
+               'en/open-release-ficus.master/set_up_course/course_staffing.html#add-course-team-members'
 
         # Assert that help link is correct.
         assert_nav_help_link(
@@ -1016,7 +1016,7 @@ class CourseGroupConfigurationHelpTest(StudioCourseTest):
         And help url should end with 'index.html'
         """
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/index.html'
+               'en/open-release-ficus.master/index.html'
 
         # Assert that help link is correct.
         assert_nav_help_link(
@@ -1037,7 +1037,7 @@ class CourseGroupConfigurationHelpTest(StudioCourseTest):
         And help url should end with 'course_features/cohorts/cohorted_courseware.html'
         """
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/course_features/cohorts/cohorted_courseware.html'
+               'en/open-release-ficus.master/course_features/cohorts/cohorted_courseware.html'
 
         # Assert that help link is correct.
         assert_side_bar_help_link(
@@ -1076,7 +1076,7 @@ class AdvancedSettingHelpTest(StudioCourseTest):
         And help url should end with 'index.html'
         """
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course' \
-               '/en/latest/index.html'
+               '/en/open-release-ficus.master/index.html'
 
         # Assert that help link is correct.
         assert_nav_help_link(
@@ -1114,7 +1114,7 @@ class CertificatePageHelpTest(StudioCourseTest):
         And help url should end with 'set_up_course/creating_course_certificates.html'
         """
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course' \
-               '/en/latest/set_up_course/creating_course_certificates.html'
+               '/en/open-release-ficus.master/set_up_course/creating_course_certificates.html'
 
         # Assert that help link is correct.
         assert_nav_help_link(
@@ -1134,7 +1134,7 @@ class CertificatePageHelpTest(StudioCourseTest):
         And help url should end with 'set_up_course/creating_course_certificates.html'
         """
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course' \
-               '/en/latest/set_up_course/creating_course_certificates.html'
+               '/en/open-release-ficus.master/set_up_course/creating_course_certificates.html'
 
         # Assert that help link is correct.
         assert_side_bar_help_link(
@@ -1186,7 +1186,8 @@ class GroupExperimentConfigurationHelpTest(ContainerBase):
         And help url should end with
         'content_experiments_configure.html#set-up-group-configurations-in-edx-studio'
         """
-        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/en/latest/course_features' \
+        href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/en' \
+               '/open-release-ficus.master/course_features' \
                '/content_experiments/content_experiments_configure.html#set-up-group-configurations-in-edx-studio'
         # Assert that help link is correct.
         assert_side_bar_help_link(
@@ -1225,7 +1226,7 @@ class ToolsImportHelpTest(StudioCourseTest):
         And help url should end with 'releasing_course/export_import_course.html#import-a-course'
         """
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/en/' \
-               'latest/releasing_course/export_import_course.html#import-a-course'
+               'open-release-ficus.master/releasing_course/export_import_course.html#import-a-course'
 
         # Assert that help link is correct.
         assert_nav_help_link(
@@ -1245,7 +1246,7 @@ class ToolsImportHelpTest(StudioCourseTest):
         And help url should end with 'releasing_course/export_import_course.html#import-a-course'
         """
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/en/' \
-               'latest/releasing_course/export_import_course.html#import-a-course'
+               'open-release-ficus.master/releasing_course/export_import_course.html#import-a-course'
 
         # Assert that help link is correct.
         assert_side_bar_help_link(
@@ -1284,7 +1285,7 @@ class ToolsExportHelpTest(StudioCourseTest):
         And help url should end with 'releasing_course/export_import_course.html#export-a-course'
         """
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/en/' \
-               'latest/releasing_course/export_import_course.html#export-a-course'
+               'open-release-ficus.master/releasing_course/export_import_course.html#export-a-course'
 
         # Assert that help link is correct.
         assert_nav_help_link(
@@ -1304,7 +1305,7 @@ class ToolsExportHelpTest(StudioCourseTest):
         And help url should end with 'releasing_course/export_import_course.html#export-a-course'
         """
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/en/' \
-               'latest/releasing_course/export_import_course.html#export-a-course'
+               'open-release-ficus.master/releasing_course/export_import_course.html#export-a-course'
 
         # Assert that help link is correct.
         assert_side_bar_help_link(
@@ -1337,7 +1338,7 @@ class StudioWelcomeHelpTest(AcceptanceTest):
         """
         # The url we want to see in anchor help element.
         href = 'http://edx.readthedocs.io/projects/open-edx-building-and-running-a-course/' \
-               'en/latest/getting_started/get_started.html'
+               'en/open-release-ficus.master/getting_started/get_started.html'
 
         # Assert that help link is correct.
         assert_nav_help_link(
