@@ -17,4 +17,23 @@
             </li>
         </ul>
     </div>
+    <% if (availableStorageService == 'azure') { %>
+    <div class="video-col encrypt-col">
+        <% if ($.inArray(status_value, ['file_complete', 'file_encrypted']) != -1 ) { %>
+        <ul class="actions-list">
+            <li class="action-item action-lock">
+                <a href="#" data-tooltip="<%- gettext('Encrypt/unencrypt file') %>" class="action-button js-lock-unlock-file <% if (status_value == 'file_encrypted') { %>encrypted<% } %>">
+                    <span class="icon fa fa-unlock-alt" aria-hidden="true"></span>
+                    <span class="icon fa fa-lock" aria-hidden="true"></span>
+                    <% if (status_value == 'file_encrypted') { %>
+                    <span class="sr"><%- StringUtils.interpolate(gettext("Unencrypt {video_name} video"), {video_name: client_video_id}) %></span>
+                    <% } else { %>
+                    <span class="sr"><%- StringUtils.interpolate(gettext("Encrypt {video_name} video"), {video_name: client_video_id}) %></span>
+                    <% } %>
+                </a>
+            </li>
+        </ul>
+        <% } %>
+    </div>
+    <% } %>
 </div>

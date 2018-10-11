@@ -1,3 +1,4 @@
+/* global AzureStorage */
 define([
     'jquery',
     'underscore',
@@ -9,7 +10,9 @@ define([
     'edx-ui-toolkit/js/utils/html-utils',
     'edx-ui-toolkit/js/utils/string-utils',
     'text!templates/active-video-upload-list.underscore',
-    'jquery.fileupload'
+    'jquery.fileupload',
+    'azure-storage.common',
+    'azure-storage.blob'
 ],
     function($, _, Backbone, ActiveVideoUpload, BaseView, ActiveVideoUploadView, CourseVideoSettingsView,
              HtmlUtils, StringUtils, activeVideoUploadListTemplate) {
@@ -47,6 +50,8 @@ define([
                 this.isVideoTranscriptEnabled = options.isVideoTranscriptEnabled;
                 this.videoSupportedFileFormats = options.videoSupportedFileFormats;
                 this.videoUploadMaxFileSizeInGB = options.videoUploadMaxFileSizeInGB;
+                this.videoMaxLengthFileName = options.videoMaxLengthFileName;
+                this.availableStorageService = options.availableStorageService;
                 this.onFileUploadDone = options.onFileUploadDone;
                 if (options.courseVideoSettingsButton) {
                     options.courseVideoSettingsButton.click(this.showCourseVideoSettingsView.bind(this));
@@ -213,13 +218,17 @@ define([
                     errorMsg;
 
                 if (uploadData.redirected) {
-                    model = new ActiveVideoUpload({
-                        fileName: uploadData.files[0].name,
-                        videoId: uploadData.videoId
-                    });
-                    this.collection.add(model);
-                    uploadData.cid = model.cid; // eslint-disable-line no-param-reassign
-                    uploadData.submit();
+                    if (this.availableStorageService === 'azure') {
+                        this.uploadAzureStorage(uploadData);
+                    } else {
+                        model = new ActiveVideoUpload({
+                            fileName: uploadData.files[0].name,
+                            videoId: uploadData.videoId
+                        });
+                        this.collection.add(model);
+                        uploadData.cid = model.cid; // eslint-disable-line no-param-reassign
+                        uploadData.submit();
+                    }
                 } else {
                     // Validate file and remove the files with errors
                     errors = view.validateFile(uploadData);
@@ -232,6 +241,13 @@ define([
                     _.each(
                         uploadData.files,
                         function(file) {
+                            var modelTracking;
+                            if (view.availableStorageService === 'azure') {
+                                modelTracking = new ActiveVideoUpload({
+                                    fileName: file.name
+                                });
+                                view.collection.add(modelTracking);
+                            }
                             $.ajax({
                                 url: view.postUrl,
                                 contentType: 'application/json',
@@ -245,12 +261,17 @@ define([
                                 _.each(
                                     responseData.files,
                                     function(file) { // eslint-disable-line no-shadow
+                                        if (modelTracking) {
+                                            modelTracking.set('videoId', file.edx_video_id);
+                                        }
+
                                         view.$uploadForm.fileupload('add', {
                                             files: _.filter(uploadData.files, function(fileObj) {
                                                 return file.file_name === fileObj.name;
                                             }),
                                             url: file.upload_url,
                                             videoId: file.edx_video_id,
+                                            cid: modelTracking ? modelTracking.cid : '',
                                             multipart: false,
                                             global: false,  // Do not trigger global AJAX error handler
                                             redirected: true
@@ -263,7 +284,7 @@ define([
                                 } catch (error) {
                                     errorMsg = view.defaultFailureMessage;
                                 }
-                                view.addUploadFailureView(file.name, errorMsg);
+                                view.addUploadFailureView(file.name, errorMsg, modelTracking);
                             });
                         }
                     );
@@ -342,13 +363,18 @@ define([
                 this.setStatus(data.cid, ActiveVideoUpload.STATUS_FAILED, message);
             },
 
-            addUploadFailureView: function(fileName, failureMessage) {
-                var model = new ActiveVideoUpload({
-                    fileName: fileName,
-                    status: ActiveVideoUpload.STATUS_FAILED,
-                    failureMessage: failureMessage
-                });
-                this.collection.add(model);
+            addUploadFailureView: function(fileName, failureMessage, model) {
+                if (model) {
+                    this.setStatus(model.cid, ActiveVideoUpload.STATUS_FAILED, failureMessage);
+                } else {
+                    var model = new ActiveVideoUpload({
+                        fileName: fileName,
+                        status: ActiveVideoUpload.STATUS_FAILED,
+                        failureMessage: failureMessage
+                    });
+                    this.collection.add(model);
+                }
+
                 this.readMessages([
                     StringUtils.interpolate(
                         gettext('Upload failed for video {fileName}'),
@@ -391,6 +417,13 @@ define([
                         )
                         .replace('{filename}', fileName)
                         .replace('{maxFileSizeInGB}', self.videoUploadMaxFileSizeInGB);
+                    } else if (
+                        self.availableStorageService === 'azure' && fileName.length > self.videoMaxLengthFileName
+                    ) {
+                        error = gettext(
+                            'The filename length can not exceed {maxLengthFileName} symbols.'
+                        )
+                        .replace('{maxLengthFileName}', self.videoMaxLengthFileName);
                     }
 
                     if (error) {
@@ -444,7 +477,66 @@ define([
                     dataType: 'json',
                     type: 'POST'
                 });
+            },
+
+            uploadAzureStorage: function(uploadData) {
+                var arrayUploadUrl;
+                var blobService;
+                var speedSummary;
+                var timerId;
+                var uploadUrl = uploadData.url,
+                    view = this,
+                    finishedOrError = false,
+                    blobUri,
+                    blobContainer,
+                    blobName,
+                    sasToken;
+
+                sasToken = uploadUrl.split('?').pop();
+                uploadUrl = uploadUrl.split('?')[0];
+                arrayUploadUrl = uploadUrl.split('/');
+                blobName = arrayUploadUrl.pop();
+                blobContainer = arrayUploadUrl.pop();
+                blobUri = uploadUrl.split(blobContainer)[0];
+
+                blobService = AzureStorage.createBlobServiceWithSas(blobUri, sasToken);
+                speedSummary = blobService.createBlockBlobFromBrowserFile(
+                    blobContainer,
+                    blobName,
+                    uploadData.files[0],
+                    function(error, result, response) {  // eslint-disable-line no-unused-vars
+                        var data;
+                        finishedOrError = true;
+                        if (error) {
+                            data = {
+                                cid: uploadData.cid,
+                                jqXHR: {}
+                            };
+                            view.fileUploadFail('event', data);
+                        } else {
+                            view.fileUploadDone('event', uploadData);
+                        }
+                    }
+                );
+
+                this.setStatus(uploadData.cid, ActiveVideoUpload.STATUS_UPLOADING);
+
+                timerId = setInterval(function() {
+                    if (!finishedOrError) {
+                        view.refreshProgress(speedSummary, uploadData.cid);
+                    } else {
+                        clearTimeout(timerId);
+                    }
+                }, 200);
+
+                this.refreshProgress(speedSummary, uploadData.cid);
+            },
+
+            refreshProgress: function(speedSummary, cid) {
+                var progress = speedSummary.getCompletePercent() / 100;
+                this.setProgress(cid, progress);
             }
+
         });
 
         return ActiveVideoUploadListView;
