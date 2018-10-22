@@ -8,8 +8,10 @@ from django.utils.translation import ugettext as _
 from openedx.core.djangolib.js_utils import js_escaped_string
 import third_party_auth
 from third_party_auth import provider, pipeline
+from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 
 providers = provider.Registry.displayed_for_login()
+auto_login_enabled = configuration_helpers.get_value('ENABLE_AUTO_LOGIN', False)
 %>
 <%block name="title">${_("Sign In")}</%block>
 <%block name="bodyclass">not-signedin view-signin</%block>
@@ -91,6 +93,16 @@ providers = provider.Registry.displayed_for_login()
 </%block>
 
 <%block name="jsextra">
+% if (auto_login_enabled is True and third_party_auth.is_enabled() and \
+static.get_value('ONLY_THIRD_PARTY_AUTH', settings.FEATURES.get('ONLY_THIRD_PARTY_AUTH', False)) and \
+providers and len(providers) == 1):
+    % for enabled in providers:
+      <script type="text/javascript">
+        var loginUrl='${pipeline.get_login_url(enabled.provider_id, pipeline.AUTH_ENTRY_LOGIN, redirect_url=reverse("home"))}';
+        window.location.href = loginUrl;
+      </script>
+    % endfor
+% endif
   <script type="text/javascript">
     function thirdPartySignin(event, url) {
       event.preventDefault();
