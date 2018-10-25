@@ -56,6 +56,10 @@ RETIREMENT_UPDATE = AccountRetirementStatusView.as_view({
     'patch': 'partial_update',
 })
 
+RETIREMENT_CLEANUP = AccountRetirementStatusView.as_view({
+    'post': 'cleanup',
+})
+
 RETIREMENT_POST = AccountRetirementView.as_view({
     'post': 'post',
 })
