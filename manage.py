@@ -105,7 +105,7 @@ if __name__ == "__main__":
 
     if edx_args.help:
         print "Django:"
-        # This will trigger django-admin.py to print out its help.
+        # This will trigger django-admin.py to print out it's help.
         django_args.append('--help')
 
     startup = importlib.import_module(edx_args.startup)
