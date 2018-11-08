@@ -3,6 +3,7 @@ Methods for interacting programmatically with the user creator table.
 """
 from course_creators.models import CourseCreator
 from student.roles import CourseCreatorRole
+from student.models import CourseAccessRole
 from student import auth
 
 
