@@ -25,7 +25,7 @@ from xmodule.modulestore import ModuleStoreEnum
 from xmodule.modulestore.django import modulestore
 from .user import user_with_role
 
-from course_creators.views import get_course_creator_status
+from course_creators.views import get_course_creator_status, is_course_author
 from .component import get_component_templates, CONTAINER_TEMPLATES
 from student.auth import (
     STUDIO_VIEW_USERS, STUDIO_EDIT_ROLES, get_user_permissions, has_studio_read_access, has_studio_write_access
@@ -48,7 +48,7 @@ def get_library_creator_status(user):
 
     if not LIBRARIES_ENABLED:
         library_creater_status = False
-    elif user.is_active and (user.is_staff or user.is_superuser):
+    elif user.is_active and (user.is_staff or user.is_superuser or is_course_author(user)):
         library_creater_status = True
     elif settings.FEATURES.get('DISABLE_LIBRARY_CREATION', False):
         library_creater_status = False
@@ -72,7 +72,7 @@ def library_handler(request, library_key_string=None):
         raise Http404  # Should never happen because we test the feature in urls.py also
 
     if not get_library_creator_status(request.user):
-        if not request.user.is_staff:
+        if not request.user.is_staff or request.user.is_superuser or is_course_author(user):
             return HttpResponseForbidden()
 
     if library_key_string is not None and request.method == 'POST':

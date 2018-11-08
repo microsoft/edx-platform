@@ -80,6 +80,18 @@ def user_requested_access(user):
         user.save()
 
 
+def is_course_author(user):
+    """
+    Check if user is Course Author of any course
+
+    """
+    user_is_course_staff = CourseAccessRole.objects.filter(user_id=user.id).exists()
+    if user_is_course_staff:
+        return True
+    else:
+        return False
+
+
 def _add_user(user, state):
     """
     Adds a user to the course creator table with the specified state.
