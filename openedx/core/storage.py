@@ -131,9 +131,9 @@ class AzureStorageExtended(AzureStorage):
             expiry = expire_at.isoformat().split('.')[0] + 'Z'
 
             sas_token = self.connection.generate_blob_shared_access_signature(
-                self.azure_container,
+                container_name=self.azure_container,
                 blob_name=name,
-                BlobPermissions.READ,
+                permission=BlobPermissions.READ,
                 expiry=expiry
             )
 
