@@ -133,7 +133,7 @@ class AzureStorageExtended(AzureStorage):
             sas_token = self.connection.generate_blob_shared_access_signature(
                 self.azure_container,
                 blob_name=name,
-                BlobPermissions(read=True),
+                BlobPermissions.READ,
                 expiry=expiry
             )
 
