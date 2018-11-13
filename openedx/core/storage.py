@@ -4,7 +4,7 @@ Django storage backends for Open edX.
 
 import pytz
 
-from azure.storage.common import AccessPolicy
+from azure.storage.blob.models import BlobPermissions
 from datetime import datetime, timedelta
 from django.contrib.staticfiles.storage import StaticFilesStorage, CachedFilesMixin
 from django.core.files.storage import get_storage_class
@@ -115,6 +115,34 @@ class AzureStorageExtended(AzureStorage):
 
         if container:
             self.azure_container = container
+
+    def url(self, name):
+        """
+        Override this method so that we can add SAS authorization tokens
+        """
+
+        sas_token = None
+        if self.url_expiry_secs:
+            now = datetime.utcnow().replace(tzinfo=pytz.utc)
+            expire_at = now + timedelta(seconds=self.url_expiry_secs)
+
+            # generate an ISO8601 time string and use split() to remove the sub-second
+            # components as Azure will reject them. Plus add the timezone at the end.
+            expiry = expire_at.isoformat().split('.')[0] + 'Z'
+
+            sas_token = self.connection.generate_blob_shared_access_signature(
+                self.azure_container,
+                blob_name=name,
+                BlobPermissions(read=True),
+                expiry=expiry
+            )
+
+        return self.connection.make_blob_url(
+            container_name=self.azure_container,
+            blob_name=name,
+            protocol=self.azure_protocol,
+            sas_token=sas_token
+        )
 
     def listdir(self, path):
         """
