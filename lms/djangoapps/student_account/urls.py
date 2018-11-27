@@ -4,7 +4,6 @@ from django.conf.urls import url
 from student_account import views
 
 urlpatterns = [
-    'student_account.views',
     url(r'^finish_auth$', views.finish_auth, name='finish_auth'),
     url(r'^settings$', views.account_settings, name='account_settings'),
     url(r'^get_cookies$', views.cookies_api, name='cookies_api'),
