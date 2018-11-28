@@ -1,9 +1,12 @@
 """
 CourseDetails
 """
+import json
+
 import re
 import logging
 
+from edxmako.shortcuts import render_to_string
 from django.conf import settings
 
 from xmodule.fields import Date
@@ -28,6 +31,10 @@ ABOUT_ATTRIBUTES = [
     'entrance_exam_id',
     'entrance_exam_minimum_score_pct',
     'about_sidebar_html',
+    'intro_video_captions',
+    'intro_video_id',
+    'intro_video_manifest',
+    'intro_video_source',
 ]
 
 
@@ -55,6 +62,11 @@ class CourseDetails(object):
         self.overview = ""  # html to render as the overview
         self.about_sidebar_html = ""
         self.intro_video = None  # a video pointer
+        self.intro_video_captions = ""
+        self.intro_video_id = ""
+        self.intro_video_manifest = ""
+        video_upload_backend = getattr(settings, 'VIDEO_UPLOAD_PIPELINE', {}).get("CLOUD", "")
+        self.intro_video_source = 'azure' if video_upload_backend == 'azure' else 'youtube'
         self.effort = None  # hours/week
         self.license = "all-rights-reserved"  # default course license is all rights reserved
         self.course_image_name = ""
@@ -174,11 +186,11 @@ class CourseDetails(object):
             store.update_item(about_item, user_id, allow_not_found=True)
 
     @classmethod
-    def update_about_video(cls, course, video_id, user_id):
+    def update_about_video(cls, course, video_id, user_id, video_source='youtube', captions=None):
         """
         Updates the Course's about video to the given video ID.
         """
-        recomposed_video_tag = CourseDetails.recompose_video_tag(video_id)
+        recomposed_video_tag = CourseDetails.recompose_video_tag(video_id, video_source, captions)
         cls.update_about_item(course, 'video', recomposed_video_tag, user_id)
 
     @classmethod
@@ -293,7 +305,13 @@ class CourseDetails(object):
             if attribute in jsondict:
                 cls.update_about_item(descriptor, attribute, jsondict[attribute], user.id)
 
-        cls.update_about_video(descriptor, jsondict['intro_video'], user.id)
+        video_source = jsondict.get('intro_video_source', 'youtube')
+        if video_source == 'youtube':
+            cls.update_about_video(descriptor, jsondict['intro_video'], user.id, video_source)
+        else:
+            cls.update_about_video(
+                descriptor, jsondict['intro_video_manifest'], user.id, video_source, jsondict['intro_video_captions']
+            )
 
         # Could just return jsondict w/o doing any db reads, but I put
         # the reads in as a means to confirm it persisted correctly
@@ -322,18 +340,25 @@ class CourseDetails(object):
             return None
 
     @staticmethod
-    def recompose_video_tag(video_key):
+    def recompose_video_tag(video_key, video_source, captions_json):
         """
         Returns HTML string to embed the video in an iFrame.
         """
         # TODO should this use a mako template? Of course, my hope is
         # that this is a short-term workaround for the db not storing
         #  the right thing
-        result = None
         if video_key:
-            result = (
-                '<iframe title="YouTube Video" width="560" height="315" src="//www.youtube.com/embed/' +
-                video_key +
-                '?rel=0" frameborder="0" allowfullscreen=""></iframe>'
-            )
-        return result
+            if video_source == 'youtube':
+                return (
+                    '<iframe title="YouTube Video" width="560" height="315" src="//www.youtube.com/embed/' +
+                    video_key +
+                    '?rel=0" frameborder="0" allowfullscreen=""></iframe>'
+                )
+            if video_source == 'azure':
+                context = {
+                    'source_url': video_key
+                }
+                if captions_json:
+                    captions = json.loads(captions_json)
+                    context['captions'] = captions
+                return render_to_string('azure_media_player.html', context)

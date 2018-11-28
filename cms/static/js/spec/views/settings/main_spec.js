@@ -33,6 +33,10 @@ define([
                 short_description: '',
                 overview: '',
                 intro_video: null,
+                intro_video_captions: '[]',
+                intro_video_id: null,
+                intro_video_manifest: '',
+                intro_video_source: 'youtube',
                 effort: null,
                 course_image_name: '',
                 course_image_asset_path: '',
@@ -360,6 +364,29 @@ define([
             $('#course-end-date').val('01/01/2030').trigger('change');
             expect(this.view.$('.message-error')).not.toExist();
             this.model.set('self_paced', false);
+        });
+
+        it('check render YouTube or Azure video player', function() {
+            this.view.intro_video_youtube_view.render = jasmine.createSpy();
+            this.view.intro_video_youtube_view.reset = jasmine.createSpy();
+            this.view.intro_video_azure_view.render = jasmine.createSpy();
+            this.view.intro_video_azure_view.reset = jasmine.createSpy();
+
+            this.view.$('#intro-video-source').val('azure').trigger('change');
+
+            expect(this.view.intro_video_azure_view.render).toHaveBeenCalled();
+            expect(this.view.intro_video_azure_view.reset).not.toHaveBeenCalled();
+            expect(this.view.intro_video_youtube_view.render).not.toHaveBeenCalled();
+            expect(this.view.intro_video_youtube_view.reset).toHaveBeenCalled();
+
+            this.view.intro_video_azure_view.render.calls.reset();
+            this.view.intro_video_youtube_view.reset.calls.reset();
+            this.view.$('#intro-video-source').val('youtube').trigger('change');
+
+            expect(this.view.intro_video_youtube_view.render).toHaveBeenCalled();
+            expect(this.view.intro_video_youtube_view.reset).not.toHaveBeenCalled();
+            expect(this.view.intro_video_azure_view.render).not.toHaveBeenCalled();
+            expect(this.view.intro_video_azure_view.reset).toHaveBeenCalled();
         });
     });
 });

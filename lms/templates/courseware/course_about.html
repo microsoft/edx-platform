@@ -18,9 +18,15 @@ from six import string_types
   ## (https://developers.facebook.com/docs/opengraph/howtos/maximizing-distribution-media-content#tags)
   <meta property="og:title" content="${course.display_name_with_default_escaped}" />
   <meta property="og:description" content="${get_course_about_section(request, course, 'short_description')}" />
+  ## AzureMediaPlayer styles
+  <link rel="stylesheet" type="text/css"
+        href="//amp.azure.net/libs/amp/2.1.5/skins/amp-default/azuremediaplayer.min.css" />
 </%block>
 
 <%block name="js_extra">
+  ## AzureMediaPlayer static files
+  <script src="//amp.azure.net/libs/amp/2.1.5/azuremediaplayer.min.js"></script>
+
   <script type="text/javascript">
   (function() {
     $(".register").click(function(event) {

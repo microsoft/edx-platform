@@ -72,7 +72,9 @@
             mathjax: '//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_SVG&delayStartupUntil=configured',   // eslint-disable-line max-len
             'youtube': '//www.youtube.com/player_api?noext',
             'js/src/ajax_prefix': 'xmodule_js/common_static/js/src/ajax_prefix',
-            'js/spec/test_utils': 'js/spec/test_utils'
+            'js/spec/test_utils': 'js/spec/test_utils',
+            'azure-storage.common': 'xmodule_js/common_static/js/vendor/azure-storage.common',
+            'azure-storage.blob': 'xmodule_js/common_static/js/vendor/azure-storage.blob'
         },
         shim: {
             'gettext': {

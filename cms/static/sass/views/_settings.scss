@@ -547,6 +547,10 @@
         border-top: 1px solid $gray-l5;
         padding-top: ($baseline/2);
       }
+
+      #intro-video-source {
+        float: right;
+      }
     }
 
     // specific fields - course image

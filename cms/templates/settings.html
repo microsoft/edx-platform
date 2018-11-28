@@ -9,6 +9,7 @@
   import urllib
   from django.utils.translation import ugettext as _
   from contentstore import utils
+  from contentstore.views.videos import get_storage_service
   from openedx.core.djangoapps.certificates.api import can_show_certificate_available_date_field
   from openedx.core.djangolib.js_utils import (
       dump_js_escaped_json, js_escaped_string
@@ -26,6 +27,7 @@
 
 <%block name="jsextra">
   <link rel="stylesheet" type="text/css" href="${static.url('js/vendor/timepicker/jquery.timepicker.css')}" />
+  <link rel="stylesheet" type="text/css" href="//amp.azure.net/libs/amp/2.1.5/skins/amp-default/azuremediaplayer.min.css" />
 
   <script type="text/javascript">
 window.CMS = window.CMS || {};
@@ -38,8 +40,10 @@ CMS.URL.UPLOAD_ASSET = '${upload_asset_url | n, js_escaped_string}'
     require(["js/factories/settings"], function(SettingsFactory) {
         SettingsFactory(
             "${details_url | n, js_escaped_string}",
+            "${video_data_handler | n, js_escaped_string}",
             ${show_min_grade_warning | n, dump_js_escaped_json},
-            ${can_show_certificate_available_date_field(context_course) | n, dump_js_escaped_json}
+            ${can_show_certificate_available_date_field(context_course) | n, dump_js_escaped_json},
+            JSON.parse(${course_videos_json | n, dump_js_escaped_json})
         );
     });
 </%block>
@@ -482,24 +486,32 @@ CMS.URL.UPLOAD_ASSET = '${upload_asset_url | n, js_escaped_string}'
                 % endif
 
                 % if about_page_editable:
+                <!-- intro video -->
                 <li class="field video" id="field-course-introduction-video">
-                  <label for="course-introduction-video">${_("Course Introduction Video")}</label>
-                  <div class="input input-existing">
-                    <div class="current current-course-introduction-video">
-                      <iframe width="618" height="350" title="${_('Course Introduction Video')}" src="" frameborder="0" allowfullscreen></iframe>
-                    </div>
-                    <div class="actions">
-                      <a href="#" class="remove-item remove-course-introduction-video remove-video-data"><span class="delete-icon"></span>${_("Delete Current Video")}</a>
-                    </div>
+                  <label for="intro-video-source">${_("Course Introduction Video")}</label>
+                  % if get_storage_service() == 'azure':
+                  <div>
+                    <select name="intro-video-source" id="intro-video-source" aria-labelledby="aria-labelledby-intro-video-source">
+                      <option value="azure">
+                        ${_("Azure")}
+                      </option>
+                      <option value="youtube">
+                        ${_("YouTube")}
+                      </option>
+                    </select>
+                    <span id="aria-labelledby-intro-video-source" class="sr">${_("There are two available storage Azure and Youtube")}</span>
+                    <span class="tip">
+                      ${_("Currently, there are two media services available to set the introduction video from")}:
+                    </span>
                   </div>
-
-                  <div class="input">
-                    ## Translators: This is the placeholder text for a field that requests a YouTube video ID for a course video
-                    <input type="text"  dir="ltr" class="long new-course-introduction-video add-video-data" id="course-introduction-video" value="" placeholder="${_("your YouTube video's ID")}" autocomplete="off" />
-                    <span class="tip tip-stacked">${_("Enter your YouTube video's ID (along with any restriction parameters)")}</span>
+                  % endif
+                  <br>
+                  <div id="field-body-course-introduction-video">
+                    <!-- INTRO VIDEO PLAYER RENDERS HERE -->
                   </div>
                 </li>
-                  % endif
+                <!-- intro video ends -->
+                % endif
               </ol>
             </div>
 
