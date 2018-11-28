@@ -267,7 +267,7 @@ FEATURES = {
     'ENABLE_COMBINED_LOGIN_REGISTRATION': False,
     'ENABLE_COMBINED_LOGIN_REGISTRATION_FOOTER': False,
 
-    # Set this to false to disable reset password endpoint 
+    # Set this to false to disable reset password endpoint
     'ENABLE_RESET_PASSWORD': True,
 
     # Enable organizational email opt-in
