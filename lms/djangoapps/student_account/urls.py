@@ -4,10 +4,11 @@ from django.conf import settings
 urlpatterns = []
 
 if settings.FEATURES.get('ENABLE_COMBINED_LOGIN_REGISTRATION'):
-    urlpatterns += patterns(
+    if settings.FEATURES.get('ENABLE_RESET_PASSWORD', True):
+        urlpatterns += patterns(
         'student_account.views',
         url(r'^password$', 'password_change_request_handler', name='password_change_request'),
-    )
+        )
 
 urlpatterns += patterns(
     'student_account.views',
