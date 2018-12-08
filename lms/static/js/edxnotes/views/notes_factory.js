@@ -4,7 +4,8 @@ define([
      'jquery', 'underscore', 'annotator_1.2.9', 'js/edxnotes/utils/logger',
      'js/edxnotes/views/shim', 'js/edxnotes/plugins/scroller',
      'js/edxnotes/plugins/events', 'js/edxnotes/plugins/accessibility',
-     'js/edxnotes/plugins/caret_navigation'
+     'js/edxnotes/plugins/caret_navigation',
+     'js/edxnotes/plugins/store_error_handler'
 ], function ($, _, Annotator, NotesLogger) {
     var plugins = ['Auth', 'Store', 'Scroller', 'Events', 'Accessibility', 'CaretNavigation', 'Tags'],
         getOptions, setupPlugins, getAnnotator;
@@ -34,7 +35,7 @@ define([
                 tokenUrl: params.tokenUrl
             },
             events: {
-                stringLimit: 300
+                stringLimit: params.eventStringLimit
             },
             store: {
                 prefix: prefix,

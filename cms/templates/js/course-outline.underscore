@@ -2,9 +2,25 @@
 var releasedToStudents = xblockInfo.get('released_to_students');
 var visibilityState = xblockInfo.get('visibility_state');
 var published = xblockInfo.get('published');
+var prereq = xblockInfo.get('prereq');
 
 var statusMessage = null;
 var statusType = null;
+if (prereq) {
+    var prereqDisplayName = '';
+    _.each(xblockInfo.get('prereqs'), function (p) {
+        if (p.block_usage_key == prereq) {
+            prereqDisplayName = p.block_display_name;
+            return false;
+        }
+    });
+    statusType = 'gated';
+    statusMessage = interpolate(
+        gettext('Prerequisite: %(prereq_display_name)s'),
+        {prereq_display_name: prereqDisplayName},
+        true
+    );
+}
 if (staffOnlyMessage) {
     statusType = 'staff-only';
     statusMessage = gettext('Contains staff only content');
@@ -28,11 +44,26 @@ if (statusType === 'warning') {
     statusIconClass = 'fa-warning';
 } else if (statusType === 'staff-only') {
     statusIconClass = 'fa-lock';
+} else if (statusType === 'gated') {
+    statusIconClass = 'fa-lock';
 }
 
-var gradingType = gettext('Not Graded');
+var gradingType = gettext('Ungraded');
 if (xblockInfo.get('graded')) {
     gradingType = xblockInfo.get('format')
+}
+
+var is_proctored_exam = xblockInfo.get('is_proctored_exam');
+var is_practice_exam = xblockInfo.get('is_practice_exam');
+if (is_proctored_exam) {
+    if (is_practice_exam) {
+        var exam_value = gettext('Practice proctored Exam');
+    } else {
+        var exam_value = gettext('Proctored Exam');
+    }
+
+} else {
+    var exam_value = gettext('Timed Exam');
 }
 %>
 <% if (parentInfo) { %>
@@ -54,11 +85,11 @@ if (xblockInfo.get('graded')) {
         <% } %>
                 <% if (xblockInfo.isVertical()) { %>
                     <span class="unit-title item-title">
-                        <a href="<%= xblockInfo.get('studio_url') %>"><%= xblockInfo.get('display_name') %></a>
+                        <a href="<%= xblockInfo.get('studio_url') %>"><%- xblockInfo.get('display_name') %></a>
                     </span>
                 <% } else { %>
                     <span class="wrapper-<%= xblockType %>-title wrapper-xblock-field incontext-editor is-editable" data-field="display_name" data-field-display-name="<%= gettext("Display Name") %>">
-                        <span class="<%= xblockType %>-title item-title xblock-field-value incontext-editor-value"><%= xblockInfo.get('display_name') %></span>
+                        <span class="<%= xblockType %>-title item-title xblock-field-value incontext-editor-value"><%- xblockInfo.get('display_name') %></span>
                     </span>
                 <% } %>
             </h3>
@@ -113,37 +144,52 @@ if (xblockInfo.get('graded')) {
                 <p>
                     <span class="sr status-release-label"><%= gettext('Release Status:') %></span>
                     <span class="status-release-value">
-                        <% if (xblockInfo.get('released_to_students')) { %>
-                            <i class="icon fa fa-check-square-o"></i>
-                            <%= gettext('Released:') %>
-                        <% } else if (xblockInfo.get('release_date')) { %>
-                            <i class="icon fa fa-clock-o"></i>
-                            <%= gettext('Scheduled:') %>
-                        <% } else { %>
-                            <i class="icon fa fa-clock-o"></i>
-                            <%= gettext('Unscheduled') %>
-                        <% } %>
-                        <% if (xblockInfo.get('release_date')) { %>
-                            <%= xblockInfo.get('release_date') %>
+                        <% if (!course.get('self_paced')) { %>
+                            <% if (xblockInfo.get('released_to_students')) { %>
+                                <i class="icon fa fa-check-square-o"></i>
+                                <%= gettext('Released:') %>
+                            <% } else if (xblockInfo.get('release_date')) { %>
+                                <i class="icon fa fa-clock-o"></i>
+                                <%= gettext('Scheduled:') %>
+                            <% } else { %>
+                                <i class="icon fa fa-clock-o"></i>
+                                <%= gettext('Unscheduled') %>
+                            <% } %>
+                            <% if (xblockInfo.get('release_date')) { %>
+                                <%= xblockInfo.get('release_date') %>
+                            <% } %>
                         <% } %>
                     </span>
                 </p>
               </div>
             <% } %>
-            <% if (xblockInfo.get('due_date') || xblockInfo.get('graded')) { %>
+            <% if (xblockInfo.get('is_time_limited')) { %>
+                <div class="status-timed-proctored-exam">
+                    <p>
+                        <span class="sr status-grading-label"> <%= gettext('Graded as:') %> </span>
+                        <i class="icon fa fa-check"></i>
+                        <span class="status-grading-value"> <%= gradingType %> </span>
+                         -
+                        <span class="sr status-proctored-exam-label"> <%- exam_value %> </span>
+                        <span class="status-proctored-exam-value"> <%- exam_value %> </span>
+                        <% if (xblockInfo.get('due_date')) { %>
+                            <span class="status-grading-date"> <%= gettext('Due:') %> <%= xblockInfo.get('due_date') %> </span>
+                        <% } %>
+                    </p>
+                </div>
+            <% } else if (xblockInfo.get('due_date') || xblockInfo.get('graded')) { %>
                 <div class="status-grading">
                     <p>
                         <span class="sr status-grading-label"> <%= gettext('Graded as:') %> </span>
                         <i class="icon fa fa-check"></i>
                         <span class="status-grading-value"> <%= gradingType %> </span>
-                        <% if (xblockInfo.get('due_date')) { %>
+                        <% if (xblockInfo.get('due_date') && !course.get('self_paced')) { %>
                             <span class="status-grading-date"> <%= gettext('Due:') %> <%= xblockInfo.get('due_date') %> </span>
                         <% } %>
                     </p>
                 </div>
             <% } %>
         <% } %>
-
         <% if (statusMessage) { %>
         <div class="status-message">
             <i class="icon fa <%= statusIconClass %>"></i>

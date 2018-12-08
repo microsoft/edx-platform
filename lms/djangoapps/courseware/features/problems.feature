@@ -4,73 +4,6 @@ Feature: LMS.Answer problems
     In order to test my understanding of the material
     I want to answer problems
 
-    Scenario: I can answer a problem correctly
-        Given External graders respond "correct"
-        And I am viewing a "<ProblemType>" problem
-        When I answer a "<ProblemType>" problem "correctly"
-        Then my "<ProblemType>" answer is marked "correct"
-        And The "<ProblemType>" problem displays a "correct" answer
-        And a "problem_check" server event is emitted
-        And a "problem_check" browser event is emitted
-
-        Examples:
-        | ProblemType       |
-        | drop down         |
-        | multiple choice   |
-        | checkbox          |
-        | radio             |
-        #| string            |
-        | numerical         |
-        | formula           |
-        | script            |
-        | code              |
-        | radio_text        |
-        | checkbox_text     |
-        | image             |
-
-    Scenario: I can answer a problem incorrectly
-        Given External graders respond "incorrect"
-        And I am viewing a "<ProblemType>" problem
-        When I answer a "<ProblemType>" problem "incorrectly"
-        Then my "<ProblemType>" answer is marked "incorrect"
-        And The "<ProblemType>" problem displays a "incorrect" answer
-
-        Examples:
-        | ProblemType       |
-        | drop down         |
-        | multiple choice   |
-        | checkbox          |
-        | radio             |
-        #| string            |
-        | numerical         |
-        | formula           |
-        | script            |
-        | code              |
-        | radio_text        |
-        | checkbox_text     |
-        | image             |
-
-    Scenario: I can submit a blank answer
-        Given I am viewing a "<ProblemType>" problem
-        When I check a problem
-        Then my "<ProblemType>" answer is marked "incorrect"
-        And The "<ProblemType>" problem displays a "blank" answer
-
-        Examples:
-        | ProblemType       |
-        | drop down         |
-        | multiple choice   |
-        | checkbox          |
-        | radio             |
-        #| string            |
-        | numerical         |
-        | formula           |
-        | script            |
-        | radio_text        |
-        | checkbox_text     |
-        | image             |
-
-
     Scenario: I can reset a problem
         Given I am viewing a randomization "<Randomization>" "<ProblemType>" problem with reset button on
         And I answer a "<ProblemType>" problem "<Correctness>ly"
@@ -115,7 +48,8 @@ Feature: LMS.Answer problems
         | drop down         | incorrect     | never           |
         | multiple choice   | incorrect     | never           |
         | checkbox          | incorrect     | never           |
-        | radio             | incorrect     | never           |
+        # TE-572
+        #| radio             | incorrect     | never           |
         #| string            | incorrect     | never           |
         | numerical         | incorrect     | never           |
         | formula           | incorrect     | never           |
@@ -176,11 +110,11 @@ Feature: LMS.Answer problems
 
     Scenario: I can view and hide the answer if the problem has it:
         Given I am viewing a "numerical" that shows the answer "always"
-        When I press the button with the label "Show Answer"
-        Then the Show/Hide button label is "Hide Answer"
+        When I press the button with the label "SHOW ANSWER"
+        Then the Show/Hide button label is "HIDE ANSWER"
         And I should see "4.14159" somewhere in the page
-        When I press the button with the label "Hide Answer"
-        Then the Show/Hide button label is "Show Answer"
+        When I press the button with the label "HIDE ANSWER"
+        Then the Show/Hide button label is "SHOW ANSWER"
         And I should not see "4.14159" anywhere on the page
 
     Scenario: I can see my score on a problem when I answer it and after I reset it

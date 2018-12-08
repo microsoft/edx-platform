@@ -9,13 +9,18 @@ from opaque_keys import InvalidKeyError
 from opaque_keys.edx.keys import CourseKey
 from opaque_keys.edx.locations import SlashSeparatedCourseKey
 from xmodule.modulestore.django import modulestore
-from certificates.queue import XQueueCertInterface
-
+from certificates.models import BadgeAssertion
+from certificates.api import regenerate_user_certificates
 
 LOGGER = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
+    """
+    Management command to recreate the certificate for
+    a given user in a given course.
+    """
+
     help = """Put a request on the queue to recreate the certificate for a particular user in a particular course."""
 
     option_list = BaseCommand.option_list + (
@@ -106,15 +111,19 @@ class Command(BaseCommand):
             )
 
             # Add the certificate request to the queue
-            xqueue_interface = XQueueCertInterface()
-            if options['insecure']:
-                xqueue_interface.use_https = False
-
-            ret = xqueue_interface.regen_cert(
+            ret = regenerate_user_certificates(
                 student, course_id, course=course,
                 forced_grade=options['grade_value'],
-                template_file=options['template_file']
+                template_file=options['template_file'],
+                insecure=options['insecure']
             )
+
+            try:
+                badge = BadgeAssertion.objects.get(user=student, course_id=course_id)
+                badge.delete()
+                LOGGER.info(u"Cleared badge for student %s.", student.id)
+            except BadgeAssertion.DoesNotExist:
+                pass
 
             LOGGER.info(
                 (

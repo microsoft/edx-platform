@@ -1,10 +1,15 @@
-from ratelimitbackend import admin
+# encoding: utf-8
+"""
+Admin site configurations for verify_student.
+"""
+
 from config_models.admin import ConfigurationModelAdmin
-from verify_student.models import (
-    SoftwareSecurePhotoVerification,
-    InCourseReverificationConfiguration,
-    VerificationStatus,
+from ratelimitbackend import admin
+from lms.djangoapps.verify_student.models import (
+    IcrvStatusEmailsConfiguration,
     SkippedReverification,
+    SoftwareSecurePhotoVerification,
+    VerificationStatus,
 )
 
 
@@ -13,6 +18,7 @@ class SoftwareSecurePhotoVerificationAdmin(admin.ModelAdmin):
     Admin for the SoftwareSecurePhotoVerification table.
     """
     list_display = ('id', 'user', 'status', 'receipt_id', 'submitted_at', 'updated_at')
+    raw_id_fields = ('user', 'reviewing_user')
     search_fields = (
         'receipt_id',
     )
@@ -22,9 +28,10 @@ class VerificationStatusAdmin(admin.ModelAdmin):
     """
     Admin for the VerificationStatus table.
     """
-    list_display = ('timestamp', 'user', 'status', 'checkpoint', 'location_id')
+    list_display = ('timestamp', 'user', 'status', 'checkpoint')
     readonly_fields = ()
-    search_fields = ('checkpoint', 'user')
+    search_fields = ('checkpoint__checkpoint_location', 'user__username')
+    raw_id_fields = ('user',)
 
     def get_readonly_fields(self, request, obj=None):
         """When editing an existing record, all fields should be read-only.
@@ -35,19 +42,16 @@ class VerificationStatusAdmin(admin.ModelAdmin):
 
         """
         if obj:
-            return self.readonly_fields + ('status', 'checkpoint', 'user', 'location_id', 'response', 'error')
+            return self.readonly_fields + ('status', 'checkpoint', 'user', 'response', 'error')
         return self.readonly_fields
-
-    def has_delete_permission(self, request, obj=None):
-        """The verification status table is append-only. """
-        return False
 
 
 class SkippedReverificationAdmin(admin.ModelAdmin):
     """Admin for the SkippedReverification table. """
     list_display = ('created_at', 'user', 'course_id', 'checkpoint')
+    raw_id_fields = ('user',)
     readonly_fields = ('user', 'course_id')
-    search_fields = ('user', 'course_id', 'checkpoint')
+    search_fields = ('user__username', 'course_id', 'checkpoint__checkpoint_location')
 
     def has_add_permission(self, request):
         """Skipped verifications can't be created in Django admin. """
@@ -55,6 +59,6 @@ class SkippedReverificationAdmin(admin.ModelAdmin):
 
 
 admin.site.register(SoftwareSecurePhotoVerification, SoftwareSecurePhotoVerificationAdmin)
-admin.site.register(InCourseReverificationConfiguration, ConfigurationModelAdmin)
 admin.site.register(SkippedReverification, SkippedReverificationAdmin)
 admin.site.register(VerificationStatus, VerificationStatusAdmin)
+admin.site.register(IcrvStatusEmailsConfiguration, ConfigurationModelAdmin)

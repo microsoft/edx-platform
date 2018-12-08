@@ -39,9 +39,9 @@ if Backbone?
 
       @searchAlertCollection.on "add", (searchAlert) =>
         content = _.template(
-          $("#search-alert-template").html(),
+          $("#search-alert-template").html())(
           {'message': searchAlert.attributes.message, 'cid': searchAlert.cid}
-          )
+        )
         @$(".search-alerts").append(content)
         @$("#search-alert-" + searchAlert.cid + " a.dismiss").bind "click", searchAlert, (event) =>
           @removeSearchAlert(event.data.cid)
@@ -248,7 +248,7 @@ if Backbone?
       @$(".forum-nav-thread[data-id='#{thread_id}'] .forum-nav-thread-link").addClass("is-active").find(".forum-nav-thread-wrapper-1").prepend('<span class="sr">' + gettext("Current conversation") + '</span>')
 
     goHome: ->
-      @template = _.template($("#discussion-home").html())
+      @template = _.template($("#discussion-home-template").html())
       $(".forum-content").html(@template)
       $(".forum-nav-thread-list a").removeClass("is-active").find(".sr").remove()
       $("input.email-setting").bind "click", @updateEmailNotifications
@@ -491,7 +491,7 @@ if Backbone?
             message = interpolate(
               _.escape(gettext('Show posts by %(username)s.')),
               {"username":
-                _.template('<a class="link-jump" href="<%= url %>"><%- username %></a>', {
+                _.template('<a class="link-jump" href="<%= url %>"><%- username %></a>')({
                   url: DiscussionUtil.urlFor("user_profile", response.users[0].id),
                   username: response.users[0].username
                 })

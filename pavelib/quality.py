@@ -50,8 +50,7 @@ def find_fixme(options):
         apps_list = ' '.join(top_python_dirs(system))
 
         pythonpath_prefix = (
-            "PYTHONPATH={system}:{system}/lib"
-            "common/djangoapps:common/lib".format(
+            "PYTHONPATH={system}/djangoapps:common/djangoapps:common/lib".format(
                 system=system
             )
         )
@@ -105,8 +104,7 @@ def run_pylint(options):
         apps_list = ' '.join(top_python_dirs(system))
 
         pythonpath_prefix = (
-            "PYTHONPATH={system}:{system}/djangoapps:{system}/"
-            "lib:common/djangoapps:common/lib".format(
+            "PYTHONPATH={system}/djangoapps:common/djangoapps:common/lib".format(
                 system=system
             )
         )
@@ -229,15 +227,128 @@ def run_complexity():
     For additional details on radon, see http://radon.readthedocs.org/
     """
     system_string = 'cms/ lms/ common/ openedx/'
-    print "--> Calculating cyclomatic complexity of files..."
+    complexity_report_dir = (Env.REPORT_DIR / "complexity")
+    complexity_report = complexity_report_dir / "python_complexity.log"
+
+    # Ensure directory structure is in place: metrics dir, and an empty complexity report dir.
+    Env.METRICS_DIR.makedirs_p()
+    _prepare_report_dir(complexity_report_dir)
+
+    print "--> Calculating cyclomatic complexity of python files..."
     try:
         sh(
-            "radon cc {system_string} --total-average".format(
-                system_string=system_string
+            "radon cc {system_string} --total-average > {complexity_report}".format(
+                system_string=system_string,
+                complexity_report=complexity_report
             )
         )
+        complexity_metric = _get_count_from_last_line(complexity_report, "python_complexity")
+        _write_metric(
+            complexity_metric,
+            (Env.METRICS_DIR / "python_complexity")
+        )
+        print "--> Python cyclomatic complexity report complete."
+        print "radon cyclomatic complexity score: {metric}".format(metric=str(complexity_metric))
+
     except BuildFailure:
         print "ERROR: Unable to calculate python-only code-complexity."
+
+
+@task
+@needs('pavelib.prereqs.install_node_prereqs')
+@cmdopts([
+    ("limit=", "l", "limit for number of acceptable violations"),
+])
+def run_jshint(options):
+    """
+    Runs jshint on static asset directories
+    """
+
+    violations_limit = int(getattr(options, 'limit', -1))
+
+    jshint_report_dir = (Env.REPORT_DIR / "jshint")
+    jshint_report = jshint_report_dir / "jshint.report"
+    _prepare_report_dir(jshint_report_dir)
+
+    sh(
+        "jshint . --config .jshintrc >> {jshint_report}".format(
+            jshint_report=jshint_report
+        ),
+        ignore_error=True
+    )
+
+    try:
+        num_violations = int(_get_count_from_last_line(jshint_report, "jshint"))
+    except TypeError:
+        raise BuildFailure(
+            "Error. Number of jshint violations could not be found in {jshint_report}".format(
+                jshint_report=jshint_report
+            )
+        )
+
+    # Record the metric
+    _write_metric(num_violations, (Env.METRICS_DIR / "jshint"))
+
+    # Fail if number of violations is greater than the limit
+    if num_violations > violations_limit > -1:
+        raise Exception(
+            "JSHint Failed. Too many violations ({count}).\nThe limit is {violations_limit}.".format(
+                count=num_violations, violations_limit=violations_limit
+            )
+        )
+
+
+def _write_metric(metric, filename):
+    """
+    Write a given metric to a given file
+    Used for things like reports/metrics/jshint, which will simply tell you the number of
+    jshint violations found
+    """
+    with open(filename, "w") as metric_file:
+        metric_file.write(str(metric))
+
+
+def _prepare_report_dir(dir_name):
+    """
+    Sets a given directory to a created, but empty state
+    """
+    dir_name.rmtree_p()
+    dir_name.mkdir_p()
+
+
+def _get_last_report_line(filename):
+    """
+    Returns the last line of a given file. Used for getting output from quality output files.
+    """
+    file_not_found_message = "The following log file could not be found: {file}".format(file=filename)
+    if os.path.isfile(filename):
+        with open(filename, 'r') as report_file:
+            lines = report_file.readlines()
+            return lines[len(lines) - 1]
+    else:
+        # Raise a build error if the file is not found
+        raise BuildFailure(file_not_found_message)
+
+
+def _get_count_from_last_line(filename, file_type):
+    """
+    This will return the number in the last line of a file.
+    It is returning only the value (as a floating number).
+    """
+    last_line = _get_last_report_line(filename)
+    if file_type is "python_complexity":
+        # Example of the last line of a complexity report: "Average complexity: A (1.93953443446)"
+        regex = r'\d+.\d+'
+    else:
+        # Example of the last line of a jshint report (for example): "3482 errors"
+        regex = r'^\d+'
+
+    try:
+        return float(re.search(regex, last_line).group(0))
+    # An AttributeError will occur if the regex finds no matches.
+    # A ValueError will occur if the returned regex cannot be cast as a float.
+    except (AttributeError, ValueError):
+        return None
 
 
 @task
@@ -258,7 +369,9 @@ def run_quality(options):
     # Directory to put the diff reports in.
     # This makes the folder if it doesn't already exist.
     dquality_dir = (Env.REPORT_DIR / "diff_quality").makedirs_p()
-    diff_quality_percentage_failure = False
+
+    # Save the pass variable. It will be set to false later if failures are detected.
+    diff_quality_percentage_pass = True
 
     def _pep8_output(count, violations_list, is_html=False):
         """
@@ -306,20 +419,20 @@ def run_quality(options):
         f.write(_pep8_output(count, violations_list, is_html=True))
 
     if count > 0:
-        diff_quality_percentage_failure = True
+        diff_quality_percentage_pass = False
 
     # ----- Set up for diff-quality pylint call -----
     # Set the string, if needed, to be used for the diff-quality --compare-branch switch.
     compare_branch = getattr(options, 'compare_branch', None)
-    compare_branch_string = ''
+    compare_branch_string = u''
     if compare_branch:
-        compare_branch_string = '--compare-branch={0}'.format(compare_branch)
+        compare_branch_string = u'--compare-branch={0}'.format(compare_branch)
 
     # Set the string, if needed, to be used for the diff-quality --fail-under switch.
     diff_threshold = int(getattr(options, 'percentage', -1))
-    percentage_string = ''
+    percentage_string = u''
     if diff_threshold > -1:
-        percentage_string = '--fail-under={0}'.format(diff_threshold)
+        percentage_string = u'--fail-under={0}'.format(diff_threshold)
 
     # Generate diff-quality html report for pylint, and print to console
     # If pylint reports exist, use those
@@ -327,33 +440,68 @@ def run_quality(options):
 
     pylint_files = get_violations_reports("pylint")
     pylint_reports = u' '.join(pylint_files)
+    jshint_files = get_violations_reports("jshint")
+    jshint_reports = u' '.join(jshint_files)
 
     pythonpath_prefix = (
-        "PYTHONPATH=$PYTHONPATH:lms:lms/djangoapps:lms/lib:cms:cms/djangoapps:cms/lib:"
+        "PYTHONPATH=$PYTHONPATH:lms:lms/djangoapps:cms:cms/djangoapps:"
         "common:common/djangoapps:common/lib"
     )
 
+    # run diff-quality for pylint.
+    if not run_diff_quality(
+            violations_type="pylint",
+            prefix=pythonpath_prefix,
+            reports=pylint_reports,
+            percentage_string=percentage_string,
+            branch_string=compare_branch_string,
+            dquality_dir=dquality_dir
+    ):
+        diff_quality_percentage_pass = False
+
+    # run diff-quality for jshint.
+    if not run_diff_quality(
+            violations_type="jshint",
+            prefix=pythonpath_prefix,
+            reports=jshint_reports,
+            percentage_string=percentage_string,
+            branch_string=compare_branch_string,
+            dquality_dir=dquality_dir
+    ):
+        diff_quality_percentage_pass = False
+
+    # If one of the quality runs fails, then paver exits with an error when it is finished
+    if not diff_quality_percentage_pass:
+        raise BuildFailure("Diff-quality failure(s).")
+
+
+def run_diff_quality(
+        violations_type=None, prefix=None, reports=None, percentage_string=None, branch_string=None, dquality_dir=None
+):
+    """
+    This executes the diff-quality commandline tool for the given violation type (e.g., pylint, jshint).
+    If diff-quality fails due to quality issues, this method returns False.
+
+    """
     try:
         sh(
-            "{pythonpath_prefix} diff-quality --violations=pylint "
-            "{pylint_reports} {percentage_string} {compare_branch_string} "
-            "--html-report {dquality_dir}/diff_quality_pylint.html ".format(
-                pythonpath_prefix=pythonpath_prefix,
-                pylint_reports=pylint_reports,
+            "{pythonpath_prefix} diff-quality --violations={type} "
+            "{reports} {percentage_string} {compare_branch_string} "
+            "--html-report {dquality_dir}/diff_quality_{type}.html ".format(
+                type=violations_type,
+                pythonpath_prefix=prefix,
+                reports=reports,
                 percentage_string=percentage_string,
-                compare_branch_string=compare_branch_string,
+                compare_branch_string=branch_string,
                 dquality_dir=dquality_dir,
             )
         )
+        return True
     except BuildFailure, error_message:
         if is_percentage_failure(error_message):
-            diff_quality_percentage_failure = True
+            return False
         else:
             raise BuildFailure(error_message)
-
-    # If one of the diff-quality runs fails, then paver exits with an error when it is finished
-    if diff_quality_percentage_failure:
-        raise BuildFailure("Diff-quality failure(s).")
 
 
 def is_percentage_failure(error_message):

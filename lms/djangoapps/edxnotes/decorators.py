@@ -1,11 +1,14 @@
 """
 Decorators related to edXNotes.
 """
-from django.conf import settings
+
 import json
+
+from django.conf import settings
+
 from edxnotes.helpers import (
-    get_endpoint,
-    get_id_token,
+    get_edxnotes_id_token,
+    get_public_endpoint,
     get_token_url,
     generate_uid,
     is_feature_enabled,
@@ -43,10 +46,11 @@ def edxnotes(cls):
                     # Use camelCase to name keys.
                     "usageId": unicode(self.scope_ids.usage_id).encode("utf-8"),
                     "courseId": unicode(self.runtime.course_id).encode("utf-8"),
-                    "token": get_id_token(self.runtime.get_real_user(self.runtime.anonymous_student_id)),
+                    "token": get_edxnotes_id_token(self.runtime.get_real_user(self.runtime.anonymous_student_id)),
                     "tokenUrl": get_token_url(self.runtime.course_id),
-                    "endpoint": get_endpoint(),
+                    "endpoint": get_public_endpoint(),
                     "debug": settings.DEBUG,
+                    "eventStringLimit": settings.TRACK_MAX_EVENT / 6,
                 },
             })
 

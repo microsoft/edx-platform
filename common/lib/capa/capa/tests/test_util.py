@@ -2,9 +2,10 @@
 Tests capa util
 """
 import unittest
+from lxml import etree
 
 from . import test_capa_system
-from capa.util import compare_with_tolerance, sanitize_html
+from capa.util import compare_with_tolerance, sanitize_html, get_inner_html_from_xpath
 
 
 class UtilTest(unittest.TestCase):
@@ -81,6 +82,29 @@ class UtilTest(unittest.TestCase):
         self.assertFalse(result)
         result = compare_with_tolerance(infinity, infinity, '1.0', False)
         self.assertTrue(result)
+        # Test absolute tolerance for smaller values
+        result = compare_with_tolerance(100.01, 100.0, 0.01, False)
+        self.assertTrue(result)
+        result = compare_with_tolerance(100.001, 100.0, 0.001, False)
+        self.assertTrue(result)
+        result = compare_with_tolerance(100.01, 100.0, '0.01%', False)
+        self.assertTrue(result)
+        result = compare_with_tolerance(100.002, 100.0, 0.001, False)
+        self.assertFalse(result)
+        result = compare_with_tolerance(0.4, 0.44, 0.01, False)
+        self.assertFalse(result)
+        result = compare_with_tolerance(100.01, 100.0, 0.010, False)
+        self.assertTrue(result)
+
+        # Test complex_number instructor_complex
+        result = compare_with_tolerance(0.4, complex(0.44, 0), 0.01, False)
+        self.assertFalse(result)
+        result = compare_with_tolerance(100.01, complex(100.0, 0), 0.010, False)
+        self.assertTrue(result)
+        result = compare_with_tolerance(110.1, complex(100.0, 0), '10.0', False)
+        self.assertFalse(result)
+        result = compare_with_tolerance(111.0, complex(100.0, 0), '10%', True)
+        self.assertTrue(result)
 
     def test_sanitize_html(self):
         """
@@ -95,3 +119,10 @@ class UtilTest(unittest.TestCase):
         queue_msg = "<{0}>Test message</{0}>".format(not_allowed_tag)
         expected = "&lt;script&gt;Test message&lt;/script&gt;"
         self.assertEqual(sanitize_html(queue_msg), expected)
+
+    def test_get_inner_html_from_xpath(self):
+        """
+        Test for getting inner html as string from xpath node.
+        """
+        xpath_node = etree.XML('<hint style="smtng">aa<a href="#">bb</a>cc</hint>')
+        self.assertEqual(get_inner_html_from_xpath(xpath_node), 'aa<a href="#">bb</a>cc')

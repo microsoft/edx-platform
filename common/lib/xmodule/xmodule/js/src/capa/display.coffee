@@ -32,9 +32,15 @@ class @Problem
     @checkButtonCheckText = @checkButtonLabel.text()
     @checkButtonCheckingText = @checkButton.data('checking')
     @checkButton.click @check_fd
-    @$('div.action button.reset').click @reset
-    @$('div.action button.show').click @show
-    @$('div.action button.save').click @save
+    @hintButton = @$('div.action button.hint-button')
+    @hintButton.click @hint_button
+    @resetButton = @$('div.action button.reset')
+    @resetButton.click @reset
+    @showButton = @$('div.action button.show')
+    @showButton.click @show
+    @saveButton = @$('div.action button.save')
+    @saveButton.click @save
+
     # Accessibility helper for sighted keyboard users to show <clarification> tooltips on focus:
     @$('.clarification').focus (ev) =>
       icon = $(ev.target).children "i"
@@ -96,19 +102,11 @@ class @Problem
     if @num_queued_items > 0
       if window.queuePollerID # Only one poller 'thread' per Problem
         window.clearTimeout(window.queuePollerID)
-      queuelen = @get_queuelen()
-      window.queuePollerID = window.setTimeout(@poll, queuelen*10)
+      window.queuePollerID = window.setTimeout(
+        => @poll(1000),
+        1000)
 
-  # Retrieves the minimum queue length of all queued items
-  get_queuelen: =>
-    minlen = Infinity
-    @queued_items.each (index, qitem) ->
-      len = parseInt($.text(qitem))
-      if len < minlen
-        minlen = len
-    return minlen
-
-  poll: =>
+  poll: (prev_timeout) =>
     $.postWithPrefix "#{@url}/problem_get", (response) =>
       # If queueing status changed, then render
       @new_queued_items = $(response.html).find(".xqueue")
@@ -123,8 +121,16 @@ class @Problem
         @forceUpdate response
         delete window.queuePollerID
       else
-        # TODO: Some logic to dynamically adjust polling rate based on queuelen
-        window.queuePollerID = window.setTimeout(@poll, 1000)
+        new_timeout = prev_timeout * 2
+        # if the timeout is greather than 1 minute
+        if new_timeout >= 60000
+          delete window.queuePollerID
+          @gentle_alert gettext("The grading process is still running. Refresh the page to see updates.")
+        else
+          window.queuePollerID = window.setTimeout(
+            => @poll(new_timeout),
+            new_timeout
+          )
 
 
   # Use this if you want to make an ajax call on the input type object
@@ -152,6 +158,7 @@ class @Problem
         @setupInputTypes()
         @bind()
         @queueing()
+        @renderProgressState()
       @el.attr('aria-busy', 'false')
     else
       $.postWithPrefix "#{@url}/problem_get", (response) =>
@@ -299,16 +306,11 @@ class @Problem
 
   check: =>
     if not @check_save_waitfor(@check_internal)
-      @check_internal()
+      @disableAllButtonsWhileRunning @check_internal, true
 
   check_internal: =>
-    @enableCheckButton false
-
-    timeout_id = @enableCheckButtonAfterTimeout()
-
     Logger.log 'problem_check', @answers
-
-    $.postWithPrefix("#{@url}/problem_check", @answers, (response) =>
+    $.postWithPrefix "#{@url}/problem_check", @answers, (response) =>
       switch response.success
         when 'incorrect', 'correct'
           window.SR.readElts($(response.contents).find('.status'))
@@ -320,9 +322,11 @@ class @Problem
         else
           @gentle_alert response.success
       Logger.log 'problem_graded', [@answers, response.contents], @id
-    ).always(@enableCheckButtonAfterResponse)
 
   reset: =>
+    @disableAllButtonsWhileRunning @reset_internal, false
+
+  reset_internal: =>
     Logger.log 'problem_reset', @answers
     $.postWithPrefix "#{@url}/problem_reset", id: @id, (response) =>
         @render(response.html)
@@ -407,7 +411,7 @@ class @Problem
 
   save: =>
     if not @check_save_waitfor(@save_internal)
-      @save_internal()
+      @disableAllButtonsWhileRunning @save_internal, false
 
   save_internal: =>
     Logger.log 'problem_save', @answers
@@ -466,9 +470,9 @@ class @Problem
     # They should set handlers on each <input> to reset the whole.
     formulaequationinput: (element) ->
       $(element).find('input').on 'input', ->
-        $p = $(element).find('p.status')
+        $p = $(element).find('span.status')
         `// Translators: the word unanswered here is about answering a problem the student must solve.`
-        $p.parent().removeClass().addClass "unanswered"
+        $p.parent().removeClass().addClass "unsubmitted"
 
     choicegroup: (element) ->
       $element = $(element)
@@ -494,9 +498,9 @@ class @Problem
 
     textline: (element) ->
       $(element).find('input').on 'input', ->
-        $p = $(element).find('p.status')
+        $p = $(element).find('span.status')
         `// Translators: the word unanswered here is about answering a problem the student must solve.`
-        $p.parent().removeClass("correct incorrect").addClass "unanswered"
+        $p.parent().removeClass("correct incorrect").addClass "unsubmitted"
 
   inputtypeSetupMethods:
 
@@ -672,16 +676,56 @@ class @Problem
       element = $(element)
       element.find("section[id^='forinput']").removeClass('choicetextgroup_show_correct')
 
-  enableCheckButton: (enable) =>
+  disableAllButtonsWhileRunning: (operationCallback, isFromCheckOperation) =>
+    # Used to keep the buttons disabled while operationCallback is running.
+    # params:
+    #   'operationCallback' is an operation to be run.
+    #   'isFromCheckOperation' is a boolean to keep track if 'operationCallback' was
+    #    @check, if so then text of check button will be changed as well.
+    @enableAllButtons false, isFromCheckOperation
+    operationCallback().always =>
+      @enableAllButtons true, isFromCheckOperation
+
+  enableAllButtons: (enable, isFromCheckOperation) =>
+    # Used to enable/disable all buttons in problem.
+    # params:
+    #   'enable' is a boolean to determine enabling/disabling of buttons.
+    #   'isFromCheckOperation' is a boolean to keep track if operation was initiated
+    #    from @check so that text of check button will also be changed while disabling/enabling
+    #    the check button.
+    if enable
+      @resetButton
+        .add(@saveButton)
+        .add(@hintButton)
+        .add(@showButton)
+        .removeClass('is-disabled')
+        .attr({'aria-disabled': 'false'})
+    else
+      @resetButton
+        .add(@saveButton)
+        .add(@hintButton)
+        .add(@showButton)
+        .addClass('is-disabled')
+        .attr({'aria-disabled': 'true'})
+
+    @enableCheckButton enable, isFromCheckOperation
+
+  enableCheckButton: (enable, changeText = true) =>
     # Used to disable check button to reduce chance of accidental double-submissions.
+    # params:
+    #   'enable' is a boolean to determine enabling/disabling of check button.
+    #   'changeText' is a boolean to determine if there is need to change the
+    #    text of check button as well.
     if enable
       @checkButton.removeClass 'is-disabled'
       @checkButton.attr({'aria-disabled': 'false'})
-      @checkButtonLabel.text(@checkButtonCheckText)
+      if changeText
+        @checkButtonLabel.text(@checkButtonCheckText)
     else
       @checkButton.addClass 'is-disabled'
       @checkButton.attr({'aria-disabled': 'true'})
-      @checkButtonLabel.text(@checkButtonCheckingText)
+      if changeText
+        @checkButtonLabel.text(@checkButtonCheckingText)
 
   enableCheckButtonAfterResponse: =>
     @has_response = true
@@ -699,3 +743,23 @@ class @Problem
       if @has_response
         @enableCheckButton true
     window.setTimeout(enableCheckButton, 750)
+
+  hint_button: =>
+    # Store the index of the currently shown hint as an attribute.
+    # Use that to compute the next hint number when the button is clicked.
+    hint_index = @$('.problem-hint').attr('hint_index')
+    if hint_index == undefined
+      next_index = 0
+    else
+      next_index = parseInt(hint_index) + 1
+    $.postWithPrefix "#{@url}/hint_button", hint_index: next_index, input_id: @id, (response) =>
+      hint_container = @.$('.problem-hint')
+      hint_container.html(response.contents)
+      MathJax.Hub.Queue [
+        'Typeset'
+        MathJax.Hub
+        hint_container[0]
+      ]
+      hint_container.attr('hint_index', response.hint_index)
+      @$('.hint-button').focus()  # a11y focus on click, like the Check button
+

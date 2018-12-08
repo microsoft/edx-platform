@@ -39,6 +39,14 @@
             "PASSWORD": "",
             "PORT": "3306",
             "USER": "root"
+        },
+        "student_module_history": {
+            "ENGINE": "django.db.backends.mysql",
+            "HOST": "localhost",
+            "NAME": "student_module_history_test",
+            "PASSWORD": "",
+            "PORT": "3306",
+            "USER": "root"
         }
     },
     "DOC_STORE_CONFIG": {
@@ -108,25 +116,7 @@
             }
         }
     },
-    "OPEN_ENDED_GRADING_INTERFACE": {
-        "grading_controller": "grading_controller",
-        "password": "password",
-        "peer_grading": "peer_grading",
-        "staff_grading": "staff_grading",
-        "url": "** OVERRIDDEN **",
-        "username": "lms"
-    },
     "SECRET_KEY": "",
-    "THIRD_PARTY_AUTH": {
-        "Google": {
-            "SOCIAL_AUTH_GOOGLE_OAUTH2_KEY": "test",
-            "SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET": "test"
-        },
-        "Facebook": {
-            "SOCIAL_AUTH_FACEBOOK_KEY": "test",
-            "SOCIAL_AUTH_FACEBOOK_SECRET": "test"
-        }
-    },
     "DJFS": {
             "type": "s3fs",
             "bucket": "test",

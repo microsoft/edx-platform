@@ -8,9 +8,13 @@ from ddt import ddt, data
 from mock import Mock
 from unittest import TestCase
 from urlparse import urlparse
-from opaque_keys.edx.locations import SlashSeparatedCourseKey
+from opaque_keys.edx.locations import BlockUsageLocator, CourseLocator, SlashSeparatedCourseKey
 from lms.djangoapps.lms_xblock.runtime import quote_slashes, unquote_slashes, LmsModuleSystem
 from xblock.fields import ScopeIds
+from xmodule.modulestore.django import ModuleI18nService
+from xmodule.modulestore.tests.factories import CourseFactory
+from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
+from xblock.exceptions import NoSuchServiceError
 
 TEST_STRINGS = [
     '',
@@ -39,12 +43,40 @@ class TestQuoteSlashes(TestCase):
         self.assertNotIn('/', quote_slashes(test_string))
 
 
+class BlockMock(Mock):
+    """Mock class that we fill with our "handler" methods."""
+
+    def handler(self, _context):
+        """
+        A test handler method.
+        """
+        pass
+
+    def handler1(self, _context):
+        """
+        A test handler method.
+        """
+        pass
+
+    def handler_a(self, _context):
+        """
+        A test handler method.
+        """
+        pass
+
+    @property
+    def location(self):
+        """Create a functional BlockUsageLocator for testing URL generation."""
+        course_key = CourseLocator(org="mockx", course="100", run="2015")
+        return BlockUsageLocator(course_key, block_type='mock_type', block_id="mock_id")
+
+
 class TestHandlerUrl(TestCase):
     """Test the LMS handler_url"""
 
     def setUp(self):
         super(TestHandlerUrl, self).setUp()
-        self.block = Mock(name='block', scope_ids=ScopeIds(None, None, None, 'dummy'))
+        self.block = BlockMock(name='block', scope_ids=ScopeIds(None, None, None, 'dummy'))
         self.course_key = SlashSeparatedCourseKey("org", "course", "run")
         self.runtime = LmsModuleSystem(
             static_url='/static',
@@ -153,3 +185,61 @@ class TestUserServiceAPI(TestCase):
         # Try to get tag in wrong scope
         with self.assertRaises(ValueError):
             self.runtime.service(self.mock_block, 'user_tags').get_tag('fake_scope', self.key)
+
+
+class TestI18nService(ModuleStoreTestCase):
+    """ Test ModuleI18nService """
+
+    def setUp(self):
+        """ Setting up tests """
+        super(TestI18nService, self).setUp()
+        self.course = CourseFactory.create()
+        self.test_language = 'dummy language'
+        self.runtime = LmsModuleSystem(
+            static_url='/static',
+            track_function=Mock(),
+            get_module=Mock(),
+            render_template=Mock(),
+            replace_urls=str,
+            course_id=self.course.id,
+            descriptor_runtime=Mock(),
+        )
+
+        self.mock_block = Mock()
+        self.mock_block.service_declaration.return_value = 'need'
+
+    def test_module_i18n_lms_service(self):
+        """
+        Test: module i18n service in LMS
+        """
+        i18n_service = self.runtime.service(self.mock_block, 'i18n')
+        self.assertIsNotNone(i18n_service)
+        self.assertIsInstance(i18n_service, ModuleI18nService)
+
+    def test_no_service_exception_with_none_declaration_(self):
+        """
+        Test: NoSuchServiceError should be raised block declaration returns none
+        """
+        self.mock_block.service_declaration.return_value = None
+        with self.assertRaises(NoSuchServiceError):
+            self.runtime.service(self.mock_block, 'i18n')
+
+    def test_no_service_exception_(self):
+        """
+        Test: NoSuchServiceError should be raised if i18n service is none.
+        """
+        self.runtime._services['i18n'] = None  # pylint: disable=protected-access
+        with self.assertRaises(NoSuchServiceError):
+            self.runtime.service(self.mock_block, 'i18n')
+
+    def test_i18n_service_callable(self):
+        """
+        Test: _services dict should contain the callable i18n service in LMS.
+        """
+        self.assertTrue(callable(self.runtime._services.get('i18n')))  # pylint: disable=protected-access
+
+    def test_i18n_service_not_callable(self):
+        """
+        Test: i18n service should not be callable in LMS after initialization.
+        """
+        self.assertFalse(callable(self.runtime.service(self.mock_block, 'i18n')))

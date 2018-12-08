@@ -5,16 +5,16 @@
             closeSubmenuKeyboard, menu, menuItems, menuSubmenuItem, submenu, submenuItems, overlay, playButton;
 
         openMenu = function () {
-            var container = $('div.video');
+            var container = $('.video');
             jasmine.Clock.useMock();
             container.find('video').trigger('contextmenu');
-            menu = container.children('ol.contextmenu');
-            menuItems = menu.children('li.menu-item').not('.submenu-item');
-            menuSubmenuItem = menu.children('li.menu-item.submenu-item');
-            submenu = menuSubmenuItem.children('ol.submenu');
-            submenuItems = submenu.children('li.menu-item');
-            overlay = container.children('div.overlay');
-            playButton = $('a.video_control.play');
+            menu = container.children('.contextmenu');
+            menuItems = menu.children('.menu-item').not('.submenu-item');
+            menuSubmenuItem = menu.children('.menu-item.submenu-item');
+            submenu = menuSubmenuItem.children('.submenu');
+            submenuItems = submenu.children('.menu-item');
+            overlay = container.children('.overlay');
+            playButton = $('.video_control.play');
         };
 
         keyPressEvent = function(key) {
@@ -68,6 +68,7 @@
             $('source').remove();
             _.result(state.storage, 'clear');
             _.result($('video').data('contextmenu'), 'destroy');
+            _.result(state.videoPlayer, 'destroy');
         });
 
         describe('constructor', function () {
@@ -219,12 +220,13 @@
 
             it('mouse left/right-clicking behaves as expected on play/pause menu item', function () {
                 var menuItem = menuItems.first();
+                spyOn(state.videoPlayer, 'isPlaying');
                 spyOn(state.videoPlayer, 'play').andCallFake(function () {
-                    state.videoControl.isPlaying = true;
+                    state.videoPlayer.isPlaying.andReturn(true);
                     state.el.trigger('play');
                 });
                 spyOn(state.videoPlayer, 'pause').andCallFake(function () {
-                    state.videoControl.isPlaying = false;
+                    state.videoPlayer.isPlaying.andReturn(false);
                     state.el.trigger('pause');
                 });
                 // Left-click on play

@@ -3,7 +3,7 @@ Javascript test tasks
 """
 from pavelib import assets
 from pavelib.utils.test import utils as test_utils
-from pavelib.utils.test.suites import TestSuite
+from pavelib.utils.test.suites.suite import TestSuite
 from pavelib.utils.envs import Env
 
 __test__ = False  # do not collect
@@ -32,8 +32,9 @@ class JsTestSuite(TestSuite):
     def __enter__(self):
         super(JsTestSuite, self).__enter__()
         self.report_dir.makedirs_p()
+        from nose.tools import set_trace; set_trace()
         if not self.skip_clean:
-            test_utils.clean_test_files()
+            test_utils.clean_test_files(skip_staticfiles=True)
 
         if self.mode == 'run' and not self.run_under_coverage:
             test_utils.clean_dir(self.report_dir)

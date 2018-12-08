@@ -9,6 +9,7 @@
 .view-profile {
     $profile-image-dimension: 120px;
 
+    .window-wrap,
     .content-wrapper {
         background-color: $white;
     }
@@ -34,6 +35,7 @@
 
         .u-field-image {
             padding-top: 0;
+            padding-bottom: ($baseline/4);
         }
 
         .image-wrapper {
@@ -41,6 +43,7 @@
             position: relative;
 
             .image-frame {
+                display: block;
                 position: relative;
                 width: $profile-image-dimension;
                 height: $profile-image-dimension;
@@ -48,19 +51,27 @@
             }
 
             .u-field-upload-button {
-                width: $profile-image-dimension;
-                height: $profile-image-dimension;
                 position: absolute;
                 top: 0;
-                opacity: 0;
+                width: $profile-image-dimension;
+                height: $profile-image-dimension;
+                border-radius: ($baseline/4);
+                border: 2px dashed transparent;
+                background: rgba(229,241,247, .8);
+                color: $link-color;
+                text-shadow: none;
                 @include transition(all $tmg-f1 ease-in-out 0s);
+                opacity: 0;
+                z-index: 6;
 
                 i {
-                    color: $white;
+                    color: $link-color;
                 }
 
-                &:focus {
+                &:focus,
+                &:hover {
                     @include show-hover-state();
+                    border-color: $link-color;
                 }
             }
 
@@ -68,50 +79,34 @@
                 @include show-hover-state();
             }
 
-            .upload-button-icon, .upload-button-title {
-                text-align: center;
-                transform: translateY(35px);
-                -webkit-transform: translateY(35px);
+            .upload-button-icon,
+            .upload-button-title {
                 display: block;
-                color: $white;
                 margin-bottom: ($baseline/4);
+                @include transform(translateY(35px));
                 line-height: 1.3em;
+                text-align: center;
+                z-index: 7;
             }
 
             .upload-button-input {
+                position: absolute;
+                top: -($profile-image-dimension * 2);
+                @include left(0);
                 width: $profile-image-dimension;
                 height: 100%;
-                position: absolute;
-                top: 0;
-                @include left(0);
-                opacity: 0;
                 cursor: pointer;
+                z-index: 5;
+                outline: 0;
             }
 
             .u-field-remove-button {
-                width: $profile-image-dimension;
-                height: $baseline;
-                opacity: 0;
                 position: relative;
-                margin-top: 2px;
+                display: block;
+                width: $profile-image-dimension;
+                margin-top: ($baseline / 4);
+                padding: ($baseline / 5);
                 text-align: center;
-
-                &:active {
-                    box-shadow: none;
-                    outline: 0;
-                }
-                &:focus {
-                    @include show-hover-state();
-                    box-shadow: none;
-                    outline: 0;
-                    border: 2px dashed $link-color !important;
-                }
-            }
-
-            &:hover, &:focus {
-                .u-field-upload-button, .u-field-remove-button {
-                    @include show-hover-state();
-                }
             }
         }
     }
@@ -128,10 +123,11 @@
         .wrapper-profile-field-account-privacy {
             @include clearfix();
             @include box-sizing(border-box);
-            margin: 0 auto 0;
-            padding: ($baseline*0.75) 0;
             width: 100%;
-            background-color: $gray-l3;
+            margin: 0 auto 0;
+            border: 1px solid $gray-l3;
+            background-color: $gray-l4;
+            padding: ($baseline*0.75) 0;
 
             .u-field-account_privacy {
                 @extend .container;
@@ -141,10 +137,11 @@
             }
 
             .u-field-title {
+                @extend %t-strong;
                 width: auto;
                 color: $base-font-color;
-                font-weight: $font-bold;
                 cursor: text;
+                text-shadow: none; // override bad lms styles on labels
             }
 
             .u-field-value {
@@ -157,6 +154,10 @@
                 width: 100%;
                 padding: 0;
                 color: $base-font-color;
+
+                .u-field-message-notification {
+                    color: $gray-d2;
+                }
             }
         }
     }
@@ -170,22 +171,22 @@
         width: 100%;
         display: inline-block;
         margin-top: ($baseline*1.5);
+        @include margin-left($baseline/2);
     }
 
     .profile-section-one-fields {
         @include float(left);
         width: flex-grid(4, 12);
-        @include margin-left($baseline*1.5);
+        @include margin-left($baseline);
 
         .u-field {
             margin-bottom: ($baseline/4);
-            padding-top: 0;
-            padding-bottom: 0;
+            padding-top: 3px;
+            padding-bottom: 3px;
             @include padding-left(3px);
         }
 
         .u-field-username {
-            margin-bottom: ($baseline/2);
 
             input[type="text"] {
               font-weight: 600;
@@ -197,12 +198,19 @@
             }
         }
 
+        .u-field-icon {
+            display: inline-block;
+            vertical-align: baseline;
+        }
+
         .u-field-title {
             width: 0;
         }
 
         .u-field-value {
             width: 200px;
+            display: inline-block;
+            vertical-align: baseline;
         }
 
         select {
@@ -212,7 +220,13 @@
         .u-field-message {
             @include float(right);
             width: 20px;
-            margin-top: 2px;
+            display: inline-block;
+            vertical-align: baseline;
+            margin-top: 0;
+
+            .icon {
+                vertical-align: baseline;
+            }
         }
     }
 
@@ -224,30 +238,40 @@
 
         .u-field-textarea {
             margin-bottom: ($baseline/2);
-            padding: ($baseline/4) ($baseline/2) ($baseline/2);
+            padding: ($baseline/2) ($baseline*.75) ($baseline*.75) ($baseline*.75);
+
+            &.editable-toggle {
+                cursor: pointer;
+            }
         }
 
         .u-field-title {
-            font-size: 1.1em;
+            @extend %t-title5;
             @extend %t-weight4;
+            display: inline-block;
+            margin-top: 0;
             margin-bottom: ($baseline/4);
+            color: inherit;
         }
 
         .u-field-value {
+            @extend %t-copy-base;
             width: 100%;
-            white-space: pre-line;
-            line-height: 1.5em;
 
             textarea {
               width: 100%;
               background-color: transparent;
+              white-space: pre-line;
+            }
+
+            a {
+                color: inherit;
             }
         }
 
         .u-field-message {
             @include float(right);
             width: auto;
-            padding-top: ($baseline/4);
         }
 
         .u-field.mode-placeholder {

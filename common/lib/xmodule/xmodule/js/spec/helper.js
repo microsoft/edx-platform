@@ -36,7 +36,7 @@
             return f();
         }
     };
-
+    jasmine.YT = stubbedYT;
     // Stub YouTube API.
     window.YT = stubbedYT;
 
@@ -76,19 +76,27 @@
 
     jasmine.stubbedMetadata = {
         '7tqY6eQzVhE': {
-            id: '7tqY6eQzVhE',
-            duration: 300
+            contentDetails : {
+                id: '7tqY6eQzVhE',
+                duration: 'PT5M0S'
+            }
         },
         'cogebirgzzM': {
-            id: 'cogebirgzzM',
-            duration: 200
+            contentDetails : {
+                id: 'cogebirgzzM',
+                duration: 'PT3M20S'
+            }
         },
         'abcdefghijkl': {
-            id: 'abcdefghijkl',
-            duration: 400
+            contentDetails : {
+                id: 'abcdefghijkl',
+                duration: 'PT6M40S'
+            }
         },
         bogus: {
-            duration: 100
+            contentDetails : {
+                duration: 'PT1M40S'
+            }
         }
     };
 
@@ -122,7 +130,7 @@
         }
         return spy.andCallFake(function (settings) {
             var match = settings.url
-                    .match(/youtube\.com\/.+\/videos\/(.+)\?v=2&alt=jsonc/),
+                    .match(/googleapis\.com\/.+\/videos\/\?id=(.+)&part=contentDetails/),
                 status, callCallback;
             if (match) {
                 status = match[1].split('_');
@@ -138,7 +146,7 @@
                     };
                 } else if (settings.success) {
                     return settings.success({
-                        data: jasmine.stubbedMetadata[match[1]]
+                        items: jasmine.stubbedMetadata[match[1]]
                     });
                 } else {
                     return {
@@ -167,15 +175,6 @@
                 // Do nothing.
                 return;
             } else if (settings.url === '/save_user_state') {
-                return {success: true};
-            } else if (settings.url === 'http://www.youtube.com/iframe_api') {
-                // Stub YouTube API.
-                window.YT = stubbedYT;
-
-                // Call the callback that must be called when YouTube API is
-                // loaded. By specification.
-                window.onYouTubeIframeAPIReady();
-
                 return {success: true};
             } else {
                 throw 'External request attempted for ' +
@@ -206,6 +205,9 @@
             },
             toBeInArray: function (array) {
                 return $.inArray(this.actual, array) > -1;
+            },
+            toBeFocused: function () {
+                return $(this.actual)[0] === $(this.actual)[0].ownerDocument.activeElement;
             }
         });
 
@@ -220,6 +222,19 @@
 
     // Stub jQuery.scrollTo module.
     $.fn.scrollTo = jasmine.createSpy('jQuery.scrollTo');
+
+    // Stub window.Video.loadYouTubeIFrameAPI()
+    window.Video.loadYouTubeIFrameAPI = jasmine.createSpy('window.Video.loadYouTubeIFrameAPI').andReturn(
+        function (scriptTag) {
+            var event = document.createEvent('Event');
+            if (fixture === "video.html") {
+                event.initEvent('load', false, false);
+            } else {
+                event.initEvent('error', false, false);
+            }
+            scriptTag.dispatchEvent(event);
+        }
+    );
 
     jasmine.initializePlayer = function (fixture, params) {
         var state;
@@ -239,12 +254,11 @@
             loadFixtures('video_all.html');
         }
 
-        // If `params` is an object, assign it's properties as data attributes
+        // If `params` is an object, assign its properties as data attributes
         // to the main video DIV element.
         if (_.isObject(params)) {
-            $('#example')
-                .find('#video_id')
-                .data(params);
+            var metadata = _.extend($('#video_id').data('metadata'), params);
+            $('#video_id').data('metadata', metadata);
         }
 
         jasmine.stubRequests();

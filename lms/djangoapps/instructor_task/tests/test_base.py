@@ -151,6 +151,7 @@ class InstructorTaskCourseTestCase(LoginEnrollmentTestCase, ModuleStoreTestCase)
     def login_username(self, username):
         """Login the user, given the `username`."""
         if self.current_user != username:
+            self.logout()
             user_email = User.objects.get(username=username).email
             self.login(user_email, "test")
             self.current_user = username
@@ -175,7 +176,7 @@ class InstructorTaskCourseTestCase(LoginEnrollmentTestCase, ModuleStoreTestCase)
     def get_task_status(task_id):
         """Use api method to fetch task status, using mock request."""
         mock_request = Mock()
-        mock_request.REQUEST = {'task_id': task_id}
+        mock_request.GET = mock_request.POST = {'task_id': task_id}
         response = instructor_task_status(mock_request)
         status = json.loads(response.content)
         return status
@@ -314,7 +315,7 @@ class TestReportMixin(object):
             ignore_other_columns (boolean): When True, we verify that `expected_rows`
                 contain data which is the subset of actual csv rows.
         """
-        report_store = ReportStore.from_config()
+        report_store = ReportStore.from_config(config_name='GRADES_DOWNLOAD')
         report_csv_filename = report_store.links_for(self.course.id)[file_index][0]
         with open(report_store.path_to(self.course.id, report_csv_filename)) as csv_file:
             # Expand the dict reader generator so we don't lose it's content

@@ -17,10 +17,16 @@ urlpatterns = patterns(
         'instructor.views.api.modify_access', name="modify_access"),
     url(r'^bulk_beta_modify_access$',
         'instructor.views.api.bulk_beta_modify_access', name="bulk_beta_modify_access"),
+    url(r'^get_problem_responses$',
+        'instructor.views.api.get_problem_responses', name="get_problem_responses"),
     url(r'^get_grading_config$',
         'instructor.views.api.get_grading_config', name="get_grading_config"),
     url(r'^get_students_features(?P<csv>/csv)?$',
         'instructor.views.api.get_students_features', name="get_students_features"),
+    url(r'^get_issued_certificates/$',
+        'instructor.views.api.get_issued_certificates', name="get_issued_certificates"),
+    url(r'^get_students_who_may_enroll$',
+        'instructor.views.api.get_students_who_may_enroll', name="get_students_who_may_enroll"),
     url(r'^get_user_invoice_preference$',
         'instructor.views.api.get_user_invoice_preference', name="get_user_invoice_preference"),
     url(r'^get_sale_records(?P<csv>/csv)?$',
@@ -31,13 +37,11 @@ urlpatterns = patterns(
         'instructor.views.api.sale_validation', name="sale_validation"),
     url(r'^get_anon_ids$',
         'instructor.views.api.get_anon_ids', name="get_anon_ids"),
-    url(r'^get_distribution$',
-        'instructor.views.api.get_distribution', name="get_distribution"),
     url(r'^get_student_progress_url$',
         'instructor.views.api.get_student_progress_url', name="get_student_progress_url"),
     url(r'^reset_student_attempts$',
         'instructor.views.api.reset_student_attempts', name="reset_student_attempts"),
-    url(  # pylint: disable=bad-continuation
+    url(
         r'^rescore_problem$',
         'instructor.views.api.rescore_problem',
         name="rescore_problem"
@@ -69,8 +73,6 @@ urlpatterns = patterns(
         'instructor.views.api.list_forum_members', name="list_forum_members"),
     url(r'^update_forum_role_membership$',
         'instructor.views.api.update_forum_role_membership', name="update_forum_role_membership"),
-    url(r'^proxy_legacy_analytics$',
-        'instructor.views.api.proxy_legacy_analytics', name="proxy_legacy_analytics"),
     url(r'^send_email$',
         'instructor.views.api.send_email', name="send_email"),
     url(r'^change_due_date$', 'instructor.views.api.change_due_date',
@@ -82,6 +84,10 @@ urlpatterns = patterns(
     url(r'^show_student_extensions$', 'instructor.views.api.show_student_extensions',
         name='show_student_extensions'),
 
+    # proctored exam downloads...
+    url(r'^get_proctored_exam_results$',
+        'instructor.views.api.get_proctored_exam_results', name="get_proctored_exam_results"),
+
     # Grade downloads...
     url(r'^list_report_downloads$',
         'instructor.views.api.list_report_downloads', name="list_report_downloads"),
@@ -89,6 +95,10 @@ urlpatterns = patterns(
         'instructor.views.api.calculate_grades_csv', name="calculate_grades_csv"),
     url(r'problem_grade_report$',
         'instructor.views.api.problem_grade_report', name="problem_grade_report"),
+
+    # Financial Report downloads..
+    url(r'^list_financial_report_downloads$',
+        'instructor.views.api.list_financial_report_downloads', name="list_financial_report_downloads"),
 
     # Registration Codes..
     url(r'get_registration_codes$',
@@ -100,13 +110,26 @@ urlpatterns = patterns(
     url(r'spent_registration_codes$',
         'instructor.views.api.spent_registration_codes', name="spent_registration_codes"),
 
+    # Reports..
+    url(r'get_enrollment_report$',
+        'instructor.views.api.get_enrollment_report', name="get_enrollment_report"),
+    url(r'get_exec_summary_report$',
+        'instructor.views.api.get_exec_summary_report', name="get_exec_summary_report"),
+    url(r'get_course_survey_results$',
+        'instructor.views.api.get_course_survey_results', name="get_course_survey_results"),
+    url(r'export_ora2_data',
+        'instructor.views.api.export_ora2_data', name="export_ora2_data"),
+
     # Coupon Codes..
     url(r'get_coupon_codes',
         'instructor.views.api.get_coupon_codes', name="get_coupon_codes"),
 
     # spoc gradebook
     url(r'^gradebook$',
-        'instructor.views.api.spoc_gradebook', name='spoc_gradebook'),
+        'instructor.views.gradebook_api.spoc_gradebook', name='spoc_gradebook'),
+
+    url(r'^gradebook/(?P<offset>[0-9]+)$',
+        'instructor.views.gradebook_api.spoc_gradebook', name='spoc_gradebook'),
 
     # Cohort management
     url(r'add_users_to_cohorts$',
@@ -120,4 +143,28 @@ urlpatterns = patterns(
     url(r'^enable_certificate_generation$',
         'instructor.views.api.enable_certificate_generation',
         name='enable_certificate_generation'),
+
+    url(r'^start_certificate_generation',
+        'instructor.views.api.start_certificate_generation',
+        name='start_certificate_generation'),
+
+    url(r'^start_certificate_regeneration',
+        'instructor.views.api.start_certificate_regeneration',
+        name='start_certificate_regeneration'),
+
+    url(r'^certificate_exception_view/$',
+        'instructor.views.api.certificate_exception_view',
+        name='certificate_exception_view'),
+
+    url(r'^generate_certificate_exceptions/(?P<generate_for>[^/]*)',
+        'instructor.views.api.generate_certificate_exceptions',
+        name='generate_certificate_exceptions'),
+
+    url(r'^generate_bulk_certificate_exceptions',
+        'instructor.views.api.generate_bulk_certificate_exceptions',
+        name='generate_bulk_certificate_exceptions'),
+
+    url(r'^certificate_invalidation_view/$',
+        'instructor.views.api.certificate_invalidation_view',
+        name='certificate_invalidation_view'),
 )

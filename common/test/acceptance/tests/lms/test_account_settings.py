@@ -6,6 +6,7 @@ from unittest import skip
 from nose.plugins.attrib import attr
 
 from bok_choy.web_app_test import WebAppTest
+from bok_choy.page_object import XSS_INJECTION
 
 from ...pages.lms.account_settings import AccountSettingsPage
 from ...pages.lms.auto_auth import AutoAuthPage
@@ -14,7 +15,6 @@ from ...pages.lms.dashboard import DashboardPage
 from ..helpers import EventsTestMixin
 
 
-@attr('shard_5')
 class AccountSettingsTestMixin(EventsTestMixin, WebAppTest):
     """
     Mixin with helper methods to test the account settings page.
@@ -24,12 +24,22 @@ class AccountSettingsTestMixin(EventsTestMixin, WebAppTest):
     USER_SETTINGS_CHANGED_EVENT_NAME = 'edx.user.settings.changed'
     ACCOUNT_SETTINGS_REFERER = u"/account/settings"
 
-    def log_in_as_unique_user(self, email=None):
+    def visit_account_settings_page(self):
+        """
+        Visit the account settings page for the current user, and store the page instance
+        as self.account_settings_page.
+        """
+        # pylint: disable=attribute-defined-outside-init
+        self.account_settings_page = AccountSettingsPage(self.browser)
+        self.account_settings_page.visit()
+        self.account_settings_page.wait_for_ajax()
+
+    def log_in_as_unique_user(self, email=None, full_name=None):
         """
         Create a unique user and return the account's username and id.
         """
         username = "test_{uuid}".format(uuid=self.unique_id[0:6])
-        auto_auth_page = AutoAuthPage(self.browser, username=username, email=email).visit()
+        auto_auth_page = AutoAuthPage(self.browser, username=username, email=email, full_name=full_name).visit()
         user_id = auto_auth_page.get_user_id()
         return username, user_id
 
@@ -78,30 +88,30 @@ class AccountSettingsTestMixin(EventsTestMixin, WebAppTest):
         self.assert_no_matching_events_were_emitted({'event_type': self.USER_SETTINGS_CHANGED_EVENT_NAME})
 
 
-@attr('shard_5')
+@attr('shard_8')
 class DashboardMenuTest(AccountSettingsTestMixin, WebAppTest):
     """
     Tests that the dashboard menu works correctly with the account settings page.
     """
     def test_link_on_dashboard_works(self):
         """
-        Scenario: Verify that the "Account Settings" link works from the dashboard.
+        Scenario: Verify that the "Account" link works from the dashboard.
 
 
         Given that I am a registered user
         And I visit my dashboard
-        And I click on "Account Settings" in the top drop down
+        And I click on "Account" in the top drop down
         Then I should see my account settings page
         """
         self.log_in_as_unique_user()
         dashboard_page = DashboardPage(self.browser)
         dashboard_page.visit()
         dashboard_page.click_username_dropdown()
-        self.assertIn('Account Settings', dashboard_page.username_dropdown_link_text)
+        self.assertIn('Account', dashboard_page.username_dropdown_link_text)
         dashboard_page.click_account_settings_link()
 
 
-@attr('shard_5')
+@attr('shard_8')
 class AccountSettingsPageTest(AccountSettingsTestMixin, WebAppTest):
     """
     Tests that verify behaviour of the Account Settings page.
@@ -113,16 +123,9 @@ class AccountSettingsPageTest(AccountSettingsTestMixin, WebAppTest):
         Initialize account and pages.
         """
         super(AccountSettingsPageTest, self).setUp()
-        self.username, self.user_id = self.log_in_as_unique_user()
+        self.full_name = XSS_INJECTION
+        self.username, self.user_id = self.log_in_as_unique_user(full_name=self.full_name)
         self.visit_account_settings_page()
-
-    def visit_account_settings_page(self):
-        """
-        Visit the account settings page for the current user.
-        """
-        self.account_settings_page = AccountSettingsPage(self.browser)
-        self.account_settings_page.visit()
-        self.account_settings_page.wait_for_ajax()
 
     def test_page_view_event(self):
         """
@@ -177,6 +180,7 @@ class AccountSettingsPageTest(AccountSettingsTestMixin, WebAppTest):
             {
                 'title': 'Connected Accounts',
                 'fields': [
+                    'Dummy',
                     'Facebook',
                     'Google',
                 ]
@@ -211,7 +215,7 @@ class AccountSettingsPageTest(AccountSettingsTestMixin, WebAppTest):
 
         for new_value in new_valid_values:
             self.assertEqual(self.account_settings_page.value_for_text_field(field_id, new_value), new_value)
-            self.account_settings_page.wait_for_messsage(field_id, success_message)
+            self.account_settings_page.wait_for_message(field_id, success_message)
             if assert_after_reload:
                 self.browser.refresh()
                 self.assertEqual(self.account_settings_page.value_for_text_field(field_id), new_value)
@@ -227,7 +231,7 @@ class AccountSettingsPageTest(AccountSettingsTestMixin, WebAppTest):
 
         for new_value in new_values:
             self.assertEqual(self.account_settings_page.value_for_dropdown_field(field_id, new_value), new_value)
-            self.account_settings_page.wait_for_messsage(field_id, success_message)
+            self.account_settings_page.wait_for_message(field_id, success_message)
             if reloads_on_save:
                 self.account_settings_page.wait_for_loading_indicator()
             else:
@@ -242,7 +246,7 @@ class AccountSettingsPageTest(AccountSettingsTestMixin, WebAppTest):
         self.assertEqual(self.account_settings_page.title_for_field(field_id), title)
         self.assertEqual(self.account_settings_page.link_title_for_link_field(field_id), link_title)
         self.account_settings_page.click_on_link_in_link_field(field_id)
-        self.account_settings_page.wait_for_messsage(field_id, success_message)
+        self.account_settings_page.wait_for_message(field_id, success_message)
 
     def test_username_field(self):
         """
@@ -257,16 +261,16 @@ class AccountSettingsPageTest(AccountSettingsTestMixin, WebAppTest):
         self._test_text_field(
             u'name',
             u'Full Name',
-            self.username,
+            self.full_name,
             u'@',
-            [u'another name', self.username],
+            [u'another name', self.full_name],
         )
 
         actual_events = self.wait_for_events(event_filter=self.settings_changed_event_filter, number_of_matches=2)
         self.assert_events_match(
             [
-                self.expected_settings_changed_event('name', self.username, 'another name'),
-                self.expected_settings_changed_event('name', 'another name', self.username),
+                self.expected_settings_changed_event('name', self.full_name, 'another name'),
+                self.expected_settings_changed_event('name', 'another name', self.full_name),
             ],
             actual_events
         )
@@ -436,9 +440,30 @@ class AccountSettingsPageTest(AccountSettingsTestMixin, WebAppTest):
         Currently there is no way to test the whole authentication process
         because that would require accounts with the providers.
         """
-        for field_id, title, link_title in [
-            ['auth-facebook', 'Facebook', 'Link'],
-            ['auth-google', 'Google', 'Link'],
-        ]:
+        providers = (
+            ['auth-oa2-facebook', 'Facebook', 'Link'],
+            ['auth-oa2-google-oauth2', 'Google', 'Link'],
+        )
+        for field_id, title, link_title in providers:
             self.assertEqual(self.account_settings_page.title_for_field(field_id), title)
             self.assertEqual(self.account_settings_page.link_title_for_link_field(field_id), link_title)
+
+
+@attr('a11y')
+class AccountSettingsA11yTest(AccountSettingsTestMixin, WebAppTest):
+    """
+    Class to test account settings accessibility.
+    """
+
+    def test_account_settings_a11y(self):
+        """
+        Test the accessibility of the account settings page.
+        """
+        self.log_in_as_unique_user()
+        self.visit_account_settings_page()
+        self.account_settings_page.a11y_audit.config.set_rules({
+            'ignore': [
+                'link-href',  # TODO: AC-233
+            ],
+        })
+        self.account_settings_page.a11y_audit.check_for_accessibility_errors()

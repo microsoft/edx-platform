@@ -4,10 +4,11 @@ define([
     'jquery', 'underscore', 'gettext', 'js/edxnotes/views/tab_panel', 'js/edxnotes/views/tab_view',
     'js/edxnotes/views/search_box'
 ], function ($, _, gettext, TabPanelView, TabView, SearchBoxView) {
+    var view = 'Search Results';
     var SearchResultsView = TabView.extend({
         PanelConstructor: TabPanelView.extend({
             id: 'search-results-panel',
-            title: 'Search Results',
+            title: view,
             className: function () {
                 return [
                     TabPanelView.prototype.className,
@@ -46,7 +47,8 @@ define([
             identifier: 'view-search-results',
             name: gettext('Search Results'),
             icon: 'fa fa-search',
-            is_closable: true
+            is_closable: true,
+            view: view
         },
 
         initialize: function (options) {
@@ -56,6 +58,7 @@ define([
             this.searchBox = new SearchBoxView({
                 el: document.getElementById('search-notes-form'),
                 debug: this.options.debug,
+                perPage: this.options.perPage,
                 beforeSearchStart: this.onBeforeSearchStart,
                 search: this.onSearch,
                 error: this.onSearchError
@@ -79,7 +82,8 @@ define([
                     return new this.PanelConstructor({
                         collection: collection,
                         searchQuery: this.searchResults.searchQuery,
-                        scrollToTag: this.options.scrollToTag
+                        scrollToTag: this.options.scrollToTag,
+                        createHeaderFooter: this.options.createHeaderFooter
                     });
                 } else {
                     return new this.NoResultsViewConstructor({
@@ -101,6 +105,7 @@ define([
 
         onClose: function () {
             this.searchResults = null;
+            this.searchBox.clearInput();
         },
 
         onBeforeSearchStart: function () {
@@ -120,10 +125,9 @@ define([
             }
         },
 
-        onSearch: function (collection, total, searchQuery) {
+        onSearch: function (collection, searchQuery) {
             this.searchResults = {
                 collection: collection,
-                total: total,
                 searchQuery: searchQuery
             };
 

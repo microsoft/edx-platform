@@ -7,7 +7,8 @@ from mock import patch
 
 from django.conf import settings
 from django.core.urlresolvers import reverse
-from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
+from course_modes.models import CourseMode
+from xmodule.modulestore.tests.django_utils import SharedModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
 from util.testing import UrlResetMixin
 from embargo.test_utils import restrict_course
@@ -17,7 +18,7 @@ from student.models import CourseEnrollment
 
 @ddt.ddt
 @unittest.skipUnless(settings.ROOT_URLCONF == 'lms.urls', 'Test only valid in lms')
-class EnrollmentTest(UrlResetMixin, ModuleStoreTestCase):
+class EnrollmentTest(UrlResetMixin, SharedModuleStoreTestCase):
     """
     Test student enrollment, especially with different course modes.
     """
@@ -26,11 +27,15 @@ class EnrollmentTest(UrlResetMixin, ModuleStoreTestCase):
     EMAIL = "bob@example.com"
     PASSWORD = "edx"
 
+    @classmethod
+    def setUpClass(cls):
+        super(EnrollmentTest, cls).setUpClass()
+        cls.course = CourseFactory.create()
+
     @patch.dict(settings.FEATURES, {'EMBARGO': True})
     def setUp(self):
         """ Create a course and user, then log in. """
         super(EnrollmentTest, self).setUp('embargo')
-        self.course = CourseFactory.create()
         self.user = UserFactory.create(username=self.USERNAME, email=self.EMAIL, password=self.PASSWORD)
         self.client.login(username=self.USERNAME, password=self.PASSWORD)
 
@@ -41,13 +46,20 @@ class EnrollmentTest(UrlResetMixin, ModuleStoreTestCase):
     @ddt.data(
         # Default (no course modes in the database)
         # Expect that we're redirected to the dashboard
-        # and automatically enrolled as "honor"
-        ([], '', 'honor'),
+        # and automatically enrolled
+        ([], '', CourseMode.DEFAULT_MODE_SLUG),
+
+        # Audit / Verified
+        # We should always go to the "choose your course" page.
+        # We should also be enrolled as the default mode.
+        (['verified', 'audit'], 'course_modes_choose', CourseMode.DEFAULT_MODE_SLUG),
 
         # Audit / Verified / Honor
         # We should always go to the "choose your course" page.
-        # We should also be enrolled as "honor" by default.
-        (['honor', 'verified', 'audit'], 'course_modes_choose', 'honor'),
+        # We should also be enrolled as the honor mode.
+        # Since honor and audit are currently offered together this precedence must
+        # be maintained.
+        (['honor', 'verified', 'audit'], 'course_modes_choose', CourseMode.HONOR),
 
         # Professional ed
         # Expect that we're sent to the "choose your track" page

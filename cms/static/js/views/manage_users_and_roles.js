@@ -1,7 +1,8 @@
 /*
  Code for editing users and assigning roles within a course or library team context.
  */
-define(['jquery', 'underscore', 'gettext', "js/views/baseview", 'js/views/feedback_prompt', 'js/views/utils/view_utils'],
+define(['jquery', 'underscore', 'gettext', "js/views/baseview",
+        'common/js/components/views/feedback_prompt', 'common/js/components/utils/view_utils'],
     function ($, _, gettext, BaseView, PromptView, ViewUtils) {
         'use strict';
         var default_messages = {
@@ -53,8 +54,8 @@ define(['jquery', 'underscore', 'gettext', "js/views/baseview", 'js/views/feedba
                 title: messages.alreadyMember.title,
                 message: _.template(
                     messages.alreadyMember.messageTpl,
-                    {email: email, container: containerName},
-                    {interpolate: /\{(.+?)}/g}
+                    {interpolate: /\{(.+?)}/g})(
+                    {email: email, container: containerName}
                 ),
                 actions: {
                     primary: {
@@ -139,7 +140,9 @@ define(['jquery', 'underscore', 'gettext', "js/views/baseview", 'js/views/feedba
                     roles = _.object(_.pluck(this.roles, 'key'), _.pluck(this.roles, "name")),
                     adminRoleCount = this.getAdminRoleCount(),
                     viewHelpers = {
-                        format: function (template, data) { return _.template(template, data, {interpolate: /\{(.+?)}/g}); }
+                        format: function (template, data) {
+                            return _.template(template, {interpolate: /\{(.+?)}/g})(data);
+                        }
                     };
                 for (var i = 0; i < this.users.length; i++) {
                     var user = this.users[i],
@@ -283,8 +286,8 @@ define(['jquery', 'underscore', 'gettext', "js/views/baseview", 'js/views/feedba
                     title: self.messages.deleteUser.title,
                     message: _.template(
                         self.messages.deleteUser.messageTpl,
-                        {email: email, container: self.containerName},
-                        {interpolate: /\{(.+?)}/g}
+                        {interpolate: /\{(.+?)}/g})(
+                        {email: email, container: self.containerName}
                     ),
                     actions: {
                         primary: {

@@ -1,7 +1,7 @@
 // ------------------------------
 // Studio: Shared Build Compile
 
-// About: Sass compile for Studio that are shared between LTR and RTL UI. Configuration and vendor specific imports happen before this shared set of imports are compiled in the style-app-*.scss files.
+// About: Sass compile for Studio that are shared between LTR and RTL UI. Configuration and vendor specific imports happen before this shared set of imports are compiled in the studio-main-*.scss files.
 
 // +Vendor and Rebase - *referenced/used vendor presentation and reset*
 // ====================
@@ -37,13 +37,13 @@
 @import 'elements/header';
 @import 'elements/footer';
 @import 'elements/sock';
-@import 'elements/tender-widget';
 @import 'elements/system-feedback'; // alerts, notifications, states
 @import 'elements/system-help'; // help UI
 @import 'elements/modal'; // interstitial UI, dialogs, modal windows
 @import 'elements/vendor'; // overrides to vendor-provided styling
 @import 'elements/modal-window';
 @import 'elements/uploaded-assets'; // layout for asset tables
+@import 'elements/creative-commons';
 
 // +Base - Specific Views
 // ====================
@@ -61,11 +61,11 @@
 @import 'views/unit';
 @import 'views/container';
 @import 'views/users';
-@import 'views/checklists';
 @import 'views/textbooks';
 @import 'views/export-git';
 @import 'views/group-configuration';
 @import 'views/video-upload';
+@import 'views/certificates';
 
 // +Base - Contexts
 // ====================
@@ -75,6 +75,7 @@
 // ====================
 @import 'xmodule/modules/css/module-styles.scss';
 @import 'xmodule/descriptors/css/module-styles.scss';
+@import 'xmodule/headings';
 @import 'elements/xmodules'; // styling for Studio-specific contexts
 
 @import 'developer'; // used for any developer-created scss that needs further polish/refactoring

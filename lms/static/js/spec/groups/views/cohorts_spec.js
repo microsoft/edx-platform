@@ -1,4 +1,4 @@
-define(['backbone', 'jquery', 'js/common_helpers/ajax_helpers', 'js/common_helpers/template_helpers',
+define(['backbone', 'jquery', 'common/js/spec_helpers/ajax_helpers', 'common/js/spec_helpers/template_helpers',
         'js/groups/views/cohorts', 'js/groups/collections/cohort', 'js/groups/models/content_group',
         'js/groups/models/course_cohort_settings', 'js/utils/animation', 'js/vendor/jquery.qubit',
         'js/groups/views/course_cohort_settings_notification', 'js/groups/models/cohort_discussions',
@@ -240,15 +240,15 @@ define(['backbone', 'jquery', 'js/common_helpers/ajax_helpers', 'js/common_helpe
                     )
                 );
                 assignmentType = assignmentType || MOCK_MANUAL_ASSIGNMENT;
-                var manualMessage = "Students are added to this cohort only when you provide their email addresses or usernames on this page.";
-                var randomMessage = "Students are added to this cohort automatically.";
+                var manualMessage = "Learners are added to this cohort only when you provide their email addresses " +
+                    "or usernames on this page.";
+                var randomMessage = "Learners are added to this cohort automatically.";
                 var message = (assignmentType == MOCK_MANUAL_ASSIGNMENT) ? manualMessage : randomMessage;
                 expect(header.find('.cohort-management-group-setup .setup-value').text().trim().split('\n')[0]).toBe(message);
             };
 
             saveFormAndExpectErrors = function(action, errors) {
-                var requestCount = requests.length,
-                    form, expectedTitle;
+                var form, expectedTitle;
                 if (action === 'add') {
                     expectedTitle = 'The cohort cannot be added';
                     form = getAddModal();
@@ -257,7 +257,7 @@ define(['backbone', 'jquery', 'js/common_helpers/ajax_helpers', 'js/common_helpe
                     form = cohortsView.$('.cohort-management-settings-form');
                 }
                 form.find('.action-save').click();
-                expect(requests.length).toBe(requestCount);
+                AjaxHelpers.expectNoRequests(requests);
                 verifyDetailedMessage(expectedTitle, 'error', errors);
             };
 
@@ -706,7 +706,7 @@ define(['backbone', 'jquery', 'js/common_helpers/ajax_helpers', 'js/common_helpe
                 it('shows an error when adding with no students specified', function() {
                     createCohortsView(this, {selectCohort: 1});
                     addStudents('    ');
-                    expect(requests.length).toBe(0);
+                    AjaxHelpers.expectNoRequests(requests);
                     verifyMessage('Enter a username or email.', 'error');
                     expect(getStudentInput().val()).toBe('');
                 });

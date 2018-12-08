@@ -33,7 +33,6 @@ def marketing_link(name):
     possible URLs for certain links. This function is to decides
     which URL should be provided.
     """
-
     # link_map maps URLs from the marketing site to the old equivalent on
     # the Django site
     link_map = settings.MKTG_URL_LINK_MAP
@@ -53,8 +52,32 @@ def marketing_link(name):
         if link_map[name] is not None:
             return reverse(link_map[name])
     else:
-        log.warning("Cannot find corresponding link for name: {name}".format(name=name))
+        log.debug("Cannot find corresponding link for name: %s", name)
         return '#'
+
+
+def is_any_marketing_link_set(names):
+    """
+    Returns a boolean if any given named marketing links are configured.
+    """
+
+    return any(is_marketing_link_set(name) for name in names)
+
+
+def is_marketing_link_set(name):
+    """
+    Returns a boolean if a given named marketing link is configured.
+    """
+
+    enable_mktg_site = microsite.get_value(
+        'ENABLE_MKTG_SITE',
+        settings.FEATURES.get('ENABLE_MKTG_SITE', False)
+    )
+
+    if enable_mktg_site:
+        return name in settings.MKTG_URLS
+    else:
+        return name in settings.MKTG_URL_LINK_MAP
 
 
 def marketing_link_context_processor(request):
@@ -73,17 +96,6 @@ def marketing_link_context_processor(request):
                 settings.MKTG_URL_LINK_MAP.viewkeys() |
                 settings.MKTG_URLS.viewkeys()
             )
-        ]
-    )
-
-
-def open_source_footer_context_processor(request):
-    """
-    Checks the site name to determine whether to use the edX.org footer or the Open Source Footer.
-    """
-    return dict(
-        [
-            ("IS_EDX_DOMAIN", settings.FEATURES.get('IS_EDX_DOMAIN', False))
         ]
     )
 
@@ -112,6 +124,8 @@ def render_to_string(template_name, dictionary, context=None, namespace='main'):
     context_instance['settings'] = settings
     context_instance['EDX_ROOT_URL'] = settings.EDX_ROOT_URL
     context_instance['marketing_link'] = marketing_link
+    context_instance['is_any_marketing_link_set'] = is_any_marketing_link_set
+    context_instance['is_marketing_link_set'] = is_marketing_link_set
 
     # In various testing contexts, there might not be a current request context.
     request_context = get_template_request_context()
@@ -139,9 +153,6 @@ def render_to_response(template_name, dictionary=None, context_instance=None, na
     Returns a HttpResponse whose content is filled with the result of calling
     lookup.get_template(args[0]).render with the passed arguments.
     """
-
-    # see if there is an override template defined in the microsite
-    template_name = microsite.get_template_path(template_name)
 
     dictionary = dictionary or {}
     return HttpResponse(render_to_string(template_name, dictionary, context_instance, namespace), **kwargs)

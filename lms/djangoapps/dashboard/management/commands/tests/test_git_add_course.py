@@ -18,7 +18,7 @@ import dashboard.git_import as git_import
 from dashboard.git_import import GitImportError
 from xmodule.modulestore import ModuleStoreEnum
 from xmodule.modulestore.django import modulestore
-from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
+from xmodule.modulestore.tests.django_utils import SharedModuleStoreTestCase
 from xmodule.modulestore.tests.mongo_connection import MONGO_PORT_NUM, MONGO_HOST
 
 
@@ -37,7 +37,7 @@ FEATURES_WITH_SSL_AUTH['AUTH_USE_CERTIFICATES'] = True
 @override_settings(MONGODB_LOG=TEST_MONGODB_LOG)
 @unittest.skipUnless(settings.FEATURES.get('ENABLE_SYSADMIN_DASHBOARD'),
                      "ENABLE_SYSADMIN_DASHBOARD not set")
-class TestGitAddCourse(ModuleStoreTestCase):
+class TestGitAddCourse(SharedModuleStoreTestCase):
     """
     Tests the git_add_course management command for proper functions.
     """
@@ -46,28 +46,28 @@ class TestGitAddCourse(ModuleStoreTestCase):
     TEST_COURSE = 'MITx/edx4edx/edx4edx'
     TEST_BRANCH = 'testing_do_not_delete'
     TEST_BRANCH_COURSE = SlashSeparatedCourseKey('MITx', 'edx4edx_branch', 'edx4edx')
-    GIT_REPO_DIR = getattr(settings, 'GIT_REPO_DIR')
+    GIT_REPO_DIR = settings.GIT_REPO_DIR
 
     def assertCommandFailureRegexp(self, regex, *args):
         """
         Convenience function for testing command failures
         """
-        with self.assertRaises(SystemExit):
-            with self.assertRaisesRegexp(CommandError, regex):
-                call_command('git_add_course', *args,
-                             stderr=StringIO.StringIO())
+        with self.assertRaisesRegexp(CommandError, regex):
+            call_command('git_add_course', *args, stderr=StringIO.StringIO())
 
     def test_command_args(self):
         """
         Validate argument checking
         """
+        # No argument given.
+        self.assertCommandFailureRegexp('Error: too few arguments')
+        # Extra/Un-named arguments given.
         self.assertCommandFailureRegexp(
-            'This script requires at least one argument, the git URL')
-        self.assertCommandFailureRegexp(
-            'Expected no more than three arguments; recieved 4',
+            'Error: unrecognized arguments: blah blah blah',
             'blah', 'blah', 'blah', 'blah')
+        # Not a valid path.
         self.assertCommandFailureRegexp(
-            'Repo was not added, check log output for details',
+            'Path {0} doesn\'t exist, please create it,'.format(self.GIT_REPO_DIR),
             'blah')
         # Test successful import from command
         if not os.path.isdir(self.GIT_REPO_DIR):
@@ -80,12 +80,12 @@ class TestGitAddCourse(ModuleStoreTestCase):
             os.mkdir(self.GIT_REPO_DIR / 'edx4edx')
 
         call_command('git_add_course', self.TEST_REPO,
-                     self.GIT_REPO_DIR / 'edx4edx_lite')
+                     directory_path=self.GIT_REPO_DIR / 'edx4edx_lite')
 
         # Test with all three args (branch)
         call_command('git_add_course', self.TEST_REPO,
-                     self.GIT_REPO_DIR / 'edx4edx_lite',
-                     self.TEST_BRANCH)
+                     directory_path=self.GIT_REPO_DIR / 'edx4edx_lite',
+                     repository_branch=self.TEST_BRANCH)
 
     def test_add_repo(self):
         """

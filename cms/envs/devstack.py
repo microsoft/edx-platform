@@ -2,6 +2,8 @@
 Specific overrides to the base prod settings to make development easier.
 """
 
+from os.path import abspath, dirname, join
+
 from .aws import *  # pylint: disable=wildcard-import, unused-wildcard-import
 
 # Don't use S3 in devstack, fall back to filesystem
@@ -10,7 +12,8 @@ MEDIA_ROOT = "/edx/var/edxapp/uploads"
 
 DEBUG = True
 USE_I18N = True
-TEMPLATE_DEBUG = DEBUG
+DEFAULT_TEMPLATE_ENGINE['OPTIONS']['debug'] = DEBUG
+HTTPS = 'off'
 
 ################################ LOGGERS ######################################
 
@@ -30,10 +33,26 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 LMS_BASE = "localhost:8000"
 FEATURES['PREVIEW_LMS_BASE'] = "preview." + LMS_BASE
 
-############################# ADVANCED COMPONENTS #############################
+########################### PIPELINE #################################
 
-# Make it easier to test advanced components in local dev
-FEATURES['ALLOW_ALL_ADVANCED_COMPONENTS'] = True
+# Skip packaging and optimization in development
+PIPELINE_ENABLED = False
+STATICFILES_STORAGE = 'openedx.core.storage.DevelopmentStorage'
+
+# Revert to the default set of finders as we don't want the production pipeline
+STATICFILES_FINDERS = [
+    'django.contrib.staticfiles.finders.FileSystemFinder',
+    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
+]
+
+############################ PYFS XBLOCKS SERVICE #############################
+# Set configuration for Django pyfilesystem
+
+DJFS = {
+    'type': 'osfs',
+    'directory_root': 'cms/static/djpyfs',
+    'url_root': '/static/djpyfs',
+}
 
 ################################# CELERY ######################################
 
@@ -78,17 +97,35 @@ FEATURES['MILESTONES_APP'] = True
 ################################ ENTRANCE EXAMS ################################
 FEATURES['ENTRANCE_EXAMS'] = True
 
+################################ COURSE LICENSES ################################
+FEATURES['LICENSING'] = True
+# Needed to enable licensing on video modules
+XBLOCK_SETTINGS = {
+    "VideoDescriptor": {
+        "licensing_enabled": True
+    }
+}
+
 ################################ SEARCH INDEX ################################
 FEATURES['ENABLE_COURSEWARE_INDEX'] = True
 FEATURES['ENABLE_LIBRARY_INDEX'] = True
 SEARCH_ENGINE = "search.elastic.ElasticSearchEngine"
 
+########################## Certificates Web/HTML View #######################
+FEATURES['CERTIFICATES_HTML_VIEW'] = True
+
+################################# DJANGO-REQUIRE ###############################
+
+# Whether to run django-require in debug mode.
+REQUIRE_DEBUG = DEBUG
+
+########################### OAUTH2 #################################
+OAUTH_OIDC_ISSUER = 'http://127.0.0.1:8000/oauth2'
+
 ###############################################################################
 # See if the developer has any local overrides.
-try:
-    from .private import *  # pylint: disable=import-error
-except ImportError:
-    pass
+if os.path.isfile(join(dirname(abspath(__file__)), 'private.py')):
+    from .private import *  # pylint: disable=import-error,wildcard-import
 
 #####################################################################
 # Lastly, run any migrations, if needed.

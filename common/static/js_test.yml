@@ -48,7 +48,6 @@ src_paths:
     - js/xblock
     - coffee/src
     - js/src
-    - js/utils
     - js/capa/src
 
 # Paths to spec (test) JavaScript files
@@ -82,4 +81,4 @@ spec_paths:
 fixture_paths:
     - js/fixtures
     - js/capa/fixtures
-    - templates/discussion
+    - common/templates

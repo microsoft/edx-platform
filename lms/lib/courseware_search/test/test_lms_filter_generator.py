@@ -3,11 +3,10 @@ Tests for the lms_filter_generator
 """
 from mock import patch, Mock
 
-from xmodule.modulestore.tests.factories import CourseFactory
+from xmodule.modulestore.tests.factories import ItemFactory, CourseFactory
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from student.tests.factories import UserFactory
 from student.models import CourseEnrollment
-
 from lms.lib.courseware_search.lms_filter_generator import LmsSearchFilterGenerator
 
 
@@ -35,10 +34,25 @@ class LmsSearchFilterGeneratorTestCase(ModuleStoreTestCase):
             )
         ]
 
+        self.chapter = ItemFactory.create(
+            parent_location=self.courses[0].location,
+            category='chapter',
+            display_name="Week 1",
+            publish_item=True,
+        )
+
+        self.chapter2 = ItemFactory.create(
+            parent_location=self.courses[1].location,
+            category='chapter',
+            display_name="Week 1",
+            publish_item=True,
+        )
+
     def setUp(self):
         super(LmsSearchFilterGeneratorTestCase, self).setUp()
         self.build_courses()
         self.user = UserFactory.create(username="jack", email="jack@fake.edx.org", password='test')
+
         for course in self.courses:
             CourseEnrollment.enroll(self.user, course.location.course_key)
 
@@ -74,12 +88,16 @@ class LmsSearchFilterGeneratorTestCase(ModuleStoreTestCase):
         self.assertEqual(0, len(field_dictionary['course']))
 
     def test_excludes_microsite(self):
-        """ By default there is the test microsite to exclude """
+        """
+        By default there is the test microsite and the microsite with logistration
+        to exclude
+        """
         _, _, exclude_dictionary = LmsSearchFilterGenerator.generate_field_filters(user=self.user)
         self.assertIn('org', exclude_dictionary)
         exclude_orgs = exclude_dictionary['org']
-        self.assertEqual(1, len(exclude_orgs))
-        self.assertEqual('TestMicrositeX', exclude_orgs[0])
+        self.assertEqual(2, len(exclude_orgs))
+        self.assertEqual('LogistrationX', exclude_orgs[0])
+        self.assertEqual('TestMicrositeX', exclude_orgs[1])
 
     @patch('microsite_configuration.microsite.get_all_orgs', Mock(return_value=[]))
     def test_excludes_no_microsite(self):

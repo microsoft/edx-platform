@@ -1,21 +1,20 @@
 """
 Common utility functions useful throughout the contentstore
 """
-# pylint: disable=no-member
 
-import copy
 import logging
 import re
 from datetime import datetime
 from pytz import UTC
 
 from django.conf import settings
-from django.utils.translation import ugettext as _
 from django.core.urlresolvers import reverse
+from django.utils.translation import ugettext as _
 from django_comment_common.models import assign_default_role
 from django_comment_common.utils import seed_permissions_roles
 
-from xmodule.contentstore.content import StaticContent
+from openedx.core.djangoapps.self_paced.models import SelfPacedConfiguration
+
 from xmodule.modulestore import ModuleStoreEnum
 from xmodule.modulestore.django import modulestore
 from xmodule.modulestore.exceptions import ItemNotFoundError
@@ -26,12 +25,6 @@ from student import auth
 
 
 log = logging.getLogger(__name__)
-
-# In order to instantiate an open ended tab automatically, need to have this data
-OPEN_ENDED_PANEL = {"name": _("Open Ended Panel"), "type": "open_ended"}
-NOTES_PANEL = {"name": _("My Notes"), "type": "notes"}
-EDXNOTES_PANEL = {"name": _("Notes"), "type": "edxnotes"}
-EXTRA_TAB_PANELS = dict([(p['type'], p) for p in [OPEN_ENDED_PANEL, NOTES_PANEL, EDXNOTES_PANEL]])
 
 
 def add_instructor(course_key, requesting_user, new_instructor):
@@ -94,7 +87,7 @@ def get_lms_link_for_item(location, preview=False):
     :param location: the location to jump to
     :param preview: True if the preview version of LMS should be returned. Default value is false.
     """
-    assert(isinstance(location, UsageKey))
+    assert isinstance(location, UsageKey)
 
     if settings.LMS_BASE is None:
         return None
@@ -116,7 +109,7 @@ def get_lms_link_for_about_page(course_key):
     Returns the url to the course about page from the location tuple.
     """
 
-    assert(isinstance(course_key, CourseKey))
+    assert isinstance(course_key, CourseKey)
 
     if settings.FEATURES.get('ENABLE_MKTG_SITE', False):
         if not hasattr(settings, 'MKTG_URLS'):
@@ -147,11 +140,22 @@ def get_lms_link_for_about_page(course_key):
     )
 
 
-def course_image_url(course):
-    """Returns the image url for the course."""
-    loc = StaticContent.compute_location(course.location.course_key, course.course_image)
-    path = StaticContent.serialize_asset_key_with_slash(loc)
-    return path
+# pylint: disable=invalid-name
+def get_lms_link_for_certificate_web_view(user_id, course_key, mode):
+    """
+    Returns the url to the certificate web view.
+    """
+    assert isinstance(course_key, CourseKey)
+
+    if settings.LMS_BASE is None:
+        return None
+
+    return u"//{certificate_web_base}/certificates/user/{user_id}/course/{course_id}?preview={mode}".format(
+        certificate_web_base=settings.LMS_BASE,
+        user_id=user_id,
+        course_id=unicode(course_key),
+        mode=mode
+    )
 
 
 # pylint: disable=invalid-name
@@ -200,12 +204,11 @@ def is_visible_to_specific_content_groups(xblock):
     """
     if not xblock.group_access:
         return False
-    for __, value in xblock.group_access.iteritems():
-        # value should be a list of group IDs. If it is an empty list or None, the xblock is visible
-        # to all groups in that particular partition. So if value is a truthy value, the xblock is
-        # restricted in some way.
-        if value:
+
+    for partition in get_user_partition_info(xblock):
+        if any(g["selected"] for g in partition["groups"]):
             return True
+
     return False
 
 
@@ -269,46 +272,6 @@ def ancestor_has_staff_lock(xblock, parent_xblock=None):
     return parent_xblock.visible_to_staff_only
 
 
-def add_extra_panel_tab(tab_type, course):
-    """
-    Used to add the panel tab to a course if it does not exist.
-    @param tab_type: A string representing the tab type.
-    @param course: A course object from the modulestore.
-    @return: Boolean indicating whether or not a tab was added and a list of tabs for the course.
-    """
-    # Copy course tabs
-    course_tabs = copy.copy(course.tabs)
-    changed = False
-    # Check to see if open ended panel is defined in the course
-
-    tab_panel = EXTRA_TAB_PANELS.get(tab_type)
-    if tab_panel not in course_tabs:
-        # Add panel to the tabs if it is not defined
-        course_tabs.append(tab_panel)
-        changed = True
-    return changed, course_tabs
-
-
-def remove_extra_panel_tab(tab_type, course):
-    """
-    Used to remove the panel tab from a course if it exists.
-    @param tab_type: A string representing the tab type.
-    @param course: A course object from the modulestore.
-    @return: Boolean indicating whether or not a tab was added and a list of tabs for the course.
-    """
-    # Copy course tabs
-    course_tabs = copy.copy(course.tabs)
-    changed = False
-    # Check to see if open ended panel is defined in the course
-
-    tab_panel = EXTRA_TAB_PANELS.get(tab_type)
-    if tab_panel in course_tabs:
-        # Add panel to the tabs if it is not defined
-        course_tabs = [ct for ct in course_tabs if ct != tab_panel]
-        changed = True
-    return changed, course_tabs
-
-
 def reverse_url(handler_name, key_name=None, key_value=None, kwargs=None):
     """
     Creates the URL for the given handler.
@@ -339,3 +302,165 @@ def reverse_usage_url(handler_name, usage_key, kwargs=None):
     Creates the URL for handlers that use usage_keys as URL parameters.
     """
     return reverse_url(handler_name, 'usage_key_string', usage_key, kwargs)
+
+
+def get_user_partition_info(xblock, schemes=None, course=None):
+    """
+    Retrieve user partition information for an XBlock for display in editors.
+
+    * If a partition has been disabled, it will be excluded from the results.
+
+    * If a group within a partition is referenced by the XBlock, but the group has been deleted,
+      the group will be marked as deleted in the results.
+
+    Arguments:
+        xblock (XBlock): The courseware component being edited.
+
+    Keyword Arguments:
+        schemes (iterable of str): If provided, filter partitions to include only
+            schemes with the provided names.
+
+        course (XBlock): The course descriptor.  If provided, uses this to look up the user partitions
+            instead of loading the course.  This is useful if we're calling this function multiple
+            times for the same course want to minimize queries to the modulestore.
+
+    Returns: list
+
+    Example Usage:
+    >>> get_user_partition_info(block, schemes=["cohort", "verification"])
+    [
+        {
+            "id": 12345,
+            "name": "Cohorts"
+            "scheme": "cohort",
+            "groups": [
+                {
+                    "id": 7890,
+                    "name": "Foo",
+                    "selected": True,
+                    "deleted": False,
+                }
+            ]
+        },
+        {
+            "id": 7292,
+            "name": "Midterm A",
+            "scheme": "verification",
+            "groups": [
+                {
+                    "id": 1,
+                    "name": "Completed verification at Midterm A",
+                    "selected": False,
+                    "deleted": False
+                },
+                {
+                    "id": 0,
+                    "name": "Did not complete verification at Midterm A",
+                    "selected": False,
+                    "deleted": False,
+                }
+            ]
+        }
+    ]
+
+    """
+    course = course or modulestore().get_course(xblock.location.course_key)
+
+    if course is None:
+        log.warning(
+            "Could not find course %s to retrieve user partition information",
+            xblock.location.course_key
+        )
+        return []
+
+    if schemes is not None:
+        schemes = set(schemes)
+
+    partitions = []
+    for p in sorted(course.user_partitions, key=lambda p: p.name):
+
+        # Exclude disabled partitions, partitions with no groups defined
+        # Also filter by scheme name if there's a filter defined.
+        if p.active and p.groups and (schemes is None or p.scheme.name in schemes):
+
+            # First, add groups defined by the partition
+            groups = []
+            for g in p.groups:
+
+                # Falsey group access for a partition mean that all groups
+                # are selected.  In the UI, though, we don't show the particular
+                # groups selected, since there's a separate option for "all users".
+                selected_groups = set(xblock.group_access.get(p.id, []) or [])
+                groups.append({
+                    "id": g.id,
+                    "name": g.name,
+                    "selected": g.id in selected_groups,
+                    "deleted": False,
+                })
+
+            # Next, add any groups set on the XBlock that have been deleted
+            all_groups = set(g.id for g in p.groups)
+            missing_group_ids = selected_groups - all_groups
+            for gid in missing_group_ids:
+                groups.append({
+                    "id": gid,
+                    "name": _("Deleted group"),
+                    "selected": True,
+                    "deleted": True,
+                })
+
+            # Put together the entire partition dictionary
+            partitions.append({
+                "id": p.id,
+                "name": p.name,
+                "scheme": p.scheme.name,
+                "groups": groups,
+            })
+
+    return partitions
+
+
+def get_visibility_partition_info(xblock):
+    """
+    Retrieve user partition information for the component visibility editor.
+
+    This pre-processes partition information to simplify the template.
+
+    Arguments:
+        xblock (XBlock): The component being edited.
+
+    Returns: dict
+
+    """
+    user_partitions = get_user_partition_info(xblock, schemes=["verification", "cohort"])
+    cohort_partitions = []
+    verification_partitions = []
+    has_selected_groups = False
+    selected_verified_partition_id = None
+
+    # Pre-process the partitions to make it easier to display the UI
+    for p in user_partitions:
+        has_selected = any(g["selected"] for g in p["groups"])
+        has_selected_groups = has_selected_groups or has_selected
+
+        if p["scheme"] == "cohort":
+            cohort_partitions.append(p)
+        elif p["scheme"] == "verification":
+            verification_partitions.append(p)
+            if has_selected:
+                selected_verified_partition_id = p["id"]
+
+    return {
+        "user_partitions": user_partitions,
+        "cohort_partitions": cohort_partitions,
+        "verification_partitions": verification_partitions,
+        "has_selected_groups": has_selected_groups,
+        "selected_verified_partition_id": selected_verified_partition_id,
+    }
+
+
+def is_self_paced(course):
+    """
+    Returns True if course is self-paced, False otherwise.
+    """
+    return course and course.self_paced and SelfPacedConfiguration.current().enabled

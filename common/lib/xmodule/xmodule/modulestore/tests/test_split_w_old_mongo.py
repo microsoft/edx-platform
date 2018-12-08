@@ -13,11 +13,11 @@ from xmodule.modulestore.inheritance import InheritanceMixin
 from xmodule.modulestore.mongo import DraftMongoModuleStore
 from xmodule.modulestore.split_mongo.split import SplitMongoModuleStore
 from xmodule.modulestore.tests.mongo_connection import MONGO_PORT_NUM, MONGO_HOST
-from xmodule.modulestore.tests.test_cross_modulestore_import_export import MemoryCache
+from xmodule.modulestore.tests.utils import MemoryCache
 
 
 @attr('mongo')
-class SplitWMongoCourseBoostrapper(unittest.TestCase):
+class SplitWMongoCourseBootstrapper(unittest.TestCase):
     """
     Helper for tests which need to construct split mongo & old mongo based courses to get interesting internal structure.
     Override _create_course and after invoking the super() _create_course, have it call _create_item for
@@ -51,7 +51,7 @@ class SplitWMongoCourseBoostrapper(unittest.TestCase):
         self.db_config['collection'] = 'modulestore{0}'.format(uuid.uuid4().hex[:5])
 
         self.user_id = random.getrandbits(32)
-        super(SplitWMongoCourseBoostrapper, self).setUp()
+        super(SplitWMongoCourseBootstrapper, self).setUp()
         self.split_mongo = SplitMongoModuleStore(
             None,
             self.db_config,

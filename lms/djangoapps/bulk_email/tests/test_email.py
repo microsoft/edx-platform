@@ -37,7 +37,7 @@ class MockCourseEmailResult(object):
 
     def get_mock_update_subtask_status(self):
         """Wrapper for mock email function."""
-        def mock_update_subtask_status(entry_id, current_task_id, new_subtask_status):  # pylint: disable=unused-argument
+        def mock_update_subtask_status(entry_id, current_task_id, new_subtask_status):
             """Increments count of number of emails sent."""
             self.emails_sent += new_subtask_status.succeeded
             return update_subtask_status(entry_id, current_task_id, new_subtask_status)
@@ -88,7 +88,7 @@ class EmailSendFromDashboardTestCase(ModuleStoreTestCase):
 
 @attr('shard_1')
 @patch.dict(settings.FEATURES, {'ENABLE_INSTRUCTOR_EMAIL': True, 'REQUIRE_COURSE_EMAIL_AUTH': False})
-@patch('bulk_email.models.html_to_text', Mock(return_value='Mocking CourseEmail.text_message'))
+@patch('bulk_email.models.html_to_text', Mock(return_value='Mocking CourseEmail.text_message', autospec=True))
 class TestEmailSendFromDashboardMockedHtmlToText(EmailSendFromDashboardTestCase):
     """
     Tests email sending with mocked html_to_text.
@@ -108,7 +108,7 @@ class TestEmailSendFromDashboardMockedHtmlToText(EmailSendFromDashboardTestCase)
         # We should get back a HttpResponseForbidden (status code 403)
         self.assertContains(response, "Email is not enabled for this course.", status_code=403)
 
-    @patch('bulk_email.models.html_to_text', Mock(return_value='Mocking CourseEmail.text_message'))
+    @patch('bulk_email.models.html_to_text', Mock(return_value='Mocking CourseEmail.text_message', autospec=True))
     def test_send_to_self(self):
         """
         Make sure email send to myself goes to myself.
@@ -129,10 +129,7 @@ class TestEmailSendFromDashboardMockedHtmlToText(EmailSendFromDashboardTestCase)
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(len(mail.outbox[0].to), 1)
         self.assertEquals(mail.outbox[0].to[0], self.instructor.email)
-        self.assertEquals(
-            mail.outbox[0].subject,
-            '[' + self.course.display_name + ']' + ' test subject for myself'
-        )
+        self.assertEquals(mail.outbox[0].subject, 'test subject for myself')
 
     def test_send_to_staff(self):
         """
@@ -240,10 +237,7 @@ class TestEmailSendFromDashboardMockedHtmlToText(EmailSendFromDashboardTestCase)
             [e.to[0] for e in mail.outbox],
             [self.instructor.email] + [s.email for s in self.staff] + [s.email for s in self.students]
         )
-        self.assertEquals(
-            mail.outbox[0].subject,
-            '[' + self.course.display_name + '] ' + uni_subject
-        )
+        self.assertEquals(mail.outbox[0].subject, uni_subject)
 
     def test_unicode_students_send_to_all(self):
         """

@@ -1,16 +1,19 @@
 """
     Test split modulestore w/o using any django stuff.
 """
+from mock import patch
 import datetime
 from importlib import import_module
-from path import path
+from path import Path as path
 import random
 import re
 import unittest
 import uuid
 
+import ddt
 from contracts import contract
 from nose.plugins.attrib import attr
+from django.core.cache import caches, InvalidCacheBackendError
 
 from openedx.core.lib import tempdir
 from xblock.fields import Reference, ReferenceList, ReferenceValueDict
@@ -21,14 +24,17 @@ from xmodule.modulestore.exceptions import (
     DuplicateItemError, DuplicateCourseError,
     InsufficientSpecificationError
 )
-from opaque_keys.edx.locator import CourseLocator, BlockUsageLocator, VersionTree, LocalId
+from opaque_keys.edx.locator import CourseKey, CourseLocator, BlockUsageLocator, VersionTree, LocalId
+from ccx_keys.locator import CCXBlockUsageLocator
 from xmodule.modulestore.inheritance import InheritanceMixin
 from xmodule.x_module import XModuleMixin
 from xmodule.fields import Date, Timedelta
 from xmodule.modulestore.split_mongo.split import SplitMongoModuleStore
 from xmodule.modulestore.tests.test_modulestore import check_has_course_method
 from xmodule.modulestore.split_mongo import BlockKey
+from xmodule.modulestore.tests.factories import check_mongo_calls
 from xmodule.modulestore.tests.mongo_connection import MONGO_PORT_NUM, MONGO_HOST
+from xmodule.modulestore.tests.utils import mock_tab_from_json
 from xmodule.modulestore.edit_info import EditInfoMixin
 
 
@@ -558,7 +564,8 @@ class SplitModuleTest(unittest.TestCase):
 class TestHasChildrenAtDepth(SplitModuleTest):
     """Test the has_children_at_depth method of XModuleMixin. """
 
-    def test_has_children_at_depth(self):
+    @patch('xmodule.tabs.CourseTab.from_json', side_effect=mock_tab_from_json)
+    def test_has_children_at_depth(self, _from_json):
         course_locator = CourseLocator(
             org='testx', course='GreekHero', run="run", branch=BRANCH_NAME_DRAFT
         )
@@ -591,12 +598,14 @@ class TestHasChildrenAtDepth(SplitModuleTest):
         self.assertFalse(ch3.has_children_at_depth(1))
 
 
+@ddt.ddt
 class SplitModuleCourseTests(SplitModuleTest):
     '''
     Course CRUD operation tests
     '''
 
-    def test_get_courses(self):
+    @patch('xmodule.tabs.CourseTab.from_json', side_effect=mock_tab_from_json)
+    def test_get_courses(self, _from_json):
         courses = modulestore().get_courses(branch=BRANCH_NAME_DRAFT)
         # should have gotten 3 draft courses
         self.assertEqual(len(courses), 3, "Wrong number of courses")
@@ -618,7 +627,28 @@ class SplitModuleCourseTests(SplitModuleTest):
         self.assertEqual(course.edited_by, "testassist@edx.org")
         self.assertDictEqual(course.grade_cutoffs, {"Pass": 0.45})
 
-    def test_get_org_courses(self):
+    @patch('xmodule.tabs.CourseTab.from_json', side_effect=mock_tab_from_json)
+    def test_get_courses_with_same_course_index(self, _from_json):
+        """
+        Test that if two courses pointing to same course index,
+        get_courses should return both.
+        """
+        courses = modulestore().get_courses(branch=BRANCH_NAME_DRAFT)
+        # Should have gotten 3 draft courses.
+        self.assertEqual(len(courses), 3)
+
+        course_index = modulestore().get_course_index_info(courses[0].id)
+        # Creating a new course with same course index of another course.
+        new_draft_course = modulestore().create_course(
+            'testX', 'rerun_2.0', 'run_q2', 1, BRANCH_NAME_DRAFT, versions_dict=course_index['versions']
+        )
+        courses = modulestore().get_courses(branch=BRANCH_NAME_DRAFT)
+        # Should have gotten 4 draft courses.
+        self.assertEqual(len(courses), 4)
+        self.assertIn(new_draft_course.id.version_agnostic(), [c.id for c in courses])
+
+    @patch('xmodule.tabs.CourseTab.from_json', side_effect=mock_tab_from_json)
+    def test_get_org_courses(self, _from_json):
         courses = modulestore().get_courses(branch=BRANCH_NAME_DRAFT, org='guestx')
 
         # should have gotten 1 draft courses
@@ -635,7 +665,8 @@ class SplitModuleCourseTests(SplitModuleTest):
         courses = modulestore().get_courses(branch=BRANCH_NAME_DRAFT)
         self.assertEqual(len(courses), 3)
 
-    def test_branch_requests(self):
+    @patch('xmodule.tabs.CourseTab.from_json', side_effect=mock_tab_from_json)
+    def test_branch_requests(self, _from_json):
         # query w/ branch qualifier (both draft and published)
         def _verify_published_course(courses_published):
             """ Helper function for verifying published course. """
@@ -665,7 +696,8 @@ class SplitModuleCourseTests(SplitModuleTest):
             locator_key_fields=['org', 'course', 'run']
         )
 
-    def test_get_course(self):
+    @patch('xmodule.tabs.CourseTab.from_json', side_effect=mock_tab_from_json)
+    def test_get_course(self, _from_json):
         '''
         Test the various calling forms for get_course
         '''
@@ -718,7 +750,8 @@ class SplitModuleCourseTests(SplitModuleTest):
         with self.assertRaises(ItemNotFoundError):
             modulestore().get_course(CourseLocator(org='testx', course='GreekHero', run="run", branch=BRANCH_NAME_PUBLISHED))
 
-    def test_cache(self):
+    @patch('xmodule.tabs.CourseTab.from_json', side_effect=mock_tab_from_json)
+    def test_cache(self, _from_json):
         """
         Test that the mechanics of caching work.
         """
@@ -730,7 +763,8 @@ class SplitModuleCourseTests(SplitModuleTest):
         self.assertIn(BlockKey('chapter', 'chapter1'), block_map)
         self.assertIn(BlockKey('problem', 'problem3_2'), block_map)
 
-    def test_course_successors(self):
+    @patch('xmodule.tabs.CourseTab.from_json', side_effect=mock_tab_from_json)
+    def test_course_successors(self, _from_json):
         """
         get_course_successors(course_locator, version_history_depth=1)
         """
@@ -761,13 +795,219 @@ class SplitModuleCourseTests(SplitModuleTest):
         self.assertEqual(len(result.children[0].children), 1)
         self.assertEqual(result.children[0].children[0].locator.version_guid, versions[0])
 
+    @patch('xmodule.tabs.CourseTab.from_json', side_effect=mock_tab_from_json)
+    def test_persist_dag(self, _from_json):
+        """
+        try saving temporary xblocks
+        """
+        test_course = modulestore().create_course(
+            course='course', run='2014', org='testx',
+            display_name='fun test course', user_id='testbot',
+            master_branch=ModuleStoreEnum.BranchName.draft
+        )
+        test_chapter = modulestore().create_xblock(
+            test_course.system, test_course.id, 'chapter', fields={'display_name': 'chapter n'},
+            parent_xblock=test_course
+        )
+        self.assertEqual(test_chapter.display_name, 'chapter n')
+        test_def_content = '<problem>boo</problem>'
+        # create child
+        new_block = modulestore().create_xblock(
+            test_course.system, test_course.id,
+            'problem',
+            fields={
+                'data': test_def_content,
+                'display_name': 'problem'
+            },
+            parent_xblock=test_chapter
+        )
+        self.assertIsNotNone(new_block.definition_locator)
+        self.assertTrue(isinstance(new_block.definition_locator.definition_id, LocalId))
+        # better to pass in persisted parent over the subdag so
+        # subdag gets the parent pointer (otherwise 2 ops, persist dag, update parent children,
+        # persist parent
+        persisted_course = modulestore().persist_xblock_dag(test_course, 'testbot')
+        self.assertEqual(len(persisted_course.children), 1)
+        persisted_chapter = persisted_course.get_children()[0]
+        self.assertEqual(persisted_chapter.category, 'chapter')
+        self.assertEqual(persisted_chapter.display_name, 'chapter n')
+        self.assertEqual(len(persisted_chapter.children), 1)
+        persisted_problem = persisted_chapter.get_children()[0]
+        self.assertEqual(persisted_problem.category, 'problem')
+        self.assertEqual(persisted_problem.data, test_def_content)
+        # update it
+        persisted_problem.display_name = 'altered problem'
+        persisted_problem = modulestore().update_item(persisted_problem, 'testbot')
+        self.assertEqual(persisted_problem.display_name, 'altered problem')
+
+    @patch('xmodule.tabs.CourseTab.from_json', side_effect=mock_tab_from_json)
+    def test_block_generations(self, _from_json):
+        """
+        Test get_block_generations
+        """
+        test_course = modulestore().create_course(
+            org='edu.harvard',
+            course='history',
+            run='hist101',
+            display_name='history test course',
+            user_id='testbot',
+            master_branch=ModuleStoreEnum.BranchName.draft
+        )
+        chapter = modulestore().create_child(
+            None, test_course.location,
+            block_type='chapter',
+            block_id='chapter1',
+            fields={'display_name': 'chapter 1'}
+        )
+        sub = modulestore().create_child(
+            None, chapter.location,
+            block_type='vertical',
+            block_id='subsection1',
+            fields={'display_name': 'subsection 1'}
+        )
+        first_problem = modulestore().create_child(
+            None, sub.location,
+            block_type='problem',
+            block_id='problem1',
+            fields={'display_name': 'problem 1', 'data': '<problem></problem>'}
+        )
+        first_problem.max_attempts = 3
+        first_problem.save()  # decache the above into the kvs
+        updated_problem = modulestore().update_item(first_problem, 'testbot')
+        self.assertIsNotNone(updated_problem.previous_version)
+        self.assertEqual(updated_problem.previous_version, first_problem.update_version)
+        self.assertNotEqual(updated_problem.update_version, first_problem.update_version)
+        modulestore().delete_item(updated_problem.location, 'testbot')
+
+        second_problem = modulestore().create_child(
+            None, sub.location.version_agnostic(),
+            block_type='problem',
+            block_id='problem2',
+            fields={'display_name': 'problem 2', 'data': '<problem></problem>'}
+        )
+
+        # The draft course root has 2 revisions: the published revision, and then the subsequent
+        # changes to the draft revision
+        version_history = modulestore().get_block_generations(test_course.location)
+        self.assertIsNotNone(version_history)
+        self.assertEqual(version_history.locator.version_guid, test_course.location.version_guid)
+        self.assertEqual(len(version_history.children), 1)
+        self.assertEqual(version_history.children[0].children, [])
+        self.assertEqual(version_history.children[0].locator.version_guid, chapter.location.version_guid)
+
+        # sub changed on add, add problem, delete problem, add problem in strict linear seq
+        version_history = modulestore().get_block_generations(sub.location)
+        self.assertEqual(len(version_history.children), 1)
+        self.assertEqual(len(version_history.children[0].children), 1)
+        self.assertEqual(len(version_history.children[0].children[0].children), 1)
+        self.assertEqual(len(version_history.children[0].children[0].children[0].children), 0)
+
+        # first and second problem may show as same usage_id; so, need to ensure their histories are right
+        version_history = modulestore().get_block_generations(updated_problem.location)
+        self.assertEqual(version_history.locator.version_guid, first_problem.location.version_guid)
+        self.assertEqual(len(version_history.children), 1)  # updated max_attempts
+        self.assertEqual(len(version_history.children[0].children), 0)
+
+        version_history = modulestore().get_block_generations(second_problem.location)
+        self.assertNotEqual(version_history.locator.version_guid, first_problem.location.version_guid)
+
+    @ddt.data(
+        ("course-v1:edx+test_course+test_run", BlockUsageLocator),
+        ("ccx-v1:edX+test_course+test_run+ccx@1", CCXBlockUsageLocator),
+    )
+    @ddt.unpack
+    def test_make_course_usage_key(self, course_id, root_block_cls):
+        """Test that we get back the appropriate usage key for the root of a course key.
+
+        In particular, we want to make sure that it properly handles CCX courses.
+        """
+        course_key = CourseKey.from_string(course_id)
+        root_block_key = modulestore().make_course_usage_key(course_key)
+        self.assertIsInstance(root_block_key, root_block_cls)
+        self.assertEqual(root_block_key.block_type, "course")
+        self.assertEqual(root_block_key.name, "course")
+
+
+class TestCourseStructureCache(SplitModuleTest):
+    """Tests for the CourseStructureCache"""
+
+    def setUp(self):
+        # use the default cache, since the `course_structure_cache`
+        # is a dummy cache during testing
+        self.cache = caches['default']
+
+        # make sure we clear the cache before every test...
+        self.cache.clear()
+        # ... and after
+        self.addCleanup(self.cache.clear)
+
+        # make a new course:
+        self.user = random.getrandbits(32)
+        self.new_course = modulestore().create_course(
+            'org', 'course', 'test_run', self.user, BRANCH_NAME_DRAFT,
+        )
+
+        super(TestCourseStructureCache, self).setUp()
+
+    @patch('xmodule.modulestore.split_mongo.mongo_connection.get_cache')
+    def test_course_structure_cache(self, mock_get_cache):
+        # force get_cache to return the default cache so we can test
+        # its caching behavior
+        mock_get_cache.return_value = self.cache
+
+        with check_mongo_calls(1):
+            not_cached_structure = self._get_structure(self.new_course)
+
+        # when cache is warmed, we should have one fewer mongo call
+        with check_mongo_calls(0):
+            cached_structure = self._get_structure(self.new_course)
+
+        # now make sure that you get the same structure
+        self.assertEqual(cached_structure, not_cached_structure)
+
+    @patch('xmodule.modulestore.split_mongo.mongo_connection.get_cache')
+    def test_course_structure_cache_no_cache_configured(self, mock_get_cache):
+        mock_get_cache.side_effect = InvalidCacheBackendError
+
+        with check_mongo_calls(1):
+            not_cached_structure = self._get_structure(self.new_course)
+
+        # if the cache isn't configured, we expect to have to make
+        # another mongo call here if we want the same course structure
+        with check_mongo_calls(1):
+            cached_structure = self._get_structure(self.new_course)
+
+        # now make sure that you get the same structure
+        self.assertEqual(cached_structure, not_cached_structure)
+
+    def test_dummy_cache(self):
+        with check_mongo_calls(1):
+            not_cached_structure = self._get_structure(self.new_course)
+
+        # Since the test is using the dummy cache, it's not actually caching
+        # anything
+        with check_mongo_calls(1):
+            cached_structure = self._get_structure(self.new_course)
+
+        # now make sure that you get the same structure
+        self.assertEqual(cached_structure, not_cached_structure)
+
+    def _get_structure(self, course):
+        """
+        Helper function to get a structure from a course.
+        """
+        return modulestore().db_connection.get_structure(
+            course.location.as_object_id(course.location.version_guid)
+        )
+
 
 class SplitModuleItemTests(SplitModuleTest):
     '''
     Item read tests including inheritance
     '''
 
-    def test_has_item(self):
+    @patch('xmodule.tabs.CourseTab.from_json', side_effect=mock_tab_from_json)
+    def test_has_item(self, _from_json):
         '''
         has_item(BlockUsageLocator)
         '''
@@ -831,7 +1071,8 @@ class SplitModuleItemTests(SplitModuleTest):
         )
         self.assertFalse(modulestore().has_item(locator))
 
-    def test_get_item(self):
+    @patch('xmodule.tabs.CourseTab.from_json', side_effect=mock_tab_from_json)
+    def test_get_item(self, _from_json):
         '''
         get_item(blocklocator)
         '''
@@ -957,6 +1198,10 @@ class SplitModuleItemTests(SplitModuleTest):
         self.assertEqual(len(matches), 3)
         matches = modulestore().get_items(locator, qualifiers={'category': 'garbage'})
         self.assertEqual(len(matches), 0)
+        matches = modulestore().get_items(locator, qualifiers={'name': 'chapter1'})
+        self.assertEqual(len(matches), 1)
+        matches = modulestore().get_items(locator, qualifiers={'name': ['chapter1', 'chapter2']})
+        self.assertEqual(len(matches), 2)
         matches = modulestore().get_items(
             locator,
             qualifiers={'category': 'chapter'},
@@ -989,7 +1234,8 @@ class SplitModuleItemTests(SplitModuleTest):
         parent = modulestore().get_parent_location(locator)
         self.assertIsNone(parent)
 
-    def test_get_children(self):
+    @patch('xmodule.tabs.CourseTab.from_json', side_effect=mock_tab_from_json)
+    def test_get_children(self, _from_json):
         """
         Test the existing get_children method on xdescriptors
         """
@@ -1342,7 +1588,8 @@ class TestItemCrud(SplitModuleTest):
         other_updated = modulestore().update_item(other_block, self.user_id)
         self.assertIn(moved_child.version_agnostic(), version_agnostic(other_updated.children))
 
-    def test_update_definition(self):
+    @patch('xmodule.tabs.CourseTab.from_json', side_effect=mock_tab_from_json)
+    def test_update_definition(self, _from_json):
         """
         test updating an item's definition: ensure it gets versioned as well as the course getting versioned
         """
@@ -1613,7 +1860,8 @@ class TestCourseCreation(SplitModuleTest):
             fields['grading_policy']['GRADE_CUTOFFS']
         )
 
-    def test_update_course_index(self):
+    @patch('xmodule.tabs.CourseTab.from_json', side_effect=mock_tab_from_json)
+    def test_update_course_index(self, _from_json):
         """
         Test the versions pointers. NOTE: you can change the org, course, or other things, but
         it's not clear how you'd find them again or associate them w/ existing student history since
@@ -1668,7 +1916,8 @@ class TestCourseCreation(SplitModuleTest):
                 dupe_course_key.org, dupe_course_key.course, dupe_course_key.run, user, BRANCH_NAME_DRAFT
             )
 
-    def test_bulk_ops_get_courses(self):
+    @patch('xmodule.tabs.CourseTab.from_json', side_effect=mock_tab_from_json)
+    def test_bulk_ops_get_courses(self, _from_json):
         """
         Test get_courses when some are created, updated, and deleted w/in a bulk operation
         """
@@ -1707,7 +1956,8 @@ class TestInheritance(SplitModuleTest):
     """
     Test the metadata inheritance mechanism.
     """
-    def test_inheritance(self):
+    @patch('xmodule.tabs.CourseTab.from_json', side_effect=mock_tab_from_json)
+    def test_inheritance(self, _from_json):
         """
         The actual test
         """
@@ -1787,7 +2037,8 @@ class TestPublish(SplitModuleTest):
     def tearDown(self):
         SplitModuleTest.tearDown(self)
 
-    def test_publish_safe(self):
+    @patch('xmodule.tabs.CourseTab.from_json', side_effect=mock_tab_from_json)
+    def test_publish_safe(self, _from_json):
         """
         Test the standard patterns: publish to new branch, revise and publish
         """
@@ -1856,7 +2107,8 @@ class TestPublish(SplitModuleTest):
         with self.assertRaises(ItemNotFoundError):
             modulestore().copy(self.user_id, source_course, destination_course, [problem1], [])
 
-    def test_move_delete(self):
+    @patch('xmodule.tabs.CourseTab.from_json', side_effect=mock_tab_from_json)
+    def test_move_delete(self, _from_json):
         """
         Test publishing moves and deletes.
         """

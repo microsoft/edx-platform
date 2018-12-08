@@ -8,7 +8,7 @@ import os
 import re
 import shutil
 import tarfile
-from path import path
+from path import Path as path
 from tempfile import mkdtemp
 
 from django.conf import settings
@@ -18,9 +18,10 @@ from django.core.files.temp import NamedTemporaryFile
 from django.core.servers.basehttp import FileWrapper
 from django.http import HttpResponse, HttpResponseNotFound
 from django.utils.translation import ugettext as _
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods, require_GET
 
-from django_future.csrf import ensure_csrf_cookie
+import dogstats_wrapper as dog_stats_api
 from edxmako.shortcuts import render_to_response
 from xmodule.contentstore.django import contentstore
 from xmodule.exceptions import SerializationError
@@ -36,6 +37,11 @@ from student.auth import has_course_author_access
 from openedx.core.lib.extract_tar import safetar_extractall
 from util.json_request import JsonResponse
 from util.views import ensure_valid_course_key
+from models.settings.course_metadata import CourseMetadata
+from contentstore.views.entrance_exam import (
+    add_entrance_exam_milestone,
+    remove_entrance_exam_milestone_reference
+)
 
 from contentstore.utils import reverse_course_url, reverse_usage_url, reverse_library_url
 
@@ -53,7 +59,6 @@ log = logging.getLogger(__name__)
 CONTENT_RE = re.compile(r"(?P<start>\d{1,11})-(?P<stop>\d{1,11})/(?P<end>\d{1,11})")
 
 
-# pylint: disable=unused-argument
 @login_required
 @ensure_csrf_cookie
 @require_http_methods(("GET", "POST", "PUT"))
@@ -109,6 +114,17 @@ def _import_handler(request, courselike_key, root_name, successful_url, context_
                 session_status = request.session.setdefault("import_status", {})
                 courselike_string = unicode(courselike_key) + filename
                 _save_request_status(request, courselike_string, 0)
+
+                # If the course has an entrance exam then remove it and its corresponding milestone.
+                # current course state before import.
+                if root_name == COURSE_ROOT:
+                    if courselike_module.entrance_exam_enabled:
+                        remove_entrance_exam_milestone_reference(request, courselike_key)
+                        log.info(
+                            "entrance exam milestone content reference for course %s has been removed",
+                            courselike_module.id
+                        )
+
                 if not filename.endswith('.tar.gz'):
                     _save_request_status(request, courselike_string, -1)
                     return JsonResponse(
@@ -260,13 +276,17 @@ def _import_handler(request, courselike_key, root_name, successful_url, context_
                 log.info("Course import %s: Extracted file verified", courselike_key)
                 _save_request_status(request, courselike_string, 3)
 
-                courselike_items = import_func(
-                    modulestore(), request.user.id,
-                    settings.GITHUB_REPO_ROOT, [dirpath],
-                    load_error_modules=False,
-                    static_content_store=contentstore(),
-                    target_id=courselike_key
-                )
+                with dog_stats_api.timer(
+                    'courselike_import.time',
+                    tags=[u"courselike:{}".format(courselike_key)]
+                ):
+                    courselike_items = import_func(
+                        modulestore(), request.user.id,
+                        settings.GITHUB_REPO_ROOT, [dirpath],
+                        load_error_modules=False,
+                        static_content_store=contentstore(),
+                        target_id=courselike_key
+                    )
 
                 new_location = courselike_items[0].location
                 logging.debug('new course at %s', new_location)
@@ -295,6 +315,22 @@ def _import_handler(request, courselike_key, root_name, successful_url, context_
                 if session_status[courselike_string] != 4:
                     _save_request_status(request, courselike_string, -abs(session_status[courselike_string]))
 
+                # status == 4 represents that course has been imported successfully.
+                if session_status[courselike_string] == 4 and root_name == COURSE_ROOT:
+                    # Reload the course so we have the latest state
+                    course = modulestore().get_course(courselike_key)
+                    if course.entrance_exam_enabled:
+                        entrance_exam_chapter = modulestore().get_items(
+                            course.id,
+                            qualifiers={'category': 'chapter'},
+                            settings={'is_entrance_exam': True}
+                        )[0]
+
+                        metadata = {'entrance_exam_id': unicode(entrance_exam_chapter.location)}
+                        CourseMetadata.update_from_dict(metadata, course, request.user)
+                        add_entrance_exam_milestone(course.id, entrance_exam_chapter)
+                        log.info("Course %s Entrance exam imported", course.id)
+
             return JsonResponse({'Status': 'OK'})
     elif request.method == 'GET':  # assume html
         status_url = reverse_course_url(
@@ -322,7 +358,6 @@ def _save_request_status(request, key, status):
     request.session.save()
 
 
-# pylint: disable=unused-argument
 @require_GET
 @ensure_csrf_cookie
 @login_required
@@ -421,7 +456,6 @@ def send_tarball(tarball):
     return response
 
 
-# pylint: disable=unused-argument
 @ensure_csrf_cookie
 @login_required
 @require_http_methods(("GET",))
@@ -464,7 +498,7 @@ def export_handler(request, course_key_string):
     context['export_url'] = export_url + '?_accept=application/x-tgz'
 
     # an _accept URL parameter will be preferred over HTTP_ACCEPT in the header.
-    requested_format = request.REQUEST.get('_accept', request.META.get('HTTP_ACCEPT', 'text/html'))
+    requested_format = request.GET.get('_accept', request.META.get('HTTP_ACCEPT', 'text/html'))
 
     if 'application/x-tgz' in requested_format:
         try:

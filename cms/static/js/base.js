@@ -1,6 +1,7 @@
-require(["domReady", "jquery", "underscore", "gettext", "js/views/feedback_notification", "js/views/feedback_prompt",
-    "js/utils/date_utils", "js/utils/module", "js/utils/handle_iframe_binding",
-    "jquery.ui", "jquery.leanModal", "jquery.form", "jquery.smoothScroll"],
+require(["domReady", "jquery", "underscore", "gettext", "common/js/components/views/feedback_notification",
+        "common/js/components/views/feedback_prompt", "js/utils/date_utils",
+        "js/utils/module", "js/utils/handle_iframe_binding", "jquery.ui", "jquery.leanModal",
+        "jquery.form", "jquery.smoothScroll"],
     function(domReady, $, _, gettext, NotificationView, PromptView, DateUtils, ModuleUtils, IframeUtils)
 {
 
@@ -14,15 +15,6 @@ domReady(function() {
     });
 
     $body.addClass('js');
-
-    // lean/simple modal
-    $('a[rel*=modal]').leanModal({
-        overlay: 0.80,
-        closeButton: '.action-modal-close'
-    });
-    $('a.action-modal-close').click(function(e) {
-        (e).preventDefault();
-    });
 
     // alerts/notifications - manual close
     $('.action-alert-close, .alert.has-actions .nav-actions a').bind('click', hideAlert);
@@ -68,9 +60,6 @@ domReady(function() {
 
     // general link management - smooth scrolling page links
     $('a[rel*="view"][href^="#"]').bind('click', smoothScrollLink);
-
-    // tender feedback window scrolling
-    $('a.show-tender').bind('click', smoothScrollTop);
 
     IframeUtils.iframeBinding();
 

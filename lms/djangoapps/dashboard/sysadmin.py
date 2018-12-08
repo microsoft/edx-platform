@@ -25,10 +25,10 @@ from django.utils.translation import ugettext as _
 from django.views.decorators.cache import cache_control
 from django.views.generic.base import TemplateView
 from django.views.decorators.http import condition
-from django_future.csrf import ensure_csrf_cookie
+from django.views.decorators.csrf import ensure_csrf_cookie
 from edxmako.shortcuts import render_to_response
 import mongoengine
-from path import path
+from path import Path as path
 
 from courseware.courses import get_course_by_id
 import dashboard.git_import as git_import
@@ -41,7 +41,6 @@ from student.models import CourseEnrollment, UserProfile, Registration
 import track.views
 from xmodule.modulestore import ModuleStoreEnum
 from xmodule.modulestore.django import modulestore
-from xmodule.modulestore.xml import XMLModuleStore
 from opaque_keys.edx.locations import SlashSeparatedCourseKey
 
 
@@ -60,9 +59,6 @@ class SysadminDashboardView(TemplateView):
         """
 
         self.def_ms = modulestore()
-        self.is_using_mongo = True
-        if isinstance(self.def_ms, XMLModuleStore):
-            self.is_using_mongo = False
         self.msg = u''
         self.datatable = []
         super(SysadminDashboardView, self).__init__(**kwargs)
@@ -107,7 +103,7 @@ class SysadminDashboardView(TemplateView):
                 writer.writerow(row)
             csv_data = read_and_flush()
             yield csv_data
-        response = HttpResponse(csv_data(), mimetype='text/csv')
+        response = HttpResponse(csv_data(), content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename={0}'.format(
             filename)
         return response
@@ -374,10 +370,7 @@ class Courses(SysadminDashboardView):
             return _("The git repo location should end with '.git', "
                      "and be a valid url")
 
-        if self.is_using_mongo:
-            return self.import_mongo_course(gitloc, branch)
-
-        return self.import_xml_course(gitloc, branch)
+        return self.import_mongo_course(gitloc, branch)
 
     def import_mongo_course(self, gitloc, branch):
         """
@@ -387,7 +380,7 @@ class Courses(SysadminDashboardView):
 
         msg = u''
 
-        log.debug('Adding course using git repo {0}'.format(gitloc))
+        log.debug('Adding course using git repo %s', gitloc)
 
         # Grab logging output for debugging imports
         output = StringIO.StringIO()
@@ -427,80 +420,6 @@ class Courses(SysadminDashboardView):
 
         msg = u"<h4 style='color:{0}'>{1}</h4>".format(color, msg_header)
         msg += u"<pre>{0}</pre>".format(escape(ret))
-        return msg
-
-    def import_xml_course(self, gitloc, branch):
-        """Imports a git course into the XMLModuleStore"""
-
-        msg = u''
-        if not getattr(settings, 'GIT_IMPORT_WITH_XMLMODULESTORE', False):
-            # Translators: "GIT_IMPORT_WITH_XMLMODULESTORE" is a variable name.
-            # "XMLModuleStore" and "MongoDB" are database systems. You should not
-            # translate these names.
-            return _('Refusing to import. GIT_IMPORT_WITH_XMLMODULESTORE is '
-                     'not turned on, and it is generally not safe to import '
-                     'into an XMLModuleStore with multithreaded. We '
-                     'recommend you enable the MongoDB based module store '
-                     'instead, unless this is a development environment.')
-        cdir = (gitloc.rsplit('/', 1)[1])[:-4]
-        gdir = settings.DATA_DIR / cdir
-        if os.path.exists(gdir):
-            msg += _("The course {0} already exists in the data directory! "
-                     "(reloading anyway)").format(cdir)
-            cmd = ['git', 'pull', ]
-            cwd = gdir
-        else:
-            cmd = ['git', 'clone', gitloc, ]
-            cwd = settings.DATA_DIR
-        cwd = os.path.abspath(cwd)
-        try:
-            cmd_output = escape(
-                subprocess.check_output(cmd, stderr=subprocess.STDOUT, cwd=cwd)
-            )
-        except subprocess.CalledProcessError as ex:
-            log.exception('Git pull or clone output was: %r', ex.output)
-            # Translators: unable to download the course content from
-            # the source git repository. Clone occurs if this is brand
-            # new, and pull is when it is being updated from the
-            # source.
-            return _('Unable to clone or pull repository. Please check '
-                     'your url. Output was: {0!r}').format(ex.output)
-
-        msg += u'<pre>{0}</pre>'.format(cmd_output)
-        if not os.path.exists(gdir):
-            msg += _('Failed to clone repository to {directory_name}').format(directory_name=gdir)
-            return msg
-        # Change branch if specified
-        if branch:
-            try:
-                git_import.switch_branch(branch, gdir)
-            except GitImportError as ex:
-                return str(ex)
-            # Translators: This is a git repository branch, which is a
-            # specific version of a courses content
-            msg += u'<p>{0}</p>'.format(
-                _('Successfully switched to branch: '
-                  '{branch_name}').format(branch_name=branch))
-
-        self.def_ms.try_load_course(os.path.abspath(gdir))
-        errlog = self.def_ms.errored_courses.get(cdir, '')
-        if errlog:
-            msg += u'<hr width="50%"><pre>{0}</pre>'.format(escape(errlog))
-        else:
-            course = self.def_ms.courses[os.path.abspath(gdir)]
-            msg += _('Loaded course {course_name}<br/>Errors:').format(
-                course_name="{} {}".format(cdir, course.display_name)
-            )
-            errors = self.def_ms.get_course_errors(course.id)
-            if not errors:
-                msg += u'None'
-            else:
-                msg += u'<ul>'
-                for (summary, err) in errors:
-                    msg += u'<li><pre>{0}: {1}</pre></li>'.format(escape(summary),
-                                                                  escape(err))
-                msg += u'</ul>'
-
         return msg
 
     def make_datatable(self):
@@ -619,7 +538,7 @@ class Staffing(SysadminDashboardView):
             raise Http404
         data = []
 
-        for course in self.get_courses():  # pylint: disable=unused-variable
+        for course in self.get_courses():
             datum = [course.display_name, course.id]
             datum += [CourseEnrollment.objects.filter(
                 course_id=course.id).count()]
@@ -653,7 +572,7 @@ class Staffing(SysadminDashboardView):
             data = []
             roles = [CourseInstructorRole, CourseStaffRole, ]
 
-            for course in self.get_courses():  # pylint: disable=unused-variable
+            for course in self.get_courses():
                 for role in roles:
                     for user in role(course.id).users_with_role():
                         datum = [course.id, role, user.username, user.email,
@@ -722,8 +641,8 @@ class GitLogs(TemplateView):
         else:
             try:
                 course = get_course_by_id(course_id)
-            except Exception:  # pylint: disable=broad-except
-                log.info('Cannot find course {0}'.format(course_id))
+            except Exception:
+                log.info('Cannot find course %s', course_id)
                 raise Http404
 
             # Allow only course team, instructors, and staff
@@ -731,11 +650,11 @@ class GitLogs(TemplateView):
                     CourseInstructorRole(course.id).has_user(request.user) or
                     CourseStaffRole(course.id).has_user(request.user)):
                 raise Http404
-            log.debug('course_id={0}'.format(course_id))
+            log.debug('course_id=%s', course_id)
             cilset = CourseImportLog.objects.filter(
                 course_id=course_id
             ).order_by('-created')
-            log.debug('cilset length={0}'.format(len(cilset)))
+            log.debug('cilset length=%s', len(cilset))
 
         # Paginate the query set
         paginator = Paginator(cilset, page_size)

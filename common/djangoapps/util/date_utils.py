@@ -2,7 +2,7 @@
 Convenience methods for working with datetime objects
 """
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 import re
 
 from pytz import timezone, UTC, UnknownTimeZoneError
@@ -73,10 +73,32 @@ def almost_same_datetime(dt1, dt2, allowed_delta=timedelta(minutes=1)):
     return abs(dt1 - dt2) < allowed_delta
 
 
+def to_timestamp(datetime_value):
+    """
+    Convert a datetime into a timestamp, represented as the number
+    of seconds since January 1, 1970 UTC.
+    """
+    return int((datetime_value - datetime(1970, 1, 1, tzinfo=UTC)).total_seconds())
+
+
+def from_timestamp(timestamp):
+    """
+    Convert a timestamp (number of seconds since Jan 1, 1970 UTC)
+    into a timezone-aware datetime.
+
+    If the timestamp cannot be converted, returns None instead.
+    """
+    try:
+        return datetime.utcfromtimestamp(int(timestamp)).replace(tzinfo=UTC)
+    except (ValueError, TypeError):
+        return None
+
+
 DEFAULT_SHORT_DATE_FORMAT = "%b %d, %Y"
 DEFAULT_LONG_DATE_FORMAT = "%A, %B %d, %Y"
 DEFAULT_TIME_FORMAT = "%I:%M:%S %p"
 DEFAULT_DATE_TIME_FORMAT = "%b %d, %Y at %H:%M"
+DEFAULT_DAY_AND_TIME_FORMAT = "%A at %-I%P"
 
 
 def strftime_localized(dtime, format):      # pylint: disable=redefined-builtin
@@ -126,6 +148,8 @@ def strftime_localized(dtime, format):      # pylint: disable=redefined-builtin
         format = ugettext("DATE_TIME_FORMAT")
         if format == "DATE_TIME_FORMAT":
             format = DEFAULT_DATE_TIME_FORMAT
+    elif format == "DAY_AND_TIME":
+        format = DEFAULT_DAY_AND_TIME_FORMAT
     elif format == "TIME":
         format = "%X"
 
@@ -183,7 +207,7 @@ def strftime_localized(dtime, format):      # pylint: disable=redefined-builtin
 
         return part
 
-    formatted_date = re.sub(r"%.|%", process_percent_code, format)
+    formatted_date = re.sub(r"%-.|%.|%", process_percent_code, format)
     return formatted_date
 
 

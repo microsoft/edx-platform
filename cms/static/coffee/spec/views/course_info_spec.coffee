@@ -1,4 +1,4 @@
-define ["js/views/course_info_handout", "js/views/course_info_update", "js/models/module_info", "js/collections/course_update", "js/common_helpers/ajax_helpers"],
+define ["js/views/course_info_handout", "js/views/course_info_update", "js/models/module_info", "js/collections/course_update", "common/js/spec_helpers/ajax_helpers"],
 (CourseInfoHandoutsView, CourseInfoUpdateView, ModuleInfo, CourseUpdateCollection, AjaxHelpers) ->
 
     describe "Course Updates and Handouts", ->
@@ -123,6 +123,9 @@ define ["js/views/course_info_handout", "js/views/course_info_update", "js/model
                 # Verify the link is not rewritten when saved.
                 expect(requestSent.content).toEqual('/static/image.jpg')
 
+                # Verify that analytics are sent
+                expect(window.analytics.track).toHaveBeenCalled()
+
             it "does rewrite links for preview", ->
                 # Create a new update.
                 @createNewUpdate('/static/image.jpg')
@@ -167,23 +170,31 @@ define ["js/views/course_info_handout", "js/views/course_info_update", "js/model
                 @courseInfoEdit.render()
                 @event = {preventDefault : () -> 'no op'}
                 @courseInfoEdit.onNew(@event)
-                @requests = AjaxHelpers["requests"](this)
 
             it "shows push notification checkbox as selected by default", ->
                 expect(@courseInfoEdit.$el.find('.toggle-checkbox')).toBeChecked()
 
             it "sends correct default value for push_notification_selected", ->
+                requests = AjaxHelpers.requests(this);
                 @courseInfoEdit.$el.find('.save-button').click()
-                requestSent = JSON.parse(@requests[@requests.length - 1].requestBody)
+                requestSent = JSON.parse(requests[requests.length - 1].requestBody)
                 expect(requestSent.push_notification_selected).toEqual(true)
 
+		# Check that analytics send push_notification info
+                analytics_payload = window.analytics.track.calls[0].args[1]
+                expect(analytics_payload).toEqual(jasmine.objectContaining({'push_notification_selected': true}))
+
             it "sends correct value for push_notification_selected when it is unselected", ->
+                requests = AjaxHelpers.requests(this);
                 # unselect push notification
                 @courseInfoEdit.$el.find('.toggle-checkbox').attr('checked', false);
-
                 @courseInfoEdit.$el.find('.save-button').click()
-                requestSent = JSON.parse(@requests[@requests.length - 1].requestBody)
+                requestSent = JSON.parse(requests[requests.length - 1].requestBody)
                 expect(requestSent.push_notification_selected).toEqual(false)
+
+		# Check that analytics send push_notification info
+                analytics_payload = window.analytics.track.calls[0].args[1]
+                expect(analytics_payload).toEqual(jasmine.objectContaining({'push_notification_selected': false}))
 
         describe "Course Handouts", ->
             handoutsTemplate = readFixtures('course_info_handouts.underscore')

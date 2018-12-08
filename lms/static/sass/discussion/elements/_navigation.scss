@@ -22,15 +22,25 @@
 }
 
 .forum-nav-browse {
-  @include box-sizing(border-box);
-  display: table-cell;
-  vertical-align: middle;
-  width: 50%;
-  padding: ($baseline/4);
+    @include box-sizing(border-box);
+    display: table-cell;
+    vertical-align: middle;
+    width: auto;
+    padding: 11px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
 
-  &:hover, &:focus, &.is-active {
-    background-color: $gray-l5;
-  }
+    &:hover,
+    &:focus,
+    &.is-active {
+        // converted to button from a;
+        // need importants to overwrite later button styles
+        box-shadow: none !important;
+        background-image: none !important;
+        background-color: $gray-l5 !important;
+    }
 
   .icon {
     @include font-size(14);
@@ -93,6 +103,33 @@
   width: 100%;
 }
 
+.forum-nav-browse-title {
+    display: block;
+    width: 100%;
+    border: 0;
+    border-radius: 0;
+    border-bottom: 1px solid $gray-l3;
+    padding: ($baseline/2) ($baseline/2);
+    background: transparent;
+    box-shadow: none;
+    background-image: none;
+    color: $link-color;
+    text-align: left;
+
+    &:hover,
+    &:focus {
+        // switched from a to button;
+        // need to override button styles
+        background-image: none !important;
+        box-shadow: none !important;
+        background: $forum-color-active-thread !important;
+    }
+}
+
+.forum-nav-browse-title .icon {
+  @include margin-right($baseline/2);
+}
+
 .forum-nav-browse-menu {
   @include font-size(14);
   overflow-y: scroll;
@@ -100,22 +137,15 @@
 }
 
 .forum-nav-browse-submenu {
-  padding-left: $baseline;
-  list-style: none;
-}
+    list-style: none;
+    padding: 0;
 
-.forum-nav-browse-title {
-  display: block;
-  border-bottom: 1px solid $gray-l3;
-  padding: ($baseline/2) ($baseline/2);
+    li {
 
-  &:hover, &:focus {
-    background: $forum-color-active-thread;
-  }
-}
-
-.forum-nav-browse-title .icon {
-  @include margin-right($baseline/2);
+        .forum-nav-browse-title {
+            padding-left: $baseline;
+        }
+    }
 }
 
 // -------------------
@@ -172,11 +202,21 @@
 }
 
 .forum-nav-thread {
-  border-bottom: 1px solid $gray-l3;
-  background-color: $gray-l5;
+  border-bottom: 1px solid $gray-l4;
+  background-color: $gray-l6;
 
   &.is-unread {
-    background-color: $white;
+    background: $white;
+    color: $blue-d1;
+
+    .forum-nav-thread-comments-count {
+      background-color: tint($blue-d1, 90%);;
+      color: $blue-d1;
+
+      &:after {
+        border-right-color: tint($blue-d1, 90%);;
+      }
+    }
   }
 }
 
@@ -184,8 +224,31 @@
   display: block;
   padding: ($baseline/4) ($baseline/2);
 
-  &.is-active, &:hover, &:focus {
-    background-color: $forum-color-active-thread;
+  &.is-active {
+    background-color: $white;
+    color: $base-font-color;
+
+    .forum-nav-thread-comments-count {
+      background-color: $gray-l4;
+      color: $base-font-color;
+
+      &:after {
+        border-right-color: $gray-l4;
+      }
+    }
+  }
+
+  .forum-nav-thread-comments-count {
+
+    // topic read, but has unread comments
+    &.is-unread {
+      background-color: $blue-d1;
+      color: $white;
+
+      &:after {
+        border-right-color: $blue-d1;
+      }
+    }
   }
 }
 
@@ -263,7 +326,7 @@
   border-radius: 2px;
   padding: ($baseline/10) ($baseline/5);
   min-width: 2em; // Fit most comment counts but allow expansion if necessary
-  background-color: $gray-l3;
+  background-color: $gray-l4;
 
   // Speech bubble tail
   &:after {
@@ -276,24 +339,7 @@
     height: 0;
     border-style: solid;
     @include border-width(0, ($baseline/4), ($baseline/4), 0);
-    @include border-color(transparent, $gray-l3, transparent, transparent);
-  }
-
-  &.is-unread {
-    background-color: $white;
-
-    &:after {
-      border-right-color: $white
-    }
-  }
-}
-
-.forum-nav-thread.is-unread .forum-nav-thread-comments-count {
-  background-color: $blue;
-  color: $white;
-
-  &:after {
-    border-right-color: $blue;
+    @include border-color(transparent, $gray-l4, transparent, transparent);
   }
 }
 
@@ -312,7 +358,8 @@
   @extend %forum-nav-load-more-content;
   color: $link-color;
 
-  &:hover, &:focus {
+  &:hover,
+  &:focus {
     color: $link-color;
     background-color: $forum-color-active-thread;
   }

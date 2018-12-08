@@ -13,6 +13,12 @@ LEGACY_SHIM_PROCESSOR = [
     }
 ]
 
+GOOGLE_ANALYTICS_PROCESSOR = [
+    {
+        'ENGINE': 'track.shim.GoogleAnalyticsProcessor'
+    }
+]
+
 
 @override_settings(
     EVENT_TRACKING_PROCESSORS=LEGACY_SHIM_PROCESSOR,
@@ -87,3 +93,126 @@ class LegacyFieldMappingProcessorTestCase(EventTrackingTestCase):
             'session': '',
         }
         assert_events_equal(expected_event, emitted_event)
+
+
+@override_settings(
+    EVENT_TRACKING_PROCESSORS=GOOGLE_ANALYTICS_PROCESSOR,
+)
+class GoogleAnalyticsProcessorTestCase(EventTrackingTestCase):
+    """Ensure emitted events contain the fields necessary for Google Analytics."""
+
+    def test_event_fields(self):
+        """ Test that course_id is added as the label if present, and nonInteraction is set. """
+        data = {sentinel.key: sentinel.value}
+
+        context = {
+            'path': sentinel.path,
+            'user_id': sentinel.user_id,
+            'course_id': sentinel.course_id,
+            'org_id': sentinel.org_id,
+            'client_id': sentinel.client_id,
+        }
+        with self.tracker.context('test', context):
+            self.tracker.emit(sentinel.name, data)
+
+        emitted_event = self.get_event()
+
+        expected_event = {
+            'context': context,
+            'data': data,
+            'label': sentinel.course_id,
+            'name': sentinel.name,
+            'nonInteraction': 1,
+            'timestamp': FROZEN_TIME,
+        }
+        assert_events_equal(expected_event, emitted_event)
+
+    def test_no_course_id(self):
+        """ Test that a label is not added if course_id is not specified, but nonInteraction is still set. """
+        data = {sentinel.key: sentinel.value}
+
+        context = {
+            'path': sentinel.path,
+            'user_id': sentinel.user_id,
+            'client_id': sentinel.client_id,
+        }
+        with self.tracker.context('test', context):
+            self.tracker.emit(sentinel.name, data)
+
+        emitted_event = self.get_event()
+
+        expected_event = {
+            'context': context,
+            'data': data,
+            'name': sentinel.name,
+            'nonInteraction': 1,
+            'timestamp': FROZEN_TIME,
+        }
+        assert_events_equal(expected_event, emitted_event)
+
+
+@override_settings(
+    EVENT_TRACKING_BACKENDS={
+        '0': {
+            'ENGINE': 'eventtracking.backends.routing.RoutingBackend',
+            'OPTIONS': {
+                'backends': {
+                    'first': {'ENGINE': 'track.tests.InMemoryBackend'}
+                },
+                'processors': [
+                    {
+                        'ENGINE': 'track.shim.GoogleAnalyticsProcessor'
+                    }
+                ]
+            }
+        },
+        '1': {
+            'ENGINE': 'eventtracking.backends.routing.RoutingBackend',
+            'OPTIONS': {
+                'backends': {
+                    'second': {
+                        'ENGINE': 'track.tests.InMemoryBackend'
+                    }
+                }
+            }
+        }
+    }
+)
+class MultipleShimGoogleAnalyticsProcessorTestCase(EventTrackingTestCase):
+    """Ensure changes don't impact other backends"""
+
+    def test_multiple_backends(self):
+        data = {
+            sentinel.key: sentinel.value,
+        }
+
+        context = {
+            'path': sentinel.path,
+            'user_id': sentinel.user_id,
+            'course_id': sentinel.course_id,
+            'org_id': sentinel.org_id,
+            'client_id': sentinel.client_id,
+        }
+        with self.tracker.context('test', context):
+            self.tracker.emit(sentinel.name, data)
+
+        segment_emitted_event = self.tracker.backends['0'].backends['first'].events[0]
+        log_emitted_event = self.tracker.backends['1'].backends['second'].events[0]
+
+        expected_event = {
+            'context': context,
+            'data': data,
+            'label': sentinel.course_id,
+            'name': sentinel.name,
+            'nonInteraction': 1,
+            'timestamp': FROZEN_TIME,
+        }
+        assert_events_equal(expected_event, segment_emitted_event)
+
+        expected_event = {
+            'context': context,
+            'data': data,
+            'name': sentinel.name,
+            'timestamp': FROZEN_TIME,
+        }
+        assert_events_equal(expected_event, log_emitted_event)

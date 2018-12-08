@@ -12,11 +12,12 @@ class CoursewareSearchPage(CoursePage):
 
     url_path = "courseware/"
     search_bar_selector = '#courseware-search-bar'
+    search_results_selector = '.courseware-results'
 
     @property
     def search_results(self):
         """ search results list showing """
-        return self.q(css='#courseware-search-results')
+        return self.q(css=self.search_results_selector)
 
     def is_browser_on_page(self):
         """ did we find the search bar in the UI """
@@ -29,11 +30,19 @@ class CoursewareSearchPage(CoursePage):
     def search(self):
         """ execute the search """
         self.q(css=self.search_bar_selector + ' [type="submit"]').click()
-        self.wait_for_element_visibility('.search-info', 'Search results are shown')
+        self.wait_for_ajax()
+        self.wait_for_element_visibility(self.search_results_selector, 'Search results are visible')
 
     def search_for_term(self, text):
         """
-        Search and return results
+        Fill input and do search
         """
         self.enter_search_term(text)
         self.search()
+
+    def clear_search(self):
+        """
+        Clear search bar after search.
+        """
+        self.q(css=self.search_bar_selector + ' .cancel-button').click()
+        self.wait_for_element_visibility('#course-content', 'Search bar is cleared')

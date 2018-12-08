@@ -1,7 +1,7 @@
 // ------------------------------
 // LMS Courseware: Shared Build Compile
 
-// About: Sass compile for the LMS Courseware Elements that are shared between LTR and RTL UI. Configuration and vendor specific imports happen before this shared set of imports are compiled in the main-*.scss files.
+// About: Sass compile for the LMS Courseware Elements that are shared between LTR and RTL UI. Configuration and vendor specific imports happen before this shared set of imports are compiled in the lms-course-*.scss files.
 
 @import 'base/base';
 @import 'base/extends';
@@ -11,6 +11,7 @@
 // base - elements
 @import 'elements/typography';
 @import 'elements/controls';
+@import 'elements/pagination';
 @import 'elements/navigation'; // all archetypes of navigation
 
 // course - base
@@ -30,7 +31,6 @@
 @import 'course/modules/student-notes'; // student notes
 @import 'course/modules/calculator'; // calculator utility
 @import 'course/modules/timer'; // timer
-@import 'course/modules/chat'; // chat utility
 
 // course - wiki
 @import "course/wiki/basic-html";
@@ -46,13 +46,10 @@
 @import "course/profile";
 @import "course/gradebook";
 @import "course/tabs";
-@import "course/staff_grading";
-@import "course/rubric";
-@import "course/open_ended_grading";
 @import "course/student-notes";
+@import "views/teams";
 
 // course - instructor-only views
-@import "course/instructor/instructor";
 @import "course/instructor/instructor_2";
 @import "course/instructor/email";
 @import "xmodule/descriptors/css/module-styles.scss";
@@ -62,6 +59,13 @@
 
 // discussion
 @import "course/discussion/form-wmd-toolbar";
+@import "course/discussion/form";
 
 // search
 @import 'search/_search';
+
+// responsive
+@import 'base/layouts'; // temporary spot for responsive course
+
+// xmodule
+@import 'xmodule/headings';

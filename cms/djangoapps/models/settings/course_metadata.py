@@ -26,7 +26,6 @@ class CourseMetadata(object):
         'enrollment_end',
         'tabs',
         'graceperiod',
-        'checklists',
         'show_timezone',
         'format',
         'graded',
@@ -43,6 +42,15 @@ class CourseMetadata(object):
         'entrance_exam_id',
         'is_entrance_exam',
         'in_entrance_exam',
+        'language',
+        'certificates',
+        'minimum_grade_credit',
+        'default_time_limit_minutes',
+        'is_proctored_enabled',
+        'is_time_limited',
+        'is_practice_exam',
+        'exam_review_rules',
+        'self_paced'
     ]
 
     @classmethod
@@ -65,18 +73,22 @@ class CourseMetadata(object):
         if not settings.FEATURES.get('ENABLE_VIDEO_UPLOAD_PIPELINE'):
             filtered_list.append('video_upload_pipeline')
 
-        # Do not show facebook_url if the feature is disabled.
-        if not settings.FEATURES.get('ENABLE_MOBILE_SOCIAL_FACEBOOK_FEATURES'):
-            filtered_list.append('facebook_url')
-
         # Do not show social sharing url field if the feature is disabled.
-        if (not settings.FEATURES.get('DASHBOARD_SHARE_SETTINGS') or
-                not settings.FEATURES.get("DASHBOARD_SHARE_SETTINGS").get("CUSTOM_COURSE_URLS")):
+        if (not hasattr(settings, 'SOCIAL_SHARING_SETTINGS') or
+                not getattr(settings, 'SOCIAL_SHARING_SETTINGS', {}).get("CUSTOM_COURSE_URLS")):
             filtered_list.append('social_sharing_url')
 
         # Do not show teams configuration if feature is disabled.
         if not settings.FEATURES.get('ENABLE_TEAMS'):
             filtered_list.append('teams_configuration')
+
+        if not settings.FEATURES.get('ENABLE_VIDEO_BUMPER'):
+            filtered_list.append('video_bumper')
+
+        # Do not show enable_ccx if feature is not enabled.
+        if not settings.FEATURES.get('CUSTOM_COURSES_EDX'):
+            filtered_list.append('enable_ccx')
+            filtered_list.append('ccx_connector')
 
         return filtered_list
 
@@ -145,7 +157,8 @@ class CourseMetadata(object):
         """
         Validate the values in the json dict (validated by xblock fields from_json method)
 
-        If all fields validate, go ahead and update those values in the database.
+        If all fields validate, go ahead and update those values on the object and return it without
+        persisting it to the DB.
         If not, return the error objects list.
 
         Returns:
@@ -174,19 +187,19 @@ class CourseMetadata(object):
 
         # If did validate, go ahead and update the metadata
         if did_validate:
-            updated_data = cls.update_from_dict(key_values, descriptor, user)
+            updated_data = cls.update_from_dict(key_values, descriptor, user, save=False)
 
         return did_validate, errors, updated_data
 
     @classmethod
-    def update_from_dict(cls, key_values, descriptor, user):
+    def update_from_dict(cls, key_values, descriptor, user, save=True):
         """
-        Update metadata descriptor in modulestore from key_values.
+        Update metadata descriptor from key_values. Saves to modulestore if save is true.
         """
         for key, value in key_values.iteritems():
             setattr(descriptor, key, value)
 
-        if len(key_values):
+        if save and len(key_values):
             modulestore().update_item(descriptor, user.id)
 
         return cls.fetch(descriptor)

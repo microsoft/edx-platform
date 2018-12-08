@@ -105,7 +105,7 @@ class LibraryTestCase(ModuleStoreTestCase):
         if user not in self.session_data:
             self.session_data[user] = {}
         request = Mock(user=user, session=self.session_data[user])
-        _load_preview_module(request, descriptor)  # pylint: disable=protected-access
+        _load_preview_module(request, descriptor)
 
     def _update_item(self, usage_key, metadata):
         """
@@ -144,7 +144,7 @@ class TestLibraries(LibraryTestCase):
         """
         Test the 'max_count' property of LibraryContent blocks.
         """
-        for _ in range(0, num_to_create):
+        for _ in range(num_to_create):
             self._add_simple_content_block()
 
         with modulestore().default_store(ModuleStoreEnum.Type.split):
@@ -168,7 +168,7 @@ class TestLibraries(LibraryTestCase):
         Test that the same student will always see the same selected child block
         """
         # Create many blocks in the library and add them to a course:
-        for num in range(0, 8):
+        for num in range(8):
             ItemFactory.create(
                 data="This is #{}".format(num + 1),
                 category="html", parent_location=self.library.location, user_id=self.user.id, publish_item=False
@@ -202,7 +202,7 @@ class TestLibraries(LibraryTestCase):
             """
             Confirm that chosen_child is still the child seen by the test student
             """
-            for _ in range(0, 6):  # Repeat many times b/c blocks are randomized
+            for _ in range(6):  # Repeat many times b/c blocks are randomized
                 lc_block = modulestore().get_item(lc_block_key)  # Reload block from the database
                 self._bind_module(lc_block)
                 current_child = get_child_of_lc_block(lc_block)
@@ -387,7 +387,7 @@ class TestLibraries(LibraryTestCase):
         html_block = modulestore().get_item(lc_block.children[0])
         self.assertEqual(html_block.data, data2)
 
-    @patch("xmodule.library_tools.SearchEngine.get_search_engine", Mock(return_value=None))
+    @patch("xmodule.library_tools.SearchEngine.get_search_engine", Mock(return_value=None, autospec=True))
     def test_refreshes_children_if_capa_type_change(self):
         """ Tests that children are automatically refreshed if capa type field changes """
         name1, name2 = "Option Problem", "Multiple Choice Problem"
@@ -523,13 +523,13 @@ class TestLibraryAccess(SignalDisconnectTestMixin, LibraryTestCase):
         self.client.logout()
         self._assert_cannot_create_library(expected_code=302)  # 302 redirect to login expected
 
-        # Now create a non-staff user with no permissions:
+        # Now check that logged-in users without CourseCreator role can still create libraries
         self._login_as_non_staff_user(logout_first=False)
         self.assertFalse(CourseCreatorRole().has_user(self.non_staff_user))
-
-        # Now check that logged-in users without any permissions cannot create libraries
         with patch.dict('django.conf.settings.FEATURES', {'ENABLE_CREATOR_GROUP': True}):
-            self._assert_cannot_create_library()
+            lib_key2 = self._create_library(library="lib2", display_name="Test Library 2")
+            library2 = modulestore().get_library(lib_key2)
+            self.assertIsNotNone(library2)
 
     @ddt.data(
         CourseInstructorRole,

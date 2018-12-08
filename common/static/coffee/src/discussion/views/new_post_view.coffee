@@ -17,7 +17,7 @@ if Backbone?
               mode: @mode,
               form_id: @mode + (if @topicId then "-" + @topicId else "")
           })
-          @$el.html(_.template($("#new-post-template").html(), context))
+          @$el.html(_.template($("#new-post-template").html())(context))
           threadTypeTemplate = _.template($("#thread-type-template").html());
           if $('.js-group-select').is(':disabled')
               $('.group-selector-wrapper').addClass('disabled')
@@ -87,7 +87,6 @@ if Backbone?
               url: url
               type: "POST"
               dataType: 'json'
-              async: false # TODO when the rest of the stuff below is made to work properly..
               data:
                   thread_type: thread_type
                   title: title

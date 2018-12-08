@@ -4,7 +4,7 @@
 
 import json
 from nose.plugins.attrib import attr
-from path import path
+from path import Path as path
 import shutil
 from StringIO import StringIO
 import tarfile
@@ -24,16 +24,7 @@ from xmodule.modulestore.tests.factories import CourseFactory
 from xmodule.modulestore.xml_importer import import_course_from_xml
 
 DATA_DIR = settings.COMMON_TEST_DATA_ROOT
-XML_COURSE_DIRS = ['toy', 'simple', 'open_ended']
-MAPPINGS = {
-    'edX/toy/2012_Fall': 'xml',
-    'edX/simple/2012_Fall': 'xml',
-    'edX/open_ended/2012_Fall': 'xml',
-}
-
-TEST_DATA_MIXED_XML_MODULESTORE = mixed_store_config(
-    DATA_DIR, MAPPINGS, include_xml=True, xml_source_dirs=XML_COURSE_DIRS,
-)
+XML_COURSE_DIRS = ['toy', 'simple']
 
 
 @attr('shard_1')
@@ -60,6 +51,7 @@ class CommandsTestBase(ModuleStoreTestCase):
         # Add a course with a unicode name.
         unique_org = factory.Sequence(lambda n: u'ëḋẌ.%d' % n)
         CourseFactory.create(
+            emit_signals=True,
             org=unique_org,
             course=u'śíḿṕĺé',
             display_name=u'2012_Fáĺĺ',
@@ -83,16 +75,14 @@ class CommandsTestBase(ModuleStoreTestCase):
         return out.read()
 
     def test_dump_course_ids(self):
-        kwargs = {'modulestore': 'default'}
-        output = self.call_command('dump_course_ids', **kwargs)
+        output = self.call_command('dump_course_ids')
         dumped_courses = output.decode('utf-8').strip().split('\n')
-
         course_ids = {unicode(course_id) for course_id in self.loaded_courses}
         dumped_ids = set(dumped_courses)
         self.assertEqual(course_ids, dumped_ids)
 
     def test_correct_course_structure_metadata(self):
-        course_id = unicode(modulestore().make_course_key('edX', 'open_ended', '2012_Fall'))
+        course_id = unicode(modulestore().make_course_key('edX', 'simple', '2012_Fall'))
         args = [course_id]
         kwargs = {'modulestore': 'default'}
 
@@ -153,7 +143,6 @@ class CommandsTestBase(ModuleStoreTestCase):
             self.assertIn('children', element)
             self.assertIn('category', element)
             self.assertIn('inherited_metadata', element)
-            self.assertIsNone(element['inherited_metadata']['ispublic'])
             # ... but does not contain inherited metadata containing a default value:
             self.assertNotIn('due', element['inherited_metadata'])
 
@@ -169,20 +158,17 @@ class CommandsTestBase(ModuleStoreTestCase):
             self.assertIn('children', element)
             self.assertIn('category', element)
             self.assertIn('inherited_metadata', element)
-            self.assertIsNone(element['inherited_metadata']['ispublic'])
             # ... and contains inherited metadata containing a default value:
             self.assertIsNone(element['inherited_metadata']['due'])
 
     def test_export_course(self):
         tmp_dir = path(mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp_dir)
         filename = tmp_dir / 'test.tar.gz'
-        try:
-            self.run_export_course(filename)
-            with tarfile.open(filename) as tar_file:
-                self.check_export_file(tar_file)
 
-        finally:
-            shutil.rmtree(tmp_dir)
+        self.run_export_course(filename)
+        with tarfile.open(filename) as tar_file:
+            self.check_export_file(tar_file)
 
     def test_export_course_stdout(self):
         output = self.run_export_course('-')
@@ -208,15 +194,6 @@ class CommandsTestBase(ModuleStoreTestCase):
         assert_in('edX-simple-2012_Fall/html/toylab.html', names)
         assert_in('edX-simple-2012_Fall/videosequence/A_simple_sequence.xml', names)
         assert_in('edX-simple-2012_Fall/sequential/Lecture_2.xml', names)
-
-
-class CommandsXMLTestCase(CommandsTestBase):
-    """
-    Test case for management commands with the xml modulestore present.
-
-    """
-    MODULESTORE = TEST_DATA_MIXED_XML_MODULESTORE
-    __test__ = True
 
 
 class CommandsMongoTestCase(CommandsTestBase):

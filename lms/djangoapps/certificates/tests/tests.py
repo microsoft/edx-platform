@@ -21,13 +21,13 @@ from certificates.tests.factories import GeneratedCertificateFactory
 from util.milestones_helpers import (
     set_prerequisite_courses,
     milestones_achieved_by_user,
-    seed_milestone_relationship_types,
 )
+from milestones.tests.utils import MilestonesTestCaseMixin
 
 
 @attr('shard_1')
 @ddt
-class CertificatesModelTest(ModuleStoreTestCase):
+class CertificatesModelTest(ModuleStoreTestCase, MilestonesTestCaseMixin):
     """
     Tests for the GeneratedCertificate model
     """
@@ -60,9 +60,38 @@ class CertificatesModelTest(ModuleStoreTestCase):
         certificate_info = certificate_info_for_user(student, course.id, grade, whitelisted)
         self.assertEqual(certificate_info, output)
 
+    @unpack
+    @data(
+        {'allow_certificate': False, 'whitelisted': False, 'grade': None, 'output': ['N', 'Y', 'honor']},
+        {'allow_certificate': True, 'whitelisted': True, 'grade': None, 'output': ['Y', 'Y', 'honor']},
+        {'allow_certificate': True, 'whitelisted': False, 'grade': 0.9, 'output': ['Y', 'Y', 'honor']},
+        {'allow_certificate': False, 'whitelisted': True, 'grade': 0.8, 'output': ['N', 'Y', 'honor']},
+        {'allow_certificate': False, 'whitelisted': None, 'grade': 0.8, 'output': ['N', 'Y', 'honor']}
+    )
+    def test_certificate_info_for_user_when_grade_changes(self, allow_certificate, whitelisted, grade, output):
+        """
+        Verify that certificate_info_for_user works as expect in scenario when grading of problems
+        changes after certificates already generated. In such scenario `Certificate delivered` should not depend
+        on student's eligibility to get certificates since in above scenario eligibility can change over period
+        of time.
+        """
+        student = UserFactory()
+        course = CourseFactory.create(org='edx', number='verified', display_name='Verified Course')
+        student.profile.allow_certificate = allow_certificate
+        student.profile.save()
+
+        GeneratedCertificateFactory.create(
+            user=student,
+            course_id=course.id,
+            status=CertificateStatuses.downloadable,
+            mode='honor'
+        )
+
+        certificate_info = certificate_info_for_user(student, course.id, grade, whitelisted)
+        self.assertEqual(certificate_info, output)
+
     @patch.dict(settings.FEATURES, {'ENABLE_PREREQUISITE_COURSES': True, 'MILESTONES_APP': True})
     def test_course_milestone_collected(self):
-        seed_milestone_relationship_types()
         student = UserFactory()
         course = CourseFactory.create(org='edx', number='998', display_name='Test Course')
         pre_requisite_course = CourseFactory.create(org='edx', number='999', display_name='Pre requisite Course')
@@ -82,3 +111,20 @@ class CertificatesModelTest(ModuleStoreTestCase):
         completed_milestones = milestones_achieved_by_user(student, unicode(pre_requisite_course.id))
         self.assertEqual(len(completed_milestones), 1)
         self.assertEqual(completed_milestones[0]['namespace'], unicode(pre_requisite_course.id))
+
+    @patch.dict(settings.FEATURES, {'ENABLE_OPENBADGES': True})
+    @patch('certificates.badge_handler.BadgeHandler', spec=True)
+    def test_badge_callback(self, handler):
+        student = UserFactory()
+        course = CourseFactory.create(org='edx', number='998', display_name='Test Course', issue_badges=True)
+        cert = GeneratedCertificateFactory.create(
+            user=student,
+            course_id=course.id,
+            status=CertificateStatuses.generating,
+            mode='verified'
+        )
+        # Check return value since class instance will be stored there.
+        self.assertFalse(handler.return_value.award.called)
+        cert.status = CertificateStatuses.downloadable
+        cert.save()
+        self.assertTrue(handler.return_value.award.called)

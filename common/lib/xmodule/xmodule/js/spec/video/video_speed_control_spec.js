@@ -1,4 +1,5 @@
 (function (undefined) {
+    'use strict';
     describe('VideoSpeedControl', function () {
         var state, oldOTBD;
 
@@ -12,6 +13,7 @@
             $('source').remove();
             window.onTouchBasedDevice = oldOTBD;
             state.storage.clear();
+            state.videoPlayer.destroy();
         });
 
         describe('constructor', function () {
@@ -37,19 +39,9 @@
                         expect($(link)).toHaveData(
                             'speed', state.speeds[index]
                         );
-                        expect($(link).find('a').text()).toBe(
+                        expect($(link).find('.speed-option').text()).toBe(
                             state.speeds[index] + 'x'
                         );
-                    });
-                });
-
-                it('add ARIA attributes to speed control', function () {
-                    var speedControl = $('div.speeds>a');
-
-                    expect(speedControl).toHaveAttrs({
-                        'role': 'button',
-                        'title': 'Speeds',
-                        'aria-disabled': 'false'
                     });
                 });
             });
@@ -60,33 +52,17 @@
                         window.onTouchBasedDevice.andReturn([device]);
                         state = jasmine.initializePlayer();
 
-                        expect(state.el.find('div.speeds')).not.toExist();
+                        expect(state.el.find('.speeds')).not.toExist();
                     });
                 });
             });
 
             describe('when running on non-touch based device', function () {
-                var speedControl, speedEntries, speedButton,
+                var speedControl, speedEntries, speedButton, speedsContainer,
                     KEY = $.ui.keyCode,
 
                     keyPressEvent = function(key) {
                         return $.Event('keydown', {keyCode: key});
-                    },
-
-                    // Get previous element in array or cyles back to the last
-                    // if it is the first.
-                    previousSpeed = function(index) {
-                        return speedEntries.eq(index < 1 ?
-                                               speedEntries.length - 1 :
-                                               index - 1);
-                    },
-
-                    // Get next element in array or cyles back to the first if
-                    // it is the last.
-                    nextSpeed = function(index) {
-                        return speedEntries.eq(index >= speedEntries.length-1 ?
-                                               0 :
-                                               index + 1);
                     };
 
                 beforeEach(function () {
@@ -94,7 +70,7 @@
                     speedControl = $('.speeds');
                     speedButton = $('.speed-button');
                     speedsContainer = $('.video-speeds');
-                    speedEntries = speedsContainer.find('a');
+                    speedEntries = speedsContainer.find('.speed-option');
                 });
 
                 it('open/close the speed menu on mouseenter/mouseleave',
@@ -111,11 +87,6 @@
                     speedControl.trigger(keyPressEvent(KEY.ENTER));
                     speedControl.mouseenter().mouseleave();
                     expect(speedControl).toHaveClass('is-opened');
-                });
-
-                it('close the speed menu on click', function () {
-                    speedControl.mouseenter().click();
-                    expect(speedControl).not.toHaveClass('is-opened');
                 });
 
                 it('close the speed menu on outside click', function () {
@@ -149,8 +120,7 @@
 
                 it('UP and DOWN keydown function as expected on speed entries',
                    function () {
-                    var lastEntry = speedEntries.length-1,
-                        speed_0_75 = speedEntries.filter(':contains("0.75x")'),
+                    var speed_0_75 = speedEntries.filter(':contains("0.75x")'),
                         speed_1_0 = speedEntries.filter(':contains("1.0x")');
 
                     // First open menu
@@ -225,7 +195,7 @@
                 it('trigger speedChange event', function () {
                     spyOnEvent(state.el, 'speedchange');
 
-                    $('li[data-speed="0.75"] a').click();
+                    $('li[data-speed="0.75"] .speed-option').click();
                     expect('speedchange').toHaveBeenTriggeredOn(state.el);
                     expect(state.videoSpeedControl.currentSpeed).toEqual('0.75');
                 });
@@ -246,6 +216,14 @@
                     .toHaveClass('is-active');
                 expect($('.speeds .value')).toHaveHtml('0.75x');
             });
+        });
+
+        it('can destroy itself', function () {
+            state = jasmine.initializePlayer();
+            state.videoSpeedControl.destroy();
+            expect(state.videoSpeedControl).toBeUndefined();
+            expect($('.video-speeds')).not.toExist();
+            expect($('.speed-button')).not.toExist();
         });
     });
 }).call(this);

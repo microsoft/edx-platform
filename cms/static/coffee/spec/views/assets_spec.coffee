@@ -1,16 +1,12 @@
-define ["jquery", "jasmine", "js/common_helpers/ajax_helpers", "squire"],
+define ["jquery", "jasmine", "common/js/spec_helpers/ajax_helpers", "squire"],
 ($, jasmine, AjaxHelpers, Squire) ->
 
-    feedbackTpl = readFixtures('system-feedback.underscore')
     assetLibraryTpl = readFixtures('asset-library.underscore')
     assetTpl = readFixtures('asset.underscore')
-    pagingHeaderTpl = readFixtures('paging-header.underscore')
-    pagingFooterTpl = readFixtures('paging-footer.underscore')
 
     describe "Asset view", ->
         beforeEach ->
             setFixtures($("<script>", {id: "asset-tpl", type: "text/template"}).text(assetTpl))
-            appendSetFixtures($("<script>", {id: "system-feedback-tpl", type: "text/template"}).text(feedbackTpl))
             appendSetFixtures(sandbox({id: "page-prompt"}))
 
             @promptSpies = jasmine.createSpyObj('Prompt.Warning', ["constructor", "show", "hide"])
@@ -26,10 +22,10 @@ define ["jquery", "jasmine", "js/common_helpers/ajax_helpers", "squire"],
             @savingSpies.show.andReturn(@savingSpies)
 
             @injector = new Squire()
-            @injector.mock("js/views/feedback_prompt", {
+            @injector.mock("common/js/components/views/feedback_prompt", {
                 "Warning": @promptSpies.constructor
             })
-            @injector.mock("js/views/feedback_notification", {
+            @injector.mock("common/js/components/views/feedback_notification", {
                 "Confirmation": @confirmationSpies.constructor,
                 "Mini": @savingSpies.constructor
             })
@@ -141,9 +137,6 @@ define ["jquery", "jasmine", "js/common_helpers/ajax_helpers", "squire"],
         beforeEach ->
             setFixtures($("<script>", {id: "asset-library-tpl", type: "text/template"}).text(assetLibraryTpl))
             appendSetFixtures($("<script>", {id: "asset-tpl", type: "text/template"}).text(assetTpl))
-            appendSetFixtures($("<script>", {id: "paging-header-tpl", type: "text/template"}).text(pagingHeaderTpl))
-            appendSetFixtures($("<script>", {id: "paging-footer-tpl", type: "text/template"}).text(pagingFooterTpl))
-            appendSetFixtures($("<script>", {id: "system-feedback-tpl", type: "text/template"}).text(feedbackTpl))
             window.analytics = jasmine.createSpyObj('analytics', ['track'])
             window.course_location_analytics = jasmine.createSpy()
             appendSetFixtures(sandbox({id: "asset_table_body"}))
@@ -153,7 +146,7 @@ define ["jquery", "jasmine", "js/common_helpers/ajax_helpers", "squire"],
             @promptSpies.show.andReturn(@promptSpies)
 
             @injector = new Squire()
-            @injector.mock("js/views/feedback_prompt", {
+            @injector.mock("common/js/components/views/feedback_prompt", {
                 "Warning": @promptSpies.constructor
             })
 
@@ -241,7 +234,7 @@ define ["jquery", "jasmine", "js/common_helpers/ajax_helpers", "squire"],
         describe "Basic", ->
             # Separate setup method to work-around mis-parenting of beforeEach methods
             setup = (requests) ->
-                @view.setPage(0)
+                @view.pagingView.setPage(0)
                 AjaxHelpers.respondWithJson(requests, @mockAssetsResponse)
 
             $.fn.fileupload = ->
@@ -285,7 +278,7 @@ define ["jquery", "jasmine", "js/common_helpers/ajax_helpers", "squire"],
                 {view: @view, requests: requests} = @createAssetsView(this)
                 appendSetFixtures('<div class="ui-loading"/>')
                 expect($('.ui-loading').is(':visible')).toBe(true)
-                @view.setPage(0)
+                @view.pagingView.setPage(0)
                 AjaxHelpers.respondWithError(requests)
                 expect($('.ui-loading').is(':visible')).toBe(false)
 
@@ -297,11 +290,12 @@ define ["jquery", "jasmine", "js/common_helpers/ajax_helpers", "squire"],
 
             it "should remove the deleted asset from the view", ->
                 {view: @view, requests: requests} = @createAssetsView(this)
+                AjaxHelpers.respondWithJson(requests, @mockAssetsResponse)
                 setup.call(this, requests)
                 # Delete the 2nd asset with success from server.
                 @view.$(".remove-asset-button")[1].click()
                 @promptSpies.constructor.mostRecentCall.args[0].actions.primary.click(@promptSpies)
-                req.respond(200) for req in requests.slice(1)
+                AjaxHelpers.respondWithNoContent(requests)
                 expect(@view.$el).toContainText("test asset 1")
                 expect(@view.$el).not.toContainText("test asset 2")
 
@@ -311,7 +305,7 @@ define ["jquery", "jasmine", "js/common_helpers/ajax_helpers", "squire"],
                 # Delete the 2nd asset, but mimic a failure from the server.
                 @view.$(".remove-asset-button")[1].click()
                 @promptSpies.constructor.mostRecentCall.args[0].actions.primary.click(@promptSpies)
-                req.respond(404) for req in requests
+                AjaxHelpers.respondWithError(requests)
                 expect(@view.$el).toContainText("test asset 1")
                 expect(@view.$el).toContainText("test asset 2")
 
@@ -333,27 +327,27 @@ define ["jquery", "jasmine", "js/common_helpers/ajax_helpers", "squire"],
         describe "Sorting", ->
             # Separate setup method to work-around mis-parenting of beforeEach methods
             setup = (requests) ->
-                @view.setPage(0)
+                @view.pagingView.setPage(0)
                 AjaxHelpers.respondWithJson(requests, @mockAssetsResponse)
 
             it "should have the correct default sort order", ->
                 {view: @view, requests: requests} = @createAssetsView(this)
                 setup.call(this, requests)
-                expect(@view.sortDisplayName()).toBe("Date Added")
+                expect(@view.pagingView.sortDisplayName()).toBe("Date Added")
                 expect(@view.collection.sortDirection).toBe("desc")
 
             it "should toggle the sort order when clicking on the currently sorted column", ->
                 {view: @view, requests: requests} = @createAssetsView(this)
                 setup.call(this, requests)
-                expect(@view.sortDisplayName()).toBe("Date Added")
+                expect(@view.pagingView.sortDisplayName()).toBe("Date Added")
                 expect(@view.collection.sortDirection).toBe("desc")
                 @view.$("#js-asset-date-col").click()
                 AjaxHelpers.respondWithJson(requests, @mockAssetsResponse)
-                expect(@view.sortDisplayName()).toBe("Date Added")
+                expect(@view.pagingView.sortDisplayName()).toBe("Date Added")
                 expect(@view.collection.sortDirection).toBe("asc")
                 @view.$("#js-asset-date-col").click()
                 AjaxHelpers.respondWithJson(requests, @mockAssetsResponse)
-                expect(@view.sortDisplayName()).toBe("Date Added")
+                expect(@view.pagingView.sortDisplayName()).toBe("Date Added")
                 expect(@view.collection.sortDirection).toBe("desc")
 
             it "should switch the sort order when clicking on a different column", ->
@@ -361,11 +355,11 @@ define ["jquery", "jasmine", "js/common_helpers/ajax_helpers", "squire"],
                 setup.call(this, requests)
                 @view.$("#js-asset-name-col").click()
                 AjaxHelpers.respondWithJson(requests, @mockAssetsResponse)
-                expect(@view.sortDisplayName()).toBe("Name")
+                expect(@view.pagingView.sortDisplayName()).toBe("Name")
                 expect(@view.collection.sortDirection).toBe("asc")
                 @view.$("#js-asset-name-col").click()
                 AjaxHelpers.respondWithJson(requests, @mockAssetsResponse)
-                expect(@view.sortDisplayName()).toBe("Name")
+                expect(@view.pagingView.sortDisplayName()).toBe("Name")
                 expect(@view.collection.sortDirection).toBe("desc")
 
             it "should switch sort to most recent date added when a new asset is added", ->
@@ -375,5 +369,5 @@ define ["jquery", "jasmine", "js/common_helpers/ajax_helpers", "squire"],
                 AjaxHelpers.respondWithJson(requests, @mockAssetsResponse)
                 addMockAsset.call(this, requests)
                 AjaxHelpers.respondWithJson(requests, @mockAssetsResponse)
-                expect(@view.sortDisplayName()).toBe("Date Added")
+                expect(@view.pagingView.sortDisplayName()).toBe("Date Added")
                 expect(@view.collection.sortDirection).toBe("desc")

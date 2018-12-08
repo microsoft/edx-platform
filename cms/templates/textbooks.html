@@ -1,8 +1,10 @@
 <%inherit file="base.html" />
 <%def name="online_help_token()"><% return "textbooks" %></%def>
 <%namespace name='static' file='static_content.html'/>
-<%! import json %>
-<%! from django.utils.translation import ugettext as _ %>
+<%!
+from django.utils.translation import ugettext as _
+from openedx.core.djangolib.js_utils import dump_js_escaped_json
+%>
 
 <%block name="title">${_("Textbooks")}</%block>
 <%block name="bodyclass">is-signedin course view-textbooks</%block>
@@ -26,7 +28,7 @@ CMS.URL.LMS_BASE = "${settings.LMS_BASE}"
 </%block>
 <%block name="requirejs">
     require(["js/factories/textbooks"], function(TextbooksFactory) {
-        TextbooksFactory(${json.dumps(textbooks)});
+        TextbooksFactory(${textbooks | n, dump_js_escaped_json});
     });
 </%block>
 

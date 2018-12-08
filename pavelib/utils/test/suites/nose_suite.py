@@ -2,9 +2,8 @@
 Classes used for defining and running nose test suites
 """
 import os
-from paver.easy import call_task
 from pavelib.utils.test import utils as test_utils
-from pavelib.utils.test.suites import TestSuite
+from pavelib.utils.test.suites.suite import TestSuite
 from pavelib.utils.envs import Env
 
 __test__ = False  # do not collect
@@ -63,10 +62,10 @@ class NoseTestSuite(TestSuite):
                 cmd0 = "`which {}`".format(cmd0)
 
             cmd = (
-                "python -m coverage run {cov_args} --rcfile={root}/.coveragerc "
+                "python -m coverage run {cov_args} --rcfile={rcfile} "
                 "{cmd0} {cmd_rest}".format(
                     cov_args=self.cov_args,
-                    root=self.root,
+                    rcfile=Env.PYTHON_COVERAGERC,
                     cmd0=cmd0,
                     cmd_rest=cmd_rest,
                 )
@@ -121,7 +120,7 @@ class SystemTestSuite(NoseTestSuite):
     def cmd(self):
         cmd = (
             './manage.py {system} test --verbosity={verbosity} '
-            '{test_id} {test_opts} --traceback --settings=test {extra} '
+            '{test_id} {test_opts} --settings=test {extra} '
             '--with-xunit --xunit-file={xunit_report}'.format(
                 system=self.root,
                 verbosity=self.verbosity,
@@ -146,20 +145,25 @@ class SystemTestSuite(NoseTestSuite):
         # django-nose will import them early in the test process,
         # thereby making sure that we load any django models that are
         # only defined in test files.
-        default_test_id = "{system}/djangoapps/* common/djangoapps/* openedx/core/djangoapps/*".format(
-            system=self.root
+        default_test_id = (
+            "{system}/djangoapps/*"
+            " common/djangoapps/*"
+            " openedx/core/djangoapps/*"
+            " openedx/tests/*"
+            " openedx/core/lib/*"
         )
 
         if self.root in ('lms', 'cms'):
-            default_test_id += " {system}/lib/*".format(system=self.root)
+            default_test_id += " {system}/lib/*"
 
         if self.root == 'lms':
-            default_test_id += " {system}/tests.py".format(system=self.root)
+            default_test_id += " {system}/tests.py"
+            default_test_id += " openedx/core/djangolib"
 
         if self.root == 'cms':
-            default_test_id += " {system}/tests/*".format(system=self.root)
+            default_test_id += " {system}/tests/*"
 
-        return default_test_id
+        return default_test_id.format(system=self.root)
 
 
 class LibTestSuite(NoseTestSuite):
