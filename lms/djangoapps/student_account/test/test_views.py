@@ -58,7 +58,34 @@ TEST_COOKIE_URL = "https://example.com/locale/test/api/dftg?sitename=testsite"
 
 User = get_user_model()  # pylint:disable=invalid-name
 
-
+TEST_COOKIE_URL = "https://example.com/locale/test/api/dftg?sitename=testsite"
+@ddt.ddt
+@override_settings(API_COOKIE_URL = TEST_COOKIE_URL)
+@patch('requests.get')
+class CookieApiVerification(TestCase):
+    """ Tests for the cookie api call """
+    def setUp(self):
+        self.request = HttpRequest()
+        self.request.LANGUAGE_CODE = "en-us"
+        
+    def test_cookie_api_call(self, mock_get):
+        expected_response = {
+            "City": "redmond",
+            "Text": "<div id=\'msccBanner\' dir=\'ltr\' data-site-name=\'uhf-openedx\' data-mscc-version=\'0.2.1\' data-nver=\'aspnet-2.0.2\' data-sver=\'0.1.2\' class=\'cc-banner\' role=\'alert\'><div class=\'cc-container\'><svg class=\'cc-icon cc-v-center\' x=\'0px\' y=\'0px\' viewBox=\'0 0 44 44\' height=\'30px\' fill=\'none\' stroke=\'currentColor\'><circle cx=\'22\' cy=\'22\' r=\'20\' stroke-width=\'2\'></circle><line x1=\'22\' x2=\'22\' y1=\'18\' y2=\'33\' stroke-width=\'3\'></line><line x1=\'22\' x2=\'22\' y1=\'12\' y2=\'15\' stroke-width=\'3\'></line></svg> <span class=\'cc-v-center cc-text\'>This site is a test site </span> <a href=\'https://example.com/en/\' aria-label=\'learn about \\u2019s \' id=\'\' class=\'cc-link cc-v-center cc-float-right\'>Learn </a></div></div>",
+            "Version": "null",
+            "MaximumDate": "2017-04-01T00:00:00",
+            "Error": "null",
+            "IsItRequired": "true",
+            "Array1": ["https://example.com/example"], 
+            "Culture": "en-us",
+            "Name": "DFGT",
+            "Array2": ["https://example.com/example"]
+        }
+        
+        mock_get.return_value.content = json.dumps(expected_response)
+        response = cookies_api(self.request)
+        self.assertJSONEqual(response.content.decode("utf-8"), expected_response)
+        
 @ddt.ddt
 @override_settings(API_COOKIE_URL=TEST_COOKIE_URL)
 @patch('requests.get')
