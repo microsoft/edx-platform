@@ -4,6 +4,7 @@ Tests for manager.py
 from nose.plugins.attrib import attr
 from unittest import TestCase
 
+from ..block_structure import BlockStructureBlockData
 from ..exceptions import UsageKeyNotInBlockStructure
 from ..manager import BlockStructureManager
 from ..transformers import BlockStructureTransformers
@@ -84,7 +85,7 @@ class TestTransformer1(MockTransformer):
         return data_key + 't1.val1.' + unicode(block_key)
 
 
-@attr('shard_2')
+@attr(shard=2)
 class TestBlockStructureManager(TestCase, ChildrenMapTestMixin):
     """
     Test class for BlockStructureManager.
@@ -151,6 +152,12 @@ class TestBlockStructureManager(TestCase, ChildrenMapTestMixin):
     def test_get_collected_outdated_data(self):
         self.collect_and_verify(expect_modulestore_called=True, expect_cache_updated=True)
         TestTransformer1.VERSION += 1
+        self.collect_and_verify(expect_modulestore_called=True, expect_cache_updated=True)
+        self.assertEquals(TestTransformer1.collect_call_count, 2)
+
+    def test_get_collected_version_update(self):
+        self.collect_and_verify(expect_modulestore_called=True, expect_cache_updated=True)
+        BlockStructureBlockData.VERSION += 1
         self.collect_and_verify(expect_modulestore_called=True, expect_cache_updated=True)
         self.assertEquals(TestTransformer1.collect_call_count, 2)
 

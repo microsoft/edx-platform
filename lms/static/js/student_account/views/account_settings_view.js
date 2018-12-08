@@ -5,9 +5,10 @@
         'jquery',
         'underscore',
         'backbone',
+        'edx-ui-toolkit/js/utils/html-utils',
         'js/student_account/views/account_section_view',
         'text!templates/student_account/account_settings.underscore'
-    ], function (gettext, $, _, Backbone, AccountSectionView, accountSettingsTemplate) {
+    ], function (gettext, $, _, Backbone, HtmlUtils, AccountSectionView, accountSettingsTemplate) {
 
         var AccountSettingsView = Backbone.View.extend({
 
@@ -15,7 +16,8 @@
             activeTab: 'aboutTabSections',
             accountSettingsTabs: [
                 {name: 'aboutTabSections', id: 'about-tab', label: gettext('Account Information'), class: 'active'},
-                {name: 'accountsTabSections', id: 'accounts-tab', label: gettext('Linked Accounts')}
+                {name: 'accountsTabSections', id: 'accounts-tab', label: gettext('Linked Accounts')},
+                {name: 'ordersTabSections', id: 'orders-tab', label: gettext('Order History')}
             ],
             events: {
                 'click .account-nav-link': 'changeTab'
@@ -27,7 +29,7 @@
             },
 
             render: function () {
-                this.$el.html(_.template(accountSettingsTemplate)({
+                HtmlUtils.setHtml(this.$el, HtmlUtils.template(accountSettingsTemplate)({
                     accountSettingsTabs: this.accountSettingsTabs
                 }));
                 this.renderSection(this.options.tabSections[this.activeTab]);

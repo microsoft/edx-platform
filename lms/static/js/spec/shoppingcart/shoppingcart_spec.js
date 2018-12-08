@@ -1,4 +1,4 @@
-define(['common/js/spec_helpers/ajax_helpers', 'js/shoppingcart/shoppingcart'],
+define(['edx-ui-toolkit/js/utils/spec-helpers/ajax-helpers', 'js/shoppingcart/shoppingcart'],
     function(AjaxHelpers) {
         'use strict';
 
@@ -7,7 +7,7 @@ define(['common/js/spec_helpers/ajax_helpers', 'js/shoppingcart/shoppingcart'],
             var requests = null;
 
             beforeEach(function() {
-                setFixtures('<section class="wrapper confirm-enrollment shopping-cart cart-view"><form action="" method="post"><input type="hidden" name="" value="" /><span class="icon fa fa-caret-right"></span><input type="submit" value="Payment"/></form></section>'); // jshint ignore:line
+                setFixtures('<section class="wrapper confirm-enrollment shopping-cart cart-view"><form action="" method="post"><input type="hidden" name="" value="" /><span class="icon fa fa-caret-right"></span><input type="submit" value="Payment"/></form></section>'); // eslint-disable-line max-len
 
                 view = new edx.shoppingcart.showcart.CartView({
                     el: $('.confirm-enrollment.cart-view form')

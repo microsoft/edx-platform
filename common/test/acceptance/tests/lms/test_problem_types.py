@@ -138,7 +138,7 @@ class ProblemTypeTestMixin(object):
     """
     can_submit_blank = False
 
-    @attr('shard_7')
+    @attr(shard=7)
     def test_answer_correctly(self):
         """
         Scenario: I can answer a problem correctly
@@ -174,7 +174,7 @@ class ProblemTypeTestMixin(object):
         for event in expected_events:
             self.wait_for_events(event_filter=event, number_of_matches=1)
 
-    @attr('shard_7')
+    @attr(shard=7)
     def test_answer_incorrectly(self):
         """
         Scenario: I can answer a problem incorrectly
@@ -194,7 +194,7 @@ class ProblemTypeTestMixin(object):
         self.problem_page.click_check()
         self.wait_for_status('incorrect')
 
-    @attr('shard_7')
+    @attr(shard=7)
     def test_submit_blank_answer(self):
         """
         Scenario: I can submit a blank answer
@@ -215,7 +215,7 @@ class ProblemTypeTestMixin(object):
         self.problem_page.click_check()
         self.wait_for_status('incorrect')
 
-    @attr('shard_7')
+    @attr(shard=7)
     def test_cant_submit_blank_answer(self):
         """
         Scenario: I can't submit a blank answer
@@ -244,6 +244,18 @@ class ProblemTypeTestMixin(object):
         # Set the scope to the problem container
         self.problem_page.a11y_audit.config.set_scope(
             include=['div#seq_content'])
+
+        self.problem_page.a11y_audit.config.set_rules({
+            "ignore": [
+                'aria-allowed-attr',  # TODO: AC-491
+                'aria-valid-attr',  # TODO: AC-491
+                'aria-roles',  # TODO: AC-491
+                'checkboxgroup',  # TODO: AC-491
+                'radiogroup',  # TODO: AC-491
+                'section',  # TODO: AC-491
+                'label',  # TODO: AC-491
+            ]
+        })
 
         # Run the accessibility audit.
         self.problem_page.a11y_audit.check_for_accessibility_errors()
@@ -285,11 +297,6 @@ class AnnotationProblemTypeTest(ProblemTypeTestBase, ProblemTypeTestMixin):
         Additional setup for AnnotationProblemTypeTest
         """
         super(AnnotationProblemTypeTest, self).setUp(*args, **kwargs)
-        self.problem_page.a11y_audit.config.set_rules({
-            'ignore': [
-                'label',  # TODO: AC-293
-            ]
-        })
 
     def answer_problem(self, correct):
         """
@@ -327,6 +334,7 @@ class CheckboxProblemTypeTest(ProblemTypeTestBase, ProblemTypeTestMixin):
         super(CheckboxProblemTypeTest, self).setUp(*args, **kwargs)
         self.problem_page.a11y_audit.config.set_rules({
             'ignore': [
+                'section',  # TODO: AC-491
                 'aria-allowed-attr',  # TODO: AC-251
                 'aria-valid-attr',  # TODO: AC-251
                 'aria-roles',  # TODO: AC-251
@@ -372,6 +380,7 @@ class MultipleChoiceProblemTypeTest(ProblemTypeTestBase, ProblemTypeTestMixin):
         super(MultipleChoiceProblemTypeTest, self).setUp(*args, **kwargs)
         self.problem_page.a11y_audit.config.set_rules({
             'ignore': [
+                'section',  # TODO: AC-491
                 'aria-valid-attr',  # TODO: AC-251
                 'radiogroup',  # TODO: AC-251
             ]
@@ -415,6 +424,7 @@ class RadioProblemTypeTest(ProblemTypeTestBase, ProblemTypeTestMixin):
         super(RadioProblemTypeTest, self).setUp(*args, **kwargs)
         self.problem_page.a11y_audit.config.set_rules({
             'ignore': [
+                'section',  # TODO: AC-491
                 'aria-valid-attr',  # TODO: AC-292
                 'radiogroup',  # TODO: AC-292
             ]
@@ -452,6 +462,7 @@ class DropDownProblemTypeTest(ProblemTypeTestBase, ProblemTypeTestMixin):
         super(DropDownProblemTypeTest, self).setUp(*args, **kwargs)
         self.problem_page.a11y_audit.config.set_rules({
             'ignore': [
+                'section',  # TODO: AC-491
                 'label',  # TODO: AC-291
             ]
         })
@@ -494,6 +505,7 @@ class StringProblemTypeTest(ProblemTypeTestBase, ProblemTypeTestMixin):
         super(StringProblemTypeTest, self).setUp(*args, **kwargs)
         self.problem_page.a11y_audit.config.set_rules({
             'ignore': [
+                'section',  # TODO: AC-491
                 'label',  # TODO: AC-290
             ]
         })
@@ -535,6 +547,7 @@ class NumericalProblemTypeTest(ProblemTypeTestBase, ProblemTypeTestMixin):
         super(NumericalProblemTypeTest, self).setUp(*args, **kwargs)
         self.problem_page.a11y_audit.config.set_rules({
             'ignore': [
+                'section',  # TODO: AC-491
                 'label',  # TODO: AC-289
             ]
         })
@@ -578,6 +591,7 @@ class FormulaProblemTypeTest(ProblemTypeTestBase, ProblemTypeTestMixin):
         super(FormulaProblemTypeTest, self).setUp(*args, **kwargs)
         self.problem_page.a11y_audit.config.set_rules({
             'ignore': [
+                'section',  # TODO: AC-491
                 'label',  # TODO: AC-288
             ]
         })
@@ -628,6 +642,7 @@ class ScriptProblemTypeTest(ProblemTypeTestBase, ProblemTypeTestMixin):
         super(ScriptProblemTypeTest, self).setUp(*args, **kwargs)
         self.problem_page.a11y_audit.config.set_rules({
             'ignore': [
+                'section',  # TODO: AC-491
                 'label',  # TODO: AC-287
             ]
         })
@@ -677,7 +692,7 @@ class CodeProblemTypeTest(ProblemTypeTestBase, ProblemTypeTestMixin):
         super(CodeProblemTypeTest, self).setUp(*args, **kwargs)
         self.problem_page.a11y_audit.config.set_rules({
             'ignore': [
-                'color-contrast',  # TODO: AC-286
+                'section',  # TODO: AC-491
                 'label',  # TODO: AC-286
             ]
         })
@@ -785,6 +800,7 @@ class RadioTextProblemTypeTest(ChoiceTextProbelmTypeTestBase, ProblemTypeTestMix
         super(RadioTextProblemTypeTest, self).setUp(*args, **kwargs)
         self.problem_page.a11y_audit.config.set_rules({
             'ignore': [
+                'section',  # TODO: AC-491
                 'label',  # TODO: AC-285
                 'radiogroup',  # TODO: AC-285
             ]
@@ -817,6 +833,7 @@ class CheckboxTextProblemTypeTest(ChoiceTextProbelmTypeTestBase, ProblemTypeTest
         super(CheckboxTextProblemTypeTest, self).setUp(*args, **kwargs)
         self.problem_page.a11y_audit.config.set_rules({
             'ignore': [
+                'section',  # TODO: AC-491
                 'label',  # TODO: AC-284
                 'checkboxgroup',  # TODO: AC-284
             ]
@@ -880,6 +897,7 @@ class SymbolicProblemTypeTest(ProblemTypeTestBase, ProblemTypeTestMixin):
         super(SymbolicProblemTypeTest, self).setUp(*args, **kwargs)
         self.problem_page.a11y_audit.config.set_rules({
             'ignore': [
+                'section',  # TODO: AC-491
                 'label',  # TODO: AC-294
             ]
         })

@@ -4,7 +4,7 @@ from bok_choy.javascript import wait_for_js
 from bok_choy.page_object import PageObject
 from bok_choy.promise import EmptyPromise, Promise
 
-from .course_page import CoursePage
+from common.test.acceptance.pages.lms.course_page import CoursePage
 
 
 class DiscussionPageMixin(object):
@@ -181,6 +181,10 @@ class DiscussionThreadPage(PageObject, DiscussionPageMixin):
             "Response is voted"
         ).fulfill()
 
+    def cannot_vote_response(self, response_id):
+        """Assert that the voting button is not visible on this response"""
+        return not self.is_element_visible(".response_{} .discussion-response .action-vote".format(response_id))
+
     def is_response_reported(self, response_id):
         return self.is_element_visible(".response_{} .discussion-response .post-label-reported".format(response_id))
 
@@ -192,6 +196,10 @@ class DiscussionThreadPage(PageObject, DiscussionPageMixin):
                 lambda: self.is_response_reported(response_id),
                 "Response is reported"
             ).fulfill()
+
+    def cannot_report_response(self, response_id):
+        """Assert that the reporting button is not visible on this response"""
+        return not self.is_element_visible(".response_{} .discussion-response .action-report".format(response_id))
 
     def is_response_endorsed(self, response_id):
         return "endorsed" in self._get_element_text(".response_{} .discussion-response .posted-details".format(response_id))
@@ -372,14 +380,18 @@ class DiscussionSortPreferencePage(CoursePage):
         """
         Return the text of option that is selected for sorting.
         """
-        options = self.q(css="body.discussion .forum-nav-sort-control option")
-        return options.filter(lambda el: el.is_selected())[0].get_attribute("value")
+        # Using this workaround (execute script) to make this test work with Chrome browser
+        selected_value = self.browser.execute_script(
+            'var selected_value = $(".forum-nav-sort-control").val(); return selected_value')
+        return selected_value
 
     def change_sort_preference(self, sort_by):
         """
         Change the option of sorting by clicking on new option.
         """
-        self.q(css="body.discussion .forum-nav-sort-control option[value='{0}']".format(sort_by)).click()
+        self.q(css=".forum-nav-sort-control option[value='{0}']".format(sort_by)).click()
+        # Click initiates an ajax call, waiting for it to complete
+        self.wait_for_ajax()
 
     def refresh_page(self):
         """

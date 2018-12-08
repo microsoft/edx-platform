@@ -3,6 +3,7 @@ Helper functions for test tasks
 """
 from paver.easy import sh, task, cmdopts
 from pavelib.utils.envs import Env
+from pavelib.utils.timer import timed
 import os
 import re
 import subprocess
@@ -15,6 +16,7 @@ __test__ = False  # do not collect
 
 
 @task
+@timed
 def clean_test_files():
     """
     Clean fixture files used by tests and .pyc files
@@ -30,7 +32,7 @@ def clean_test_files():
 
 def clean_dir(directory):
     """
-    Clean coverage files, to ensure that we don't use stale data to generate reports.
+    Delete all the files from the specified directory.
     """
     # We delete the files but preserve the directory structure
     # so that coverage.py has a place to put the reports.
@@ -39,14 +41,16 @@ def clean_dir(directory):
 
 @task
 @cmdopts([
-    ('skip_clean', 'C', 'skip cleaning repository before running tests'),
+    ('skip-clean', 'C', 'skip cleaning repository before running tests'),
+    ('skip_clean', None, 'deprecated in favor of skip-clean'),
 ])
+@timed
 def clean_reports_dir(options):
     """
     Clean coverage files, to ensure that we don't use stale data to generate reports.
     """
     if getattr(options, 'skip_clean', False):
-        print '--skip_clean is set, skipping...'
+        print '--skip-clean is set, skipping...'
         return
 
     # We delete the files but preserve the directory structure
@@ -56,6 +60,7 @@ def clean_reports_dir(options):
 
 
 @task
+@timed
 def clean_mongo():
     """
     Clean mongo test databases

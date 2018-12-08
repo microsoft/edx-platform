@@ -1,4 +1,5 @@
-define(['jquery', 'js/factories/login', 'common/js/spec_helpers/ajax_helpers', 'common/js/components/utils/view_utils'],
+define(['jquery', 'js/factories/login', 'edx-ui-toolkit/js/utils/spec-helpers/ajax-helpers',
+        'common/js/components/utils/view_utils'],
 function($, LoginFactory, AjaxHelpers, ViewUtils) {
     'use strict';
     describe("Studio Login Page", function() {
@@ -6,7 +7,6 @@ function($, LoginFactory, AjaxHelpers, ViewUtils) {
 
         beforeEach(function() {
             loadFixtures('mock/login.underscore');
-            /*jshint unused: false*/
             var login_factory = new LoginFactory("/home/");
             submitButton = $('#submit');
         });

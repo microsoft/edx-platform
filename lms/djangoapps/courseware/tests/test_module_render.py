@@ -19,7 +19,6 @@ from mock import MagicMock, patch, Mock
 from opaque_keys.edx.keys import UsageKey, CourseKey
 from opaque_keys.edx.locations import SlashSeparatedCourseKey
 from pyquery import PyQuery
-from courseware.module_render import hash_resource
 from xblock.field_data import FieldData
 from xblock.runtime import Runtime
 from xblock.fields import ScopeIds
@@ -59,6 +58,7 @@ from openedx.core.djangoapps.credit.api import (
     set_credit_requirements,
     set_credit_requirement_status
 )
+from xblock_django.models import XBlockConfiguration
 
 from edx_proctoring.api import (
     create_exam,
@@ -120,7 +120,7 @@ class GradedStatelessXBlock(XBlock):
         )
 
 
-@attr('shard_1')
+@attr(shard=1)
 @ddt.ddt
 class ModuleRenderTestCase(SharedModuleStoreTestCase, LoginEnrollmentTestCase):
     """
@@ -339,16 +339,16 @@ class ModuleRenderTestCase(SharedModuleStoreTestCase, LoginEnrollmentTestCase):
         )
 
     @override_settings(FIELD_OVERRIDE_PROVIDERS=(
-        'ccx.overrides.CustomCoursesForEdxOverrideProvider',
+        'courseware.student_field_overrides.IndividualStudentOverrideProvider',
     ))
-    def test_rebind_different_users_ccx(self):
+    def test_rebind_different_users(self):
         """
         This tests the rebinding a descriptor to a student does not result
-        in overly nested _field_data when CCX is enabled.
+        in overly nested _field_data.
         """
         request = self.request_factory.get('')
         request.user = self.mock_user
-        course = CourseFactory.create(enable_ccx=True)
+        course = CourseFactory.create()
 
         descriptor = ItemFactory(category='html', parent=course)
         field_data_cache = FieldDataCache(
@@ -406,7 +406,7 @@ class ModuleRenderTestCase(SharedModuleStoreTestCase, LoginEnrollmentTestCase):
         self.assertEqual(hash_resource(resources), 'a76e27c8e80ca3efd7ce743093aa59e0')
 
 
-@attr('shard_1')
+@attr(shard=1)
 class TestHandleXBlockCallback(SharedModuleStoreTestCase, LoginEnrollmentTestCase):
     """
     Test the handle_xblock_callback function
@@ -613,7 +613,7 @@ class TestHandleXBlockCallback(SharedModuleStoreTestCase, LoginEnrollmentTestCas
         self.assertEquals(len(doc('div.xblock-student_view-videosequence')), 1)
 
 
-@attr('shard_1')
+@attr(shard=1)
 @ddt.ddt
 class TestTOC(ModuleStoreTestCase):
     """Check the Table of Contents for a course"""
@@ -719,7 +719,7 @@ class TestTOC(ModuleStoreTestCase):
             self.assertEquals(actual['next_of_active_section']['url_name'], 'video_123456789012')
 
 
-@attr('shard_1')
+@attr(shard=1)
 @ddt.ddt
 @patch.dict('django.conf.settings.FEATURES', {'ENABLE_SPECIAL_EXAMS': True})
 class TestProctoringRendering(SharedModuleStoreTestCase):
@@ -1047,7 +1047,7 @@ class TestProctoringRendering(SharedModuleStoreTestCase):
         return None
 
 
-@attr('shard_1')
+@attr(shard=1)
 class TestGatedSubsectionRendering(SharedModuleStoreTestCase, MilestonesTestCaseMixin):
     @classmethod
     def setUpClass(cls):
@@ -1130,7 +1130,7 @@ class TestGatedSubsectionRendering(SharedModuleStoreTestCase, MilestonesTestCase
         self.assertIsNone(actual['next_of_active_section'])
 
 
-@attr('shard_1')
+@attr(shard=1)
 @ddt.ddt
 class TestHtmlModifiers(ModuleStoreTestCase):
     """
@@ -1294,7 +1294,7 @@ class XBlockWithJsonInitData(XBlock):
         return frag
 
 
-@attr('shard_1')
+@attr(shard=1)
 @ddt.ddt
 class JsonInitDataTest(ModuleStoreTestCase):
     """Tests for JSON data injected into the JS init function."""
@@ -1379,7 +1379,7 @@ class ViewInStudioTest(ModuleStoreTestCase):
         self.child_module = self._get_module(course.id, child_descriptor, child_descriptor.location)
 
 
-@attr('shard_1')
+@attr(shard=1)
 class MongoViewInStudioTest(ViewInStudioTest):
     """Test the 'View in Studio' link visibility in a mongo backed course."""
 
@@ -1408,7 +1408,7 @@ class MongoViewInStudioTest(ViewInStudioTest):
         self.assertNotIn('View Unit in Studio', result_fragment.content)
 
 
-@attr('shard_1')
+@attr(shard=1)
 class MixedViewInStudioTest(ViewInStudioTest):
     """Test the 'View in Studio' link visibility in a mixed mongo backed course."""
 
@@ -1440,7 +1440,7 @@ class DetachedXBlock(XBlock):
         return frag
 
 
-@attr('shard_1')
+@attr(shard=1)
 @patch.dict('django.conf.settings.FEATURES', {'DISPLAY_DEBUG_INFO_TO_STAFF': True, 'DISPLAY_HISTOGRAMS_TO_STAFF': True})
 @patch('courseware.module_render.has_access', Mock(return_value=True, autospec=True))
 class TestStaffDebugInfo(SharedModuleStoreTestCase):
@@ -1587,7 +1587,7 @@ PER_STUDENT_ANONYMIZED_DESCRIPTORS = set(
 )
 
 
-@attr('shard_1')
+@attr(shard=1)
 @ddt.ddt
 class TestAnonymousStudentId(SharedModuleStoreTestCase, LoginEnrollmentTestCase):
     """
@@ -1670,7 +1670,7 @@ class TestAnonymousStudentId(SharedModuleStoreTestCase, LoginEnrollmentTestCase)
         )
 
 
-@attr('shard_1')
+@attr(shard=1)
 @patch('track.views.tracker', autospec=True)
 class TestModuleTrackingContext(SharedModuleStoreTestCase):
     """
@@ -1789,7 +1789,7 @@ class TestModuleTrackingContext(SharedModuleStoreTestCase):
             self.assertEqual(module_info['original_usage_version'], unicode(original_usage_version))
 
 
-@attr('shard_1')
+@attr(shard=1)
 class TestXmoduleRuntimeEvent(TestSubmittingProblems):
     """
     Inherit from TestSubmittingProblems to get functionality that set up a course and problems structure
@@ -1852,7 +1852,7 @@ class TestXmoduleRuntimeEvent(TestSubmittingProblems):
         send_mock.assert_called_with(**expected_signal_kwargs)
 
 
-@attr('shard_1')
+@attr(shard=1)
 class TestRebindModule(TestSubmittingProblems):
     """
     Tests to verify the functionality of rebinding a module.
@@ -1929,7 +1929,7 @@ class TestRebindModule(TestSubmittingProblems):
         self.assertEqual(module.descriptor.scope_ids.user_id, user2.id)
 
 
-@attr('shard_1')
+@attr(shard=1)
 @ddt.ddt
 class TestEventPublishing(ModuleStoreTestCase, LoginEnrollmentTestCase):
     """
@@ -1968,7 +1968,7 @@ class TestEventPublishing(ModuleStoreTestCase, LoginEnrollmentTestCase):
         mock_track_function.return_value.assert_called_once_with(event_type, event)
 
 
-@attr('shard_1')
+@attr(shard=1)
 @ddt.ddt
 class LMSXBlockServiceBindingTest(SharedModuleStoreTestCase):
     """
@@ -2059,7 +2059,7 @@ BLOCK_TYPES = ['xblock', 'xmodule']
 USER_NUMBERS = range(2)
 
 
-@attr('shard_1')
+@attr(shard=1)
 @ddt.ddt
 class TestFilteredChildren(SharedModuleStoreTestCase):
     """
@@ -2215,7 +2215,7 @@ class TestFilteredChildren(SharedModuleStoreTestCase):
         self.assertEquals(set(child_usage_ids), set(child.scope_ids.usage_id for child in block.get_children()))
 
 
-@attr('shard_1')
+@attr(shard=1)
 @ddt.ddt
 class TestDisabledXBlockTypes(ModuleStoreTestCase):
     """
@@ -2224,15 +2224,40 @@ class TestDisabledXBlockTypes(ModuleStoreTestCase):
     # pylint: disable=no-member
     def setUp(self):
         super(TestDisabledXBlockTypes, self).setUp()
-
-        for store in self.store.modulestores:
-            store.disabled_xblock_types = ('video',)
+        XBlockConfiguration(name='video', enabled=False).save()
 
     @ddt.data(ModuleStoreEnum.Type.mongo, ModuleStoreEnum.Type.split)
     def test_get_item(self, default_ms):
         with self.store.default_store(default_ms):
             course = CourseFactory()
-            for block_type in ('video',):
-                item = ItemFactory(category=block_type, parent=course)
-                item = self.store.get_item(item.scope_ids.usage_id)
-                self.assertEqual(item.__class__.__name__, 'RawDescriptorWithMixins')
+            self._verify_descriptor('video', course, 'RawDescriptorWithMixins')
+
+    @ddt.data(ModuleStoreEnum.Type.mongo, ModuleStoreEnum.Type.split)
+    def test_dynamic_updates(self, default_ms):
+        """Tests that the list of disabled xblocks can dynamically update."""
+        with self.store.default_store(default_ms):
+            course = CourseFactory()
+            item_usage_id = self._verify_descriptor('problem', course, 'CapaDescriptorWithMixins')
+            XBlockConfiguration(name='problem', enabled=False).save()
+
+            # First verify that the cached value is used until there is a new request cache.
+            self._verify_descriptor('problem', course, 'CapaDescriptorWithMixins', item_usage_id)
+
+            # Now simulate a new request cache.
+            self.store.request_cache.data = {}
+            self._verify_descriptor('problem', course, 'RawDescriptorWithMixins', item_usage_id)
+
+    def _verify_descriptor(self, category, course, descriptor, item_id=None):
+        """
+        Helper method that gets an item with the specified category from the
+        modulestore and verifies that it has the expected descriptor name.
+
+        Returns the item's usage_id.
+        """
+        if not item_id:
+            item = ItemFactory(category=category, parent=course)
+            item_id = item.scope_ids.usage_id
+
+        item = self.store.get_item(item_id)
+        self.assertEqual(item.__class__.__name__, descriptor)
+        return item_id

@@ -5,12 +5,10 @@ Modulestore configuration for test cases.
 import copy
 import functools
 import os
-from uuid import uuid4
 from contextlib import contextmanager
 
 from mock import patch
 
-import django.core.cache
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.test import TestCase
@@ -218,7 +216,7 @@ class ModuleStoreIsolationMixin(CacheIsolationMixin):
 
     MODULESTORE = functools.partial(mixed_store_config, mkdtemp_clean(), {})
     CONTENTSTORE = functools.partial(contentstore_config)
-    ENABLED_CACHES = ['mongo_metadata_inheritance', 'loc_cache']
+    ENABLED_CACHES = ['default', 'mongo_metadata_inheritance', 'loc_cache']
     __settings_overrides = []
     __old_modulestores = []
     __old_contentstores = []

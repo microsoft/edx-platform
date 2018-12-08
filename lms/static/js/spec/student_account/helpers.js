@@ -34,7 +34,8 @@ define(['underscore'], function(_) {
     };
 
     var DEFAULT_USER_PREFERENCES_DATA = {
-        'pref-lang': '2'
+        'pref-lang': '2',
+        'time_zone': null
     };
 
     var createUserPreferencesData = function(options) {

@@ -1230,7 +1230,7 @@ class CapaModuleTest(unittest.TestCase):
     def test_no_max_attempts(self):
         module = CapaFactory.create(max_attempts='')
         html = module.get_problem_html()
-        self.assertTrue(html is not None)
+        self.assertIsNotNone(html)
         # assert that we got here without exploding
 
     def test_get_problem_html(self):
@@ -1365,7 +1365,7 @@ class CapaModuleTest(unittest.TestCase):
         # Try to render the module with DEBUG turned off
         html = module.get_problem_html()
 
-        self.assertTrue(html is not None)
+        self.assertIsNotNone(html)
 
         # Check the rendering context
         render_args, _ = module.system.render_template.call_args
@@ -1395,7 +1395,7 @@ class CapaModuleTest(unittest.TestCase):
         # Try to render the module with DEBUG turned on
         html = module.get_problem_html()
 
-        self.assertTrue(html is not None)
+        self.assertIsNotNone(html)
 
         # Check the rendering context
         render_args, _ = module.system.render_template.call_args
@@ -1419,7 +1419,7 @@ class CapaModuleTest(unittest.TestCase):
         # Get the seed
         # By this point, the module should have persisted the seed
         seed = module.seed
-        self.assertTrue(seed is not None)
+        self.assertIsNotNone(seed)
 
         # If we're not rerandomizing, the seed is always set
         # to the same value (1)
@@ -1479,7 +1479,7 @@ class CapaModuleTest(unittest.TestCase):
             of the form test_func() -> bool
             '''
             success = False
-            for i in range(num_tries):
+            for __ in range(num_tries):
                 if test_func() is True:
                     success = True
                     break
@@ -1490,7 +1490,7 @@ class CapaModuleTest(unittest.TestCase):
         # Get the seed
         # By this point, the module should have persisted the seed
         seed = module.seed
-        self.assertTrue(seed is not None)
+        self.assertIsNotNone(seed)
 
         # We do NOT want the seed to reset if rerandomize
         # is set to 'never' -- it should still be 1
@@ -1510,7 +1510,7 @@ class CapaModuleTest(unittest.TestCase):
             # to generate a different seed
             success = _retry_and_check(5, lambda: _reset_and_get_seed(module) != seed)
 
-            self.assertTrue(module.seed is not None)
+            self.assertIsNotNone(module.seed)
             msg = 'Could not get a new seed from reset after 5 tries'
             self.assertTrue(success, msg)
 
@@ -1543,7 +1543,7 @@ class CapaModuleTest(unittest.TestCase):
         # Get the seed
         # By this point, the module should have persisted the seed
         seed = module.seed
-        self.assertTrue(seed is not None)
+        self.assertIsNotNone(seed)
 
         #the seed should never change because the student hasn't finished the problem
         self.assertEqual(seed, _reset_and_get_seed(module))
@@ -1718,6 +1718,34 @@ class CapaModuleTest(unittest.TestCase):
             self.assertEquals(event_info['permutation'][CapaFactory.answer_key()],
                               ('answerpool', ['choice_1', 'choice_3', 'choice_2', 'choice_0']))
             self.assertEquals(event_info['success'], 'incorrect')
+
+    @ddt.unpack
+    @ddt.data(
+        {'display_name': None, 'expected_display_name': 'problem'},
+        {'display_name': '', 'expected_display_name': 'problem'},
+        {'display_name': ' ', 'expected_display_name': 'problem'},
+        {'display_name': 'CAPA 101', 'expected_display_name': 'CAPA 101'}
+    )
+    def test_problem_display_name_with_default(self, display_name, expected_display_name):
+        """
+        Verify that display_name_with_default works as expected.
+        """
+        module = CapaFactory.create(display_name=display_name)
+        self.assertEqual(module.display_name_with_default, expected_display_name)
+
+    @ddt.data(
+        '',
+        '   ',
+    )
+    def test_problem_no_display_name(self, display_name):
+        """
+        Verify that if problem display name is not provided then a default name is used.
+        """
+        module = CapaFactory.create(display_name=display_name)
+        module.get_problem_html()
+        render_args, _ = module.system.render_template.call_args
+        context = render_args[1]
+        self.assertEqual(context['problem']['name'], module.location.block_type)
 
 
 @ddt.ddt

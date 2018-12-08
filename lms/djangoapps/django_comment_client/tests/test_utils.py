@@ -28,11 +28,10 @@ from xmodule.modulestore import ModuleStoreEnum
 from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory, ToyCourseFactory
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase, TEST_DATA_MIXED_MODULESTORE
 from xmodule.modulestore.django import modulestore
-from opaque_keys.edx.locator import CourseLocator
 from lms.djangoapps.teams.tests.factories import CourseTeamFactory
 
 
-@attr('shard_1')
+@attr(shard=1)
 class DictionaryTestCase(TestCase):
     def test_extract(self):
         d = {'cats': 'meow', 'dogs': 'woof'}
@@ -57,7 +56,7 @@ class DictionaryTestCase(TestCase):
         self.assertEqual(utils.merge_dict(d1, d2), expected)
 
 
-@attr('shard_1')
+@attr(shard=1)
 class AccessUtilsTestCase(ModuleStoreTestCase):
     """
     Base testcase class for access and roles for the
@@ -113,7 +112,7 @@ class AccessUtilsTestCase(ModuleStoreTestCase):
 
 
 @ddt.ddt
-@attr('shard_1')
+@attr(shard=1)
 class CoursewareContextTestCase(ModuleStoreTestCase):
     """
     Base testcase class for courseware context for the
@@ -177,32 +176,32 @@ class CoursewareContextTestCase(ModuleStoreTestCase):
 
     @ddt.data((ModuleStoreEnum.Type.mongo, 2), (ModuleStoreEnum.Type.split, 1))
     @ddt.unpack
-    def test_get_accessible_discussion_modules(self, modulestore_type, expected_discussion_modules):
+    def test_get_accessible_discussion_xblocks(self, modulestore_type, expected_discussion_xblocks):
         """
-        Tests that the accessible discussion modules having no parents do not get fetched for split modulestore.
+        Tests that the accessible discussion xblocks having no parents do not get fetched for split modulestore.
         """
         course = CourseFactory.create(default_store=modulestore_type)
 
-        # Create a discussion module.
+        # Create a discussion xblock.
         test_discussion = self.store.create_child(self.user.id, course.location, 'discussion', 'test_discussion')
 
-        # Assert that created discussion module is not an orphan.
+        # Assert that created discussion xblock is not an orphan.
         self.assertNotIn(test_discussion.location, self.store.get_orphans(course.id))
 
-        # Assert that there is only one discussion module in the course at the moment.
-        self.assertEqual(len(utils.get_accessible_discussion_modules(course, self.user)), 1)
+        # Assert that there is only one discussion xblock in the course at the moment.
+        self.assertEqual(len(utils.get_accessible_discussion_xblocks(course, self.user)), 1)
 
-        # Add an orphan discussion module to that course
+        # Add an orphan discussion xblock to that course
         orphan = course.id.make_usage_key('discussion', 'orphan_discussion')
         self.store.create_item(self.user.id, orphan.course_key, orphan.block_type, block_id=orphan.block_id)
 
-        # Assert that the discussion module is an orphan.
+        # Assert that the discussion xblock is an orphan.
         self.assertIn(orphan, self.store.get_orphans(course.id))
 
-        self.assertEqual(len(utils.get_accessible_discussion_modules(course, self.user)), expected_discussion_modules)
+        self.assertEqual(len(utils.get_accessible_discussion_xblocks(course, self.user)), expected_discussion_xblocks)
 
 
-@attr('shard_3')
+@attr(shard=3)
 class CachedDiscussionIdMapTestCase(ModuleStoreTestCase):
     """
     Tests that using the cache of discussion id mappings has the same behavior as searching through the course.
@@ -262,7 +261,7 @@ class CachedDiscussionIdMapTestCase(ModuleStoreTestCase):
         with self.assertRaises(utils.DiscussionIdMapIsNotCached):
             utils.get_cached_discussion_key(self.course, 'test_discussion_id')
 
-    def test_module_does_not_have_required_keys(self):
+    def test_xblock_does_not_have_required_keys(self):
         self.assertTrue(utils.has_required_keys(self.discussion))
         self.assertFalse(utils.has_required_keys(self.bad_discussion))
 
@@ -335,7 +334,7 @@ class CategoryMapTestMixin(object):
         )
 
 
-@attr('shard_1')
+@attr(shard=1)
 class CategoryMapTestCase(CategoryMapTestMixin, ModuleStoreTestCase):
     """
     Base testcase class for discussion categories for the
@@ -505,7 +504,7 @@ class CategoryMapTestCase(CategoryMapTestMixin, ModuleStoreTestCase):
             cohorted_if_in_list=True
         )
 
-    def test_get_unstarted_discussion_modules(self):
+    def test_get_unstarted_discussion_xblocks(self):
         later = datetime.datetime(datetime.MAXYEAR, 1, 1, tzinfo=django_utc())
 
         self.create_discussion("Chapter 1", "Discussion 1", start=later)
@@ -1023,10 +1022,10 @@ class CategoryMapTestCase(CategoryMapTestMixin, ModuleStoreTestCase):
         )
 
 
-@attr('shard_1')
+@attr(shard=1)
 class ContentGroupCategoryMapTestCase(CategoryMapTestMixin, ContentGroupTestCase):
     """
-    Tests `get_discussion_category_map` on discussion modules which are
+    Tests `get_discussion_category_map` on discussion xblocks which are
     only visible to some content groups.
     """
     def test_staff_user(self):
@@ -1197,7 +1196,7 @@ class JsonResponseTestCase(TestCase, UnicodeTestMixin):
         self.assertEqual(reparsed, text)
 
 
-@attr('shard_1')
+@attr(shard=1)
 class RenderMustacheTests(TestCase):
     """
     Test the `render_mustache` utility function.
@@ -1360,3 +1359,61 @@ class IsCommentableCohortedTestCase(ModuleStoreTestCase):
         # Verify that team discussions are not cohorted, but other discussions are
         self.assertFalse(utils.is_commentable_cohorted(course.id, team.discussion_topic_id))
         self.assertTrue(utils.is_commentable_cohorted(course.id, "random"))
+
+
+class PermissionsTestCase(ModuleStoreTestCase):
+    """Test utils functionality related to forums "abilities" (permissions)"""
+
+    def test_get_ability(self):
+        content = {}
+        content['user_id'] = '1'
+        content['type'] = 'thread'
+
+        user = mock.Mock()
+        user.id = 1
+
+        with mock.patch('django_comment_client.utils.check_permissions_by_view') as check_perm:
+            check_perm.return_value = True
+            self.assertEqual(utils.get_ability(None, content, user), {
+                'editable': True,
+                'can_reply': True,
+                'can_delete': True,
+                'can_openclose': True,
+                'can_vote': False,
+                'can_report': False
+            })
+
+            content['user_id'] = '2'
+            self.assertEqual(utils.get_ability(None, content, user), {
+                'editable': True,
+                'can_reply': True,
+                'can_delete': True,
+                'can_openclose': True,
+                'can_vote': True,
+                'can_report': True
+            })
+
+    def test_is_content_authored_by(self):
+        content = {}
+        user = mock.Mock()
+        user.id = 1
+
+        # strict equality checking
+        content['user_id'] = 1
+        self.assertTrue(utils.is_content_authored_by(content, user))
+
+        # cast from string to int
+        content['user_id'] = '1'
+        self.assertTrue(utils.is_content_authored_by(content, user))
+
+        # strict equality checking, fails
+        content['user_id'] = 2
+        self.assertFalse(utils.is_content_authored_by(content, user))
+
+        # cast from string to int, fails
+        content['user_id'] = 'string'
+        self.assertFalse(utils.is_content_authored_by(content, user))
+
+        # content has no known author
+        del content['user_id']
+        self.assertFalse(utils.is_content_authored_by(content, user))

@@ -18,6 +18,7 @@ Common traits:
 
 import datetime
 import json
+import warnings
 
 import dateutil
 
@@ -97,6 +98,21 @@ CELERY_QUEUES = {
     HIGH_MEM_QUEUE: {},
 }
 
+# Setup alternate queues, to allow access to cross-process workers
+ALTERNATE_QUEUE_ENVS = os.environ.get('ALTERNATE_WORKER_QUEUES', '').split()
+ALTERNATE_QUEUES = [
+    DEFAULT_PRIORITY_QUEUE.replace(QUEUE_VARIANT, alternate + '.')
+    for alternate in ALTERNATE_QUEUE_ENVS
+]
+CELERY_QUEUES.update(
+    {
+        alternate: {}
+        for alternate in ALTERNATE_QUEUES
+        if alternate not in CELERY_QUEUES.keys()
+    }
+)
+CELERY_ROUTES = "{}celery.Router".format(QUEUE_VARIANT)
+
 # If we're a worker on the high_mem queue, set ourselves to die after processing
 # one request to avoid having memory leaks take down the worker server. This env
 # var is set in /etc/init/edx-workers.conf -- this should probably be replaced
@@ -172,9 +188,19 @@ REGISTRATION_EMAIL_PATTERNS_ALLOWED = ENV_TOKENS.get('REGISTRATION_EMAIL_PATTERN
 EDXMKTG_LOGGED_IN_COOKIE_NAME = ENV_TOKENS.get('EDXMKTG_LOGGED_IN_COOKIE_NAME', EDXMKTG_LOGGED_IN_COOKIE_NAME)
 EDXMKTG_USER_INFO_COOKIE_NAME = ENV_TOKENS.get('EDXMKTG_USER_INFO_COOKIE_NAME', EDXMKTG_USER_INFO_COOKIE_NAME)
 
+LMS_ROOT_URL = ENV_TOKENS.get('LMS_ROOT_URL')
+
 ENV_FEATURES = ENV_TOKENS.get('FEATURES', {})
 for feature, value in ENV_FEATURES.items():
     FEATURES[feature] = value
+
+# Backward compatibility for deprecated feature names
+if 'ENABLE_S3_GRADE_DOWNLOADS' in FEATURES:
+    warnings.warn(
+        "'ENABLE_S3_GRADE_DOWNLOADS' is deprecated. Please use 'ENABLE_GRADE_DOWNLOADS' instead",
+        DeprecationWarning,
+    )
+    FEATURES['ENABLE_GRADE_DOWNLOADS'] = FEATURES['ENABLE_S3_GRADE_DOWNLOADS']
 
 CMS_BASE = ENV_TOKENS.get('CMS_BASE', 'studio.edx.org')
 
@@ -243,9 +269,13 @@ BULK_EMAIL_ROUTING_KEY = HIGH_PRIORITY_QUEUE
 # we have to reset the value here.
 BULK_EMAIL_ROUTING_KEY_SMALL_JOBS = LOW_PRIORITY_QUEUE
 
-# Theme overrides
-THEME_NAME = ENV_TOKENS.get('THEME_NAME', None)
-COMPREHENSIVE_THEME_DIR = path(ENV_TOKENS.get('COMPREHENSIVE_THEME_DIR', COMPREHENSIVE_THEME_DIR))
+# following setting is for backward compatibility
+if ENV_TOKENS.get('COMPREHENSIVE_THEME_DIR', None):
+    COMPREHENSIVE_THEME_DIR = ENV_TOKENS.get('COMPREHENSIVE_THEME_DIR')
+
+COMPREHENSIVE_THEME_DIRS = ENV_TOKENS.get('COMPREHENSIVE_THEME_DIRS', COMPREHENSIVE_THEME_DIRS) or []
+DEFAULT_SITE_THEME = ENV_TOKENS.get('DEFAULT_SITE_THEME', DEFAULT_SITE_THEME)
+ENABLE_COMPREHENSIVE_THEMING = ENV_TOKENS.get('ENABLE_COMPREHENSIVE_THEMING', ENABLE_COMPREHENSIVE_THEMING)
 
 # Marketing link overrides
 MKTG_URL_LINK_MAP.update(ENV_TOKENS.get('MKTG_URL_LINK_MAP', {}))
@@ -469,6 +499,20 @@ FILE_UPLOAD_STORAGE_PREFIX = ENV_TOKENS.get('FILE_UPLOAD_STORAGE_PREFIX', FILE_U
 # If there is a database called 'read_replica', you can use the use_read_replica_if_available
 # function in util/query.py, which is useful for very large database reads
 DATABASES = AUTH_TOKENS['DATABASES']
+
+# The normal database user does not have enough permissions to run migrations.
+# Migrations are run with separate credentials, given as DB_MIGRATION_*
+# environment variables
+for name, database in DATABASES.items():
+    if name != 'read_replica':
+        database.update({
+            'ENGINE': os.environ.get('DB_MIGRATION_ENGINE', database['ENGINE']),
+            'USER': os.environ.get('DB_MIGRATION_USER', database['USER']),
+            'PASSWORD': os.environ.get('DB_MIGRATION_PASS', database['PASSWORD']),
+            'NAME': os.environ.get('DB_MIGRATION_NAME', database['NAME']),
+            'HOST': os.environ.get('DB_MIGRATION_HOST', database['HOST']),
+            'PORT': os.environ.get('DB_MIGRATION_PORT', database['PORT']),
+        })
 
 XQUEUE_INTERFACE = AUTH_TOKENS['XQUEUE_INTERFACE']
 
@@ -711,10 +755,12 @@ ECOMMERCE_API_URL = ENV_TOKENS.get('ECOMMERCE_API_URL', ECOMMERCE_API_URL)
 ECOMMERCE_API_SIGNING_KEY = AUTH_TOKENS.get('ECOMMERCE_API_SIGNING_KEY', ECOMMERCE_API_SIGNING_KEY)
 ECOMMERCE_API_TIMEOUT = ENV_TOKENS.get('ECOMMERCE_API_TIMEOUT', ECOMMERCE_API_TIMEOUT)
 
+COURSE_CATALOG_API_URL = ENV_TOKENS.get('COURSE_CATALOG_API_URL', COURSE_CATALOG_API_URL)
+
 ##### Custom Courses for EdX #####
 if FEATURES.get('CUSTOM_COURSES_EDX'):
     INSTALLED_APPS += ('lms.djangoapps.ccx', 'openedx.core.djangoapps.ccxcon')
-    FIELD_OVERRIDE_PROVIDERS += (
+    MODULESTORE_FIELD_OVERRIDE_PROVIDERS += (
         'lms.djangoapps.ccx.overrides.CustomCoursesForEdxOverrideProvider',
     )
 CCX_MAX_STUDENTS_ALLOWED = ENV_TOKENS.get('CCX_MAX_STUDENTS_ALLOWED', CCX_MAX_STUDENTS_ALLOWED)

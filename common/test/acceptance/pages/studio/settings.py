@@ -7,9 +7,12 @@ import os
 from bok_choy.promise import EmptyPromise
 from bok_choy.javascript import requirejs
 
-from .course_page import CoursePage
-from .users import wait_for_ajax_or_reload
-from .utils import press_the_notification_button
+from common.test.acceptance.pages.studio.course_page import CoursePage
+from common.test.acceptance.pages.studio.users import wait_for_ajax_or_reload
+from common.test.acceptance.pages.studio.utils import (
+    press_the_notification_button,
+    type_in_codemirror
+)
 
 
 @requirejs('js/factories/settings')
@@ -70,6 +73,36 @@ class SettingsPage(CoursePage):
         results = self.get_elements(css_selector=css_selector)
         return results[0] if results else None
 
+    def set_element_values(self, element_values):
+        """
+        Set the values of the elements to those specified
+        in the element_values dict.
+        """
+        for css, value in element_values.iteritems():
+            element = self.get_element(css)
+            element.clear()
+            element.send_keys(value)
+
+    def un_focus_input_field(self):
+        """
+        Makes an input field un-focus by
+        clicking outside of it.
+        """
+        self.get_element('.title-2').click()
+
+    def is_element_present(self, css_selector):
+        """
+        Returns boolean based on the presence
+        of an element with css as passed.
+        """
+        return self.q(css=css_selector).present
+
+    def change_course_description(self, change_text):
+        """
+        Changes the course description
+        """
+        type_in_codemirror(self, 0, change_text, find_prefix="$")
+
     ################
     # Properties
     ################
@@ -113,7 +146,7 @@ class SettingsPage(CoursePage):
         Property. Returns the text of the license type for the course
         ("All Rights Reserved" or "Creative Commons")
         """
-        license_types_css = "section.license ul.license-types li.license-type"
+        license_types_css = ".license ul.license-types li.license-type"
         self.wait_for_element_presence(
             license_types_css,
             "license type buttons are present",
@@ -124,7 +157,7 @@ class SettingsPage(CoursePage):
 
         # Look for the license text that will be displayed by default,
         # if no button is yet explicitly selected
-        license_text = self.q(css='section.license span.license-text')
+        license_text = self.q(css='.license span.license-text')
         if license_text.is_present():
             return license_text.text[0]
         return None
@@ -135,13 +168,13 @@ class SettingsPage(CoursePage):
         Sets the course license to the given license_name
         (str, "All Rights Reserved" or "Creative Commons")
         """
-        license_types_css = "section.license ul.license-types li.license-type"
+        license_types_css = ".license ul.license-types li.license-type"
         self.wait_for_element_presence(
             license_types_css,
             "license type buttons are present",
         )
         button_xpath = (
-            "//section[contains(@class, 'license')]"
+            "//div[contains(@class, 'license')]"
             "//ul[contains(@class, 'license-types')]"
             "//li[contains(@class, 'license-type')]"
             "//button[contains(text(),'{license_name}')]"
@@ -151,7 +184,7 @@ class SettingsPage(CoursePage):
             raise Exception("Invalid license name: {name}".format(name=license_name))
         button.click()
 
-    pacing_css = 'section.pacing input[type=radio]'
+    pacing_css = '.pacing input[type=radio]'
 
     @property
     def checked_pacing_css(self):
@@ -207,6 +240,17 @@ class SettingsPage(CoursePage):
     ################
     # Clicks
     ################
+
+    def click_button(self, name):
+        """
+        Clicks the button
+        """
+        btn_css = 'div#page-notification button.action-{}'.format(name.lower())
+        EmptyPromise(
+            lambda: self.q(css=btn_css).visible,
+            '{} button is visible'.format(name)
+        ).fulfill()
+        press_the_notification_button(self, name)
 
     ################
     # Workflows

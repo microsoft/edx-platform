@@ -13,8 +13,7 @@ define([
             var view = null,
                 programModel,
                 program = {
-                    category: 'xseries',
-                    display_category: 'XSeries',
+                    category: 'FooBar',
                     status: 'active',
                     subtitle: 'program 1',
                     name: 'test program 1',
@@ -28,7 +27,7 @@ define([
                     modified: '2016-03-25T13:45:21.220732Z',
                     marketing_slug: 'p_2?param=haha&test=b', 
                     id: 146,
-                    marketing_url: 'http://www.edx.org/xseries/p_2?param=haha&test=b',
+                    detail_url: 'http://courses.edx.org/dashboard/programs/1/foo',
                     banner_image_urls: {
                         w348h116: 'http://www.edx.org/images/test1',
                         w435h145: 'http://www.edx.org/images/test2',
@@ -53,9 +52,9 @@ define([
                 cardRenders = function($card) {
                     expect($card).toBeDefined();
                     expect($card.find('.title').html().trim()).toEqual(program.name);
-                    expect($card.find('.category span').html().trim()).toEqual('XSeries Program');
+                    expect($card.find('.category span').html().trim()).toEqual(program.category);
                     expect($card.find('.organization').html().trim()).toEqual(program.organizations[0].key);
-                    expect($card.find('.card-link').attr('href')).toEqual(program.marketing_url);
+                    expect($card.find('.card-link').attr('href')).toEqual(program.detail_url);
                 };
 
             beforeEach(function() {

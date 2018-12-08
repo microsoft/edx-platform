@@ -659,7 +659,7 @@ class CapaMixin(CapaFields):
             check_button_checking = False
 
         content = {
-            'name': self.display_name_with_default_escaped,
+            'name': self.display_name_with_default,
             'html': html,
             'weight': self.weight,
         }
@@ -1067,8 +1067,11 @@ class CapaMixin(CapaFields):
             self.set_last_submission_time()
 
         except (StudentInputError, ResponseError, LoncapaProblemError) as inst:
-            log.warning("StudentInputError in capa_module:problem_check",
-                        exc_info=True)
+            if self.runtime.DEBUG:
+                log.warning(
+                    "StudentInputError in capa_module:problem_check",
+                    exc_info=True
+                )
 
             # Save the user's state before failing
             self.set_state_from_lcp()

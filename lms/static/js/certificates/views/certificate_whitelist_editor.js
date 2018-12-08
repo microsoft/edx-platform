@@ -44,13 +44,17 @@
                         model = {user_name: user_name};
                     }
 
-                    var certificate_exception = new CertificateExceptionModel({
-                        url: this.collection.url,
-                        user_name: user_name,
-                        user_email: user_email,
-                        notes: notes,
-                        new: true
-                    });
+                    var certificate_exception = new CertificateExceptionModel(
+                        {
+                            user_name: user_name,
+                            user_email: user_email,
+                            notes: notes,
+                            new: true
+                        },
+                        {
+                            url: this.collection.url
+                        }
+                    );
                     var message = "";
 
                     if(this.collection.findWhere(model)){
@@ -60,7 +64,7 @@
                         );
                     }
                     else if(certificate_exception.isValid()){
-                        message = gettext("<%= user %> has been successfully added to the exception list. Click Generate Exception Certificate below to send the certificate."); // jshint ignore:line
+                        message = gettext('<%= user %> has been successfully added to the exception list. Click Generate Exception Certificate below to send the certificate.');  // eslint-disable-line max-len
                         certificate_exception.save(
                             null,
                             {

@@ -1,4 +1,8 @@
-define(['backbone', 'jquery', 'underscore', 'common/js/spec_helpers/ajax_helpers', 'common/js/spec_helpers/template_helpers',
+define(['backbone',
+        'jquery',
+        'underscore',
+        'edx-ui-toolkit/js/utils/spec-helpers/ajax-helpers',
+        'common/js/spec_helpers/template_helpers',
         'js/spec/views/fields_helpers',
         'js/spec/student_account/helpers',
         'js/spec/student_account/account_settings_fields_helpers',
@@ -26,6 +30,8 @@ define(['backbone', 'jquery', 'underscore', 'common/js/spec_helpers/ajax_helpers
                     'options': Helpers.FIELD_OPTIONS
                 }, 'preferred_language': {
                     'options': Helpers.FIELD_OPTIONS
+                }, 'time_zone': {
+                    'options': Helpers.FIELD_OPTIONS,
                 }
             };
 
@@ -52,7 +58,7 @@ define(['backbone', 'jquery', 'underscore', 'common/js/spec_helpers/ajax_helpers
 
             var createAccountSettingsPage = function() {
                 var context = AccountSettingsPage(
-                    FIELDS_DATA, AUTH_DATA, Helpers.USER_ACCOUNTS_API_URL, Helpers.USER_PREFERENCES_API_URL, 'edX'
+                    FIELDS_DATA, [], AUTH_DATA, Helpers.USER_ACCOUNTS_API_URL, Helpers.USER_PREFERENCES_API_URL, 'edX'
                 );
                 return context.accountSettingsView;
             };
@@ -144,7 +150,7 @@ define(['backbone', 'jquery', 'underscore', 'common/js/spec_helpers/ajax_helpers
 
                 var sectionsData = accountSettingsView.options.tabSections.aboutTabSections;
 
-                expect(sectionsData[0].fields.length).toBe(6);
+                expect(sectionsData[0].fields.length).toBe(7);
 
                 var textFields = [sectionsData[0].fields[1], sectionsData[0].fields[2]];
                 for (i = 0; i < textFields.length ; i++) {

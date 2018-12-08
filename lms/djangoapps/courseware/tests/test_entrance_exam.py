@@ -38,8 +38,8 @@ from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
 
 
-@attr('shard_2')
-@patch.dict('django.conf.settings.FEATURES', {'ENTRANCE_EXAMS': True, 'MILESTONES_APP': True})
+@attr(shard=2)
+@patch.dict('django.conf.settings.FEATURES', {'ENTRANCE_EXAMS': True})
 class EntranceExamTestCases(LoginEnrollmentTestCase, ModuleStoreTestCase, MilestonesTestCaseMixin):
     """
     Check that content is properly gated.
@@ -47,7 +47,7 @@ class EntranceExamTestCases(LoginEnrollmentTestCase, ModuleStoreTestCase, Milest
     Creates a test course from scratch. The tests below are designed to execute
     workflows regardless of the feature flag settings.
     """
-    @patch.dict('django.conf.settings.FEATURES', {'ENTRANCE_EXAMS': True, 'MILESTONES_APP': True})
+    @patch.dict('django.conf.settings.FEATURES', {'ENTRANCE_EXAMS': True})
     def setUp(self):
         """
         Test case scaffolding
@@ -293,7 +293,9 @@ class EntranceExamTestCases(LoginEnrollmentTestCase, ModuleStoreTestCase, Milest
         """
         test entrance exam score. we will hit the method get_entrance_exam_score to verify exam score.
         """
-        with self.assertNumQueries(1):
+        # One query is for getting the list of disabled XBlocks (which is
+        # then stored in the request).
+        with self.assertNumQueries(2):
             exam_score = get_entrance_exam_score(self.request, self.course)
         self.assertEqual(exam_score, 0)
 

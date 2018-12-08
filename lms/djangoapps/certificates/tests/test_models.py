@@ -15,11 +15,15 @@ from certificates.models import (
     ExampleCertificateSet,
     CertificateHtmlViewConfiguration,
     CertificateTemplateAsset,
+    CertificateInvalidation,
     GeneratedCertificate,
     CertificateStatuses,
     CertificateGenerationHistory,
 )
-from certificates.tests.factories import GeneratedCertificateFactory
+from certificates.tests.factories import (
+    CertificateInvalidationFactory,
+    GeneratedCertificateFactory
+)
 from instructor_task.tests.factories import InstructorTaskFactory
 from opaque_keys.edx.locator import CourseLocator
 from student.tests.factories import AdminFactory, UserFactory
@@ -36,7 +40,7 @@ PLATFORM_ROOT = TEST_DIR.parent.parent.parent.parent
 TEST_DATA_ROOT = PLATFORM_ROOT / TEST_DATA_DIR
 
 
-@attr('shard_1')
+@attr(shard=1)
 class ExampleCertificateTest(TestCase):
     """Tests for the ExampleCertificate model. """
 
@@ -102,7 +106,7 @@ class ExampleCertificateTest(TestCase):
         self.assertIs(result, None)
 
 
-@attr('shard_1')
+@attr(shard=1)
 class CertificateHtmlViewConfigurationTest(TestCase):
     """
     Test the CertificateHtmlViewConfiguration model.
@@ -169,7 +173,7 @@ class CertificateHtmlViewConfigurationTest(TestCase):
         self.assertEquals(self.config.get_config(), {})
 
 
-@attr('shard_1')
+@attr(shard=1)
 class CertificateTemplateAssetTest(TestCase):
     """
     Test Assets are uploading/saving successfully for CertificateTemplateAsset.
@@ -197,7 +201,7 @@ class CertificateTemplateAssetTest(TestCase):
         self.assertEqual(certificate_template_asset.asset, 'certificate_template_assets/1/picture2.jpg')
 
 
-@attr('shard_1')
+@attr(shard=1)
 class EligibleCertificateManagerTest(SharedModuleStoreTestCase):
     """
     Test the GeneratedCertificate model's object manager for filtering
@@ -236,7 +240,7 @@ class EligibleCertificateManagerTest(SharedModuleStoreTestCase):
         )
 
 
-@attr('shard_1')
+@attr(shard=1)
 @ddt.ddt
 class TestCertificateGenerationHistory(TestCase):
     """
@@ -299,4 +303,51 @@ class TestCertificateGenerationHistory(TestCase):
         self.assertEqual(
             certificate_generation_history.get_task_name(),
             expected
+        )
+
+
+@attr(shard=1)
+class CertificateInvalidationTest(SharedModuleStoreTestCase):
+    """
+    Test for the Certificate Invalidation model.
+    """
+
+    def setUp(self):
+        super(CertificateInvalidationTest, self).setUp()
+        self.course = CourseFactory()
+        self.user = UserFactory()
+        self.course_id = self.course.id  # pylint: disable=no-member
+        self.certificate = GeneratedCertificateFactory.create(
+            status=CertificateStatuses.downloadable,
+            user=self.user,
+            course_id=self.course_id
+        )
+
+    def test_is_certificate_invalid_method(self):
+        """ Verify that method return false if certificate is valid. """
+
+        self.assertFalse(
+            CertificateInvalidation.has_certificate_invalidation(self.user, self.course_id)
+        )
+
+    def test_is_certificate_invalid_with_invalid_cert(self):
+        """ Verify that method return true if certificate is invalid. """
+
+        invalid_cert = CertificateInvalidationFactory.create(
+            generated_certificate=self.certificate,
+            invalidated_by=self.user
+        )
+        # Invalidate user certificate
+        self.certificate.invalidate()
+        self.assertTrue(
+            CertificateInvalidation.has_certificate_invalidation(self.user, self.course_id)
+        )
+
+        # mark the entry as in-active.
+        invalid_cert.active = False
+        invalid_cert.save()
+
+        # After making the certificate valid method will return false.
+        self.assertFalse(
+            CertificateInvalidation.has_certificate_invalidation(self.user, self.course_id)
         )

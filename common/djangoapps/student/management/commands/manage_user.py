@@ -4,7 +4,8 @@ Django users, set/unset permission bits, and associate groups by name.
 """
 
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
+from django.contrib.auth.hashers import is_password_usable
+from django.contrib.auth.models import Group, BaseUserManager
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils.translation import gettext as _
@@ -23,6 +24,8 @@ class Command(BaseCommand):
         parser.add_argument('--remove', dest='is_remove', action='store_true')
         parser.add_argument('--superuser', dest='is_superuser', action='store_true')
         parser.add_argument('--staff', dest='is_staff', action='store_true')
+        parser.add_argument('--unusable-password', dest='unusable_password', action='store_true')
+        parser.add_argument('--initial-password-hash', dest='initial_password_hash')
         parser.add_argument('-g', '--groups', nargs='*', default=[])
 
     def _maybe_update(self, user, attribute, new_value):
@@ -68,7 +71,8 @@ class Command(BaseCommand):
         user.delete()
 
     @transaction.atomic
-    def handle(self, username, email, is_remove, is_staff, is_superuser, groups, *args, **options):
+    def handle(self, username, email, is_remove, is_staff, is_superuser, groups,
+               unusable_password, initial_password_hash, *args, **options):
 
         if is_remove:
             return self._handle_remove(username, email)
@@ -80,7 +84,15 @@ class Command(BaseCommand):
         )
 
         if created:
-            user.set_unusable_password()
+            if initial_password_hash:
+                if not is_password_usable(initial_password_hash):
+                    raise CommandError('The password hash provided for user {} is invalid.'.format(username))
+                user.password = initial_password_hash
+            else:
+                # Set the password to a random, unknown, but usable password
+                # allowing self-service password resetting.  Cases where unusable
+                # passwords are required, should be explicit, and will be handled below.
+                user.set_password(BaseUserManager().make_random_password(25))
             self.stderr.write(_('Created new user: "{}"').format(user))
         else:
             # NOTE, we will not update the email address of an existing user.
@@ -90,6 +102,11 @@ class Command(BaseCommand):
 
         self._maybe_update(user, 'is_staff', is_staff)
         self._maybe_update(user, 'is_superuser', is_superuser)
+
+        # Set unusable password if specified
+        if unusable_password and user.has_usable_password():
+            self.stderr.write(_('Setting unusable password for user "{}"').format(user))
+            user.set_unusable_password()
 
         # Ensure the user has a profile
         try:

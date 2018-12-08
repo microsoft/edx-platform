@@ -1,13 +1,13 @@
 // Jasmine Test Suite: Certificate Web Preview
 
-define([ // jshint ignore:line
+define([
     'underscore',
     'jquery',
     'js/models/course',
     'js/certificates/views/certificate_preview',
     'common/js/spec_helpers/template_helpers',
     'common/js/spec_helpers/view_helpers',
-    'common/js/spec_helpers/ajax_helpers'
+    'edx-ui-toolkit/js/utils/spec-helpers/ajax-helpers'
 ],
 function(_, $, Course, CertificatePreview, TemplateHelpers, ViewHelpers, AjaxHelpers) {
     'use strict';

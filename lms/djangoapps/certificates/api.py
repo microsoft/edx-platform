@@ -21,6 +21,7 @@ from util.organizations_helpers import get_course_organizations
 from certificates.models import (
     CertificateGenerationConfiguration,
     CertificateGenerationCourseSetting,
+    CertificateInvalidation,
     CertificateStatuses,
     CertificateTemplate,
     CertificateTemplateAsset,
@@ -158,6 +159,11 @@ def generate_user_certificates(student, course_key, course=None, insecure=False,
         generate_pdf=generate_pdf,
         forced_grade=forced_grade
     )
+    # If cert_status is not present in certificate valid_statuses (for example unverified) then
+    # add_cert returns None and raises AttributeError while accesing cert attributes.
+    if cert is None:
+        return
+
     if CertificateStatuses.is_passing_status(cert.status):
         emit_certificate_event('created', student, course_key, course, {
             'user_id': student.id,
@@ -271,6 +277,26 @@ def set_cert_generation_enabled(course_key, is_enabled):
         log.info(u"Enabled self-generated certificates for course '%s'.", unicode(course_key))
     else:
         log.info(u"Disabled self-generated certificates for course '%s'.", unicode(course_key))
+
+
+def is_certificate_invalid(student, course_key):
+    """Check that whether the student in the course has been invalidated
+    for receiving certificates.
+
+    Arguments:
+        student (user object): logged-in user
+        course_key (CourseKey): The course identifier.
+
+    Returns:
+        Boolean denoting whether the student in the course is invalidated
+        to receive certificates
+    """
+    is_invalid = False
+    certificate = GeneratedCertificate.certificate_for_student(student, course_key)
+    if certificate is not None:
+        is_invalid = CertificateInvalidation.has_certificate_invalidation(student, course_key)
+
+    return is_invalid
 
 
 def cert_generation_enabled(course_key):
@@ -542,10 +568,10 @@ def get_asset_url_by_slug(asset_slug):
 def get_certificate_header_context(is_secure=True):
     """
     Return data to be used in Certificate Header,
-    data returned should be customized according to the microsite settings
+    data returned should be customized according to the site configuration.
     """
     data = dict(
-        logo_src=branding_api.get_logo_url(),
+        logo_src=branding_api.get_logo_url(is_secure),
         logo_url=branding_api.get_base_url(is_secure),
     )
 
@@ -555,7 +581,7 @@ def get_certificate_header_context(is_secure=True):
 def get_certificate_footer_context():
     """
     Return data to be used in Certificate Footer,
-    data returned should be customized according to the microsite settings
+    data returned should be customized according to the site configuration.
     """
     data = dict()
 

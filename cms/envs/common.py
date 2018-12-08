@@ -47,7 +47,7 @@ import lms.envs.common
 from lms.envs.common import (
     USE_TZ, TECH_SUPPORT_EMAIL, PLATFORM_NAME, BUGS_EMAIL, DOC_STORE_CONFIG, DATA_DIR, ALL_LANGUAGES, WIKI_ENABLED,
     update_module_store_settings, ASSET_IGNORE_REGEX, COPYRIGHT_YEAR,
-    PARENTAL_CONSENT_AGE_LIMIT, COMPREHENSIVE_THEME_DIR, REGISTRATION_EMAIL_PATTERNS_ALLOWED,
+    PARENTAL_CONSENT_AGE_LIMIT, COMPREHENSIVE_THEME_DIRS, REGISTRATION_EMAIL_PATTERNS_ALLOWED,
     # The following PROFILE_IMAGE_* settings are included as they are
     # indirectly accessed through the email opt-in API, which is
     # technically accessible through the CMS via legacy URLs.
@@ -61,7 +61,22 @@ from lms.envs.common import (
     # Django REST framework configuration
     REST_FRAMEWORK,
 
-    STATICI18N_OUTPUT_DIR
+    STATICI18N_OUTPUT_DIR,
+
+    # Theme to use when no site or site theme is defined,
+    DEFAULT_SITE_THEME,
+
+    # Default site to use if no site exists matching request headers
+    SITE_ID,
+
+    # Enable or disable theming
+    ENABLE_COMPREHENSIVE_THEMING,
+
+    # constants for redirects app
+    REDIRECT_CACHE_TIMEOUT,
+    REDIRECT_CACHE_KEY_PREFIX,
+
+    JWT_AUTH,
 )
 from path import Path as path
 from warnings import simplefilter
@@ -193,6 +208,12 @@ FEATURES = {
 
     # Show Language selector
     'SHOW_LANGUAGE_SELECTOR': False,
+
+    # Temporary feature flag for disabling saving of subsection grades.
+    # There is also an advanced setting in the course module.  The
+    # feature flag and the advanced setting must both be true for
+    # a course to use saved grades.
+    'ENABLE_SUBSECTION_GRADES_SAVED': False,
 }
 
 ENABLE_JASMINE = False
@@ -281,6 +302,7 @@ AUTHENTICATION_BACKENDS = (
 )
 
 LMS_BASE = None
+LMS_ROOT_URL = "http://localhost:8000"
 
 # These are standard regexes for pulling out info like course_ids, usage_ids, etc.
 # They are used so that URLs with deprecated-format strings still work.
@@ -312,11 +334,13 @@ simplefilter('ignore')
 ################################# Middleware ###################################
 
 MIDDLEWARE_CLASSES = (
+    'crum.CurrentRequestUserMiddleware',
     'request_cache.middleware.RequestCache',
     'header_control.middleware.HeaderControlMiddleware',
     'django.middleware.cache.UpdateCacheMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.sites.middleware.CurrentSiteMiddleware',
 
     # Instead of SessionMiddleware, we use a more secure version
     # 'django.contrib.sessions.middleware.SessionMiddleware',
@@ -332,7 +356,6 @@ MIDDLEWARE_CLASSES = (
 
     'student.middleware.UserStandingMiddleware',
     'contentserver.middleware.StaticContentServer',
-    'crum.CurrentRequestUserMiddleware',
 
     'django.contrib.messages.middleware.MessageMiddleware',
     'track.middleware.TrackMiddleware',
@@ -350,14 +373,13 @@ MIDDLEWARE_CLASSES = (
 
     'codejail.django_integration.ConfigureCodeJailMiddleware',
 
-    # needs to run after locale middleware (or anything that modifies the request context)
-    'edxmako.middleware.MakoMiddleware',
-
     # catches any uncaught RateLimitExceptions and returns a 403 instead of a 500
     'ratelimitbackend.middleware.RateLimitMiddleware',
 
     # for expiring inactive sessions
     'session_inactivity_timeout.middleware.SessionInactivityTimeout',
+
+    'openedx.core.djangoapps.theming.middleware.CurrentSiteThemeMiddleware',
 
     # use Django built in clickjacking protection
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -454,7 +476,6 @@ SESSION_SERIALIZER = 'django.contrib.sessions.serializers.PickleSerializer'
 
 
 # Site info
-SITE_ID = 1
 SITE_NAME = "localhost:8001"
 HTTPS = 'on'
 ROOT_URLCONF = 'cms.urls'
@@ -525,7 +546,7 @@ STATICFILES_STORAGE = 'openedx.core.storage.ProductionStorage'
 # List of finder classes that know how to find static files in various locations.
 # Note: the pipeline finder is included to be able to discover optimized files
 STATICFILES_FINDERS = [
-    'openedx.core.djangoapps.theming.finders.ComprehensiveThemeFinder',
+    'openedx.core.djangoapps.theming.finders.ThemeFilesFinder',
     'django.contrib.staticfiles.finders.FileSystemFinder',
     'django.contrib.staticfiles.finders.AppDirectoriesFinder',
     'openedx.core.lib.xblock_pipeline.finder.XBlockPipelineFinder',
@@ -541,7 +562,6 @@ from openedx.core.lib.rooted_paths import rooted_glob
 PIPELINE_CSS = {
     'style-vendor': {
         'source_filenames': [
-            'js/vendor/afontgarde/afontgarde.css',
             'css/vendor/normalize.css',
             'css/vendor/font-awesome.css',
             'css/vendor/html5-input-polyfills/number-polyfill.css',
@@ -591,12 +611,6 @@ PIPELINE_CSS = {
         ],
         'output_filename': 'css/studio-main-v2-rtl.css',
     },
-    'style-edx-icons': {
-        'source_filenames': [
-            'css/edx-icons.css',
-        ],
-        'output_filename': 'css/edx-icons.css',
-    },
     'style-xmodule-annotations': {
         'source_filenames': [
             'css/vendor/ova/annotator.css',
@@ -623,7 +637,7 @@ PIPELINE_JS = {
         'source_filenames': (
             rooted_glob(COMMON_ROOT / 'static/', 'xmodule/descriptors/js/*.js') +
             rooted_glob(COMMON_ROOT / 'static/', 'xmodule/modules/js/*.js') +
-            rooted_glob(COMMON_ROOT / 'static/', 'coffee/src/discussion/*.js')
+            rooted_glob(COMMON_ROOT / 'static/', 'common/js/discussion/*.js')
         ),
         'output_filename': 'js/cms-modules.js',
         'test_order': 1
@@ -886,6 +900,9 @@ INSTALLED_APPS = (
     # programs support
     'openedx.core.djangoapps.programs',
 
+    # Catalog integration
+    'openedx.core.djangoapps.catalog',
+
     # Self-paced course configuration
     'openedx.core.djangoapps.self_paced',
 
@@ -916,6 +933,9 @@ INSTALLED_APPS = (
 
     # Enables default site and redirects
     'django_sites_extensions',
+
+    # additional release utilities to ease automation
+    'release_util'
 )
 
 
@@ -1114,31 +1134,6 @@ XBLOCK_SETTINGS = {
         'YOUTUBE_API_KEY': YOUTUBE_API_KEY
     }
 }
-
-################################ XBlock Deprecation ################################
-
-# The following settings are used for deprecating XBlocks.
-
-# Adding an XBlock to this list does the following:
-# 1. Shows a warning on the course outline if the XBlock is listed in
-#    "Advanced Module List" in "Advanced Settings" page.
-# 2. List all instances of that XBlock on the top of the course outline page asking
-#    course authors to delete or replace the instances.
-DEPRECATED_BLOCK_TYPES = [
-    'peergrading',
-    'combinedopenended',
-    'graphical_slider_tool',
-    'randomize',
-]
-
-# Adding components in this list will disable the creation of new problems for
-# those advanced components in Studio. Existing problems will work fine
-# and one can edit them in Studio.
-# DEPRECATED. Please use /admin/xblock_django/xblockdisableconfig instead.
-DEPRECATED_ADVANCED_COMPONENT_TYPES = []
-
-# XBlocks can be disabled from rendering in LMS Courseware by adding them to
-# /admin/xblock_django/xblockdisableconfig/.
 
 ################################ Settings for Credit Course Requirements ################################
 # Initial delay used for retrying tasks.

@@ -64,7 +64,7 @@ class BookmarksViewsTestsBase(BookmarksTestsBase, BookmarkApiEventTestMixin):
         return response
 
 
-@attr('shard_2')
+@attr(shard=2)
 @ddt.ddt
 @skipUnless(settings.ROOT_URLCONF == 'lms.urls', 'Tests only valid in LMS')
 class BookmarksListViewTests(BookmarksViewsTestsBase):
@@ -268,7 +268,7 @@ class BookmarksListViewTests(BookmarksViewsTestsBase):
         self.assertEqual(response.data['developer_message'], u'Parameter usage_id not provided.')
 
         # Send empty data dictionary.
-        with self.assertNumQueries(7):  # No queries for bookmark table.
+        with self.assertNumQueries(8):  # No queries for bookmark table.
             response = self.send_post(
                 client=self.client,
                 url=reverse('bookmarks'),
@@ -369,7 +369,7 @@ class BookmarksListViewTests(BookmarksViewsTestsBase):
         )
 
 
-@attr('shard_2')
+@attr(shard=2)
 @ddt.ddt
 @skipUnless(settings.ROOT_URLCONF == 'lms.urls', 'Tests only valid in LMS')
 class BookmarksDetailViewTests(BookmarksViewsTestsBase):

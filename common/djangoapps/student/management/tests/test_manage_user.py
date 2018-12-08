@@ -4,6 +4,7 @@ Unit tests for user_management management commands.
 import itertools
 
 import ddt
+from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import Group, User
 from django.core.management import call_command, CommandError
 from django.test import TestCase
@@ -47,6 +48,56 @@ class TestManageUserCommand(TestCase):
         # check idempotency
         call_command('manage_user', TEST_USERNAME, TEST_EMAIL, '--remove')
         self.assertEqual([], list(User.objects.all()))
+
+    def test_unusable_password(self):
+        """
+        Ensure that a user's password is set to an unusable_password.
+        """
+        user = User.objects.create(username=TEST_USERNAME, email=TEST_EMAIL)
+        self.assertEqual([(TEST_USERNAME, TEST_EMAIL)], [(u.username, u.email) for u in User.objects.all()])
+        user.set_password(User.objects.make_random_password())
+        user.save()
+
+        # Run once without passing --unusable-password and make sure the password is usable
+        call_command('manage_user', TEST_USERNAME, TEST_EMAIL)
+        user = User.objects.get(username=TEST_USERNAME, email=TEST_EMAIL)
+        self.assertTrue(user.has_usable_password())
+
+        # Make sure the user now has an unusable_password
+        call_command('manage_user', TEST_USERNAME, TEST_EMAIL, '--unusable-password')
+        user = User.objects.get(username=TEST_USERNAME, email=TEST_EMAIL)
+        self.assertFalse(user.has_usable_password())
+
+        # check idempotency
+        call_command('manage_user', TEST_USERNAME, TEST_EMAIL, '--unusable-password')
+        self.assertFalse(user.has_usable_password())
+
+    def test_initial_password_hash(self):
+        """
+        Ensure that a user's password hash is set correctly when the user is created,
+        and that it isn't touched for existing users.
+        """
+        initial_hash = make_password('hunter2')
+
+        # Make sure the command aborts if the provided hash isn't a valid Django password hash
+        with self.assertRaises(CommandError) as exc_context:
+            call_command('manage_user', TEST_USERNAME, TEST_EMAIL, '--initial-password-hash', 'invalid_hash')
+        self.assertIn('password hash', str(exc_context.exception).lower())
+
+        # Make sure the hash gets set correctly for a new user
+        call_command('manage_user', TEST_USERNAME, TEST_EMAIL, '--initial-password-hash', initial_hash)
+        user = User.objects.get(username=TEST_USERNAME)
+        self.assertEqual(user.password, initial_hash)
+
+        # Change the password
+        new_hash = make_password('correct horse battery staple')
+        user.password = new_hash
+        user.save()
+
+        # Verify that calling manage_user again leaves the password untouched
+        call_command('manage_user', TEST_USERNAME, TEST_EMAIL, '--initial-password-hash', initial_hash)
+        user = User.objects.get(username=TEST_USERNAME)
+        self.assertEqual(user.password, new_hash)
 
     def test_wrong_email(self):
         """

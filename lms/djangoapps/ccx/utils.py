@@ -16,8 +16,6 @@ from django.core.urlresolvers import reverse
 from smtplib import SMTPException
 
 from courseware.courses import get_course_by_id
-from courseware.model_data import FieldDataCache
-from courseware.module_render import get_module_for_descriptor
 from instructor.enrollment import (
     enroll_email,
     get_email_params,
@@ -282,12 +280,6 @@ def ccx_students_enrolling_center(action, identifiers, email_students, course_ke
 
 def prep_course_for_grading(course, request):
     """Set up course module for overrides to function properly"""
-    field_data_cache = FieldDataCache.cache_for_descriptor_descendents(
-        course.id, request.user, course, depth=2)
-    course = get_module_for_descriptor(
-        request.user, request, course, field_data_cache, course.id, course=course
-    )
-
     course._field_data_cache = {}  # pylint: disable=protected-access
     course.set_grading_policy(course.grading_policy)
 

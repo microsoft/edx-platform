@@ -10,7 +10,6 @@ from ccx_keys.locator import CCXLocator
 from django.conf import settings
 from django.core.urlresolvers import reverse
 from django.test.utils import override_settings
-from opaque_keys.edx.locations import SlashSeparatedCourseKey
 
 from openedx.core.djangoapps.self_paced.models import SelfPacedConfiguration
 from util.date_utils import strftime_localized
@@ -31,7 +30,7 @@ from .helpers import LoginEnrollmentTestCase
 from lms.djangoapps.ccx.tests.factories import CcxFactory
 
 
-@attr('shard_1')
+@attr(shard=1)
 class CourseInfoTestCase(LoginEnrollmentTestCase, SharedModuleStoreTestCase):
     """
     Tests for the Course Info page
@@ -45,9 +44,6 @@ class CourseInfoTestCase(LoginEnrollmentTestCase, SharedModuleStoreTestCase):
             category="course_info", parent_location=cls.course.location,
             data="OOGIE BLOOGIE", display_name="updates"
         )
-
-    def setUp(self):
-        super(CourseInfoTestCase, self).setUp()
 
     def test_logged_in_unenrolled(self):
         self.setup_user()
@@ -101,6 +97,21 @@ class CourseInfoTestCase(LoginEnrollmentTestCase, SharedModuleStoreTestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 404)
 
+
+@attr(shard=1)
+class CourseInfoLastAccessedTestCase(LoginEnrollmentTestCase, ModuleStoreTestCase):
+    """
+    Tests of the CourseInfo last accessed link.
+    """
+
+    def setUp(self):
+        super(CourseInfoLastAccessedTestCase, self).setUp()
+        self.course = CourseFactory.create()
+        self.page = ItemFactory.create(
+            category="course_info", parent_location=self.course.location,
+            data="OOGIE BLOOGIE", display_name="updates"
+        )
+
     def test_last_accessed_courseware_not_shown(self):
         """
         Test that the last accessed courseware link is not shown if there
@@ -133,6 +144,21 @@ class CourseInfoTestCase(LoginEnrollmentTestCase, SharedModuleStoreTestCase):
         info_page_response = self.client.get(info_url)
         content = pq(info_page_response.content)
         self.assertEqual(content('.page-header-secondary .last-accessed-link').attr('href'), section_url)
+
+
+@attr(shard=1)
+class CourseInfoTitleTestCase(LoginEnrollmentTestCase, ModuleStoreTestCase):
+    """
+    Tests of the CourseInfo page title.
+    """
+
+    def setUp(self):
+        super(CourseInfoTitleTestCase, self).setUp()
+        self.course = CourseFactory.create()
+        self.page = ItemFactory.create(
+            category="course_info", parent_location=self.course.location,
+            data="OOGIE BLOOGIE", display_name="updates"
+        )
 
     def test_info_title(self):
         """
@@ -210,7 +236,7 @@ class CourseInfoTestCaseCCX(SharedModuleStoreTestCase, LoginEnrollmentTestCase):
         self.assertRedirects(response, expected, status_code=302, target_status_code=200)
 
 
-@attr('shard_1')
+@attr(shard=1)
 class CourseInfoTestCaseXML(LoginEnrollmentTestCase, ModuleStoreTestCase):
     """
     Tests for the Course Info page for an XML course
@@ -258,7 +284,7 @@ class CourseInfoTestCaseXML(LoginEnrollmentTestCase, ModuleStoreTestCase):
         self.assertNotIn(self.xml_data, resp.content)
 
 
-@attr('shard_1')
+@attr(shard=1)
 @override_settings(FEATURES=dict(settings.FEATURES, EMBARGO=False))
 class SelfPacedCourseInfoTestCase(LoginEnrollmentTestCase, SharedModuleStoreTestCase):
     """
@@ -285,11 +311,12 @@ class SelfPacedCourseInfoTestCase(LoginEnrollmentTestCase, SharedModuleStoreTest
         url = reverse('info', args=[unicode(course.id)])
         with self.assertNumQueries(sql_queries):
             with check_mongo_calls(mongo_queries):
-                resp = self.client.get(url)
+                with mock.patch("openedx.core.djangoapps.theming.helpers.get_current_site", return_value=None):
+                    resp = self.client.get(url)
         self.assertEqual(resp.status_code, 200)
 
     def test_num_queries_instructor_paced(self):
-        self.fetch_course_info_with_queries(self.instructor_paced_course, 21, 4)
+        self.fetch_course_info_with_queries(self.instructor_paced_course, 23, 4)
 
     def test_num_queries_self_paced(self):
-        self.fetch_course_info_with_queries(self.self_paced_course, 21, 4)
+        self.fetch_course_info_with_queries(self.self_paced_course, 23, 4)

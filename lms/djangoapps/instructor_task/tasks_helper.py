@@ -46,7 +46,7 @@ from certificates.models import (
 )
 from certificates.api import generate_user_certificates
 from courseware.courses import get_course_by_id, get_problems_in_section
-from courseware.grades import iterate_grades_for
+from grades.course_grades import iterate_grades_for
 from courseware.models import StudentModule
 from courseware.model_data import DjangoKeyValueStore, FieldDataCache
 from courseware.module_render import get_module_for_descriptor_internal
@@ -649,10 +649,6 @@ def upload_exec_summary_to_store(data_dict, report_name, course_id, generated_at
             timestamp_str=generated_at.strftime("%Y-%m-%d-%H%M")
         ),
         output_buffer,
-        config={
-            'content_type': 'text/html',
-            'content_encoding': None,
-        }
     )
     tracker.emit(REPORT_REQUESTED_EVENT_NAME, {"report_type": report_name})
 
@@ -937,7 +933,7 @@ def upload_problem_grade_report(_xmodule_instance_args, _entry_id, course_id, _t
     error_rows = [list(header_row.values()) + ['error_msg']]
     current_step = {'step': 'Calculating Grades'}
 
-    for student, gradeset, err_msg in iterate_grades_for(course_id, enrolled_students, keep_raw_scores=True):
+    for student, gradeset, err_msg in iterate_grades_for(course_id, enrolled_students):
         student_fields = [getattr(student, field_name) for field_name in header_row]
         task_progress.attempted += 1
 

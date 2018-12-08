@@ -2,7 +2,6 @@
 
 import copy
 import mock
-from mock import patch
 import shutil
 import lxml.html
 from lxml import etree
@@ -475,12 +474,12 @@ class ImportRequiredTestCases(ContentStoreTestCase):
         renamed_chapter = [item for item in all_items if item.location.block_id == 'renamed_chapter'][0]
         self.assertIsNotNone(renamed_chapter.published_on)
         self.assertIsNotNone(renamed_chapter.parent)
-        self.assertTrue(renamed_chapter.location in course_after_rename[0].children)
+        self.assertIn(renamed_chapter.location, course_after_rename[0].children)
         original_chapter = [item for item in all_items
                             if item.location.block_id == 'b9870b9af59841a49e6e02765d0e3bbf'][0]
         self.assertIsNone(original_chapter.published_on)
         self.assertIsNone(original_chapter.parent)
-        self.assertFalse(original_chapter.location in course_after_rename[0].children)
+        self.assertNotIn(original_chapter.location, course_after_rename[0].children)
 
     def test_empty_data_roundtrip(self):
         """
@@ -691,7 +690,6 @@ class MiscCourseTests(ContentStoreTestCase):
         # Test that malicious code does not appear in html
         self.assertNotIn(malicious_code, resp.content)
 
-    @patch('django.conf.settings.DEPRECATED_ADVANCED_COMPONENT_TYPES', [])
     def test_advanced_components_in_edit_unit(self):
         # This could be made better, but for now let's just assert that we see the advanced modules mentioned in the page
         # response HTML
@@ -731,6 +729,29 @@ class MiscCourseTests(ContentStoreTestCase):
         # Verify that only single asset has been exported with the expected asset name.
         self.assertTrue(filesystem.exists(exported_asset_name))
         self.assertEqual(len(exported_static_files), 1)
+
+        # Remove tempdir
+        shutil.rmtree(root_dir)
+
+    @mock.patch(
+        'lms.djangoapps.ccx.modulestore.CCXModulestoreWrapper.get_item',
+        mock.Mock(return_value=mock.Mock(children=[]))
+    )
+    def test_export_with_orphan_vertical(self):
+        """
+        Tests that, export does not fail when a parent xblock does not have draft child xblock
+        information but the draft child xblock has parent information.
+        """
+        # Make an existing unit a draft
+        self.store.convert_to_draft(self.problem.location, self.user.id)
+        root_dir = path(mkdtemp_clean())
+        export_course_to_xml(self.store, None, self.course.id, root_dir, 'test_export')
+
+        # Verify that problem is exported in the drafts. This is expected because we are
+        # mocking get_item to for drafts. Expect no draft is exported.
+        # Specifically get_item is used in `xmodule.modulestore.xml_exporter._export_drafts`
+        export_draft_dir = OSFS(root_dir / 'test_export/drafts')
+        self.assertEqual(len(export_draft_dir.listdir()), 0)
 
         # Remove tempdir
         shutil.rmtree(root_dir)
@@ -913,7 +934,7 @@ class MiscCourseTests(ContentStoreTestCase):
 
     def test_import_polls(self):
         items = self.store.get_items(self.course.id, qualifiers={'category': 'poll_question'})
-        self.assertTrue(len(items) > 0)
+        self.assertGreater(len(items), 0)
         # check that there's actually content in the 'question' field
         self.assertGreater(len(items[0].question), 0)
 
@@ -977,7 +998,7 @@ class MiscCourseTests(ContentStoreTestCase):
           3) computing thumbnail location of asset
           4) deleting the asset from the course
         """
-        asset_key = self.course.id.make_asset_key('asset', 'sample_static.txt')
+        asset_key = self.course.id.make_asset_key('asset', 'sample_static.html')
         content = StaticContent(
             asset_key, "Fake asset", "application/text", "test",
         )
@@ -1049,7 +1070,7 @@ class MiscCourseTests(ContentStoreTestCase):
         draft content is also deleted
         """
         # add an asset
-        asset_key = self.course.id.make_asset_key('asset', 'sample_static.txt')
+        asset_key = self.course.id.make_asset_key('asset', 'sample_static.html')
         content = StaticContent(
             asset_key, "Fake asset", "application/text", "test",
         )
@@ -1243,7 +1264,7 @@ class ContentStoreTest(ContentStoreTestCase, XssTestMixin):
 
         auth.add_users(self.user, instructor_role, self.user)
 
-        self.assertTrue(len(instructor_role.users_with_role()) > 0)
+        self.assertGreater(len(instructor_role.users_with_role()), 0)
 
         # Now delete course and check that user not in instructor groups of this course
         delete_course_and_groups(course_id, self.user.id)

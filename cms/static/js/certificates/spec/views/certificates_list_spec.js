@@ -1,6 +1,6 @@
 // Jasmine Test Suite: Certificate List View
 
-define([ // jshint ignore:line
+define([
     'underscore',
     'js/models/course',
     'js/certificates/collections/certificates',
@@ -11,7 +11,7 @@ define([ // jshint ignore:line
     'js/certificates/views/certificates_list',
     'js/certificates/views/certificate_preview',
     'common/js/components/views/feedback_notification',
-    'common/js/spec_helpers/ajax_helpers',
+    'edx-ui-toolkit/js/utils/spec-helpers/ajax-helpers',
     'common/js/spec_helpers/template_helpers',
     'js/certificates/spec/custom_matchers'
 ],
@@ -61,7 +61,7 @@ function(_, Course, CertificatesCollection, CertificateModel, CertificateDetails
                 collection: this.collection
             });
             appendSetFixtures(this.view.render().el);
-            CustomMatchers(); // jshint ignore:line
+            CustomMatchers();
         });
 
         afterEach(function() {

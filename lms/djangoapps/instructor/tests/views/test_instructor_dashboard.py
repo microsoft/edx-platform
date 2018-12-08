@@ -43,7 +43,7 @@ def intercept_renderer(path, context):
     return response
 
 
-@attr('shard_3')
+@attr(shard=3)
 @ddt.ddt
 class TestInstructorDashboard(ModuleStoreTestCase, LoginEnrollmentTestCase, XssTestMixin):
     """
@@ -110,7 +110,7 @@ class TestInstructorDashboard(ModuleStoreTestCase, LoginEnrollmentTestCase, XssT
         CourseFinanceAdminRole(self.course.id).add_users(self.instructor)
         total_amount = PaidCourseRegistration.get_total_amount_of_purchased_item(self.course.id)
         response = self.client.get(self.url)
-        self.assertTrue('${amount}'.format(amount=total_amount) in response.content)
+        self.assertIn('${amount}'.format(amount=total_amount), response.content)
 
     def test_course_name_xss(self):
         """Test that the instructor dashboard correctly escapes course names
@@ -137,7 +137,7 @@ class TestInstructorDashboard(ModuleStoreTestCase, LoginEnrollmentTestCase, XssT
         """
         response = self.client.get(self.url)
         # no enrollment information should be visible
-        self.assertFalse('<h2>Enrollment Information</h2>' in response.content)
+        self.assertNotIn('<h3 class="hd hd-3">Enrollment Information</h3>', response.content)
 
     @patch.dict(settings.FEATURES, {'DISPLAY_ANALYTICS_ENROLLMENTS': True})
     @override_settings(ANALYTICS_DASHBOARD_URL='')
@@ -148,14 +148,14 @@ class TestInstructorDashboard(ModuleStoreTestCase, LoginEnrollmentTestCase, XssT
         response = self.client.get(self.url)
 
         # enrollment information visible
-        self.assertTrue('<h2>Enrollment Information</h2>' in response.content)
-        self.assertTrue('<td>Verified</td>' in response.content)
-        self.assertTrue('<td>Audit</td>' in response.content)
-        self.assertTrue('<td>Honor</td>' in response.content)
-        self.assertTrue('<td>Professional</td>' in response.content)
+        self.assertIn('<h3 class="hd hd-3">Enrollment Information</h3>', response.content)
+        self.assertIn('<th scope="row">Verified</th>', response.content)
+        self.assertIn('<th scope="row">Audit</th>', response.content)
+        self.assertIn('<th scope="row">Honor</th>', response.content)
+        self.assertIn('<th scope="row">Professional</th>', response.content)
 
         # dashboard link hidden
-        self.assertFalse(self.get_dashboard_enrollment_message() in response.content)
+        self.assertNotIn(self.get_dashboard_enrollment_message(), response.content)
 
     @patch.dict(settings.FEATURES, {'DISPLAY_ANALYTICS_ENROLLMENTS': True})
     @override_settings(ANALYTICS_DASHBOARD_URL='')
@@ -166,11 +166,10 @@ class TestInstructorDashboard(ModuleStoreTestCase, LoginEnrollmentTestCase, XssT
         users = [UserFactory() for _ in range(2)]
         CourseEnrollment.enroll(users[0], self.course.id, mode="professional")
         CourseEnrollment.enroll(users[1], self.course.id, mode="no-id-professional")
-
         response = self.client.get(self.url)
 
         # Check that the number of professional enrollments is two
-        self.assertContains(response, "<td>Professional</td><td>2</td>")
+        self.assertContains(response, '<th scope="row">Professional</th><td>2</td>')
 
     @patch.dict(settings.FEATURES, {'DISPLAY_ANALYTICS_ENROLLMENTS': False})
     @override_settings(ANALYTICS_DASHBOARD_URL='http://example.com')
@@ -182,14 +181,14 @@ class TestInstructorDashboard(ModuleStoreTestCase, LoginEnrollmentTestCase, XssT
         response = self.client.get(self.url)
 
         # enrollment information hidden
-        self.assertFalse('<td>Verified</td>' in response.content)
-        self.assertFalse('<td>Audit</td>' in response.content)
-        self.assertFalse('<td>Honor</td>' in response.content)
-        self.assertFalse('<td>Professional</td>' in response.content)
+        self.assertNotIn('<th scope="row">Verified</th>', response.content)
+        self.assertNotIn('<th scope="row">Audit</th>', response.content)
+        self.assertNotIn('<th scope="row">Honor</th>', response.content)
+        self.assertNotIn('<th scope="row">Professional</th>', response.content)
 
         # link to dashboard shown
         expected_message = self.get_dashboard_enrollment_message()
-        self.assertTrue(expected_message in response.content)
+        self.assertIn(expected_message, response.content)
 
     @override_settings(ANALYTICS_DASHBOARD_URL='')
     @override_settings(ANALYTICS_DASHBOARD_NAME='')
@@ -199,7 +198,7 @@ class TestInstructorDashboard(ModuleStoreTestCase, LoginEnrollmentTestCase, XssT
         """
         response = self.client.get(self.url)
         analytics_section = '<li class="nav-item"><a href="" data-section="instructor_analytics">Analytics</a></li>'
-        self.assertFalse(analytics_section in response.content)
+        self.assertNotIn(analytics_section, response.content)
 
     @override_settings(ANALYTICS_DASHBOARD_URL='http://example.com')
     @override_settings(ANALYTICS_DASHBOARD_NAME='Example')
@@ -209,11 +208,11 @@ class TestInstructorDashboard(ModuleStoreTestCase, LoginEnrollmentTestCase, XssT
         """
         response = self.client.get(self.url)
         analytics_section = '<li class="nav-item"><a href="" data-section="instructor_analytics">Analytics</a></li>'
-        self.assertTrue(analytics_section in response.content)
+        self.assertIn(analytics_section, response.content)
 
         # link to dashboard shown
         expected_message = self.get_dashboard_analytics_message()
-        self.assertTrue(expected_message in response.content)
+        self.assertIn(expected_message, response.content)
 
     def add_course_to_user_cart(self, cart, course_key):
         """
@@ -392,6 +391,6 @@ class TestInstructorDashboardPerformance(ModuleStoreTestCase, LoginEnrollmentTes
 
         # check MongoDB calls count
         url = reverse('spoc_gradebook', kwargs={'course_id': self.course.id})
-        with check_mongo_calls(8):
+        with check_mongo_calls(7):
             response = self.client.get(url)
             self.assertEqual(response.status_code, 200)

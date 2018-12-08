@@ -9,7 +9,6 @@ import pytz
 
 from django.contrib.auth.models import User
 from ccx_keys.locator import CCXLocator
-from django.http import Http404
 from django.test.client import RequestFactory
 from django.core.urlresolvers import reverse
 from django.test import TestCase
@@ -28,9 +27,7 @@ from courseware.tests.factories import (
     StaffFactory,
     UserFactory,
 )
-import courseware.views.views as views
 from courseware.tests.helpers import LoginEnrollmentTestCase
-from edxmako.tests import mako_middleware_process_request
 from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
 from student.models import CourseEnrollment
 from student.roles import CourseCcxCoachRole
@@ -137,24 +134,16 @@ class CoachAccessTestCaseCCX(SharedModuleStoreTestCase, LoginEnrollmentTestCase)
         CourseEnrollment.enroll(student, ccx_locator)
 
         # Test for access of a coach
-        request = self.request_factory.get(reverse('about_course', args=[unicode(ccx_locator)]))
-        request.user = self.coach
-        mako_middleware_process_request(request)
-        resp = views.progress(request, course_id=unicode(ccx_locator), student_id=student.id)
+        resp = self.client.get(reverse('student_progress', args=[unicode(ccx_locator), student.id]))
         self.assertEqual(resp.status_code, 200)
 
         # Assert access of a student
-        request = self.request_factory.get(reverse('about_course', args=[unicode(ccx_locator)]))
-        request.user = student
-        mako_middleware_process_request(request)
-
-        with self.assertRaises(Http404) as context:
-            views.progress(request, course_id=unicode(ccx_locator), student_id=self.coach.id)
-
-        self.assertIsNotNone(context.exception)
+        self.client.login(username=student.username, password='test')
+        resp = self.client.get(reverse('student_progress', args=[unicode(ccx_locator), self.coach.id]))
+        self.assertEqual(resp.status_code, 404)
 
 
-@attr('shard_1')
+@attr(shard=1)
 @ddt.ddt
 class AccessTestCase(LoginEnrollmentTestCase, ModuleStoreTestCase, MilestonesTestCaseMixin):
     """
@@ -177,8 +166,7 @@ class AccessTestCase(LoginEnrollmentTestCase, ModuleStoreTestCase, MilestonesTes
 
     def verify_access(self, mock_unit, student_should_have_access, expected_error_type=None):
         """ Verify the expected result from _has_access_descriptor """
-        response = access._has_access_descriptor(self.anonymous_user, 'load',
-                                                 mock_unit, course_key=self.course.id)
+        response = access._has_access_descriptor(self.anonymous_user, 'load', mock_unit, course_key=self.course.id)
         self.assertEqual(student_should_have_access, bool(response))
 
         if expected_error_type is not None:
@@ -394,7 +382,7 @@ class AccessTestCase(LoginEnrollmentTestCase, ModuleStoreTestCase, MilestonesTes
         Tests that "visible_to_staff_only" overrides start date.
         """
         expected_access = expected_error_type is None
-        mock_unit = Mock(user_partitions=[])
+        mock_unit = Mock(location=self.course.location, user_partitions=[])
         mock_unit._class_tags = {}  # Needed for detached check in _has_access_descriptor
         mock_unit.visible_to_staff_only = visible_to_staff_only
         mock_unit.start = start
@@ -417,7 +405,7 @@ class AccessTestCase(LoginEnrollmentTestCase, ModuleStoreTestCase, MilestonesTes
         """
         Tests that descriptor has access in preview mode.
         """
-        mock_unit = Mock(user_partitions=[])
+        mock_unit = Mock(location=self.course.location, user_partitions=[])
         mock_unit._class_tags = {}  # Needed for detached check in _has_access_descriptor
         mock_unit.visible_to_staff_only = False
         mock_unit.start = start
@@ -436,7 +424,7 @@ class AccessTestCase(LoginEnrollmentTestCase, ModuleStoreTestCase, MilestonesTes
         Tests that descriptor has no access when start date in future & without preview.
         """
         expected_access = expected_error_type is None
-        mock_unit = Mock(user_partitions=[])
+        mock_unit = Mock(location=self.course.location, user_partitions=[])
         mock_unit._class_tags = {}  # Needed for detached check in _has_access_descriptor
         mock_unit.visible_to_staff_only = False
         mock_unit.start = start
@@ -566,7 +554,7 @@ class AccessTestCase(LoginEnrollmentTestCase, ModuleStoreTestCase, MilestonesTes
         """
         Test course access on mobile for staff and students.
         """
-        descriptor = Mock(user_partitions=[])
+        descriptor = Mock(id=self.course.id, user_partitions=[])
         descriptor._class_tags = {}
         descriptor.visible_to_staff_only = False
         descriptor.mobile_available = mobile_available
@@ -619,7 +607,7 @@ class AccessTestCase(LoginEnrollmentTestCase, ModuleStoreTestCase, MilestonesTes
         self.assertEqual(response.status_code, 200)
 
 
-@attr('shard_1')
+@attr(shard=1)
 class UserRoleTestCase(TestCase):
     """
     Tests for user roles.
@@ -676,7 +664,7 @@ class UserRoleTestCase(TestCase):
         )
 
 
-@attr('shard_3')
+@attr(shard=3)
 @ddt.ddt
 class CourseOverviewAccessTestCase(ModuleStoreTestCase):
     """
@@ -706,7 +694,7 @@ class CourseOverviewAccessTestCase(ModuleStoreTestCase):
         self.user_normal = UserFactory.create()
         self.user_beta_tester = BetaTesterFactory.create(course_key=self.course_not_started.id)
         self.user_completed_pre_requisite = UserFactory.create()
-        fulfill_course_milestone(self.user_completed_pre_requisite, self.course_started.id)
+        fulfill_course_milestone(self.course_started.id, self.user_completed_pre_requisite)
         self.user_staff = UserFactory.create(is_staff=True)
         self.user_anonymous = AnonymousUserFactory.create()
 

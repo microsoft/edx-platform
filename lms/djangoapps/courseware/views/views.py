@@ -5,7 +5,7 @@ Courseware views functions
 import json
 import logging
 import urllib
-from collections import OrderedDict
+from collections import OrderedDict, namedtuple
 from datetime import datetime
 
 import analytics
@@ -38,12 +38,14 @@ from instructor.views.api import require_global_staff
 import shoppingcart
 import survey.utils
 import survey.views
+from lms.djangoapps.ccx.utils import prep_course_for_grading
 from certificates import api as certs_api
+from certificates.models import CertificateStatuses
 from openedx.core.djangoapps.models.course_details import CourseDetails
 from commerce.utils import EcommerceService
 from enrollment.api import add_enrollment
 from course_modes.models import CourseMode
-from courseware import grades
+from lms.djangoapps.grades.new.course_grade import CourseGradeFactory
 from courseware.access import has_access, has_ccx_coach_role, _adjust_start_date_for_beta_testers
 from courseware.access_response import StartDateError
 from courseware.access_utils import in_preview_mode
@@ -60,7 +62,7 @@ from courseware.courses import (
     UserNotEnrolled
 )
 from courseware.masquerade import setup_masquerade
-from courseware.model_data import FieldDataCache, ScoresClient
+from courseware.model_data import FieldDataCache
 from courseware.models import StudentModule, BaseStudentModuleHistory
 from courseware.url_helpers import get_redirect_url, get_redirect_url_for_global_staff
 from courseware.user_state_client import DjangoXBlockUserStateClient
@@ -74,7 +76,7 @@ from openedx.core.djangoapps.credit.api import (
     is_user_eligible_for_credit,
     is_credit_course
 )
-from openedx.core.djangoapps.theming import helpers as theming_helpers
+from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 from shoppingcart.utils import is_shopping_cart_enabled
 from openedx.core.djangoapps.self_paced.models import SelfPacedConfiguration
 from student.models import UserTestGroup, CourseEnrollment
@@ -100,6 +102,8 @@ log = logging.getLogger("edx.courseware")
 # Only display the requirements on learner dashboard for
 # credit and verified modes.
 REQUIREMENTS_DISPLAY_MODES = CourseMode.CREDIT_MODES + [CourseMode.VERIFIED]
+
+CertData = namedtuple("CertData", ["cert_status", "title", "msg", "download_url", "cert_web_view_url"])
 
 
 def user_groups(user):
@@ -136,7 +140,7 @@ def courses(request):
     if not settings.FEATURES.get('ENABLE_COURSE_DISCOVERY'):
         courses_list = get_courses(request.user)
 
-        if theming_helpers.get_value(
+        if configuration_helpers.get_value(
                 "ENABLE_COURSE_SORTING_BY_START_DATE",
                 settings.FEATURES["ENABLE_COURSE_SORTING_BY_START_DATE"]
         ):
@@ -537,7 +541,7 @@ def course_about(request, course_id):
         course_details = CourseDetails.populate(course)
         modes = CourseMode.modes_for_course_dict(course_key)
 
-        if theming_helpers.get_value('ENABLE_MKTG_SITE', settings.FEATURES.get('ENABLE_MKTG_SITE', False)):
+        if configuration_helpers.get_value('ENABLE_MKTG_SITE', settings.FEATURES.get('ENABLE_MKTG_SITE', False)):
             return redirect(reverse('info', args=[course.id.to_deprecated_string()]))
 
         registered = registered_for_course(course, request.user)
@@ -658,7 +662,6 @@ def course_about(request, course_id):
 @ensure_valid_course_key
 def progress(request, course_id, student_id=None):
     """ Display the progress page. """
-
     course_key = CourseKey.from_string(course_id)
 
     with modulestore().bulk_operations(course_key):
@@ -673,7 +676,16 @@ def _progress(request, course_key, student_id):
 
     Course staff are allowed to see the progress of students in their class.
     """
+
+    if student_id is not None:
+        try:
+            student_id = int(student_id)
+        # Check for ValueError if 'student_id' cannot be converted to integer.
+        except ValueError:
+            raise Http404
+
     course = get_course_with_access(request.user, 'load', course_key, depth=None, check_if_enrolled=True)
+    prep_course_for_grading(course, request)
 
     # check to see if there is a required survey that must be taken before
     # the user can access the course.
@@ -681,24 +693,23 @@ def _progress(request, course_key, student_id):
         return redirect(reverse('course_survey', args=[unicode(course.id)]))
 
     staff_access = bool(has_access(request.user, 'staff', course))
-    try:
-        coach_access = has_ccx_coach_role(request.user, course_key)
-    except CCXLocatorValidationException:
-        coach_access = False
-
-    has_access_on_students_profiles = staff_access or coach_access
 
     if student_id is None or student_id == request.user.id:
         # always allowed to see your own profile
         student = request.user
     else:
+        try:
+            coach_access = has_ccx_coach_role(request.user, course_key)
+        except CCXLocatorValidationException:
+            coach_access = False
+
+        has_access_on_students_profiles = staff_access or coach_access
         # Requesting access to a different student's profile
         if not has_access_on_students_profiles:
             raise Http404
         try:
             student = User.objects.get(id=student_id)
-        # Check for ValueError if 'student_id' cannot be converted to integer.
-        except (ValueError, User.DoesNotExist):
+        except User.DoesNotExist:
             raise Http404
 
     # NOTE: To make sure impersonation by instructor works, use
@@ -708,28 +719,18 @@ def _progress(request, course_key, student_id):
     # additional DB lookup (this kills the Progress page in particular).
     student = User.objects.prefetch_related("groups").get(id=student.id)
 
-    with outer_atomic():
-        field_data_cache = grades.field_data_cache_for_grading(course, student)
-        scores_client = ScoresClient.from_field_data_cache(field_data_cache)
-
-    courseware_summary = grades.progress_summary(
-        student, request, course, field_data_cache=field_data_cache, scores_client=scores_client
-    )
-    grade_summary = grades.grade(
-        student, request, course, field_data_cache=field_data_cache, scores_client=scores_client
-    )
-    studio_url = get_studio_url(course, 'settings/grading')
-
-    if courseware_summary is None:
-        #This means the student didn't have access to the course (which the instructor requested)
+    course_grade = CourseGradeFactory(student).create(course)
+    if not course_grade.has_access_to_course:
+        # This means the student didn't have access to the course (which the instructor requested)
         raise Http404
+
+    courseware_summary = course_grade.chapter_grades
+    grade_summary = course_grade.summary
+
+    studio_url = get_studio_url(course, 'settings/grading')
 
     # checking certificate generation configuration
     enrollment_mode, is_active = CourseEnrollment.enrollment_mode_for_user(student, course_key)
-    show_generate_cert_btn = (
-        is_active and CourseMode.is_eligible_for_certificate(enrollment_mode)
-        and certs_api.cert_generation_enabled(course_key)
-    )
 
     context = {
         'course': course,
@@ -739,32 +740,115 @@ def _progress(request, course_key, student_id):
         'staff_access': staff_access,
         'student': student,
         'passed': is_course_passed(course, grade_summary),
-        'show_generate_cert_btn': show_generate_cert_btn,
         'credit_course_requirements': _credit_course_requirements(course_key, student),
-        'is_id_verified': SoftwareSecurePhotoVerification.user_is_verified(student)
+        'certificate_data': _get_cert_data(student, course, course_key, is_active, enrollment_mode)
     }
-
-    if show_generate_cert_btn:
-        cert_status = certs_api.certificate_downloadable_status(student, course_key)
-        context.update(cert_status)
-        # showing the certificate web view button if feature flags are enabled.
-        if certs_api.has_html_certificates_enabled(course_key, course):
-            if certs_api.get_active_web_certificate(course) is not None:
-                context.update({
-                    'show_cert_web_view': True,
-                    'cert_web_view_url': certs_api.get_certificate_url(course_id=course_key, uuid=cert_status['uuid']),
-                })
-            else:
-                context.update({
-                    'is_downloadable': False,
-                    'is_generating': True,
-                    'download_url': None
-                })
 
     with outer_atomic():
         response = render_to_response('courseware/progress.html', context)
 
     return response
+
+
+def _get_cert_data(student, course, course_key, is_active, enrollment_mode):
+    """Returns students course certificate related data.
+
+    Arguments:
+        student (User): Student for whom certificate to retrieve.
+        course (Course): Course object for which certificate data to retrieve.
+        course_key (CourseKey): Course identifier for course.
+        is_active (Bool): Boolean value to check if course is active.
+        enrollment_mode (String): Course mode in which student is enrolled.
+
+    Returns:
+        returns dict if course certificate is available else None.
+    """
+
+    if enrollment_mode == CourseMode.AUDIT:
+        return CertData(
+            CertificateStatuses.audit_passing,
+            'Your enrollment: Audit track',
+            'You are enrolled in the audit track for this course. The audit track does not include a certificate.',
+            download_url=None,
+            cert_web_view_url=None
+        )
+
+    show_generate_cert_btn = (
+        is_active and CourseMode.is_eligible_for_certificate(enrollment_mode)
+        and certs_api.cert_generation_enabled(course_key)
+    )
+
+    if not show_generate_cert_btn:
+        return None
+
+    if certs_api.is_certificate_invalid(student, course_key):
+        return CertData(
+            CertificateStatuses.invalidated,
+            'Your certificate has been invalidated',
+            'Please contact your course team if you have any questions.',
+            download_url=None,
+            cert_web_view_url=None
+        )
+
+    cert_downloadable_status = certs_api.certificate_downloadable_status(student, course_key)
+
+    if cert_downloadable_status['is_downloadable']:
+        cert_status = CertificateStatuses.downloadable
+        title = 'Your certificate is available'
+        msg = 'You can keep working for a higher grade, or request your certificate now.'
+        if certs_api.has_html_certificates_enabled(course_key, course):
+            if certs_api.get_active_web_certificate(course) is not None:
+                cert_web_view_url = certs_api.get_certificate_url(
+                    course_id=course_key, uuid=cert_downloadable_status['uuid']
+                )
+                return CertData(cert_status, title, msg, download_url=None, cert_web_view_url=cert_web_view_url)
+            else:
+                return CertData(
+                    CertificateStatuses.generating,
+                    "We're working on it...",
+                    "We're creating your certificate. You can keep working in your courses and a link "
+                    "to it will appear here and on your Dashboard when it is ready.",
+                    download_url=None,
+                    cert_web_view_url=None
+                )
+
+        return CertData(
+            cert_status, title, msg, download_url=cert_downloadable_status['download_url'], cert_web_view_url=None
+        )
+
+    if cert_downloadable_status['is_generating']:
+        return CertData(
+            CertificateStatuses.generating,
+            "We're working on it...",
+            "We're creating your certificate. You can keep working in your courses and a link to "
+            "it will appear here and on your Dashboard when it is ready.",
+            download_url=None,
+            cert_web_view_url=None
+        )
+
+    # If the learner is in verified modes and the student did not have
+    # their ID verified, we need to show message to ask learner to verify their ID first
+    missing_required_verification = enrollment_mode in CourseMode.VERIFIED_MODES and \
+        not SoftwareSecurePhotoVerification.user_is_verified(student)
+
+    if missing_required_verification or cert_downloadable_status['is_unverified']:
+        platform_name = configuration_helpers.get_value('PLATFORM_NAME', settings.PLATFORM_NAME)
+        return CertData(
+            CertificateStatuses.unverified,
+            'Certificate unavailable',
+            'You have not received a certificate because you do not have a current {platform_name} verified '
+            'identity.'.format(platform_name=platform_name),
+            download_url=None,
+            cert_web_view_url=None
+        )
+
+    return CertData(
+        CertificateStatuses.requesting,
+        'Congratulations, you qualified for a certificate!',
+        'You can keep working for a higher grade, or request your certificate now.',
+        download_url=None,
+        cert_web_view_url=None
+    )
 
 
 def _credit_course_requirements(course_key, student):
@@ -1037,7 +1121,7 @@ def is_course_passed(course, grade_summary=None, student=None, request=None):
     success_cutoff = min(nonzero_cutoffs) if nonzero_cutoffs else None
 
     if grade_summary is None:
-        grade_summary = grades.grade(student, request, course)
+        grade_summary = CourseGradeFactory(student).create(course).summary
 
     return success_cutoff and grade_summary['percent'] >= success_cutoff
 
@@ -1071,7 +1155,7 @@ def generate_user_cert(request, course_id):
         log.info(u"Anon user trying to generate certificate for %s", course_id)
         return HttpResponseBadRequest(
             _('You must be signed in to {platform_name} to create a certificate.').format(
-                platform_name=settings.PLATFORM_NAME
+                platform_name=configuration_helpers.get_value('PLATFORM_NAME', settings.PLATFORM_NAME)
             )
         )
 
@@ -1187,7 +1271,7 @@ FINANCIAL_ASSISTANCE_HEADER = _(
     ' financial assistance program.'
 ).format(
     percent_sign="%",
-    platform_name=settings.PLATFORM_NAME
+    platform_name=configuration_helpers.get_value('PLATFORM_NAME', settings.PLATFORM_NAME)
 ).split('\n')
 
 
@@ -1298,12 +1382,16 @@ def financial_assistance_form(request):
             mode_slug=CourseMode.VERIFIED
         ).exists()
     ]
+    incomes = ['Less than $5,000', '$5,000 - $10,000', '$10,000 - $15,000', '$15,000 - $20,000', '$20,000 - $25,000']
+    annual_incomes = [
+        {'name': _(income), 'value': income} for income in incomes  # pylint: disable=translation-of-non-string
+    ]
     return render_to_response('financial-assistance/apply.html', {
         'header_text': FINANCIAL_ASSISTANCE_HEADER,
         'student_faq_url': marketing_link('FAQ'),
         'dashboard_url': reverse('dashboard'),
         'account_settings_url': reverse('account_settings'),
-        'platform_name': settings.PLATFORM_NAME,
+        'platform_name': configuration_helpers.get_value('PLATFORM_NAME', settings.PLATFORM_NAME),
         'user_details': {
             'email': user.email,
             'username': user.username,
@@ -1328,12 +1416,12 @@ def financial_assistance_form(request):
             },
             {
                 'name': 'income',
-                'type': 'text',
+                'type': 'select',
                 'label': FA_INCOME_LABEL,
-                'placeholder': _('income in US Dollars ($)'),
+                'placeholder': '',
                 'defaultValue': '',
                 'required': True,
-                'restrictions': {},
+                'options': annual_incomes,
                 'instructions': _('Specify your annual household income in US Dollars.')
             },
             {

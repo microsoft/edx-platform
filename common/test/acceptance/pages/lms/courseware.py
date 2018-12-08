@@ -2,7 +2,7 @@
 Courseware page.
 """
 
-from .course_page import CoursePage
+from common.test.acceptance.pages.lms.course_page import CoursePage
 from bok_choy.promise import EmptyPromise
 from selenium.webdriver.common.action_chains import ActionChains
 
@@ -228,6 +228,12 @@ class CoursewarePage(CoursePage):
         """
         return self.entrance_exam_message_selector.is_present() \
             and "You have passed the entrance exam" in self.entrance_exam_message_selector.text[0]
+
+    def has_banner(self):
+        """
+        Returns boolean indicating presence of banner
+        """
+        return self.q(css='.pattern-library-shim').is_present()
 
     @property
     def is_timer_bar_present(self):

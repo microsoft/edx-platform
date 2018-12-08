@@ -33,7 +33,7 @@
 
   .file-download-link a {
     font-size: 15px;
-    color: $link-color;
+    color: $uxpl-blue-base;
     text-decoration: underline;
     padding: ($baseline/4);
   }
@@ -134,6 +134,70 @@
       }
     }
   }
+  
+    .btn-blue {
+        @extend %btn-primary-blue;
+        margin-bottom: 0;
+        padding: ($baseline/2.5) ($baseline/2);
+        text-shadow: none;
+    }
+
+    // Custom File upload
+    .customBrowseBtn {
+        display: inline-block;
+        position: relative;
+        margin: ($baseline/2) 0 0;
+        width: 350px;
+        overflow: hidden;
+        vertical-align: bottom;
+
+        .enhanced-input-file {
+            @include border-radius(4px 0 0 4px);
+            @include padding(23px 6px 5px);
+            position: relative;
+            display: inline-block;
+            width: 250px;
+            vertical-align: middle;
+            border: 1px solid $lightGrey1;
+            background: $white;
+            cursor: not-allowed;
+            z-index: 2;
+        }
+
+        .file-browse {
+            @include margin-left(-4px);
+            display: inline-block;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            overflow: hidden;
+
+            .browse {
+                @include button(simple, $uxpl-blue-base);
+                @include margin-left(268px);
+                border-radius: 0 3px 3px 0;
+                padding: 6px ($baseline/2);
+                font-size: 12px;
+            }
+
+            .file_field {
+                @include left(-27%);
+                position: absolute;
+                z-index: 3;
+                height: 24px; // To match bull browse button
+                width: 124%;
+                margin: 0;
+                padding: 4px 0 0 0;
+                cursor: pointer;
+
+                // for visual sync, need to make button similar to firefox
+                &::-webkit-file-upload-button {
+                    width: 100px;
+                }
+            }
+        }
+    }
 }
 
 // instructor dashboard 2
@@ -416,12 +480,58 @@
       margin-bottom: $baseline;
       padding: 0;
 
-      .label {
-        display: block;
-      }
-
       ul {
         list-style-type: none;
+      }
+
+      .send_to_list {
+        line-height: 1.3em;
+      }
+
+      input[name="send_to"] {
+        float: left;
+        margin-top: .3em;
+        margin-left: .1em;
+      }
+
+      input[name="send_to"]+label {
+        display: block;
+        padding-left: 1.3em;
+        margin-bottom: 0;
+      }
+
+      input[name="send_to"]:checked+label {
+        // "bolds" the text without causing a width recalculation
+        text-shadow: 1px 0px 0px;
+      }
+
+      input[name="send_to"]:focus+label, input[name="send_to"]:hover:not([disabled])+label {
+        background-color: #EFEFEF;
+
+        * {
+          background-color: #EFEFEF;
+        }
+      }
+
+      input[name="send_to"]:disabled+label {
+        font-weight: lighter;
+        background-color: $light-gray3
+      }
+
+      .email-targets-primary {
+        display: table-cell;
+        margin: 0;
+        width: 20%;
+      }
+
+      .email-targets-secondary {
+        display: table-cell;
+        margin: 0;
+        @include columns(2);
+
+        .subheading {
+          font-size: .9em;
+        }
       }
 
       &:last-child {
@@ -628,7 +738,7 @@
         // .add-field
 
         input[type="button"].add {
-          @include idashbutton($blue);
+          @include idashbutton($uxpl-blue-base);
           position: absolute;
           @include right($baseline);
         }
@@ -710,7 +820,7 @@
     }
   }
   .form-submit {
-    @include idashbutton($blue);
+    @include idashbutton($uxpl-blue-base);
     @include font-size(14);
     @include line-height(14);
     margin-right: ($baseline/2);
@@ -732,7 +842,7 @@
     }
 
     .action-create {
-      @include idashbutton($blue);
+      @include idashbutton($uxpl-blue-base);
       @extend %t-weight4;
       @include float(right);
       @include text-align(right);
@@ -757,7 +867,7 @@
 
     // specific message actions
     .message .action-create {
-      @include idashbutton($blue);
+      @include idashbutton($uxpl-blue-base);
     }
   }
 
@@ -933,7 +1043,7 @@
     }
 
     .action-submit {
-      @include idashbutton($blue);
+      @include idashbutton($uxpl-blue-base);
       // needed to override very poor specificity and base rules for blue button
       @include font-size(14);
       margin-bottom: 0;
@@ -1080,7 +1190,7 @@
     }
 
     .cohorted-text {
-      color: $link-color;
+      color: $uxpl-blue-base;
     }
 
     .discussions-wrapper {
@@ -1381,7 +1491,7 @@ input[name="subject"] {
     color: #3c3c3c;
     line-height: 30px;
     .add{
-      @include button(simple, $blue);
+      @include button(simple, $uxpl-blue-base);
       @extend .button-reset;
       font-size: em(13);
       @include float(right);
@@ -1586,7 +1696,7 @@ input[name="subject"] {
     border-radius: 2px;
     input[type="button"]#update_coupon_button, input[type="button"]#add_coupon_button,
     input[type="button"]#set_course_button, input[type="button"]#lookup_regcode {
-      @include button(simple, $blue);
+      @include button(simple, $uxpl-blue-base);
       @extend .button-reset;
       display: block;
       height: auto;
@@ -1595,7 +1705,7 @@ input[name="subject"] {
       white-space: normal;
     }
     input[name="generate-registration-codes-csv"]{
-      @include button(simple, $blue);
+      @include button(simple, $uxpl-blue-base);
       @extend .button-reset;
     }
     .modal-form-error {
@@ -1736,7 +1846,7 @@ input[name="subject"] {
         h2 {
           font-size: 24px;
           font-weight: 100;
-          color: #1580b0;
+          color: $uxpl-blue-base;
           @include text-align(left);
         }
       }
@@ -1860,7 +1970,7 @@ input[name="subject"] {
     color: #3c3c3c;
     line-height: 30px;
     .add{
-      @include button(simple, $blue);
+      @include button(simple, $uxpl-blue-base);
       @extend .button-reset;
       font-size: em(13);
       @include float(right);
@@ -1879,7 +1989,7 @@ input[name="subject"] {
     color: #3C3C3C;
     line-height: 30px;
     .add{
-      @include button(simple, $blue);
+      @include button(simple, $uxpl-blue-base);
       @extend .button-reset;
       font-size: em(13);
     }
@@ -1902,7 +2012,7 @@ input[name="subject"] {
     color: #3C3C3C;
     line-height: 30px;
     .add{
-      @include button(simple, $blue);
+      @include button(simple, $uxpl-blue-base);
       @extend .button-reset;
       font-size: em(13);
     }
@@ -2089,8 +2199,8 @@ input[name="subject"] {
         &:focus {
           z-index: 2;
           color: #fff;
-          background-color: darken(#428bca, 6.5%);
-          border-color: darken(#428bca, 6.5%);
+          background-color: $uxpl-blue-base;
+          border-color: $uxpl-blue-base;
           cursor: default;
         }
       }
@@ -2120,13 +2230,6 @@ input[name="subject"] {
 // view - certificates
 // --------------------
 .instructor-dashboard-wrapper-2 section.idash-section#certificates {
-
-  .btn-blue {
-    @extend %btn-primary-blue;
-    padding: ($baseline/2.5) ($baseline/2);
-    text-shadow: none;
-    margin-bottom: 10px;
-  }
 
   %exception-message {
         margin-top: 15px;
@@ -2256,7 +2359,7 @@ input[name="subject"] {
             color: $gray-d1;
 
             &:hover {
-              color: $blue;
+              color: $uxpl-blue-hover-active;
             }
           }
 
@@ -2297,48 +2400,14 @@ input[name="subject"] {
         }
 
       }
-      .arrow {
-        font-weight: bold;
-      }
+        .arrow {
+            @include margin-right($baseline/2);
+            border: none;
+            background: transparent;
+            box-shadow: none;
+            color: $uxpl-blue-base;
+            font-weight: bold;
+        }
     }
-  }
-
-}
-
-// Custom File upload
-.customBrowseBtn {
-  margin: ($baseline/2) 0;
-  display: inline-block;
-  .file-browse {
-    position: relative;
-    overflow: hidden;
-    display: inline;
-    @include margin-left(-5px);
-    span.browse {
-      @include button(simple, $blue);
-      @include margin-right($baseline);
-      padding: 6px ($baseline/2);
-      font-size: 12px;
-      border-radius: 0 3px 3px 0;
-    }
-    input.file_field {
-      position: absolute;
-      @include right(0);
-      top: 0;
-      margin: 0;
-      padding: 0;
-      cursor: pointer;
-      opacity: 0;
-      filter: alpha(opacity=0);
-    }
-  }
-  & > span, & input[disabled] {
-    vertical-align: middle;
-  }
-  input[disabled] {
-    @include border-radius(4px 0 0 4px);
-    @include padding(6px 6px 5px);
-    border: 1px solid $lightGrey1;
-    cursor: not-allowed;
   }
 }

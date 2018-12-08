@@ -16,8 +16,6 @@ from nose.plugins.attrib import attr
 from edxmako.shortcuts import render_to_response
 
 from branding.views import index
-from edxmako.tests import mako_middleware_process_request
-import student.views
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
 
@@ -42,7 +40,7 @@ def mock_render_to_response(*args, **kwargs):
 RENDER_MOCK = Mock(side_effect=mock_render_to_response)
 
 
-@attr('shard_1')
+@attr(shard=1)
 class AnonymousIndexPageTest(ModuleStoreTestCase):
     """
     Tests that anonymous users can access the '/' page,  Need courses with start date
@@ -63,11 +61,9 @@ class AnonymousIndexPageTest(ModuleStoreTestCase):
         anonymous and start dates are being checked.  It replaces a previous
         test as it solves the issue in a different way
         """
-        request = self.factory.get('/')
-        request.user = AnonymousUser()
-
-        mako_middleware_process_request(request)
-        student.views.index(request)
+        self.client.logout()
+        response = self.client.get(reverse('root'))
+        self.assertEqual(response.status_code, 200)
 
     @override_settings(FEATURES=FEATURES_WITH_STARTDATE)
     def test_anon_user_with_startdate_index(self):
@@ -116,13 +112,13 @@ class AnonymousIndexPageTest(ModuleStoreTestCase):
         self.assertEqual(response._headers.get("location")[1], "/login")  # pylint: disable=protected-access
 
 
-@attr('shard_1')
+@attr(shard=1)
 class PreRequisiteCourseCatalog(ModuleStoreTestCase, LoginEnrollmentTestCase, MilestonesTestCaseMixin):
     """
     Test to simulate and verify fix for disappearing courses in
     course catalog when using pre-requisite courses
     """
-    @patch.dict(settings.FEATURES, {'ENABLE_PREREQUISITE_COURSES': True, 'MILESTONES_APP': True})
+    @patch.dict(settings.FEATURES, {'ENABLE_PREREQUISITE_COURSES': True})
     def test_course_with_prereq(self):
         """
         Simulate having a course which has closed enrollments that has
@@ -160,7 +156,7 @@ class PreRequisiteCourseCatalog(ModuleStoreTestCase, LoginEnrollmentTestCase, Mi
         self.assertIn('course that has pre requisite', resp.content)
 
 
-@attr('shard_1')
+@attr(shard=1)
 class IndexPageCourseCardsSortingTests(ModuleStoreTestCase):
     """
     Test for Index page course cards sorting

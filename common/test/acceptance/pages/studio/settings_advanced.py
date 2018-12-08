@@ -3,8 +3,12 @@ Course Advanced Settings page
 """
 
 from bok_choy.promise import EmptyPromise
-from .course_page import CoursePage
-from .utils import press_the_notification_button, type_in_codemirror, get_codemirror_value
+from common.test.acceptance.pages.studio.course_page import CoursePage
+from common.test.acceptance.pages.studio.utils import (
+    press_the_notification_button,
+    type_in_codemirror,
+    get_codemirror_value,
+)
 
 
 KEY_CSS = '.key h3.title'
@@ -221,5 +225,7 @@ class AdvancedSettingsPage(CoursePage):
             'enable_subsection_gating',
             'learning_info',
             'instructor_info',
-            'create_zendesk_tickets'
+            'create_zendesk_tickets',
+            'ccx_connector',
+            'enable_ccx'
         ]

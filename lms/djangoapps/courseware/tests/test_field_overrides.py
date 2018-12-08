@@ -17,6 +17,7 @@ from ..field_overrides import (
     OverrideFieldData,
     OverrideModulestoreFieldData,
 )
+from ..testutils import FieldOverrideTestMixin
 
 
 TESTUSER = "testuser"
@@ -44,7 +45,7 @@ class TestOverrideProvider(FieldOverrideProvider):
         return True
 
 
-@attr('shard_1')
+@attr(shard=1)
 @override_settings(FIELD_OVERRIDE_PROVIDERS=(
     'courseware.tests.test_field_overrides.TestOverrideProvider',))
 class OverrideFieldDataTests(SharedModuleStoreTestCase):
@@ -124,19 +125,11 @@ class OverrideFieldDataTests(SharedModuleStoreTestCase):
         self.assertIsInstance(data, DictFieldData)
 
 
-@attr('shard_1')
+@attr(shard=1)
 @override_settings(
     MODULESTORE_FIELD_OVERRIDE_PROVIDERS=['courseware.tests.test_field_overrides.TestOverrideProvider']
 )
-class OverrideModulestoreFieldDataTests(OverrideFieldDataTests):
-    def setUp(self):
-        super(OverrideModulestoreFieldDataTests, self).setUp()
-        OverrideModulestoreFieldData.provider_classes = None
-
-    def tearDown(self):
-        super(OverrideModulestoreFieldDataTests, self).tearDown()
-        OverrideModulestoreFieldData.provider_classes = None
-
+class OverrideModulestoreFieldDataTests(FieldOverrideTestMixin, OverrideFieldDataTests):
     def make_one(self):
         return OverrideModulestoreFieldData.wrap(self.course, DictFieldData({
             'foo': 'bar',
@@ -149,7 +142,7 @@ class OverrideModulestoreFieldDataTests(OverrideFieldDataTests):
         self.assertIsInstance(data, DictFieldData)
 
 
-@attr('shard_1')
+@attr(shard=1)
 class ResolveDottedTests(unittest.TestCase):
     """
     Tests for `resolve_dotted`.

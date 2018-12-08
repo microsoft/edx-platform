@@ -9,18 +9,19 @@ from datetime import datetime, timedelta
 import ddt
 
 from capa.tests.response_xml_factory import MultipleChoiceResponseXMLFactory
-from ..helpers import UniqueCourseTest, EventsTestMixin
-from ...pages.studio.auto_auth import AutoAuthPage
-from ...pages.lms.create_mode import ModeCreationPage
-from ...pages.studio.overview import CourseOutlinePage
-from ...pages.lms.courseware import CoursewarePage, CoursewareSequentialTabPage
-from ...pages.lms.course_nav import CourseNavPage
-from ...pages.lms.problem import ProblemPage
-from ...pages.common.logout import LogoutPage
-from ...pages.lms.track_selection import TrackSelectionPage
-from ...pages.lms.pay_and_verify import PaymentAndVerificationFlow, FakePaymentPage
-from ...pages.lms.dashboard import DashboardPage
-from ...fixtures.course import CourseFixture, XBlockFixtureDesc
+from common.test.acceptance.tests.helpers import UniqueCourseTest, EventsTestMixin
+from common.test.acceptance.pages.studio.auto_auth import AutoAuthPage
+from common.test.acceptance.pages.lms.create_mode import ModeCreationPage
+from common.test.acceptance.pages.studio.overview import CourseOutlinePage
+from common.test.acceptance.pages.lms.courseware import CoursewarePage, CoursewareSequentialTabPage
+from common.test.acceptance.pages.lms.course_nav import CourseNavPage
+from common.test.acceptance.pages.lms.problem import ProblemPage
+from common.test.acceptance.pages.common.logout import LogoutPage
+from common.test.acceptance.pages.lms.staff_view import StaffPage
+from common.test.acceptance.pages.lms.track_selection import TrackSelectionPage
+from common.test.acceptance.pages.lms.pay_and_verify import PaymentAndVerificationFlow, FakePaymentPage
+from common.test.acceptance.pages.lms.dashboard import DashboardPage
+from common.test.acceptance.fixtures.course import CourseFixture, XBlockFixtureDesc
 
 
 class CoursewareTest(UniqueCourseTest):
@@ -249,22 +250,10 @@ class ProctoredExamTest(UniqueCourseTest):
         self.courseware_page.visit()
         self.assertTrue(self.courseware_page.can_start_proctored_exam)
 
-    @ddt.data(True, False)
-    def test_timed_exam_flow(self, hide_after_due):
+    def _setup_and_take_timed_exam(self, hide_after_due=False):
         """
-        Given that I am a staff member on the exam settings section
-        select advanced settings tab
-        When I Make the exam timed.
-        And I login as a verified student.
-        And visit the courseware as a verified student.
-        And I start the timed exam
-        Then I am taken to the exam with a timer bar showing
-        When I finish the exam
-        Then I see the exam submitted dialog in place of the exam
-        When I log back into studio as a staff member
-        And change the problem's due date to be in the past
-        And log back in as the original verified student
-        Then I see the exam or message in accordance with the hide_after_due setting
+        Helper to perform the common action "set up a timed exam as staff,
+        then take it as student"
         """
         LogoutPage(self.browser).visit()
         self._auto_auth("STAFF_TESTER", "staff101@example.com", True)
@@ -285,6 +274,27 @@ class ProctoredExamTest(UniqueCourseTest):
         self.assertTrue(self.courseware_page.has_submitted_exam_message())
 
         LogoutPage(self.browser).visit()
+
+    @ddt.data(True, False)
+    def test_timed_exam_flow(self, hide_after_due):
+        """
+        Given that I am a staff member on the exam settings section
+        select advanced settings tab
+        When I Make the exam timed.
+        And I login as a verified student.
+        And visit the courseware as a verified student.
+        And I start the timed exam
+        Then I am taken to the exam with a timer bar showing
+        When I finish the exam
+        Then I see the exam submitted dialog in place of the exam
+        When I log back into studio as a staff member
+        And change the problem's due date to be in the past
+        And log back in as the original verified student
+        Then I see the exam or message in accordance with the hide_after_due setting
+        """
+        self._setup_and_take_timed_exam(hide_after_due)
+
+        LogoutPage(self.browser).visit()
         self._auto_auth("STAFF_TESTER", "staff101@example.com", True)
         self.course_outline.visit()
         last_week = (datetime.today() - timedelta(days=7)).strftime("%m/%d/%Y")
@@ -295,6 +305,25 @@ class ProctoredExamTest(UniqueCourseTest):
         self.courseware_page.visit()
         self.assertEqual(self.courseware_page.has_submitted_exam_message(), hide_after_due)
 
+    def test_masquerade_visibility_override(self):
+        """
+        Given that a timed exam problem exists in the course
+        And a student has taken that exam
+        And that exam is hidden to the student
+        And I am a staff user masquerading as the student
+        Then I should be able to see the exam content
+        """
+        self._setup_and_take_timed_exam()
+
+        LogoutPage(self.browser).visit()
+        self._auto_auth("STAFF_TESTER", "staff101@example.com", True)
+        self.courseware_page.visit()
+        staff_page = StaffPage(self.browser, self.course_id)
+        self.assertEqual(staff_page.staff_view_mode, 'Staff')
+
+        staff_page.set_staff_view_mode_specific_student(self.USERNAME)
+        self.assertFalse(self.courseware_page.has_submitted_exam_message())
+
     def test_field_visiblity_with_all_exam_types(self):
         """
         Given that I am a staff member
@@ -302,11 +331,11 @@ class ProctoredExamTest(UniqueCourseTest):
         And the subsection edit dialog is open
         select advanced settings tab
         For each of None, Timed, Proctored, and Practice exam types
-        The time allotted, review rules, and hide after due fields have proper visibility
-        None: False, False, False
-        Timed: True, False, True
-        Proctored: True, True, False
-        Practice: True, False, False
+        The time allotted and review rules fields have proper visibility
+        None: False, False
+        Timed: True, False
+        Proctored: True, True
+        Practice: True, False
         """
         LogoutPage(self.browser).visit()
         self._auto_auth("STAFF_TESTER", "staff101@example.com", True)
@@ -318,22 +347,18 @@ class ProctoredExamTest(UniqueCourseTest):
         self.course_outline.select_none_exam()
         self.assertFalse(self.course_outline.time_allotted_field_visible())
         self.assertFalse(self.course_outline.exam_review_rules_field_visible())
-        self.assertFalse(self.course_outline.hide_after_due_field_visible())
 
         self.course_outline.select_timed_exam()
         self.assertTrue(self.course_outline.time_allotted_field_visible())
         self.assertFalse(self.course_outline.exam_review_rules_field_visible())
-        self.assertTrue(self.course_outline.hide_after_due_field_visible())
 
         self.course_outline.select_proctored_exam()
         self.assertTrue(self.course_outline.time_allotted_field_visible())
         self.assertTrue(self.course_outline.exam_review_rules_field_visible())
-        self.assertFalse(self.course_outline.hide_after_due_field_visible())
 
         self.course_outline.select_practice_exam()
         self.assertTrue(self.course_outline.time_allotted_field_visible())
         self.assertFalse(self.course_outline.exam_review_rules_field_visible())
-        self.assertFalse(self.course_outline.hide_after_due_field_visible())
 
 
 class CoursewareMultipleVerticalsTest(UniqueCourseTest, EventsTestMixin):

@@ -543,7 +543,7 @@ class SummaryResults(object):
                     print("{}: {}{} violations".format(rule_id, padding, self.totals_by_rule[rule_id]), file=out)
                 print("", file=out)
 
-            # matches output of jshint for simplicity
+            # matches output of eslint for simplicity
             print("", file=out)
             print("{} violations total".format(self.total_violations), file=out)
 
@@ -2376,8 +2376,8 @@ class MakoTemplateLinter(BaseLinter):
             r"""
                 <script.*?> |  # script tag start
                 </script> |  # script tag end
-                <%static:require_module.*?> |  # require js script tag start
-                </%static:require_module> | # require js script tag end
+                <%static:require_module(_async)?.*?> |  # require js script tag start (optionally the _async version)
+                </%static:require_module(_async)?> | # require js script tag end (optionally the _async version)
                 <%block[ ]*name=['"]requirejs['"]\w*> |  # require js tag start
                 </%block>  # require js tag end
             """,

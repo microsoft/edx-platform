@@ -1,8 +1,7 @@
+/* eslint-env node */
+
 // Karma config for xmodule suite.
 // Docs and troubleshooting tips in common/static/common/js/karma.common.conf.js
-
-/* jshint node: true */
-/*jshint -W079 */
 
 'use strict';
 var path = require('path');
@@ -20,12 +19,10 @@ var options = {
     libraryFilesToInclude: [
         {pattern: 'common_static/js/vendor/requirejs/require.js', included: true},
         {pattern: 'RequireJS-namespace-undefine.js', included: true},
-        {pattern: 'spec/main_requirejs.js', included: true},
 
         {pattern: 'common_static/coffee/src/ajax_prefix.js', included: true},
         {pattern: 'common_static/common/js/vendor/underscore.js', included: true},
         {pattern: 'common_static/common/js/vendor/backbone.js', included: true},
-        {pattern: 'common_static/edx-ui-toolkit/js/utils/global-loader.js', included: true},
         {pattern: 'common_static/js/vendor/CodeMirror/codemirror.js', included: true},
         {pattern: 'common_static/js/vendor/draggabilly.js'},
         {pattern: 'common_static/common/js/vendor/jquery.js', included: true},
@@ -50,11 +47,14 @@ var options = {
         {pattern: 'common_static/js/vendor/jasmine-imagediff.js', included: true},
         {pattern: 'common_static/common/js/spec_helpers/jasmine-waituntil.js', included: true},
         {pattern: 'common_static/common/js/spec_helpers/jasmine-extensions.js', included: true},
-        {pattern: 'common_static/js/vendor/sinon-1.17.0.js', included: true}
+        {pattern: 'common_static/js/vendor/sinon-1.17.0.js', included: true},
+
+        {pattern: 'spec/main_requirejs.js', included: true},
     ],
 
     libraryFiles: [
-        {pattern: 'common_static/edx-pattern-library/js/**/*.js'}
+        {pattern: 'common_static/edx-pattern-library/js/**/*.js'},
+        {pattern: 'common_static/edx-ui-toolkit/js/**/*.js'}
     ],
 
     // Make sure the patterns in sourceFiles and specFiles do not match the same file.

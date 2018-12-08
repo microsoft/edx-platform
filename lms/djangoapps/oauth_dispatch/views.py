@@ -6,17 +6,13 @@ django-oauth-toolkit as appropriate.
 from __future__ import unicode_literals
 
 import json
-from time import time
 
-import jwt
 from auth_exchange import views as auth_exchange_views
-from django.conf import settings
-from django.utils.functional import cached_property
 from django.views.generic import View
 from edx_oauth2_provider import views as dop_views  # django-oauth2-provider views
 from oauth2_provider import models as dot_models, views as dot_views  # django-oauth-toolkit
 
-from openedx.core.djangoapps.theming import helpers
+from openedx.core.lib.token_utils import JwtBuilder
 
 from . import adapters
 
@@ -87,15 +83,6 @@ class AccessTokenView(_DispatchingView):
     dot_view = dot_views.TokenView
     dop_view = dop_views.AccessTokenView
 
-    @cached_property
-    def claim_handlers(self):
-        """ Returns a dictionary mapping scopes to methods that will add claims to the JWT payload. """
-
-        return {
-            'email': self._attach_email_claim,
-            'profile': self._attach_profile_claim
-        }
-
     def dispatch(self, request, *args, **kwargs):
         response = super(AccessTokenView, self).dispatch(request, *args, **kwargs)
 
@@ -103,7 +90,7 @@ class AccessTokenView(_DispatchingView):
             expires_in, scopes, user = self._decompose_access_token_response(request, response)
 
             content = {
-                'access_token': self._generate_jwt(user, scopes, expires_in),
+                'access_token': JwtBuilder(user).build_token(scopes, expires_in),
                 'expires_in': expires_in,
                 'token_type': 'JWT',
                 'scope': ' '.join(scopes),
@@ -123,43 +110,6 @@ class AccessTokenView(_DispatchingView):
         expires_in = content['expires_in']
         return expires_in, scopes, user
 
-    def _generate_jwt(self, user, scopes, expires_in):
-        """ Returns a JWT access token. """
-        now = int(time())
-        jwt_auth = helpers.get_value("JWT_AUTH", settings.JWT_AUTH)
-        payload = {
-            'iss': jwt_auth['JWT_ISSUER'],
-            'aud': jwt_auth['JWT_AUDIENCE'],
-            'exp': now + expires_in,
-            'iat': now,
-            'preferred_username': user.username,
-            'scopes': scopes,
-        }
-
-        for scope in scopes:
-            handler = self.claim_handlers.get(scope)
-
-            if handler:
-                handler(payload, user)
-
-        secret = jwt_auth['JWT_SECRET_KEY']
-        token = jwt.encode(payload, secret, algorithm=jwt_auth['JWT_ALGORITHM'])
-
-        return token
-
-    def _attach_email_claim(self, payload, user):
-        """ Add the email claim details to the JWT payload. """
-        payload['email'] = user.email
-
-    def _attach_profile_claim(self, payload, user):
-        """ Add the profile claim details to the JWT payload. """
-        payload.update({
-            'family_name': user.last_name,
-            'name': user.get_full_name(),
-            'given_name': user.first_name,
-            'administrator': user.is_staff,
-        })
-
 
 class AuthorizationView(_DispatchingView):
     """
@@ -175,3 +125,10 @@ class AccessTokenExchangeView(_DispatchingView):
     """
     dop_view = auth_exchange_views.DOPAccessTokenExchangeView
     dot_view = auth_exchange_views.DOTAccessTokenExchangeView
+
+
+class RevokeTokenView(_DispatchingView):
+    """
+    Dispatch to the RevokeTokenView of django-oauth-toolkit
+    """
+    dot_view = dot_views.RevokeTokenView

@@ -16,7 +16,6 @@ import mock
 from openedx.core.djangoapps.user_api.preferences.api import get_user_preference
 from lang_pref import LANGUAGE_KEY
 from notification_prefs import NOTIFICATION_PREF_KEY
-from edxmako.tests import mako_middleware_process_request
 from external_auth.models import ExternalAuthMap
 import student
 from student.models import UserAttribute
@@ -231,9 +230,9 @@ class TestCreateAccount(TestCase):
         request.session['ExternalAuthMap'] = extauth
         request.user = AnonymousUser()
 
-        mako_middleware_process_request(request)
-        with mock.patch('django.contrib.auth.models.User.email_user') as mock_send_mail:
-            student.views.create_account(request)
+        with mock.patch('edxmako.request_context.get_current_request', return_value=request):
+            with mock.patch('django.contrib.auth.models.User.email_user') as mock_send_mail:
+                student.views.create_account(request)
 
         # check that send_mail is called
         if bypass_activation_email:
@@ -252,7 +251,7 @@ class TestCreateAccount(TestCase):
 
     @unittest.skipUnless(settings.FEATURES.get('AUTH_USE_SHIB'), "AUTH_USE_SHIB not set")
     @mock.patch.dict(settings.FEATURES, {'BYPASS_ACTIVATION_EMAIL_FOR_EXTAUTH': False, 'AUTOMATIC_AUTH_FOR_TESTING': False})
-    def test_extauth_bypass_sending_activation_email_without_bypass(self):
+    def test_extauth_bypass_sending_activation_email_without_bypass_1(self):
         """
         Tests user creation without sending activation email when
         settings.FEATURES['BYPASS_ACTIVATION_EMAIL_FOR_EXTAUTH']=False and doing external auth
@@ -261,7 +260,7 @@ class TestCreateAccount(TestCase):
 
     @unittest.skipUnless(settings.FEATURES.get('AUTH_USE_SHIB'), "AUTH_USE_SHIB not set")
     @mock.patch.dict(settings.FEATURES, {'BYPASS_ACTIVATION_EMAIL_FOR_EXTAUTH': False, 'AUTOMATIC_AUTH_FOR_TESTING': False, 'SKIP_EMAIL_VALIDATION': True})
-    def test_extauth_bypass_sending_activation_email_without_bypass(self):
+    def test_extauth_bypass_sending_activation_email_without_bypass_2(self):
         """
         Tests user creation without sending activation email when
         settings.FEATURES['BYPASS_ACTIVATION_EMAIL_FOR_EXTAUTH']=False and doing external auth
@@ -602,7 +601,7 @@ class TestCreateCommentsServiceUser(TransactionTestCase):
     def test_cs_user_not_created(self, register, request):
         "If user account creation fails, we should not create a comments service user"
         try:
-            response = self.client.post(self.url, self.params)
+            self.client.post(self.url, self.params)
         except:
             pass
         with self.assertRaises(User.DoesNotExist):

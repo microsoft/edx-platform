@@ -6,7 +6,7 @@ from selenium.webdriver.common.keys import Keys
 from bok_choy.javascript import js_defined
 from bok_choy.promise import EmptyPromise
 
-from ..common.utils import click_css, wait_for_notification
+from common.test.acceptance.pages.common.utils import click_css, wait_for_notification
 
 
 @js_defined('window.jQuery')
@@ -101,6 +101,18 @@ def add_component(page, item_type, specific_type, is_advanced_problem=False):
     page.wait_for_ajax()
 
 
+def add_components(page, item_type, items, is_advanced_problem=False):
+    """
+    Adds multiple components of a specific type.
+    item_type should be "advanced", "html", "problem", or "video"
+    items is a list of components of specific type to be added.
+    Please note that if you want to create an advanced problem
+    then all other items must be of advanced problem type.
+    """
+    for item in items:
+        add_component(page, item_type, item, is_advanced_problem)
+
+
 def add_html_component(page, menu_index, boilerplate=None):
     """
     Adds an instance of the HTML component with the specified name.
@@ -146,6 +158,17 @@ def get_codemirror_value(page, index=0, find_prefix="$"):
         return {find_prefix}('div.CodeMirror:eq({index})').get(0).CodeMirror.getValue();
         """.format(index=index, find_prefix=find_prefix)
     )
+
+
+def get_input_value(page, css_selector):
+    """
+    Returns the value of the field matching the css selector.
+    """
+    page.wait_for_element_presence(
+        css_selector,
+        'Elements matching "{}" selector are present'.format(css_selector)
+    )
+    return page.q(css=css_selector).attrs('value')[0]
 
 
 def set_input_value(page, css, value):

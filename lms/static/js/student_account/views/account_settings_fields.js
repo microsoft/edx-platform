@@ -11,7 +11,9 @@
         'text!templates/fields/field_link_account.underscore',
         'text!templates/fields/field_dropdown_account.underscore',
         'text!templates/fields/field_social_link_account.underscore',
-        'edx-ui-toolkit/js/utils/string-utils'
+        'text!templates/fields/field_order_history.underscore',
+        'edx-ui-toolkit/js/utils/string-utils',
+        'edx-ui-toolkit/js/utils/html-utils'
     ], function (
         gettext, $, _, Backbone,
         FieldViews,
@@ -20,7 +22,9 @@
         field_link_account_template,
         field_dropdown_account_template,
         field_social_link_template,
-        StringUtils
+        field_order_history_template,
+        StringUtils,
+        HtmlUtils
     )
     {
 
@@ -37,10 +41,13 @@
             EmailFieldView: FieldViews.TextFieldView.extend({
                 fieldTemplate: field_text_account_template,
                 successMessage: function () {
-                    return this.indicators.success + StringUtils.interpolate(
-                            gettext('We\'ve sent a confirmation message to {new_email_address}. Click the link in the message to update your email address.'), /* jshint ignore:line */
+                    return HtmlUtils.joinHtml(
+                        this.indicators.success,
+                        StringUtils.interpolate(
+                            gettext('We\'ve sent a confirmation message to {new_email_address}. Click the link in the message to update your email address.'),  // eslint-disable-line max-len
                             {'new_email_address': this.fieldValue()}
-                        );
+                        )
+                    );
                 }
             }),
             LanguagePreferenceFieldView: FieldViews.DropdownFieldView.extend({
@@ -61,8 +68,10 @@
                         },
                         error: function () {
                             view.showNotificationMessage(
-                                view.indicators.error +
-                                gettext('You must sign out and sign back in before your language changes take effect.')
+                                HtmlUtils.joinHtml(
+                                    view.indicators.error,
+                                    gettext('You must sign out and sign back in before your language changes take effect.')  // eslint-disable-line max-len
+                                )
                             );
                         }
                     });
@@ -102,10 +111,13 @@
                     });
                 },
                 successMessage: function () {
-                    return this.indicators.success + StringUtils.interpolate(
-                            gettext('We\'ve sent a message to {email_address}. Click the link in the message to reset your password.'), /* jshint ignore:line */
+                    return HtmlUtils.joinHtml(
+                        this.indicators.success,
+                        StringUtils.interpolate(
+                            gettext('We\'ve sent a message to {email_address}. Click the link in the message to reset your password.'),  // eslint-disable-line max-len
                             {'email_address': this.model.get(this.options.emailAttribute)}
-                        );
+                        )
+                    );
                 }
             }),
             LanguageProficienciesFieldView: FieldViews.DropdownFieldView.extend({
@@ -149,7 +161,7 @@
                         linkTitle = gettext('Unlink This Account');
                         linkClass = 'social-field-linked';
                         subTitle = StringUtils.interpolate(
-                            gettext('You can use your {accountName} account to sign in to your {platformName} account.'), /* jshint ignore:line */
+                            gettext('You can use your {accountName} account to sign in to your {platformName} account.'),  // eslint-disable-line max-len
                             {accountName: this.options.title, platformName: this.options.platformName}
                         );
                         screenReaderTitle = StringUtils.interpolate(
@@ -160,12 +172,12 @@
                         linkTitle = gettext('Link Your Account');
                         linkClass = 'social-field-unlinked';
                         subTitle = StringUtils.interpolate(
-                            gettext('Link your {accountName} account to your {platformName} account and use {accountName} to sign in to {platformName}.'), /* jshint ignore:line */
+                            gettext('Link your {accountName} account to your {platformName} account and use {accountName} to sign in to {platformName}.'),  // eslint-disable-line max-len
                             {accountName: this.options.title, platformName: this.options.platformName}
                         );
                     }
 
-                    this.$el.html(this.template({
+                    HtmlUtils.setHtml(this.$el, HtmlUtils.template(this.fieldTemplate)({
                         id: this.options.valueAttribute,
                         title: this.options.title,
                         screenReaderTitle: screenReaderTitle,
@@ -216,14 +228,38 @@
                     });
                 },
                 inProgressMessage: function () {
-                    return this.indicators.inProgress + (
+                    return HtmlUtils.joinHtml(this.indicators.inProgress, (
                         this.options.connected ? gettext('Unlinking') : gettext('Linking')
-                    );
+                    ));
                 },
                 successMessage: function () {
-                    return this.indicators.success + gettext('Successfully unlinked.');
+                    return HtmlUtils.joinHtml(this.indicators.success, gettext('Successfully unlinked.'));
                 }
             }),
+
+            OrderHistoryFieldView: FieldViews.ReadonlyFieldView.extend({
+                fieldType: 'orderHistory',
+                fieldTemplate: field_order_history_template,
+
+                initialize: function (options) {
+                    this.options = options;
+                    this._super(options);
+                    this.template = HtmlUtils.template(this.fieldTemplate);
+                },
+
+                render: function () {
+                    HtmlUtils.setHtml(this.$el, this.template({
+                        title: this.options.title,
+                        totalPrice: this.options.totalPrice,
+                        orderId: this.options.orderId,
+                        orderDate: this.options.orderDate,
+                        receiptUrl: this.options.receiptUrl,
+                        valueAttribute: this.options.valueAttribute
+                    }));
+                    this.delegateEvents();
+                    return this;
+                }
+            })
         };
 
         return AccountSettingsFieldViews;

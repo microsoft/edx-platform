@@ -164,7 +164,7 @@ class CourseTopicsViewTest(DiscussionAPIViewTestMixin, ModuleStoreTestCase):
 
     def create_course(self, modules_count, module_store, topics):
         """
-        Create a course in a specified module store with discussion module and topics
+        Create a course in a specified module store with discussion xblocks and topics
         """
         course = CourseFactory.create(
             org="a",
@@ -176,7 +176,7 @@ class CourseTopicsViewTest(DiscussionAPIViewTestMixin, ModuleStoreTestCase):
         )
         CourseEnrollmentFactory.create(user=self.user, course_id=course.id)
         course_url = reverse("course_topics", kwargs={"course_id": unicode(course.id)})
-        # add some discussion modules
+        # add some discussion xblocks
         for i in range(modules_count):
             ItemFactory.create(
                 parent_location=course.location,
@@ -188,9 +188,9 @@ class CourseTopicsViewTest(DiscussionAPIViewTestMixin, ModuleStoreTestCase):
             )
         return course_url
 
-    def make_discussion_module(self, topic_id, category, subcategory, **kwargs):
+    def make_discussion_xblock(self, topic_id, category, subcategory, **kwargs):
         """
-        Build a discussion module in self.course
+        Build a discussion xblock in self.course
         """
         ItemFactory.create(
             parent_location=self.course.location,
@@ -249,7 +249,7 @@ class CourseTopicsViewTest(DiscussionAPIViewTestMixin, ModuleStoreTestCase):
         Tests discussion topic does not exist for the given topic id.
         """
         topic_id = "courseware-topic-id"
-        self.make_discussion_module(topic_id, "test_category", "test_target")
+        self.make_discussion_xblock(topic_id, "test_category", "test_target")
         url = "{}?topic_id=invalid_topic_id".format(self.url)
         response = self.client.get(url)
         self.assert_response_correct(
@@ -264,8 +264,8 @@ class CourseTopicsViewTest(DiscussionAPIViewTestMixin, ModuleStoreTestCase):
         """
         topic_id_1 = "topic_id_1"
         topic_id_2 = "topic_id_2"
-        self.make_discussion_module(topic_id_1, "test_category_1", "test_target_1")
-        self.make_discussion_module(topic_id_2, "test_category_2", "test_target_2")
+        self.make_discussion_xblock(topic_id_1, "test_category_1", "test_target_1")
+        self.make_discussion_xblock(topic_id_2, "test_category_2", "test_target_2")
         url = "{}?topic_id=topic_id_1,topic_id_2".format(self.url)
         response = self.client.get(url)
         self.assert_response_correct(
@@ -306,7 +306,7 @@ class CourseTopicsViewTest(DiscussionAPIViewTestMixin, ModuleStoreTestCase):
         )
 
 
-@attr('shard_3')
+@attr(shard=3)
 @ddt.ddt
 @httpretty.activate
 @mock.patch.dict("django.conf.settings.FEATURES", {"ENABLE_DISCUSSION_SERVICE": True})
@@ -354,6 +354,28 @@ class ThreadViewSetListTest(DiscussionAPIViewTestMixin, ModuleStoreTestCase, Pro
         thread.update(overrides or {})
         return thread
 
+    def create_source_thread(self, overrides=None):
+        """
+        Create a sample source cs_thread
+        """
+        thread = make_minimal_cs_thread({
+            "id": "test_thread",
+            "course_id": unicode(self.course.id),
+            "commentable_id": "test_topic",
+            "user_id": str(self.user.id),
+            "username": self.user.username,
+            "created_at": "2015-04-28T00:00:00Z",
+            "updated_at": "2015-04-28T11:11:11Z",
+            "title": "Test Title",
+            "body": "Test body",
+            "votes": {"up_count": 4},
+            "comments_count": 5,
+            "unread_comments_count": 3,
+        })
+
+        thread.update(overrides or {})
+        return thread
+
     def test_course_id_missing(self):
         response = self.client.get(self.url)
         self.assert_response_correct(
@@ -372,20 +394,9 @@ class ThreadViewSetListTest(DiscussionAPIViewTestMixin, ModuleStoreTestCase, Pro
 
     def test_basic(self):
         self.register_get_user_response(self.user, upvoted_ids=["test_thread"])
-        source_threads = [make_minimal_cs_thread({
-            "id": "test_thread",
-            "course_id": unicode(self.course.id),
-            "commentable_id": "test_topic",
-            "user_id": str(self.author.id),
-            "username": self.author.username,
-            "created_at": "2015-04-28T00:00:00Z",
-            "updated_at": "2015-04-28T11:11:11Z",
-            "title": "Test Title",
-            "body": "Test body",
-            "votes": {"up_count": 4},
-            "comments_count": 5,
-            "unread_comments_count": 3,
-        })]
+        source_threads = [
+            self.create_source_thread({"user_id": str(self.author.id), "username": self.author.username})
+        ]
         expected_threads = [self.make_expected_thread({
             "created_at": "2015-04-28T00:00:00Z",
             "updated_at": "2015-04-28T11:11:11Z",
@@ -640,54 +651,8 @@ class ThreadViewSetListTest(DiscussionAPIViewTestMixin, ModuleStoreTestCase, Pro
         user_2.profile.year_of_birth = 1970
         user_2.profile.save()
         source_threads = [
-            {
-                "type": "thread",
-                "id": "test_thread",
-                "course_id": unicode(self.course.id),
-                "commentable_id": "test_topic",
-                "group_id": None,
-                "user_id": str(self.user.id),
-                "username": self.user.username,
-                "anonymous": False,
-                "anonymous_to_peers": False,
-                "created_at": "2015-04-28T00:00:00Z",
-                "updated_at": "2015-04-28T11:11:11Z",
-                "thread_type": "discussion",
-                "title": "Test Title",
-                "body": "Test body",
-                "pinned": False,
-                "closed": False,
-                "abuse_flaggers": [],
-                "votes": {"up_count": 4},
-                "comments_count": 5,
-                "unread_comments_count": 3,
-                "read": False,
-                "endorsed": False
-            },
-            {
-                "type": "thread",
-                "id": "test_thread",
-                "course_id": unicode(self.course.id),
-                "commentable_id": "test_topic",
-                "group_id": None,
-                "user_id": str(user_2.id),
-                "username": user_2.username,
-                "anonymous": False,
-                "anonymous_to_peers": False,
-                "created_at": "2015-04-28T00:00:00Z",
-                "updated_at": "2015-04-28T11:11:11Z",
-                "thread_type": "discussion",
-                "title": "Test Title",
-                "body": "Test body",
-                "pinned": False,
-                "closed": False,
-                "abuse_flaggers": [],
-                "votes": {"up_count": 4},
-                "comments_count": 5,
-                "unread_comments_count": 3,
-                "read": False,
-                "endorsed": False
-            }
+            self.create_source_thread(),
+            self.create_source_thread({"user_id": str(user_2.id), "username": user_2.username}),
         ]
 
         self.register_get_user_response(self.user, upvoted_ids=["test_thread"])
@@ -706,6 +671,28 @@ class ThreadViewSetListTest(DiscussionAPIViewTestMixin, ModuleStoreTestCase, Pro
             expected_profile_data = self.get_expected_user_profile(response_thread['author'])
             response_users = response_thread['users']
             self.assertEqual(expected_profile_data, response_users[response_thread['author']])
+
+    def test_profile_image_requested_field_anonymous_user(self):
+        """
+        Tests profile_image in requested_fields for thread created with anonymous user
+        """
+        source_threads = [
+            self.create_source_thread(
+                {"user_id": None, "username": None, "anonymous": True, "anonymous_to_peers": True}
+            ),
+        ]
+
+        self.register_get_user_response(self.user, upvoted_ids=["test_thread"])
+        self.register_get_threads_response(source_threads, page=1, num_pages=1)
+
+        response = self.client.get(
+            self.url,
+            {"course_id": unicode(self.course.id), "requested_fields": "profile_image"},
+        )
+        self.assertEqual(response.status_code, 200)
+        response_thread = json.loads(response.content)['results'][0]
+        self.assertIsNone(response_thread['author'])
+        self.assertEqual({}, response_thread['users'])
 
 
 @httpretty.activate
@@ -803,7 +790,7 @@ class ThreadViewSetCreateTest(DiscussionAPIViewTestMixin, ModuleStoreTestCase):
         self.assertEqual(response_data, expected_response_data)
 
 
-@attr('shard_3')
+@attr(shard=3)
 @ddt.ddt
 @httpretty.activate
 @disable_signal(api, 'thread_edited')
@@ -1019,7 +1006,7 @@ class ThreadViewSetDeleteTest(DiscussionAPIViewTestMixin, ModuleStoreTestCase):
         self.assertEqual(response.status_code, 404)
 
 
-@attr('shard_3')
+@attr(shard=3)
 @ddt.ddt
 @httpretty.activate
 @mock.patch.dict("django.conf.settings.FEATURES", {"ENABLE_DISCUSSION_SERVICE": True})
@@ -1031,6 +1018,24 @@ class CommentViewSetListTest(DiscussionAPIViewTestMixin, ModuleStoreTestCase, Pr
         self.url = reverse("comment-list")
         self.thread_id = "test_thread"
         self.storage = get_profile_image_storage()
+
+    def create_source_comment(self, overrides=None):
+        """
+        Create a sample source cs_comment
+        """
+        comment = make_minimal_cs_comment({
+            "id": "test_comment",
+            "thread_id": self.thread_id,
+            "user_id": str(self.user.id),
+            "username": self.user.username,
+            "created_at": "2015-05-11T00:00:00Z",
+            "updated_at": "2015-05-11T11:11:11Z",
+            "body": "Test body",
+            "votes": {"up_count": 4},
+        })
+
+        comment.update(overrides or {})
+        return comment
 
     def make_minimal_cs_thread(self, overrides=None):
         """
@@ -1088,24 +1093,9 @@ class CommentViewSetListTest(DiscussionAPIViewTestMixin, ModuleStoreTestCase, Pr
 
     def test_basic(self):
         self.register_get_user_response(self.user, upvoted_ids=["test_comment"])
-        source_comments = [{
-            "type": "comment",
-            "id": "test_comment",
-            "thread_id": self.thread_id,
-            "parent_id": None,
-            "user_id": str(self.author.id),
-            "username": self.author.username,
-            "anonymous": False,
-            "anonymous_to_peers": False,
-            "created_at": "2015-05-11T00:00:00Z",
-            "updated_at": "2015-05-11T11:11:11Z",
-            "body": "Test body",
-            "endorsed": False,
-            "abuse_flaggers": [],
-            "votes": {"up_count": 4},
-            "child_count": 0,
-            "children": [],
-        }]
+        source_comments = [
+            self.create_source_comment({"user_id": str(self.author.id), "username": self.author.username})
+        ]
         expected_comments = [self.expected_response_comment(overrides={
             "voted": True,
             "vote_count": 4,
@@ -1292,24 +1282,7 @@ class CommentViewSetListTest(DiscussionAPIViewTestMixin, ModuleStoreTestCase, Pr
         """
         Tests all comments retrieved have user profile image details if called in requested_fields
         """
-        source_comments = [{
-            "type": "comment",
-            "id": "test_comment",
-            "thread_id": self.thread_id,
-            "parent_id": None,
-            "user_id": str(self.user.id),
-            "username": self.user.username,
-            "anonymous": False,
-            "anonymous_to_peers": False,
-            "created_at": "2015-05-11T00:00:00Z",
-            "updated_at": "2015-05-11T11:11:11Z",
-            "body": "Test body",
-            "endorsed": False,
-            "abuse_flaggers": [],
-            "votes": {"up_count": 4},
-            "child_count": 0,
-            "children": [],
-        }]
+        source_comments = [self.create_source_comment()]
         self.register_get_thread_response({
             "id": self.thread_id,
             "course_id": unicode(self.course.id),
@@ -1372,6 +1345,38 @@ class CommentViewSetListTest(DiscussionAPIViewTestMixin, ModuleStoreTestCase, Pr
             response_users = response_comment['users']
             self.assertEqual(expected_author_profile_data, response_users[response_comment['author']])
             self.assertEqual(expected_endorser_profile_data, response_users[response_comment['endorsed_by']])
+
+    def test_profile_image_request_for_null_endorsed_by(self):
+        """
+        Tests if 'endorsed' is True but 'endorsed_by' is null, the api does not crash.
+        This is the case for some old/stale data in prod/stage environments.
+        """
+        self.register_get_user_response(self.user)
+        thread = self.make_minimal_cs_thread({
+            "thread_type": "question",
+            "endorsed_responses": [make_minimal_cs_comment({
+                "id": "endorsed_comment",
+                "user_id": self.user.id,
+                "username": self.user.username,
+                "endorsed": True,
+            })],
+            "non_endorsed_resp_total": 0,
+        })
+        self.register_get_thread_response(thread)
+        self.create_profile_image(self.user, get_profile_image_storage())
+
+        response = self.client.get(self.url, {
+            "thread_id": thread["id"],
+            "endorsed": True,
+            "requested_fields": "profile_image",
+        })
+        self.assertEqual(response.status_code, 200)
+        response_comments = json.loads(response.content)['results']
+        for response_comment in response_comments:
+            expected_author_profile_data = self.get_expected_user_profile(response_comment['author'])
+            response_users = response_comment['users']
+            self.assertEqual(expected_author_profile_data, response_users[response_comment['author']])
+            self.assertNotIn(response_comment['endorsed_by'], response_users)
 
 
 @httpretty.activate

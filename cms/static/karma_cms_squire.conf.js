@@ -1,8 +1,8 @@
+/* eslint-env node */
+
 // Karma config for cms-squire suite.
 // Docs and troubleshooting tips in common/static/common/js/karma.common.conf.js
 
-/* jshint node: true */
-/*jshint -W079 */
 'use strict';
 var path = require('path');
 var configModule = require(path.join(__dirname, '../../common/static/common/js/karma.common.conf.js'));
@@ -22,6 +22,7 @@ var options = {
     // Otherwise Istanbul which is used for coverage tracking will cause tests to not run.
     sourceFiles: [
         {pattern: 'coffee/src/**/!(*spec).js'},
+        {pattern: 'cms/js/**/!(*spec|djangojs).js'},
         {pattern: 'js/**/!(*spec|djangojs).js'}
     ],
 
@@ -36,7 +37,7 @@ var options = {
     ],
 
     runFiles: [
-        {pattern: 'coffee/spec/main_squire.js', included: true}
+        {pattern: 'cms/js/spec/main_squire.js', included: true}
     ]
 };
 

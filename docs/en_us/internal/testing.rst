@@ -208,10 +208,16 @@ To run a single test format the command like this.
 
     paver test_system -t lms/djangoapps/courseware/tests/tests.py:ActivateLoginTest.test_activate_login
 
-The ``lms`` suite of tests runs concurrently, and with randomized order, by default.
-You can override these by using ``--no-randomize`` to disable randomization,
-and ``--processes=N`` to control how many tests will run concurrently (``0`` will
-disable concurrency). For example:
+The ``lms`` suite of tests runs with randomized order, by default.
+You can override these by using ``--no-randomize`` to disable randomization.
+
+You can also enable test concurrency with the ``--processes=N`` flag (where ``N``
+is the number of processes to run tests with, and ``-1`` means one process per
+available core). Note, however, that when running concurrently, breakpoints may
+not work correctly, and you will not be able to run single test methods (only
+single test classes).
+
+For example:
 
 ::
     # This will run all tests in the order that they appear in their files, serially
@@ -627,6 +633,13 @@ During acceptance test execution, Django log files are written to
 
 **Note**: The acceptance tests can *not* currently run in parallel.
 
+Running Tests on Paver Scripts
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To run tests on the scripts that power the various Paver commands, use the following command::
+
+  nosetests paver
+
 
 Testing internationalization with dummy translations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -789,13 +802,13 @@ To view JavaScript code style quality run this command.
 
 ::
 
-    paver run_jshint
+    paver run_eslint
 
 -  This command also comes with a ``--limit`` switch, this is an example of that switch.
 
 ::
 
-	paver run_jshint --limit=700
+	paver run_eslint --limit=50000
 
 
 
@@ -816,7 +829,7 @@ Two tools are available for evaluating complexity of edx-platform code:
 
 ::
 
-       plato -q -x common/static/js/vendor/ -t common -l .jshintrc -r -d jscomplexity common/static/js/
+       plato -q -x common/static/js/vendor/ -t common -e .eslintrc.json -r -d jscomplexity common/static/js/
 
 
 

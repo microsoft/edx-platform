@@ -98,8 +98,8 @@ class CapaModule(CapaMixin, XModule):
         try:
             result = handlers[dispatch](data)
 
-        except NotFoundError as err:
-            log.exception(
+        except NotFoundError:
+            log.info(
                 "Unable to find data when dispatching %s to %s for user %s",
                 dispatch,
                 self.scope_ids.usage_id,
@@ -108,7 +108,7 @@ class CapaModule(CapaMixin, XModule):
             _, _, traceback_obj = sys.exc_info()  # pylint: disable=redefined-outer-name
             raise ProcessingError(not_found_error_message), None, traceback_obj
 
-        except Exception as err:
+        except Exception:
             log.exception(
                 "Unknown error when dispatching %s to %s for user %s",
                 dispatch,
@@ -127,6 +127,19 @@ class CapaModule(CapaMixin, XModule):
         })
 
         return json.dumps(result, cls=ComplexEncoder)
+
+    @property
+    def display_name_with_default(self):
+        """
+        Constructs the display name for a CAPA problem.
+
+        Default to the display_name if it isn't None or not an empty string,
+        else fall back to problem category.
+        """
+        if self.display_name is None or not self.display_name.strip():
+            return self.location.block_type
+
+        return self.display_name
 
 
 class CapaDescriptor(CapaFields, RawDescriptor):

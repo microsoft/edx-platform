@@ -51,19 +51,41 @@ from lms.djangoapps.badges.utils import badges_enabled
 from certificates.models import GeneratedCertificate
 from course_modes.models import CourseMode
 from enrollment.api import _default_course_mode
-from microsite_configuration import microsite
 import lms.lib.comment_client as cc
 from openedx.core.djangoapps.commerce.utils import ecommerce_api_client, ECOMMERCE_DATE_FORMAT
 from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
+from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 from util.model_utils import emit_field_changed_events, get_changed_fields_dict
 from util.query import use_read_replica_if_available
 from util.milestones_helpers import is_entrance_exams_enabled
 
 
 UNENROLL_DONE = Signal(providing_args=["course_enrollment", "skip_refund"])
+ENROLL_STATUS_CHANGE = Signal(providing_args=["event", "user", "course_id", "mode", "cost", "currency"])
 log = logging.getLogger(__name__)
 AUDIT_LOG = logging.getLogger("audit")
 SessionStore = import_module(settings.SESSION_ENGINE).SessionStore  # pylint: disable=invalid-name
+
+# enroll status changed events - signaled to email_marketing.  See email_marketing.tasks for more info
+
+
+# ENROLL signal used for free enrollment only
+class EnrollStatusChange(object):
+    """
+    Possible event types for ENROLL_STATUS_CHANGE signal
+    """
+    # enroll for a course
+    enroll = 'enroll'
+    # unenroll for a course
+    unenroll = 'unenroll'
+    # add an upgrade to cart
+    upgrade_start = 'upgrade_start'
+    # complete an upgrade purchase
+    upgrade_complete = 'upgrade_complete'
+    # add a paid course to the cart
+    paid_start = 'paid_start'
+    # complete a paid course purchase
+    paid_complete = 'paid_complete'
 
 UNENROLLED_TO_ALLOWEDTOENROLL = 'from unenrolled to allowed to enroll'
 ALLOWEDTOENROLL_TO_ENROLLED = 'from allowed to enroll to enrolled'
@@ -127,7 +149,7 @@ def anonymous_id_for_user(user, course_id, save=True):
     hasher.update(settings.SECRET_KEY)
     hasher.update(unicode(user.id))
     if course_id:
-        hasher.update(course_id.to_deprecated_string().encode('utf-8'))
+        hasher.update(unicode(course_id).encode('utf-8'))
     digest = hasher.hexdigest()
 
     if not hasattr(user, '_anonymous_id'):
@@ -146,12 +168,14 @@ def anonymous_id_for_user(user, course_id, save=True):
         )
         if anonymous_user_id.anonymous_user_id != digest:
             log.error(
-                u"Stored anonymous user id %r for user %r "
-                u"in course %r doesn't match computed id %r",
-                user,
-                course_id,
-                anonymous_user_id.anonymous_user_id,
-                digest
+                u"Stored anonymous user id %(anonymous_user_id)r for "
+                u"user %(user)r in course %(course_id)r doesn't match "
+                u"computed id %(digest)r", {
+                    "anonymous_user_id": anonymous_user_id.anonymous_user_id,
+                    "user": user,
+                    "course_id": course_id,
+                    "digest": digest,
+                }
             )
     except IntegrityError:
         # Another thread has already created this entry, so
@@ -1028,16 +1052,14 @@ class CourseEnrollment(models.Model):
         if user.id is None:
             user.save()
 
-        enrollment, created = cls.objects.get_or_create(
+        enrollment, __ = cls.objects.get_or_create(
             user=user,
             course_id=course_key,
+            defaults={
+                'mode': CourseMode.DEFAULT_MODE_SLUG,
+                'is_active': False
+            }
         )
-
-        # If we *did* just create a new enrollment, set some defaults
-        if created:
-            enrollment.mode = CourseMode.DEFAULT_MODE_SLUG
-            enrollment.is_active = False
-            enrollment.save()
 
         return enrollment
 
@@ -1113,6 +1135,7 @@ class CourseEnrollment(models.Model):
                 UNENROLL_DONE.send(sender=None, course_enrollment=self, skip_refund=skip_refund)
 
                 self.emit_event(EVENT_NAME_ENROLLMENT_DEACTIVATED)
+                self.send_signal(EnrollStatusChange.unenroll)
 
                 dog_stats_api.increment(
                     "common.student.unenrollment",
@@ -1124,6 +1147,24 @@ class CourseEnrollment(models.Model):
             # Only emit mode change events when the user's enrollment
             # mode has changed from its previous setting
             self.emit_event(EVENT_NAME_ENROLLMENT_MODE_CHANGED)
+
+    def send_signal(self, event, cost=None, currency=None):
+        """
+        Sends a signal announcing changes in course enrollment status.
+        """
+        ENROLL_STATUS_CHANGE.send(sender=None, event=event, user=self.user,
+                                  mode=self.mode, course_id=self.course_id,
+                                  cost=cost, currency=currency)
+
+    @classmethod
+    def send_signal_full(cls, event, user=user, mode=mode, course_id=course_id, cost=None, currency=None):
+        """
+        Sends a signal announcing changes in course enrollment status.
+        This version should be used if you don't already have a CourseEnrollment object
+        """
+        ENROLL_STATUS_CHANGE.send(sender=None, event=event, user=user,
+                                  mode=mode, course_id=course_id,
+                                  cost=cost, currency=currency)
 
     def emit_event(self, event_name):
         """
@@ -1909,7 +1950,7 @@ class LinkedInAddToProfileConfiguration(ConfigurationModel):
             target (str): An identifier for the occurrance of the button.
 
         """
-        company_identifier = microsite.get_value('LINKEDIN_COMPANY_ID', self.company_identifier)
+        company_identifier = configuration_helpers.get_value('LINKEDIN_COMPANY_ID', self.company_identifier)
         params = OrderedDict([
             ('_ed', company_identifier),
             ('pfCertificationName', self._cert_name(course_name, cert_mode).encode('utf-8')),
@@ -1931,7 +1972,7 @@ class LinkedInAddToProfileConfiguration(ConfigurationModel):
             cert_mode,
             _(u"{platform_name} Certificate for {course_name}")
         ).format(
-            platform_name=microsite.get_value('platform_name', settings.PLATFORM_NAME),
+            platform_name=configuration_helpers.get_value('platform_name', settings.PLATFORM_NAME),
             course_name=course_name
         )
 
@@ -2198,3 +2239,11 @@ class UserAttribute(TimeStampedModel):
             return cls.objects.get(user=user, name=name).value
         except cls.DoesNotExist:
             return None
+
+
+class LogoutViewConfiguration(ConfigurationModel):
+    """ Configuration for the logout view. """
+
+    def __unicode__(self):
+        """Unicode representation of the instance. """
+        return u'Logout view configuration: {enabled}'.format(enabled=self.enabled)

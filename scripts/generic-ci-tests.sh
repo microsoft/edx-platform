@@ -29,10 +29,9 @@ set -e
 #   `SHARD` is a number indicating which subset of the tests to build.
 #
 #       For "bok-choy" and "lms-unit", the tests are put into shard groups
-#       using the nose'attr' decorator (e.g. "@attr('shard_1')"). Anything with
-#       the 'shard_n' attribute will run in the nth shard. If there isn't a
-#       shard explicitly assigned, the test will run in the last shard (the one
-#       with the highest number).
+#       using the nose 'attr' decorator (e.g. "@attr(shard=1)"). Anything with
+#       the 'shard=n' attribute will run in the nth shard. If there isn't a
+#       shard explicitly assigned, the test will run in the last shard.
 #
 #   Jenkins-specific configuration details:
 #
@@ -80,8 +79,9 @@ case "$TEST_SUITE" in
         paver run_pylint -l $PYLINT_THRESHOLD > pylint.log || { cat pylint.log; EXIT=1; }
 
         mkdir -p reports
-        echo "Finding jshint violations and storing report..."
-        paver run_jshint -l $JSHINT_THRESHOLD > jshint.log || { cat jshint.log; EXIT=1; }
+
+        echo "Finding ESLint violations and storing report..."
+        paver run_eslint -l $ESLINT_THRESHOLD > eslint.log || { cat eslint.log; EXIT=1; }
         echo "Running code complexity report (python)."
         paver run_complexity > reports/code_complexity.log || echo "Unable to calculate code complexity. Ignoring error."
         echo "Running safe template linter report."
@@ -99,22 +99,16 @@ case "$TEST_SUITE" in
         ;;
 
     "lms-unit")
-        LMS_ARGS="--with-flaky"
+        PAVER_ARGS="--with-flaky --processes=-1 --cov-args='-p' -v --with-xunitmp"
         case "$SHARD" in
             "all")
-                paver test_system -s lms --extra_args="$LMS_ARGS" --cov_args="-p" -v
+                paver test_system -s lms $PAVER_ARGS
                 ;;
-            "1")
-                paver test_system -s lms --extra_args="--attr='shard_1' $LMS_ARGS" --cov_args="-p" -v
+            [1-3])
+                paver test_system -s lms --attr="shard=$SHARD" $PAVER_ARGS
                 ;;
-            "2")
-                paver test_system -s lms --extra_args="--attr='shard_2' $LMS_ARGS" --cov_args="-p" -v
-                ;;
-            "3")
-                paver test_system -s lms --extra_args="--attr='shard_3' $LMS_ARGS" --cov_args="-p" -v
-                ;;
-            "4")
-                paver test_system -s lms --extra_args="--attr='shard_1=False,shard_2=False,shard_3=False' $LMS_ARGS" --cov_args="-p" -v
+            4|"noshard")
+                paver test_system -s lms --attr='!shard' $PAVER_ARGS
                 ;;
             *)
                 # If no shard is specified, rather than running all tests, create an empty xunit file. This is a
@@ -128,11 +122,11 @@ case "$TEST_SUITE" in
         ;;
 
     "cms-unit")
-        paver test_system -s cms --extra_args="--with-flaky" --cov_args="-p" -v
+        paver test_system -s cms --with-flaky --cov-args="-p" -v --with-xunitmp
         ;;
 
     "commonlib-unit")
-        paver test_lib --extra_args="--with-flaky" --cov_args="-p" -v
+        paver test_lib --with-flaky --cov-args="-p" -v --with-xunit
         ;;
 
     "js-unit")
@@ -141,8 +135,8 @@ case "$TEST_SUITE" in
         ;;
 
     "commonlib-js-unit")
-        paver test_js --coverage --skip_clean || { EXIT=1; }
-        paver test_lib --skip_clean --extra_args="--with-flaky" --cov_args="-p" || { EXIT=1; }
+        paver test_js --coverage --skip-clean || { EXIT=1; }
+        paver test_lib --skip-clean --with-flaky --cov-args="-p" --with-xunitmp || { EXIT=1; }
 
         # This is to ensure that the build status of the shard is properly set.
         # Because we are running two paver commands in a row, we need to capture
@@ -159,11 +153,11 @@ case "$TEST_SUITE" in
         ;;
 
     "lms-acceptance")
-        paver test_acceptance -s lms --extra_args="-v 3"
+        paver test_acceptance -s lms -vvv --with-xunit
         ;;
 
     "cms-acceptance")
-        paver test_acceptance -s cms --extra_args="-v 3"
+        paver test_acceptance -s cms -vvv --with-xunit
         ;;
 
     "bok-choy")
@@ -174,46 +168,20 @@ case "$TEST_SUITE" in
         cp -R $HOME/firefox/ firefox/
         export SELENIUM_FIREFOX_PATH=firefox/firefox
 
+        PAVER_ARGS="-n $NUMBER_OF_BOKCHOY_THREADS --with-flaky --with-xunit"
+
         case "$SHARD" in
 
             "all")
-                paver test_bokchoy
+                paver test_bokchoy $PAVER_ARGS
                 ;;
 
-            "1")
-                paver test_bokchoy -n $NUMBER_OF_BOKCHOY_THREADS --extra_args="-a shard_1 --with-flaky"
+            [1-8])
+                paver test_bokchoy --attr="shard=$SHARD" $PAVER_ARGS
                 ;;
 
-            "2")
-                paver test_bokchoy -n $NUMBER_OF_BOKCHOY_THREADS --extra_args="-a 'shard_2' --with-flaky"
-                ;;
-
-            "3")
-                paver test_bokchoy -n $NUMBER_OF_BOKCHOY_THREADS --extra_args="-a 'shard_3' --with-flaky"
-                ;;
-
-            "4")
-                paver test_bokchoy -n $NUMBER_OF_BOKCHOY_THREADS --extra_args="-a 'shard_4' --with-flaky"
-                ;;
-
-            "5")
-                paver test_bokchoy -n $NUMBER_OF_BOKCHOY_THREADS --extra_args="-a 'shard_5' --with-flaky"
-                ;;
-
-            "6")
-                paver test_bokchoy -n $NUMBER_OF_BOKCHOY_THREADS --extra_args="-a 'shard_6' --with-flaky"
-                ;;
-
-            "7")
-                paver test_bokchoy -n $NUMBER_OF_BOKCHOY_THREADS --extra_args="-a 'shard_7' --with-flaky"
-                ;;
-
-            "8")
-                paver test_bokchoy -n $NUMBER_OF_BOKCHOY_THREADS --extra_args="-a 'shard_8' --with-flaky"
-                ;;
-
-            "9")
-                paver test_bokchoy -n $NUMBER_OF_BOKCHOY_THREADS --extra_args="-a shard_1=False,shard_2=False,shard_3=False,shard_4=False,shard_5=False,shard_6=False,shard_7=False,shard_8=False,a11y=False --with-flaky"
+            9|"noshard")
+                paver test_bokchoy --attr='!shard,a11y=False' $PAVER_ARGS
                 ;;
 
             # Default case because if we later define another bok-choy shard on Jenkins

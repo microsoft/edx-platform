@@ -126,7 +126,7 @@ class EnrollmentTestMixin(object):
         self.assertEqual(actual_mode, expected_mode)
 
 
-@attr('shard_3')
+@attr(shard=3)
 @override_settings(EDX_API_KEY="i am a key")
 @ddt.ddt
 @unittest.skipUnless(settings.ROOT_URLCONF == 'lms.urls', 'Test only valid in lms')
@@ -152,7 +152,7 @@ class EnrollmentTest(EnrollmentTestMixin, ModuleStoreTestCase, APITestCase):
         self.rate_limit_config.save()
 
         throttle = EnrollmentUserThrottle()
-        self.rate_limit, rate_duration = throttle.parse_rate(throttle.rate)
+        self.rate_limit, __ = throttle.parse_rate(throttle.rate)
 
         # Pass emit_signals when creating the course so it would be cached
         # as a CourseOverview.
@@ -543,7 +543,7 @@ class EnrollmentTest(EnrollmentTestMixin, ModuleStoreTestCase, APITestCase):
             mode_display_name=CourseMode.DEFAULT_MODE_SLUG,
         )
 
-        for attempt in xrange(self.rate_limit + 10):
+        for __ in xrange(self.rate_limit + 10):
             self.assert_enrollment_status(as_server=True)
 
     def test_create_enrollment_with_mode(self):
@@ -884,6 +884,37 @@ class EnrollmentTest(EnrollmentTestMixin, ModuleStoreTestCase, APITestCase):
         self.assert_enrollment_status(username='fake-user', expected_status=status.HTTP_404_NOT_FOUND, as_server=False)
         self.assert_enrollment_status(username='fake-user', expected_status=status.HTTP_406_NOT_ACCEPTABLE,
                                       as_server=True)
+
+    def test_update_enrollment_with_expired_mode_throws_error(self):
+        """Verify that if verified mode is expired than it's enrollment cannot be updated. """
+        for mode in [CourseMode.DEFAULT_MODE_SLUG, CourseMode.VERIFIED]:
+            CourseModeFactory.create(
+                course_id=self.course.id,
+                mode_slug=mode,
+                mode_display_name=mode,
+            )
+
+        # Create an enrollment
+        self.assert_enrollment_status(as_server=True)
+
+        # Check that the enrollment is the default.
+        self.assertTrue(CourseEnrollment.is_enrolled(self.user, self.course.id))
+        course_mode, is_active = CourseEnrollment.enrollment_mode_for_user(self.user, self.course.id)
+        self.assertTrue(is_active)
+        self.assertEqual(course_mode, CourseMode.DEFAULT_MODE_SLUG)
+
+        # Change verified mode expiration.
+        mode = CourseMode.objects.get(course_id=self.course.id, mode_slug=CourseMode.VERIFIED)
+        mode.expiration_datetime = datetime.datetime(year=1970, month=1, day=1, tzinfo=pytz.utc)
+        mode.save()
+        self.assert_enrollment_status(
+            as_server=True,
+            mode=CourseMode.VERIFIED,
+            expected_status=status.HTTP_400_BAD_REQUEST
+        )
+        course_mode, is_active = CourseEnrollment.enrollment_mode_for_user(self.user, self.course.id)
+        self.assertTrue(is_active)
+        self.assertEqual(course_mode, CourseMode.DEFAULT_MODE_SLUG)
 
 
 @unittest.skipUnless(settings.ROOT_URLCONF == 'lms.urls', 'Test only valid in lms')

@@ -5,8 +5,8 @@ import json
 
 import requests
 
-from . import PROGRAMS_STUB_URL
-from .config import ConfigModelFixture
+from common.test.acceptance.fixtures import PROGRAMS_STUB_URL
+from common.test.acceptance.fixtures.config import ConfigModelFixture
 
 
 class ProgramsFixture(object):
@@ -31,21 +31,17 @@ class ProgramsFixture(object):
 
 class ProgramsConfigMixin(object):
     """Mixin providing a method used to configure the programs feature."""
-    def set_programs_api_configuration(self, is_enabled=False, api_version=1, api_url=PROGRAMS_STUB_URL,
-                                       js_path='/js', css_path='/css'):
+    def set_programs_api_configuration(self, is_enabled=False, api_version=1, api_url=PROGRAMS_STUB_URL):
         """Dynamically adjusts the Programs config model during tests."""
         ConfigModelFixture('/config/programs', {
             'enabled': is_enabled,
             'api_version_number': api_version,
             'internal_service_url': api_url,
             'public_service_url': api_url,
-            'authoring_app_js_path': js_path,
-            'authoring_app_css_path': css_path,
             'cache_ttl': 0,
             'enable_student_dashboard': is_enabled,
             'enable_studio_tab': is_enabled,
             'enable_certification': is_enabled,
-            'xseries_ad_enabled': is_enabled,
             'program_listing_enabled': is_enabled,
             'program_details_enabled': is_enabled,
         }).install()

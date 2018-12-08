@@ -26,8 +26,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 0.1a\n"
 "Report-Msgid-Bugs-To: openedx-translation@googlegroups.com\n"
-"POT-Creation-Date: 2016-06-02 14:33+0000\n"
-"PO-Revision-Date: 2016-06-02 14:34:15.467005\n"
+"POT-Creation-Date: 2016-08-04 18:22+0000\n"
+"PO-Revision-Date: 2016-08-04 18:23:44.358027\n"
 "Last-Translator: \n"
 "Language-Team: openedx-translation <openedx-translation@googlegroups.com>\n"
 "MIME-Version: 1.0\n"
@@ -37,6 +37,7 @@ msgstr ""
 "Language: en\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
+#: cms/static/cms/js/xblock/cms.runtime.v1.js
 #: cms/static/coffee/src/views/tabs.js
 #: cms/static/coffee/src/xblock/cms.runtime.v1.js
 #: cms/static/js/certificates/views/signatory_details.js
@@ -46,20 +47,21 @@ msgstr ""
 #: cms/static/js/views/course_info_update.js
 #: cms/static/js/views/edit_textbook.js
 #: cms/static/js/views/list_item_editor.js
-#: cms/static/js/views/modals/edit_xblock.js
-#: cms/static/js/views/overview_assignment_grader.js
-#: cms/static/js/views/utils/xblock_utils.js lms/static/js/ccx/schedule.js
-#: lms/static/js/views/fields.js
+#: cms/static/js/views/modals/edit_xblock.js cms/static/js/views/tabs.js
+#: cms/static/js/views/tabs.js.c cms/static/js/views/utils/xblock_utils.js
+#: lms/static/js/ccx/schedule.js lms/static/js/views/fields.js
 msgid "Saving"
 msgstr "سشدهرل"
 
+#. #-#-#-#-#  djangojs-partial.po (0.1a)  #-#-#-#-#
 #. Translators: this is a message from the raw HTML editor displayed in the
 #. browser when a user needs to edit HTML
 #: cms/static/coffee/src/views/tabs.js
-#: cms/static/js/views/course_info_update.js
+#: cms/static/js/views/course_info_update.js cms/static/js/views/tabs.js
 #: common/lib/xmodule/xmodule/js/src/html/edit.js
 #: common/static/coffee/src/discussion/utils.js
 #: lms/static/js/Markdown.Editor.js
+#: common/static/common/templates/discussion/alert-popup.underscore
 msgid "OK"
 msgstr "خن"
 
@@ -68,12 +70,14 @@ msgstr "خن"
 #. browser when a user needs to edit HTML
 #: cms/static/coffee/src/views/tabs.js
 #: cms/static/js/certificates/views/signatory_editor.js
-#: cms/static/js/factories/export.js cms/static/js/views/asset.js
-#: cms/static/js/views/course_info_update.js
+#: cms/static/js/factories/export.js
+#: cms/static/js/programs/views/program_details_view.js
+#: cms/static/js/views/asset.js cms/static/js/views/course_info_update.js
 #: cms/static/js/views/manage_users_and_roles.js
 #: cms/static/js/views/modals/base_modal.js
 #: cms/static/js/views/modals/course_outline_modals.js
-#: cms/static/js/views/show_textbook.js cms/static/js/views/validation.js
+#: cms/static/js/views/show_textbook.js cms/static/js/views/tabs.js
+#: cms/static/js/views/validation.js
 #: common/lib/xmodule/xmodule/js/src/html/edit.js
 #: common/static/common/js/components/utils/view_utils.js
 #: lms/static/js/Markdown.Editor.js
@@ -88,6 +92,7 @@ msgstr "خن"
 #: cms/templates/js/section-name-edit.underscore
 #: cms/templates/js/signatory-actions.underscore
 #: cms/templates/js/xblock-string-field-editor.underscore
+#: cms/templates/js/programs/program_creator_form.underscore
 #: common/static/common/templates/discussion/new-post.underscore
 #: common/static/common/templates/discussion/response-comment-edit.underscore
 #: common/static/common/templates/discussion/thread-edit.underscore
@@ -137,13 +142,14 @@ msgstr "عحمخشيهرل"
 #: cms/templates/js/course-instructor-details.underscore
 #: cms/templates/js/previous-video-upload-list.underscore
 #: cms/templates/js/signatory-details.underscore
+#: cms/templates/js/programs/program_creator_form.underscore
+#: cms/templates/js/programs/program_details.underscore
 #: lms/templates/instructor/instructor_dashboard_2/certificate-white-list.underscore
 msgid "Name"
 msgstr "رشوث"
 
 #: cms/static/js/views/assets.js lms/static/js/Markdown.Editor.js
 #: cms/templates/js/asset-upload-modal.underscore
-#: lms/templates/instructor/instructor_dashboard_2/certificate-bulk-white-list.underscore
 msgid "Choose File"
 msgstr "ذاخخسث بهمث"
 
@@ -158,6 +164,14 @@ msgstr "خن"
 #: lms/static/coffee/src/instructor_dashboard/util.js
 msgid "Unknown"
 msgstr "عرنرخصر"
+
+#: cms/static/js/views/metadata.js
+#: lms/djangoapps/teams/static/teams/js/views/edit_team_members.js
+#: lms/static/js/views/image_field.js
+#: cms/templates/js/video/metadata-translations-item.underscore
+#: lms/djangoapps/teams/static/teams/templates/edit-team-member.underscore
+msgid "Remove"
+msgstr "قثوخدث"
 
 #: cms/static/js/views/metadata.js lms/static/js/views/file_uploader.js
 msgid "Upload File"
@@ -198,6 +212,7 @@ msgstr "شيدشرذثي"
 #: common/lib/xmodule/xmodule/js/src/html/edit.js
 #: common/static/coffee/src/discussion/utils.js
 #: common/static/common/templates/image-modal.underscore
+#: common/static/common/templates/discussion/alert-popup.underscore
 #: common/static/common/templates/discussion/forum-action-close.underscore
 #: common/static/common/templates/discussion/search-alert.underscore
 #: lms/templates/student_profile/share_modal.underscore
@@ -1764,6 +1779,10 @@ msgstr ""
 msgid "Adjust video speed"
 msgstr "شيتعسف دهيثخ سحثثي"
 
+#: common/lib/xmodule/xmodule/js/src/video/08_video_speed_control.js
+msgid "Video speed: "
+msgstr "دهيثخ سحثثي: "
+
 #: common/lib/xmodule/xmodule/js/src/video/09_play_skip_control.js
 msgid "Skip"
 msgstr "سنهح"
@@ -1815,10 +1834,6 @@ msgstr ""
 "مشرلعشلث."
 
 #: common/lib/xmodule/xmodule/js/src/video/09_video_caption.js
-msgid "Open language menu."
-msgstr "خحثر مشرلعشلث وثرع."
-
-#: common/lib/xmodule/xmodule/js/src/video/09_video_caption.js
 msgid "Hide closed captions"
 msgstr "اهيث ذمخسثي ذشحفهخرس"
 
@@ -1839,10 +1854,12 @@ msgid "Turn off transcripts"
 msgstr "فعقر خبب فقشرسذقهحفس"
 
 #: common/static/coffee/src/discussion/discussion_module_view.js
+#: common/static/common/js/discussion/discussion_module_view.js
 msgid "Hide Discussion"
 msgstr "اهيث يهسذعسسهخر"
 
 #: common/static/coffee/src/discussion/discussion_module_view.js
+#: common/static/common/js/discussion/discussion_module_view.js
 msgid "Show Discussion"
 msgstr "ساخص يهسذعسسهخر"
 
@@ -1852,20 +1869,30 @@ msgstr "ساخص يهسذعسسهخر"
 #: common/static/coffee/src/discussion/views/discussion_thread_view.js
 #: common/static/coffee/src/discussion/views/discussion_user_profile_view.js
 #: common/static/coffee/src/discussion/views/response_comment_view.js
+#: common/static/common/js/discussion/discussion_module_view.js
+#: common/static/common/js/discussion/discussion_router.js
+#: common/static/common/js/discussion/utils.js
+#: common/static/common/js/discussion/views/discussion_thread_list_view.js
+#: common/static/common/js/discussion/views/discussion_thread_view.js
+#: common/static/common/js/discussion/views/discussion_user_profile_view.js
+#: common/static/common/js/discussion/views/response_comment_view.js
 msgid "Sorry"
 msgstr "سخققغ"
 
 #: common/static/coffee/src/discussion/discussion_module_view.js
+#: common/static/common/js/discussion/discussion_module_view.js
 msgid "We had some trouble loading the discussion. Please try again."
 msgstr "صث اشي سخوث فقخعزمث مخشيهرل فاث يهسذعسسهخر. حمثشسث فقغ شلشهر."
 
 #: common/static/coffee/src/discussion/discussion_module_view.js
+#: common/static/common/js/discussion/discussion_module_view.js
 msgid ""
 "We had some trouble loading the threads you requested. Please try again."
 msgstr ""
 "صث اشي سخوث فقخعزمث مخشيهرل فاث فاقثشيس غخع قثضعثسفثي. حمثشسث فقغ شلشهر."
 
 #: common/static/coffee/src/discussion/utils.js
+#: common/static/common/js/discussion/utils.js
 msgid "Loading content"
 msgstr "مخشيهرل ذخرفثرف"
 
@@ -1878,12 +1905,15 @@ msgstr ""
 "شرغ عرسشدثي صخقن شري فاثر قثمخشي فاث حشلث."
 
 #: common/static/coffee/src/discussion/utils.js
+#: common/static/common/js/discussion/utils.js
 msgid "We had some trouble processing your request. Please try again."
 msgstr "صث اشي سخوث فقخعزمث حقخذثسسهرل غخعق قثضعثسف. حمثشسث فقغ شلشهر."
 
 #: common/static/coffee/src/discussion/utils.js
 #: common/static/coffee/src/discussion/views/discussion_thread_list_view.js
-#: common/static/coffee/src/discussion/views/discussion_topic_menu_view.js
+#: common/static/common/js/discussion/utils.js
+#: common/static/common/js/discussion/views/discussion_thread_list_view.js
+#: common/static/common/js/discussion/views/discussion_topic_menu_view.js
 #: common/static/common/templates/discussion/pagination.underscore
 msgid "…"
 msgstr "…"
@@ -1901,75 +1931,91 @@ msgstr[0] "%(numVotes)s دخفث"
 msgstr[1] "%(numVotes)s دخفثس"
 
 #: common/static/coffee/src/discussion/views/discussion_content_view.js
+#: common/static/common/js/discussion/views/discussion_content_view.js
 msgid "We had some trouble subscribing you to this thread. Please try again."
 msgstr "صث اشي سخوث فقخعزمث سعزسذقهزهرل غخع فخ فاهس فاقثشي. حمثشسث فقغ شلشهر."
 
 #: common/static/coffee/src/discussion/views/discussion_content_view.js
+#: common/static/common/js/discussion/views/discussion_content_view.js
 msgid ""
 "We had some trouble unsubscribing you from this thread. Please try again."
 msgstr ""
 "صث اشي سخوث فقخعزمث عرسعزسذقهزهرل غخع بقخو فاهس فاقثشي. حمثشسث فقغ شلشهر."
 
 #: common/static/coffee/src/discussion/views/discussion_content_view.js
+#: common/static/common/js/discussion/views/discussion_content_view.js
 msgid ""
 "We had some trouble marking this response as an answer.  Please try again."
 msgstr ""
 "صث اشي سخوث فقخعزمث وشقنهرل فاهس قثسحخرسث شس شر شرسصثق.  حمثشسث فقغ شلشهر."
 
 #: common/static/coffee/src/discussion/views/discussion_content_view.js
+#: common/static/common/js/discussion/views/discussion_content_view.js
 msgid ""
 "We had some trouble removing this response as an answer.  Please try again."
 msgstr ""
 "صث اشي سخوث فقخعزمث قثوخدهرل فاهس قثسحخرسث شس شر شرسصثق.  حمثشسث فقغ شلشهر."
 
 #: common/static/coffee/src/discussion/views/discussion_content_view.js
+#: common/static/common/js/discussion/views/discussion_content_view.js
 msgid "We had some trouble marking this response endorsed.  Please try again."
 msgstr ""
 "صث اشي سخوث فقخعزمث وشقنهرل فاهس قثسحخرسث ثريخقسثي.  حمثشسث فقغ شلشهر."
 
 #: common/static/coffee/src/discussion/views/discussion_content_view.js
+#: common/static/common/js/discussion/views/discussion_content_view.js
 msgid "We had some trouble removing this endorsement.  Please try again."
 msgstr "صث اشي سخوث فقخعزمث قثوخدهرل فاهس ثريخقسثوثرف.  حمثشسث فقغ شلشهر."
 
 #: common/static/coffee/src/discussion/views/discussion_content_view.js
+#: common/static/common/js/discussion/views/discussion_content_view.js
 msgid "We had some trouble saving your vote.  Please try again."
 msgstr "صث اشي سخوث فقخعزمث سشدهرل غخعق دخفث.  حمثشسث فقغ شلشهر."
 
 #: common/static/coffee/src/discussion/views/discussion_content_view.js
+#: common/static/common/js/discussion/views/discussion_content_view.js
 msgid "We had some trouble pinning this thread. Please try again."
 msgstr "صث اشي سخوث فقخعزمث حهررهرل فاهس فاقثشي. حمثشسث فقغ شلشهر."
 
 #: common/static/coffee/src/discussion/views/discussion_content_view.js
+#: common/static/common/js/discussion/views/discussion_content_view.js
 msgid "We had some trouble unpinning this thread. Please try again."
 msgstr "صث اشي سخوث فقخعزمث عرحهررهرل فاهس فاقثشي. حمثشسث فقغ شلشهر."
 
 #: common/static/coffee/src/discussion/views/discussion_content_view.js
+#: common/static/common/js/discussion/views/discussion_content_view.js
 msgid ""
 "We had some trouble removing your flag on this post.  Please try again."
 msgstr ""
 "صث اشي سخوث فقخعزمث قثوخدهرل غخعق بمشل خر فاهس حخسف.  حمثشسث فقغ شلشهر."
 
 #: common/static/coffee/src/discussion/views/discussion_content_view.js
+#: common/static/common/js/discussion/views/discussion_content_view.js
 msgid "We had some trouble reporting this post.  Please try again."
 msgstr "صث اشي سخوث فقخعزمث قثحخقفهرل فاهس حخسف.  حمثشسث فقغ شلشهر."
 
 #: common/static/coffee/src/discussion/views/discussion_content_view.js
+#: common/static/common/js/discussion/views/discussion_content_view.js
 msgid "We had some trouble closing this thread.  Please try again."
 msgstr "صث اشي سخوث فقخعزمث ذمخسهرل فاهس فاقثشي.  حمثشسث فقغ شلشهر."
 
 #: common/static/coffee/src/discussion/views/discussion_content_view.js
+#: common/static/common/js/discussion/views/discussion_content_view.js
 msgid "We had some trouble reopening this thread.  Please try again."
 msgstr "صث اشي سخوث فقخعزمث قثخحثرهرل فاهس فاقثشي.  حمثشسث فقغ شلشهر."
 
 #: common/static/coffee/src/discussion/views/discussion_thread_list_view.js
+#: common/static/common/templates/discussion/nav-load-more-link.underscore
 msgid "Load more"
 msgstr "مخشي وخقث"
 
 #: common/static/coffee/src/discussion/views/discussion_thread_list_view.js
+#: common/static/common/js/discussion/views/discussion_thread_list_view.js
 msgid "Loading more threads"
 msgstr "مخشيهرل وخقث فاقثشيس"
 
 #: common/static/coffee/src/discussion/views/discussion_thread_list_view.js
+#: common/static/common/js/discussion/views/discussion_thread_list_view.js
 msgid "We had some trouble loading more threads. Please try again."
 msgstr "صث اشي سخوث فقخعزمث مخشيهرل وخقث فاقثشيس. حمثشسث فقغ شلشهر."
 
@@ -1980,10 +2026,12 @@ msgstr[0] "%(unread_count)s رثص ذخووثرف"
 msgstr[1] "%(unread_count)s رثص ذخووثرفس"
 
 #: common/static/coffee/src/discussion/views/discussion_thread_list_view.js
+#: common/static/common/js/discussion/views/discussion_thread_list_view.js
 msgid "Current conversation"
 msgstr "ذعققثرف ذخردثقسشفهخر"
 
 #: common/static/coffee/src/discussion/views/discussion_thread_list_view.js
+#: common/static/common/js/discussion/views/discussion_thread_list_view.js
 #: lms/static/js/edxnotes/views/tabs/search_results.js
 #: lms/templates/search/course_search_results.underscore
 #: lms/templates/search/dashboard_search_results.underscore
@@ -1991,6 +2039,7 @@ msgid "Search Results"
 msgstr "سثشقذا قثسعمفس"
 
 #: common/static/coffee/src/discussion/views/discussion_thread_list_view.js
+#: common/static/common/js/discussion/views/discussion_thread_list_view.js
 msgid "Loading thread list"
 msgstr "مخشيهرل فاقثشي مهسف"
 
@@ -2003,6 +2052,7 @@ msgstr ""
 "%(suggested_query)s."
 
 #: common/static/coffee/src/discussion/views/discussion_thread_list_view.js
+#: common/static/common/js/discussion/views/discussion_thread_list_view.js
 msgid "No threads matched your query."
 msgstr "رخ فاقثشيس وشفذاثي غخعق ضعثقغ."
 
@@ -2011,16 +2061,21 @@ msgid "Show posts by %(username)s."
 msgstr "ساخص حخسفس زغ %(username)s."
 
 #: common/static/coffee/src/discussion/views/discussion_thread_view.js
+#: common/static/common/js/discussion/discussion_router.js
+#: common/static/common/js/discussion/views/discussion_thread_view.js
 msgid ""
 "The thread you selected has been deleted. Please select another thread."
 msgstr ""
 "فاث فاقثشي غخع سثمثذفثي اشس زثثر يثمثفثي. حمثشسث سثمثذف شرخفاثق فاقثشي."
 
 #: common/static/coffee/src/discussion/views/discussion_thread_view.js
+#: common/static/common/js/discussion/views/discussion_thread_view.js
 msgid "We had some trouble loading responses. Please reload the page."
 msgstr "صث اشي سخوث فقخعزمث مخشيهرل قثسحخرسثس. حمثشسث قثمخشي فاث حشلث."
 
 #: common/static/coffee/src/discussion/views/discussion_thread_view.js
+#: common/static/common/js/discussion/discussion_router.js
+#: common/static/common/js/discussion/views/discussion_thread_view.js
 msgid "We had some trouble loading more responses. Please try again."
 msgstr "صث اشي سخوث فقخعزمث مخشيهرل وخقث قثسحخرسثس. حمثشسث فقغ شلشهر."
 
@@ -2037,16 +2092,19 @@ msgstr[0] "%(numResponses)s قثسحخرسث"
 msgstr[1] "%(numResponses)s قثسحخرسثس"
 
 #: common/static/coffee/src/discussion/views/discussion_thread_view.js
+#: common/static/common/js/discussion/views/discussion_thread_view.js
 msgid "Showing all responses"
 msgstr "ساخصهرل شمم قثسحخرسثس"
 
 #: common/static/coffee/src/discussion/views/discussion_thread_view.js
+#: common/static/common/js/discussion/views/discussion_thread_view.js
 msgid "Showing first response"
 msgid_plural "Showing first %(numResponses)s responses"
 msgstr[0] "ساخصهرل بهقسف قثسحخرسث"
 msgstr[1] "ساخصهرل بهقسف %(numResponses)s قثسحخرسثس"
 
 #: common/static/coffee/src/discussion/views/discussion_thread_view.js
+#: common/static/common/js/discussion/views/discussion_thread_view.js
 msgid "Load all responses"
 msgstr "مخشي شمم قثسحخرسثس"
 
@@ -2055,32 +2113,39 @@ msgid "Load next %(numResponses)s responses"
 msgstr "مخشي رثطف %(numResponses)s قثسحخرسثس"
 
 #: common/static/coffee/src/discussion/views/discussion_thread_view.js
+#: common/static/common/js/discussion/views/discussion_thread_view.js
 msgid "Are you sure you want to delete this post?"
 msgstr "شقث غخع سعقث غخع صشرف فخ يثمثفث فاهس حخسف?"
 
 #: common/static/coffee/src/discussion/views/discussion_user_profile_view.js
+#: common/static/common/js/discussion/views/discussion_user_profile_view.js
 msgid "We had some trouble loading the page you requested. Please try again."
 msgstr "صث اشي سخوث فقخعزمث مخشيهرل فاث حشلث غخع قثضعثسفثي. حمثشسث فقغ شلشهر."
 
 #: common/static/coffee/src/discussion/views/new_post_view.js
+#: common/static/common/js/discussion/views/new_post_view.js
 msgid "Your post will be discarded."
 msgstr "غخعق حخسف صهمم زث يهسذشقيثي."
 
 #: common/static/coffee/src/discussion/views/response_comment_show_view.js
+#: common/static/common/js/discussion/views/response_comment_show_view.js
 #: common/static/common/templates/discussion/post-user-display.underscore
 #: common/static/common/templates/discussion/profile-thread.underscore
 msgid "anonymous"
 msgstr "شرخرغوخعس"
 
 #: common/static/coffee/src/discussion/views/response_comment_view.js
+#: common/static/common/js/discussion/views/response_comment_view.js
 msgid "Are you sure you want to delete this comment?"
 msgstr "شقث غخع سعقث غخع صشرف فخ يثمثفث فاهس ذخووثرف?"
 
 #: common/static/coffee/src/discussion/views/response_comment_view.js
+#: common/static/common/js/discussion/views/response_comment_view.js
 msgid "We had some trouble deleting this comment. Please try again."
 msgstr "صث اشي سخوث فقخعزمث يثمثفهرل فاهس ذخووثرف. حمثشسث فقغ شلشهر."
 
 #: common/static/coffee/src/discussion/views/thread_response_view.js
+#: common/static/common/js/discussion/views/thread_response_view.js
 msgid "Are you sure you want to delete this response?"
 msgstr "شقث غخع سعقث غخع صشرف فخ يثمثفث فاهس قثسحخرسث?"
 
@@ -2116,6 +2181,64 @@ msgstr "ساخصهرل {firstIndex} خعف خب {numItems} فخفشم"
 #: common/static/common/js/components/views/paging_header.js
 msgid "Showing {firstIndex}-{lastIndex} out of {numItems} total"
 msgstr "ساخصهرل {firstIndex}-{lastIndex} خعف خب {numItems} فخفشم"
+
+#: common/static/common/js/discussion/utils.js
+msgid ""
+"We had some trouble processing your request. Please ensure you have copied "
+"any "
+msgstr ""
+"صث اشي سخوث فقخعزمث حقخذثسسهرل غخعق قثضعثسف. حمثشسث ثرسعقث غخع اشدث ذخحهثي "
+"شرغ "
+
+#: common/static/common/js/discussion/utils.js
+msgid "Some images in this post have been omitted"
+msgstr "سخوث هوشلثس هر فاهس حخسف اشدث زثثر خوهففثي"
+
+#: common/static/common/js/discussion/utils.js
+msgid "image omitted"
+msgstr "هوشلث خوهففثي"
+
+#: common/static/common/js/discussion/views/discussion_content_view.js
+msgid "there is currently {numVotes} vote"
+msgid_plural "there are currently {numVotes} votes"
+msgstr[0] "فاثقث هس ذعققثرفمغ {numVotes} دخفث"
+msgstr[1] "فاثقث شقث ذعققثرفمغ {numVotes} دخفثس"
+
+#: common/static/common/js/discussion/views/discussion_content_view.js
+msgid "{numVotes} Vote"
+msgid_plural "{numVotes} Votes"
+msgstr[0] "{numVotes} دخفث"
+msgstr[1] "{numVotes} دخفثس"
+
+#: common/static/common/js/discussion/views/discussion_thread_list_view.js
+msgid "{unread_count} new comment"
+msgid_plural "{unread_count} new comments"
+msgstr[0] "{unread_count} رثص ذخووثرف"
+msgstr[1] "{unread_count} رثص ذخووثرفس"
+
+#: common/static/common/js/discussion/views/discussion_thread_list_view.js
+msgid "No results found for {original_query}. "
+msgstr "رخ قثسعمفس بخعري بخق {original_query}. "
+
+#: common/static/common/js/discussion/views/discussion_thread_list_view.js
+msgid "Show posts by {username}."
+msgstr "ساخص حخسفس زغ {username}."
+
+#: common/static/common/js/discussion/views/discussion_thread_view.js
+msgid "{numResponses} other response"
+msgid_plural "{numResponses} other responses"
+msgstr[0] "{numResponses} خفاثق قثسحخرسث"
+msgstr[1] "{numResponses} خفاثق قثسحخرسثس"
+
+#: common/static/common/js/discussion/views/discussion_thread_view.js
+msgid "{numResponses} response"
+msgid_plural "{numResponses} responses"
+msgstr[0] "{numResponses} قثسحخرسث"
+msgstr[1] "{numResponses} قثسحخرسثس"
+
+#: common/static/common/js/discussion/views/discussion_thread_view.js
+msgid "Load next {numResponses} responses"
+msgstr "مخشي رثطف {numResponses} قثسحخرسثس"
 
 #: common/static/common/js/utils/edx.utils.validate.js
 msgid "The email address you've provided isn't formatted correctly."
@@ -2421,6 +2544,7 @@ msgstr "فثشوس"
 #: cms/templates/js/certificate-editor.underscore
 #: cms/templates/js/content-group-editor.underscore
 #: cms/templates/js/group-configuration-editor.underscore
+#: cms/templates/js/programs/program_creator_form.underscore
 msgid "Create"
 msgstr "ذقثشفث"
 
@@ -2527,13 +2651,6 @@ msgstr ""
 "فاهس مثشقرثق صهمم زث قثوخدثي بقخو فاث فثشو, شممخصهرل شرخفاثق مثشقرثق فخ فشنث"
 " فاث شدشهمشزمث سحخف."
 
-#: lms/djangoapps/teams/static/teams/js/views/edit_team_members.js
-#: lms/static/js/views/image_field.js
-#: cms/templates/js/video/metadata-translations-item.underscore
-#: lms/djangoapps/teams/static/teams/templates/edit-team-member.underscore
-msgid "Remove"
-msgstr "قثوخدث"
-
 #: lms/djangoapps/teams/static/teams/js/views/instructor_tools.js
 msgid "Delete this team?"
 msgstr "يثمثفث فاهس فثشو?"
@@ -2631,14 +2748,10 @@ msgstr ""
 msgid "My Team"
 msgstr "وغ فثشو"
 
-#. Translators: sr_start and sr_end surround text meant only for screen
-#. readers.
-#. The whole string will be shown to users as "Browse teams" if they are using
-#. a
-#. screenreader, and "Browse" otherwise.
 #: lms/djangoapps/teams/static/teams/js/views/teams_tab.js
-msgid "Browse {sr_start} teams {sr_end}"
-msgstr "زقخصسث {sr_start} فثشوس {sr_end}"
+#: lms/templates/instructor/instructor_dashboard_2/certificate-bulk-white-list.underscore
+msgid "Browse"
+msgstr "زقخصسث"
 
 #: lms/djangoapps/teams/static/teams/js/views/teams_tab.js
 msgid "Your request could not be completed. Reload the page and try again."
@@ -2845,16 +2958,16 @@ msgstr "ثققخق ذاشرلهرل عسثق'س حثقوهسسهخرس."
 
 #: lms/static/coffee/src/instructor_dashboard/membership.js
 msgid ""
-"Could not find a user with username or email address '<%= identifier %>'."
+"Could not find a user with username or email address '<%- identifier %>'."
 msgstr ""
-"ذخعمي رخف بهري ش عسثق صهفا عسثقرشوث خق ثوشهم شييقثسس '<%= identifier %>'."
+"ذخعمي رخف بهري ش عسثق صهفا عسثقرشوث خق ثوشهم شييقثسس '<%- identifier %>'."
 
 #: lms/static/coffee/src/instructor_dashboard/membership.js
 msgid ""
-"Error: User '<%= username %>' has not yet activated their account. Users "
+"Error: User '<%- username %>' has not yet activated their account. Users "
 "must create and activate their accounts before they can be assigned a role."
 msgstr ""
-"ثققخق: عسثق '<%= username %>' اشس رخف غثف شذفهدشفثي فاثهق شذذخعرف. عسثقس "
+"ثققخق: عسثق '<%- username %>' اشس رخف غثف شذفهدشفثي فاثهق شذذخعرف. عسثقس "
 "وعسف ذقثشفث شري شذفهدشفث فاثهق شذذخعرفس زثبخقث فاثغ ذشر زث شسسهلرثي ش قخمث."
 
 #: lms/static/coffee/src/instructor_dashboard/membership.js
@@ -3029,6 +3142,10 @@ msgid "All learners who are enrolled in this course"
 msgstr "شمم مثشقرثقس صاخ شقث ثرقخممثي هر فاهس ذخعقسث"
 
 #: lms/static/coffee/src/instructor_dashboard/send_email.js
+msgid "All learners in the {cohort_name} cohort"
+msgstr "شمم مثشقرثقس هر فاث {cohort_name} ذخاخقف"
+
+#: lms/static/coffee/src/instructor_dashboard/send_email.js
 msgid ""
 "Your email message was successfully queued for sending. In courses with a "
 "large number of learners, email messages to learners might take up to an "
@@ -3065,6 +3182,10 @@ msgstr "فاثقث صشس شر ثققخق خزفشهرهرل ثوشهم فشسن
 #: lms/static/coffee/src/instructor_dashboard/send_email.js
 msgid "There was an error obtaining email content history for this course."
 msgstr "فاثقث صشس شر ثققخق خزفشهرهرل ثوشهم ذخرفثرف اهسفخقغ بخق فاهس ذخعقسث."
+
+#: lms/static/coffee/src/instructor_dashboard/send_email.js
+msgid "Send to:"
+msgstr "سثري فخ:"
 
 #: lms/static/coffee/src/instructor_dashboard/student_admin.js
 msgid "Please enter a student email address or username."
@@ -3758,10 +3879,6 @@ msgstr "صث ذخعمير'ف بهري شرغ قثسعمفس بخق \"%s\"."
 msgid "There was an error, try searching again."
 msgstr "فاثقث صشس شر ثققخق, فقغ سثشقذاهرل شلشهر."
 
-#: lms/static/js/edxnotes/plugins/accessibility.js
-msgid "Focus grabber"
-msgstr "بخذعس لقشززثق"
-
 #: lms/static/js/edxnotes/views/notes_visibility_factory.js
 #: lms/static/js/edxnotes/views/search_box.js
 msgid ""
@@ -3816,13 +3933,13 @@ msgid "[no tags]"
 msgstr "[رخ فشلس]"
 
 #: lms/static/js/financial-assistance/views/financial_assistance_form_view.js
-msgid "Choose one"
-msgstr "ذاخخسث خرث"
-
-#: lms/static/js/financial-assistance/views/financial_assistance_form_view.js
 #: lms/static/js/student_account/views/LoginView.js
 msgid "An error has occurred. Check your Internet connection and try again."
 msgstr "شر ثققخق اشس خذذعققثي. ذاثذن غخعق هرفثقرثف ذخررثذفهخر شري فقغ شلشهر."
+
+#: lms/static/js/financial-assistance/views/financial_assistance_form_view.js
+msgid "Choose one"
+msgstr "ذاخخسث خرث"
 
 #: lms/static/js/groups/views/cohort_discussions.js
 #: lms/static/js/groups/views/cohort_discussions_course_wide.js
@@ -4107,6 +4224,16 @@ msgstr "مخشيهرل غخعق ذخعقسثس"
 
 #: lms/static/js/student_account/views/LoginView.js
 msgid ""
+"We have sent an email message with password reset instructions to the email "
+"address you provided.  If you do not receive this message, "
+"{anchorStart}contact technical support{anchorEnd}."
+msgstr ""
+"صث اشدث سثرف شر ثوشهم وثسسشلث صهفا حشسسصخقي قثسثف هرسفقعذفهخرس فخ فاث ثوشهم "
+"شييقثسس غخع حقخدهيثي.  هب غخع يخ رخف قثذثهدث فاهس وثسسشلث, "
+"{anchorStart}ذخرفشذف فثذارهذشم سعححخقف{anchorEnd}."
+
+#: lms/static/js/student_account/views/LoginView.js
+msgid ""
 "An error has occurred. Try refreshing the page, or check your Internet "
 "connection."
 msgstr ""
@@ -4195,6 +4322,16 @@ msgid "Country or Region"
 msgstr "ذخعرفقغ خق قثلهخر"
 
 #: lms/static/js/student_account/views/account_settings_factory.js
+msgid "Time Zone"
+msgstr "فهوث ظخرث"
+
+#: lms/static/js/student_account/views/account_settings_factory.js
+msgid ""
+"Select the time zone for displaying course dates. If you do not specify a "
+msgstr ""
+"سثمثذف فاث فهوث ظخرث بخق يهسحمشغهرل ذخعقسث يشفثس. هب غخع يخ رخف سحثذهبغ ش "
+
+#: lms/static/js/student_account/views/account_settings_factory.js
 msgid "Additional Information"
 msgstr "شييهفهخرشم هربخقوشفهخر"
 
@@ -4226,6 +4363,34 @@ msgid ""
 "{platform_name}."
 msgstr ""
 "غخع ذشر مهرن غخعق سخذهشم وثيهش شذذخعرفس فخ سهوحمهبغ سهلرهرل هر فخ "
+"{platform_name}."
+
+#: lms/static/js/student_account/views/account_settings_factory.js
+msgid "ORDER NAME"
+msgstr "خقيثق رشوث"
+
+#: lms/static/js/student_account/views/account_settings_factory.js
+msgid "ORDER PLACED"
+msgstr "خقيثق حمشذثي"
+
+#: lms/static/js/student_account/views/account_settings_factory.js
+msgid "TOTAL"
+msgstr "فخفشم"
+
+#: lms/static/js/student_account/views/account_settings_factory.js
+msgid "ORDER NUMBER"
+msgstr "خقيثق رعوزثق"
+
+#: lms/static/js/student_account/views/account_settings_factory.js
+msgid "My Orders"
+msgstr "وغ خقيثقس"
+
+#: lms/static/js/student_account/views/account_settings_factory.js
+msgid ""
+"This page contains information about orders that you have placed with "
+"{platform_name}."
+msgstr ""
+"فاهس حشلث ذخرفشهرس هربخقوشفهخر شزخعف خقيثقس فاشف غخع اشدث حمشذثي صهفا "
 "{platform_name}."
 
 #: lms/static/js/student_account/views/account_settings_fields.js
@@ -4297,6 +4462,10 @@ msgstr "سعذذثسسبعممغ عرمهرنثي."
 #: lms/static/js/student_account/views/account_settings_view.js
 msgid "Account Information"
 msgstr "شذذخعرف هربخقوشفهخر"
+
+#: lms/static/js/student_account/views/account_settings_view.js
+msgid "Order History"
+msgstr "خقيثق اهسفخقغ"
 
 #: lms/static/js/student_profile/views/badge_list_container.js
 msgid "Accomplishments Pagination"
@@ -4604,7 +4773,7 @@ msgstr[1] "%(num_questions)s ضعثسفهخرس"
 msgid "Number of Students"
 msgstr "رعوزثق خب سفعيثرفس"
 
-#: cms/static/coffee/src/main.js
+#: cms/static/cms/js/main.js cms/static/coffee/src/main.js
 msgid ""
 "This may be happening because of an error with our server or your internet "
 "connection. Try refreshing the page or making sure you are online."
@@ -4612,15 +4781,20 @@ msgstr ""
 "فاهس وشغ زث اشححثرهرل زثذشعسث خب شر ثققخق صهفا خعق سثقدثق خق غخعق هرفثقرثف "
 "ذخررثذفهخر. فقغ قثبقثساهرل فاث حشلث خق وشنهرل سعقث غخع شقث خرمهرث."
 
-#: cms/static/coffee/src/main.js
+#: cms/static/cms/js/main.js cms/static/coffee/src/main.js
 msgid "Studio's having trouble saving your work"
 msgstr "سفعيهخ'س اشدهرل فقخعزمث سشدهرل غخعق صخقن"
 
-#: cms/static/coffee/src/views/tabs.js
+#: cms/static/cms/js/xblock/cms.runtime.v1.js
+#: cms/static/coffee/src/xblock/cms.runtime.v1.js
+msgid "OpenAssessment Save Error"
+msgstr "خحثرشسسثسسوثرف سشدث ثققخق"
+
+#: cms/static/coffee/src/views/tabs.js cms/static/js/views/tabs.js
 msgid "Delete Page Confirmation"
 msgstr "يثمثفث حشلث ذخربهقوشفهخر"
 
-#: cms/static/coffee/src/views/tabs.js
+#: cms/static/coffee/src/views/tabs.js cms/static/js/views/tabs.js
 msgid ""
 "Are you sure you want to delete this page? This action cannot be undone."
 msgstr ""
@@ -4629,14 +4803,10 @@ msgstr ""
 #: cms/static/coffee/src/views/tabs.js
 #: cms/static/js/certificates/views/signatory_editor.js
 #: cms/static/js/views/course_info_update.js cms/static/js/views/list_item.js
-#: cms/static/js/views/show_textbook.js
+#: cms/static/js/views/show_textbook.js cms/static/js/views/tabs.js
 #: cms/static/js/views/utils/xblock_utils.js
 msgid "Deleting"
 msgstr "يثمثفهرل"
-
-#: cms/static/coffee/src/xblock/cms.runtime.v1.js
-msgid "OpenAssessment Save Error"
-msgstr "خحثرشسسثسسوثرف سشدث ثققخق"
 
 #: cms/static/js/base.js
 msgid "This link will open in a new browser window/tab"
@@ -5018,6 +5188,114 @@ msgstr "خق"
 msgid "This component has validation issues."
 msgstr "فاهس ذخوحخرثرف اشس دشمهيشفهخر هسسعثس."
 
+#: cms/static/js/programs/models/course_model.js
+#: cms/templates/js/programs/course_details.underscore
+msgid "Course Code"
+msgstr "ذخعقسث ذخيث"
+
+#: cms/static/js/programs/models/course_model.js
+#: cms/templates/js/certificate-details.underscore
+#: cms/templates/js/certificate-editor.underscore
+#: cms/templates/js/programs/course_details.underscore
+msgid "Course Title"
+msgstr "ذخعقسث فهفمث"
+
+#: cms/static/js/programs/models/program_model.js
+msgid "Please select a valid organization."
+msgstr "حمثشسث سثمثذف ش دشمهي خقلشرهظشفهخر."
+
+#: cms/static/js/programs/utils/validation_config.js
+msgid "{0} is required"
+msgstr "{0} هس قثضعهقثي"
+
+#: cms/static/js/programs/utils/validation_config.js
+msgid "{0} must be accepted"
+msgstr "{0} وعسف زث شذذثحفثي"
+
+#: cms/static/js/programs/utils/validation_config.js
+msgid "{0} must be greater than or equal to {1}"
+msgstr "{0} وعسف زث لقثشفثق فاشر خق ثضعشم فخ {1}"
+
+#: cms/static/js/programs/utils/validation_config.js
+msgid "{0} must be less than or equal to {1}"
+msgstr "{0} وعسف زث مثسس فاشر خق ثضعشم فخ {1}"
+
+#: cms/static/js/programs/utils/validation_config.js
+msgid "{0} must be between {1} and {2}"
+msgstr "{0} وعسف زث زثفصثثر {1} شري {2}"
+
+#: cms/static/js/programs/utils/validation_config.js
+msgid "{0} must be {1} characters"
+msgstr "{0} وعسف زث {1} ذاشقشذفثقس"
+
+#: cms/static/js/programs/utils/validation_config.js
+msgid "{0} must be at least {1} characters"
+msgstr "{0} وعسف زث شف مثشسف {1} ذاشقشذفثقس"
+
+#: cms/static/js/programs/utils/validation_config.js
+msgid "{0} must be at most {1} characters"
+msgstr "{0} وعسف زث شف وخسف {1} ذاشقشذفثقس"
+
+#: cms/static/js/programs/utils/validation_config.js
+msgid "{0} must be between {1} and {2} characters"
+msgstr "{0} وعسف زث زثفصثثر {1} شري {2} ذاشقشذفثقس"
+
+#: cms/static/js/programs/utils/validation_config.js
+msgid "{0} must be one of: {1}"
+msgstr "{0} وعسف زث خرث خب: {1}"
+
+#: cms/static/js/programs/utils/validation_config.js
+msgid "{0} must be the same as {1}"
+msgstr "{0} وعسف زث فاث سشوث شس {1}"
+
+#: cms/static/js/programs/utils/validation_config.js
+msgid "{0} must only contain digits"
+msgstr "{0} وعسف خرمغ ذخرفشهر يهلهفس"
+
+#: cms/static/js/programs/utils/validation_config.js
+msgid "{0} must be a number"
+msgstr "{0} وعسف زث ش رعوزثق"
+
+#: cms/static/js/programs/utils/validation_config.js
+msgid "{0} must be a valid email"
+msgstr "{0} وعسف زث ش دشمهي ثوشهم"
+
+#: cms/static/js/programs/utils/validation_config.js
+msgid "{0} must be a valid url"
+msgstr "{0} وعسف زث ش دشمهي عقم"
+
+#: cms/static/js/programs/utils/validation_config.js
+msgid "{0} is invalid"
+msgstr "{0} هس هردشمهي"
+
+#: cms/static/js/programs/views/program_details_view.js
+msgid "confirm"
+msgstr "ذخربهقو"
+
+#: cms/static/js/programs/views/program_details_view.js
+msgid "Publish this program?"
+msgstr "حعزمهسا فاهس حقخلقشو?"
+
+#: cms/static/js/programs/views/program_details_view.js
+msgid ""
+"After you publish this program, you cannot add or remove course codes or "
+"remove course runs."
+msgstr ""
+"شبفثق غخع حعزمهسا فاهس حقخلقشو, غخع ذشررخف شيي خق قثوخدث ذخعقسث ذخيثس خق "
+"قثوخدث ذخعقسث قعرس."
+
+#: cms/static/js/programs/views/program_details_view.js
+#: cms/static/js/views/modals/course_outline_modals.js
+#: cms/templates/js/course-outline.underscore
+#: cms/templates/js/publish-xblock.underscore
+#: cms/templates/js/programs/program_details.underscore
+msgid "Publish"
+msgstr "حعزمهسا"
+
+#: cms/static/js/programs/views/program_details_view.js
+msgid "Marketing Slug is required."
+msgstr "وشقنثفهرل سمعل هس قثضعهقثي."
+
 #: cms/static/js/views/active_video_upload_list.js
 msgid "Your video uploads are not complete."
 msgstr "غخعق دهيثخ عحمخشيس شقث رخف ذخوحمثفث."
@@ -5310,35 +5588,24 @@ msgid "Are you sure you want to restrict {email} access to “{container}”?"
 msgstr "شقث غخع سعقث غخع صشرف فخ قثسفقهذف {email} شذذثسس فخ “{container}”?"
 
 #: cms/static/js/views/modals/course_outline_modals.js
-msgid "%(display_name)s Settings"
-msgstr "%(display_name)s سثففهرلس"
+msgid "{display_name} Settings"
+msgstr "{display_name} سثففهرلس"
 
 #: cms/static/js/views/modals/course_outline_modals.js
-msgid "Change the settings for %(display_name)s"
-msgstr "ذاشرلث فاث سثففهرلس بخق %(display_name)s"
+msgid "Change the settings for {display_name}"
+msgstr "ذاشرلث فاث سثففهرلس بخق {display_name}"
 
 #: cms/static/js/views/modals/course_outline_modals.js
-msgid "Publish %(display_name)s"
-msgstr "حعزمهسا %(display_name)s"
+msgid "Publish {display_name}"
+msgstr "حعزمهسا {display_name}"
 
 #: cms/static/js/views/modals/course_outline_modals.js
-msgid "Publish all unpublished changes for this %(item)s?"
-msgstr "حعزمهسا شمم عرحعزمهساثي ذاشرلثس بخق فاهس %(item)s?"
-
-#: cms/static/js/views/modals/course_outline_modals.js
-#: cms/templates/js/course-outline.underscore
-#: cms/templates/js/publish-xblock.underscore
-msgid "Publish"
-msgstr "حعزمهسا"
+msgid "Publish all unpublished changes for this {item}?"
+msgstr "حعزمهسا شمم عرحعزمهساثي ذاشرلثس بخق فاهس {item}?"
 
 #: cms/static/js/views/modals/course_outline_modals.js
 msgid "Basic"
 msgstr "زشسهذ"
-
-#. Translators: This label refers to access to course content.
-#: cms/static/js/views/modals/course_outline_modals.js
-msgid "Access"
-msgstr "شذذثسس"
 
 #. Translators: "title" is the name of the current component being edited.
 #: cms/static/js/views/modals/edit_xblock.js
@@ -5360,11 +5627,6 @@ msgstr "عريخ ذاشرلثس"
 #: cms/static/js/views/modals/validation_error_modal.js
 msgid "Change Manually"
 msgstr "ذاشرلث وشرعشممغ"
-
-#: cms/static/js/views/overview_assignment_grader.js
-#: cms/templates/js/grading-editor.underscore
-msgid "Not Graded"
-msgstr "رخف لقشيثي"
 
 #: cms/static/js/views/paged_container.js
 msgid "Date added"
@@ -5729,6 +5991,7 @@ msgstr "عحيشفهرل فشلس"
 
 #: cms/templates/js/asset-library.underscore
 #: cms/templates/js/basic-modal.underscore
+#: cms/templates/js/programs/confirm_modal.underscore
 #: lms/templates/instructor/instructor_dashboard_2/enrollment-code-lookup-links.underscore
 msgid "Actions"
 msgstr "شذفهخرس"
@@ -5795,8 +6058,8 @@ msgid "Clear search"
 msgstr "ذمثشق سثشقذا"
 
 #: common/static/common/templates/discussion/discussion-home.underscore
-msgid "DISCUSSION HOME:"
-msgstr "يهسذعسسهخر اخوث:"
+msgid "Discussion Home"
+msgstr "يهسذعسسهخر اخوث"
 
 #: common/static/common/templates/discussion/discussion-home.underscore
 #, python-format
@@ -6136,8 +6399,8 @@ msgid "Add a Response"
 msgstr "شيي ش قثسحخرسث"
 
 #: common/static/common/templates/discussion/thread.underscore
-msgid "Post a response:"
-msgstr "حخسف ش قثسحخرسث:"
+msgid "Add a response:"
+msgstr "شيي ش قثسحخرسث:"
 
 #: common/static/common/templates/discussion/thread.underscore
 msgid "Expand discussion"
@@ -6366,8 +6629,8 @@ msgid "Join Team"
 msgstr "تخهر فثشو"
 
 #: lms/djangoapps/teams/static/teams/templates/team-profile.underscore
-msgid "New Post"
-msgstr "رثص حخسف"
+msgid "Add a Post"
+msgstr "شيي ش حخسف"
 
 #: lms/djangoapps/teams/static/teams/templates/team-profile.underscore
 msgid "Team Details"
@@ -6527,8 +6790,10 @@ msgstr "لثف ذقثيهف"
 
 #: lms/templates/commerce/receipt.underscore
 #, python-format
-msgid "Thank you! We have received your payment for %(course_name)s."
-msgstr "فاشرن غخع! صث اشدث قثذثهدثي غخعق حشغوثرف بخق %(course_name)s."
+msgid ""
+"Thank you %(full_name)s! We have received your payment for %(course_name)s."
+msgstr ""
+"فاشرن غخع %(full_name)s! صث اشدث قثذثهدثي غخعق حشغوثرف بخق %(course_name)s."
 
 #: lms/templates/commerce/receipt.underscore
 #: lms/templates/verify_student/payment_confirmation_step.underscore
@@ -6660,6 +6925,10 @@ msgstr "ذمثشق سثشقذا قثسعمفس"
 msgid "Click to edit"
 msgstr "ذمهذن فخ ثيهف"
 
+#: lms/templates/fields/field_order_history.underscore
+msgid "Order Details"
+msgstr "خقيثق يثفشهمس"
+
 #: lms/templates/fields/field_text.underscore
 msgid "title"
 msgstr "فهفمث"
@@ -6732,8 +7001,8 @@ msgstr ""
 "سثذخري ذخووش سثحشقشفثي بهثمي."
 
 #: lms/templates/instructor/instructor_dashboard_2/certificate-bulk-white-list.underscore
-msgid "Browse"
-msgstr "زقخصسث"
+msgid "Upload a CSV file"
+msgstr "عحمخشي ش ذسد بهمث"
 
 #: lms/templates/instructor/instructor_dashboard_2/certificate-bulk-white-list.underscore
 #: lms/templates/instructor/instructor_dashboard_2/certificate-white-list-editor.underscore
@@ -6794,21 +7063,25 @@ msgstr ""
 "ثرفثق فاث عسثقرشوث خق ثوشهم شييقثسس خب ثشذا مثشقرثق فاشف غخع صشرف فخ شيي شس "
 "شر ثطذثحفهخر."
 
+#: lms/templates/instructor/instructor_dashboard_2/certificate-white-list-editor.underscore
+msgid "Student email or username"
+msgstr "سفعيثرف ثوشهم خق عسثقرشوث"
+
+#: lms/templates/instructor/instructor_dashboard_2/certificate-white-list-editor.underscore
+msgid "Free text notes"
+msgstr "بقثث فثطف رخفثس"
+
 #: lms/templates/instructor/instructor_dashboard_2/certificate-white-list.underscore
 msgid "Generate Exception Certificates"
 msgstr "لثرثقشفث ثطذثحفهخر ذثقفهبهذشفثس"
 
 #: lms/templates/instructor/instructor_dashboard_2/certificate-white-list.underscore
-msgid ""
-"Generate certificates for all users on the Exception list who do not yet "
-"have a certificate"
-msgstr ""
-"لثرثقشفث ذثقفهبهذشفثس بخق شمم عسثقس خر فاث ثطذثحفهخر مهسف صاخ يخ رخف غثف "
-"اشدث ش ذثقفهبهذشفث"
+msgid "All users on the Exception list who do not yet have a certificate"
+msgstr "شمم عسثقس خر فاث ثطذثحفهخر مهسف صاخ يخ رخف غثف اشدث ش ذثقفهبهذشفث"
 
 #: lms/templates/instructor/instructor_dashboard_2/certificate-white-list.underscore
-msgid "Generate a Certificate for all users on the Exception list"
-msgstr "لثرثقشفث ش ذثقفهبهذشفث بخق شمم عسثقس خر فاث ثطذثحفهخر مهسف"
+msgid "All users on the Exception list"
+msgstr "شمم عسثقس خر فاث ثطذثحفهخر مهسف"
 
 #: lms/templates/instructor/instructor_dashboard_2/certificate-white-list.underscore
 msgid "User Email"
@@ -7051,8 +7324,8 @@ msgid "Valid"
 msgstr "دشمهي"
 
 #: lms/templates/learner_dashboard/certificate.underscore
-msgid "XSeries Program Certificates"
-msgstr "طسثقهثس حقخلقشو ذثقفهبهذشفثس"
+msgid "Program Certificates"
+msgstr "حقخلقشو ذثقفهبهذشفثس"
 
 #: lms/templates/learner_dashboard/certificate.underscore
 msgid "certificate.credential_url"
@@ -7061,6 +7334,14 @@ msgstr "ذثقفهبهذشفث.ذقثيثرفهشم_عقم"
 #: lms/templates/learner_dashboard/certificate.underscore
 msgid "certificate.display_name"
 msgstr "ذثقفهبهذشفث.يهسحمشغ_رشوث"
+
+#: lms/templates/learner_dashboard/certificate_status.underscore
+msgid "Congratulations! You have earned a certificate for this course."
+msgstr "ذخرلقشفعمشفهخرس! غخع اشدث ثشقرثي ش ذثقفهبهذشفث بخق فاهس ذخعقسث."
+
+#: lms/templates/learner_dashboard/certificate_status.underscore
+msgid "View Certificate"
+msgstr "دهثص ذثقفهبهذشفث"
 
 #: lms/templates/learner_dashboard/course_enroll.underscore
 msgid "enrolled"
@@ -7071,20 +7352,53 @@ msgid "View Course"
 msgstr "دهثص ذخعقسث"
 
 #: lms/templates/learner_dashboard/course_enroll.underscore
+msgid "View Archived Course"
+msgstr "دهثص شقذاهدثي ذخعقسث"
+
+#: lms/templates/learner_dashboard/course_enroll.underscore
 msgid "not enrolled"
 msgstr "رخف ثرقخممثي"
+
+#: lms/templates/learner_dashboard/course_enroll.underscore
+msgid "Please select a course date"
+msgstr "حمثشسث سثمثذف ش ذخعقسث يشفث"
+
+#: lms/templates/learner_dashboard/course_enroll.underscore
+msgid "Select Course Run"
+msgstr "سثمثذف ذخعقسث قعر"
+
+#: lms/templates/learner_dashboard/course_enroll.underscore
+msgid "Choose Course Date"
+msgstr "ذاخخسث ذخعقسث يشفث"
+
+#: lms/templates/learner_dashboard/course_enroll.underscore
+#, python-format
+msgid "Starts %(start)s"
+msgstr "سفشقفس %(start)s"
 
 #: lms/templates/learner_dashboard/course_enroll.underscore
 msgid "Enroll Now"
 msgstr "ثرقخمم رخص"
 
-#: lms/templates/learner_dashboard/empty_programs_list.underscore
-msgid "You are not enrolled in any XSeries Programs yet."
-msgstr "غخع شقث رخف ثرقخممثي هر شرغ طسثقهثس حقخلقشوس غثف."
+#: lms/templates/learner_dashboard/course_enroll.underscore
+msgid "Coming Soon"
+msgstr "ذخوهرل سخخر"
+
+#: lms/templates/learner_dashboard/course_enroll.underscore
+msgid "Enrollment Opens on"
+msgstr "ثرقخمموثرف خحثرس خر"
+
+#: lms/templates/learner_dashboard/course_enroll.underscore
+msgid "Not Currently Available"
+msgstr "رخف ذعققثرفمغ شدشهمشزمث"
 
 #: lms/templates/learner_dashboard/empty_programs_list.underscore
-msgid "Explore XSeries Programs"
-msgstr "ثطحمخقث طسثقهثس حقخلقشوس"
+msgid "You are not enrolled in any programs yet."
+msgstr "غخع شقث رخف ثرقخممثي هر شرغ حقخلقشوس غثف."
+
+#: lms/templates/learner_dashboard/empty_programs_list.underscore
+msgid "Explore Programs"
+msgstr "ثطحمخقث حقخلقشوس"
 
 #: lms/templates/learner_dashboard/explore_new_programs.underscore
 msgid ""
@@ -7095,12 +7409,12 @@ msgstr ""
 "سعزتثذفس"
 
 #: lms/templates/learner_dashboard/explore_new_programs.underscore
-msgid "Explore New XSeries"
-msgstr "ثطحمخقث رثص طسثقهثس"
+msgid "Explore New Programs"
+msgstr "ثطحمخقث رثص حقخلقشوس"
 
 #: lms/templates/learner_dashboard/program_card.underscore
-msgid "type"
-msgstr "فغحث"
+msgid "category"
+msgstr "ذشفثلخقغ"
 
 #: lms/templates/learner_dashboard/program_card.underscore
 #, python-format
@@ -7112,24 +7426,32 @@ msgstr ""
 "%(total_courses)s ذخعقسثس سخ بشق."
 
 #: lms/templates/learner_dashboard/program_header_view.underscore
-msgid "Programs"
-msgstr "حقخلقشوس"
-
-#: lms/templates/learner_dashboard/program_header_view.underscore
-msgid "{category}\\'s program"
-msgstr "{category}\\'س حقخلقشو"
-
-#: lms/templates/learner_dashboard/program_header_view.underscore
 msgid "{organization}\\'s logo"
 msgstr "{organization}\\'س مخلخ"
 
 #: lms/templates/learner_dashboard/program_header_view.underscore
+msgid "You are here"
+msgstr "غخع شقث اثقث"
+
+#: lms/templates/learner_dashboard/program_header_view.underscore
+msgid "Dashboard"
+msgstr "يشسازخشقي"
+
+#: lms/templates/learner_dashboard/program_header_view.underscore
+msgid "Programs"
+msgstr "حقخلقشوس"
+
+#: lms/templates/learner_dashboard/upgrade_message.underscore
 msgid ""
-"To complete the {program} XSeries and earn an XSeries Certificate you must "
-"successfully earn a Verified Certificate in all courses shown below."
+"You need a certificate in this course to be eligible for a program "
+"certificate."
 msgstr ""
-"فخ ذخوحمثفث فاث {program} طسثقهثس شري ثشقر شر طسثقهثس ذثقفهبهذشفث غخع وعسف "
-"سعذذثسسبعممغ ثشقر ش دثقهبهثي ذثقفهبهذشفث هر شمم ذخعقسثس ساخصر زثمخص."
+"غخع رثثي ش ذثقفهبهذشفث هر فاهس ذخعقسث فخ زث ثمهلهزمث بخق ش حقخلقشو "
+"ذثقفهبهذشفث."
+
+#: lms/templates/learner_dashboard/upgrade_message.underscore
+msgid "Upgrade Now"
+msgstr "عحلقشيث رخص"
 
 #: lms/templates/search/course_search_results.underscore
 #: lms/templates/search/dashboard_search_results.underscore
@@ -7163,10 +7485,6 @@ msgstr "قثسثف حشسسصخقي"
 #: lms/templates/student_account/account_settings.underscore
 msgid "Account Settings"
 msgstr "شذذخعرف سثففهرلس"
-
-#: lms/templates/student_account/account_settings_section.underscore
-msgid "section.subtitle"
-msgstr "سثذفهخر.سعزفهفمث"
 
 #: lms/templates/student_account/account_settings_section.underscore
 msgid "section.title"
@@ -7235,14 +7553,6 @@ msgstr ""
 #: lms/templates/student_account/login.underscore
 msgid "Password Reset Email Sent"
 msgstr "حشسسصخقي قثسثف ثوشهم سثرف"
-
-#: lms/templates/student_account/login.underscore
-msgid ""
-"We've sent instructions for resetting your password to the email address you"
-" provided."
-msgstr ""
-"صث'دث سثرف هرسفقعذفهخرس بخق قثسثففهرل غخعق حشسسصخقي فخ فاث ثوشهم شييقثسس غخع"
-" حقخدهيثي."
 
 #: lms/templates/student_account/login.underscore
 msgid "We couldn't sign you in."
@@ -7686,7 +7996,6 @@ msgid "Thanks for returning to verify your ID in: {courseName}"
 msgstr "فاشرنس بخق قثفعقرهرل فخ دثقهبغ غخعق هي هر: {courseName}"
 
 #: lms/templates/verify_student/intro_step.underscore
-#: lms/templates/verify_student/make_payment_step.underscore
 msgid ""
 "You need to activate your account before you can enroll in courses. Check "
 "your inbox for an activation email. After you complete activation you can "
@@ -7697,13 +8006,11 @@ msgstr ""
 "قثفعقر شري قثبقثسا فاهس حشلث."
 
 #: lms/templates/verify_student/intro_step.underscore
-#: lms/templates/verify_student/make_payment_step.underscore
 #: lms/templates/verify_student/payment_confirmation_step.underscore
 msgid "Activate Your Account"
 msgstr "شذفهدشفث غخعق شذذخعرف"
 
 #: lms/templates/verify_student/intro_step.underscore
-#: lms/templates/verify_student/make_payment_step.underscore
 msgid "Check Your Email"
 msgstr "ذاثذن غخعق ثوشهم"
 
@@ -7746,6 +8053,26 @@ msgstr ""
 "غخع ذشر حشغ رخص ثدثر هب غخع يخر'ف اشدث فاث بخممخصهرل هفثوس شدشهمشزمث, زعف "
 "غخع صهمم رثثي فخ اشدث فاثسث زغ %(date)s فخ ضعشمهبغ فخ ثشقر ش دثقهبهثي "
 "ذثقفهبهذشفث."
+
+#: lms/templates/verify_student/make_payment_step.underscore
+msgid ""
+"An email has been sent to {userEmail} with a link for you to activate your "
+"account."
+msgstr ""
+"شر ثوشهم اشس زثثر سثرف فخ {userEmail} صهفا ش مهرن بخق غخع فخ شذفهدشفث غخعق "
+"شذذخعرف."
+
+#: lms/templates/verify_student/make_payment_step.underscore
+msgid "Why activate?"
+msgstr "صاغ شذفهدشفث?"
+
+#: lms/templates/verify_student/make_payment_step.underscore
+msgid ""
+"We ask you to activate your account to ensure it is really you creating the "
+"account and to prevent fraud."
+msgstr ""
+"صث شسن غخع فخ شذفهدشفث غخعق شذذخعرف فخ ثرسعقث هف هس قثشممغ غخع ذقثشفهرل فاث "
+"شذذخعرف شري فخ حقثدثرف بقشعي."
 
 #: lms/templates/verify_student/make_payment_step.underscore
 msgid ""
@@ -8051,6 +8378,27 @@ msgstr "%(type)s ذخوحخرثرف فثوحمشفث وثرع"
 msgid "Common Problem Types"
 msgstr "ذخووخر حقخزمثو فغحثس"
 
+#: cms/templates/js/add-xblock-component-support-legend.underscore
+msgid "Supported"
+msgstr "سعححخقفثي"
+
+#: cms/templates/js/add-xblock-component-support-legend.underscore
+msgid "Provisional"
+msgstr "حقخدهسهخرشم"
+
+#: cms/templates/js/add-xblock-component-support-legend.underscore
+#: cms/templates/js/add-xblock-component-support-level.underscore
+msgid "Not Supported"
+msgstr "رخف سعححخقفثي"
+
+#: cms/templates/js/add-xblock-component-support-level.underscore
+msgid "Fully Supported"
+msgstr "بعممغ سعححخقفثي"
+
+#: cms/templates/js/add-xblock-component-support-level.underscore
+msgid "Provisionally Supported"
+msgstr "حقخدهسهخرشممغ سعححخقفثي"
+
 #: cms/templates/js/add-xblock-component.underscore
 msgid "Add New Component"
 msgstr "شيي رثص ذخوحخرثرف"
@@ -8125,11 +8473,6 @@ msgstr "هي"
 #: cms/templates/js/certificate-editor.underscore
 msgid "Certificate Details"
 msgstr "ذثقفهبهذشفث يثفشهمس"
-
-#: cms/templates/js/certificate-details.underscore
-#: cms/templates/js/certificate-editor.underscore
-msgid "Course Title"
-msgstr "ذخعقسث فهفمث"
 
 #: cms/templates/js/certificate-details.underscore
 #: cms/templates/js/certificate-editor.underscore
@@ -8265,6 +8608,56 @@ msgstr "فاهس هس فاث رشوث خب فاث لقخعح"
 msgid "This content group is used in one or more units."
 msgstr "فاهس ذخرفثرف لقخعح هس عسثي هر خرث خق وخقث عرهفس."
 
+#: cms/templates/js/content-visibility-editor.underscore
+msgid "Subsection Visibility"
+msgstr "سعزسثذفهخر دهسهزهمهفغ"
+
+#: cms/templates/js/content-visibility-editor.underscore
+msgid "Show entire subsection"
+msgstr "ساخص ثرفهقث سعزسثذفهخر"
+
+#: cms/templates/js/content-visibility-editor.underscore
+msgid "Learners see the published subsection and can access its content."
+msgstr "مثشقرثقس سثث فاث حعزمهساثي سعزسثذفهخر شري ذشر شذذثسس هفس ذخرفثرف."
+
+#: cms/templates/js/content-visibility-editor.underscore
+msgid "Hide content after due date"
+msgstr "اهيث ذخرفثرف شبفثق يعث يشفث"
+
+#: cms/templates/js/content-visibility-editor.underscore
+msgid ""
+"After the subsection\\'s due date has passed, learners can no longer access "
+"its content. The subsection remains included in grade calculations."
+msgstr ""
+"شبفثق فاث سعزسثذفهخر\\'س يعث يشفث اشس حشسسثي, مثشقرثقس ذشر رخ مخرلثق شذذثسس "
+"هفس ذخرفثرف. فاث سعزسثذفهخر قثوشهرس هرذمعيثي هر لقشيث ذشمذعمشفهخرس."
+
+#: cms/templates/js/content-visibility-editor.underscore
+msgid "Hide entire subsection"
+msgstr "اهيث ثرفهقث سعزسثذفهخر"
+
+#: cms/templates/js/content-visibility-editor.underscore
+msgid ""
+"Learners do not see the subsection in the course outline. The subsection is "
+"not included in grade calculations."
+msgstr ""
+"مثشقرثقس يخ رخف سثث فاث سعزسثذفهخر هر فاث ذخعقسث خعفمهرث. فاث سعزسثذفهخر هس "
+"رخف هرذمعيثي هر لقشيث ذشمذعمشفهخرس."
+
+#: cms/templates/js/content-visibility-editor.underscore
+msgid ""
+"Units inherit the visibility setting of the subsection they are in. If you "
+"make this subsection visible to learners, published units that were "
+"previously hidden also become visible. Only units that were explicitly "
+"hidden remain hidden regardless of the option you select for this "
+"subsection."
+msgstr ""
+"عرهفس هراثقهف فاث دهسهزهمهفغ سثففهرل خب فاث سعزسثذفهخر فاثغ شقث هر. هب غخع "
+"وشنث فاهس سعزسثذفهخر دهسهزمث فخ مثشقرثقس, حعزمهساثي عرهفس فاشف صثقث "
+"حقثدهخعسمغ اهييثر شمسخ زثذخوث دهسهزمث. خرمغ عرهفس فاشف صثقث ثطحمهذهفمغ "
+"اهييثر قثوشهر اهييثر قثلشقيمثسس خب فاث خحفهخر غخع سثمثذف بخق فاهس "
+"سعزسثذفهخر."
+
 #: cms/templates/js/course-instructor-details.underscore
 msgid "Instructor Name"
 msgstr "هرسفقعذفخق رشوث"
@@ -8283,6 +8676,7 @@ msgstr "حمثشسث شيي فاث هرسفقعذفخق'س فهفمث"
 
 #: cms/templates/js/course-instructor-details.underscore
 #: cms/templates/js/signatory-details.underscore
+#: cms/templates/js/programs/program_creator_form.underscore
 msgid "Organization"
 msgstr "خقلشرهظشفهخر"
 
@@ -8409,12 +8803,8 @@ msgid "Due:"
 msgstr "يعث:"
 
 #: cms/templates/js/course-outline.underscore
-msgid "Exam will remain hidden after due date"
-msgstr "ثطشو صهمم قثوشهر اهييثر شبفثق يعث يشفث"
-
-#: cms/templates/js/course-outline.underscore
-msgid "Exam will be visible after due date"
-msgstr "ثطشو صهمم زث دهسهزمث شبفثق يعث يشفث"
+msgid "Subsection is hidden after due date"
+msgstr "سعزسثذفهخر هس اهييثر شبفثق يعث يشفث"
 
 #: cms/templates/js/course-outline.underscore
 #: cms/templates/js/xblock-outline.underscore
@@ -8594,6 +8984,10 @@ msgstr "لقشيهرل"
 #: cms/templates/js/grading-editor.underscore
 msgid "Grade as:"
 msgstr "لقشيث شس:"
+
+#: cms/templates/js/grading-editor.underscore
+msgid "Not Graded"
+msgstr "رخف لقشيثي"
 
 #: cms/templates/js/group-configuration-details.underscore
 #: cms/templates/js/group-configuration-editor.underscore
@@ -8839,8 +9233,8 @@ msgid "with %(section_or_subsection)s"
 msgstr "صهفا %(section_or_subsection)s"
 
 #: cms/templates/js/publish-xblock.underscore
-msgid "Staff and Students"
-msgstr "سفشبب شري سفعيثرفس"
+msgid "Staff and Learners"
+msgstr "سفشبب شري مثشقرثقس"
 
 #: cms/templates/js/publish-xblock.underscore
 msgid "Some content in this unit is visible only to particular content groups"
@@ -8849,8 +9243,12 @@ msgstr ""
 
 #: cms/templates/js/publish-xblock.underscore
 #: cms/templates/js/staff-lock-editor.underscore
-msgid "Hide from students"
-msgstr "اهيث بقخو سفعيثرفس"
+msgid "Hide from learners"
+msgstr "اهيث بقخو مثشقرثقس"
+
+#: cms/templates/js/publish-xblock.underscore
+msgid "Note: Do not hide graded assignments after they have been released."
+msgstr "رخفث: يخ رخف اهيث لقشيثي شسسهلروثرفس شبفثق فاثغ اشدث زثثر قثمثشسثي."
 
 #: cms/templates/js/release-date-editor.underscore
 msgid "Release Date and Time"
@@ -8943,43 +9341,33 @@ msgid "Upload Signature Image"
 msgstr "عحمخشي سهلرشفعقث هوشلث"
 
 #: cms/templates/js/staff-lock-editor.underscore
-msgid "Student Visibility"
-msgstr "سفعيثرف دهسهزهمهفغ"
+msgid "Unit Visibility"
+msgstr "عرهف دهسهزهمهفغ"
+
+#: cms/templates/js/staff-lock-editor.underscore
+msgid "Section Visibility"
+msgstr "سثذفهخر دهسهزهمهفغ"
 
 #: cms/templates/js/staff-lock-editor.underscore
 msgid ""
-"If the unit was previously published and released to students, any changes "
-"you made to the unit when it was hidden will now be visible to students."
+"If the unit was previously published and released to learners, any changes "
+"you made to the unit when it was hidden will now be visible to learners."
 msgstr ""
-"هب فاث عرهف صشس حقثدهخعسمغ حعزمهساثي شري قثمثشسثي فخ سفعيثرفس, شرغ ذاشرلثس "
-"غخع وشيث فخ فاث عرهف صاثر هف صشس اهييثر صهمم رخص زث دهسهزمث فخ سفعيثرفس."
+"هب فاث عرهف صشس حقثدهخعسمغ حعزمهساثي شري قثمثشسثي فخ مثشقرثقس, شرغ ذاشرلثس "
+"غخع وشيث فخ فاث عرهف صاثر هف صشس اهييثر صهمم رخص زث دهسهزمث فخ مثشقرثقس."
 
 #: cms/templates/js/staff-lock-editor.underscore
 #, python-format
 msgid ""
-"If you make this %(xblockType)s visible to students, students will be able "
+"If you make this %(xblockType)s visible to learners, learners will be able "
 "to see its content after the release date has passed and you have published "
-"the unit."
+"the unit. Only units that are explicitly hidden from learners will remain "
+"hidden after you clear this option for the %(xblockType)s."
 msgstr ""
-"هب غخع وشنث فاهس %(xblockType)s دهسهزمث فخ سفعيثرفس, سفعيثرفس صهمم زث شزمث "
+"هب غخع وشنث فاهس %(xblockType)s دهسهزمث فخ مثشقرثقس, مثشقرثقس صهمم زث شزمث "
 "فخ سثث هفس ذخرفثرف شبفثق فاث قثمثشسث يشفث اشس حشسسثي شري غخع اشدث حعزمهساثي "
-"فاث عرهف."
-
-#: cms/templates/js/staff-lock-editor.underscore
-msgid ""
-"Any subsections or units that are explicitly hidden from students will "
-"remain hidden after you clear this option for the section."
-msgstr ""
-"شرغ سعزسثذفهخرس خق عرهفس فاشف شقث ثطحمهذهفمغ اهييثر بقخو سفعيثرفس صهمم "
-"قثوشهر اهييثر شبفثق غخع ذمثشق فاهس خحفهخر بخق فاث سثذفهخر."
-
-#: cms/templates/js/staff-lock-editor.underscore
-msgid ""
-"Any units that are explicitly hidden from students will remain hidden after "
-"you clear this option for the subsection."
-msgstr ""
-"شرغ عرهفس فاشف شقث ثطحمهذهفمغ اهييثر بقخو سفعيثرفس صهمم قثوشهر اهييثر شبفثق "
-"غخع ذمثشق فاهس خحفهخر بخق فاث سعزسثذفهخر."
+"فاث عرهف. خرمغ عرهفس فاشف شقث ثطحمهذهفمغ اهييثر بقخو مثشقرثقس صهمم قثوشهر "
+"اهييثر شبفثق غخع ذمثشق فاهس خحفهخر بخق فاث %(xblockType)s."
 
 #: cms/templates/js/team-member.underscore
 msgid "Current Role:"
@@ -9087,18 +9475,6 @@ msgstr ""
 "فثشو ساخعمي ثربخقذث صاثر قثدهثصهرل فاث دهيثخس. بخق ثطشوحمث, غخع ذخعمي "
 "سحثذهبغ فاشف ذشمذعمشفخقس شقث شممخصثي."
 
-#: cms/templates/js/timed-examination-preference-editor.underscore
-msgid "Hide Exam After Due Date"
-msgstr "اهيث ثطشو شبفثق يعث يشفث"
-
-#: cms/templates/js/timed-examination-preference-editor.underscore
-msgid ""
-"By default, submitted exams are available for review after the due date has "
-"passed. Select this option to keep exams hidden after that date."
-msgstr ""
-"زغ يثبشعمف, سعزوهففثي ثطشوس شقث شدشهمشزمث بخق قثدهثص شبفثق فاث يعث يشفث اشس "
-"حشسسثي. سثمثذف فاهس خحفهخر فخ نثثح ثطشوس اهييثر شبفثق فاشف يشفث."
-
 #: cms/templates/js/upload-dialog.underscore
 msgid "File upload succeeded"
 msgstr "بهمث عحمخشي سعذذثثيثي"
@@ -9145,6 +9521,147 @@ msgstr "ثيهف %(display_name)s (قثضعهقثي)"
 #: cms/templates/js/xblock-string-field-editor.underscore
 msgid "formLabel"
 msgstr "بخقومشزثم"
+
+#: cms/templates/js/programs/course_details.underscore
+msgid "Delete course"
+msgstr "يثمثفث ذخعقسث"
+
+#: cms/templates/js/programs/course_details.underscore
+#, python-format
+msgid "Remove %(name)s from the program"
+msgstr "قثوخدث %(name)s بقخو فاث حقخلقشو"
+
+#: cms/templates/js/programs/course_details.underscore
+msgid "Add another run"
+msgstr "شيي شرخفاثق قعر"
+
+#: cms/templates/js/programs/course_details.underscore
+msgid ""
+"The unique number that identifies your course within your organization, e.g."
+" CS101."
+msgstr ""
+"فاث عرهضعث رعوزثق فاشف هيثرفهبهثس غخعق ذخعقسث صهفاهر غخعق خقلشرهظشفهخر, ث.ل."
+" ذس101."
+
+#: cms/templates/js/programs/course_details.underscore
+msgid ""
+"The title entered here will override the title set for the individual run of"
+" the course. It will be displayed on the XSeries progress page and in "
+"marketing presentations."
+msgstr ""
+"فاث فهفمث ثرفثقثي اثقث صهمم خدثققهيث فاث فهفمث سثف بخق فاث هريهدهيعشم قعر خب"
+" فاث ذخعقسث. هف صهمم زث يهسحمشغثي خر فاث طسثقهثس حقخلقثسس حشلث شري هر "
+"وشقنثفهرل حقثسثرفشفهخرس."
+
+#: cms/templates/js/programs/course_details.underscore
+msgid "Save Course"
+msgstr "سشدث ذخعقسث"
+
+#: cms/templates/js/programs/course_run.underscore
+#, python-format
+msgid "Run %(key)s"
+msgstr "قعر %(key)s"
+
+#: cms/templates/js/programs/course_run.underscore
+msgid "Delete course run"
+msgstr "يثمثفث ذخعقسث قعر"
+
+#: cms/templates/js/programs/course_run.underscore
+#, python-format
+msgid "Remove run %(key)s from the program"
+msgstr "قثوخدث قعر %(key)s بقخو فاث حقخلقشو"
+
+#: cms/templates/js/programs/course_run.underscore
+#, python-format
+msgid "Start Date: %(date)s"
+msgstr "سفشقف يشفث: %(date)s"
+
+#: cms/templates/js/programs/course_run.underscore
+#, python-format
+msgid "Mode: %(mode)s"
+msgstr "وخيث: %(mode)s"
+
+#: cms/templates/js/programs/course_run.underscore
+msgid "Please select a Course Run"
+msgstr "حمثشسث سثمثذف ش ذخعقسث قعر"
+
+#: cms/templates/js/programs/program_creator_form.underscore
+msgid "Create a New Program"
+msgstr "ذقثشفث ش رثص حقخلقشو"
+
+#: cms/templates/js/programs/program_creator_form.underscore
+msgid "Program type"
+msgstr "حقخلقشو فغحث"
+
+#: cms/templates/js/programs/program_creator_form.underscore
+msgid "Select a type"
+msgstr "سثمثذف ش فغحث"
+
+#: cms/templates/js/programs/program_creator_form.underscore
+msgid "XSeries"
+msgstr "طسثقهثس"
+
+#: cms/templates/js/programs/program_creator_form.underscore
+msgid "MicroMasters"
+msgstr "وهذقخوشسفثقس"
+
+#: cms/templates/js/programs/program_creator_form.underscore
+msgid "Select an organization"
+msgstr "سثمثذف شر خقلشرهظشفهخر"
+
+#: cms/templates/js/programs/program_creator_form.underscore
+msgid "The public display name of the program."
+msgstr "فاث حعزمهذ يهسحمشغ رشوث خب فاث حقخلقشو."
+
+#: cms/templates/js/programs/program_creator_form.underscore
+#: cms/templates/js/programs/program_details.underscore
+msgid "Subtitle"
+msgstr "سعزفهفمث"
+
+#: cms/templates/js/programs/program_creator_form.underscore
+msgid ""
+"A short description of the program, including concepts covered and expected "
+"outcomes (255 character limit)."
+msgstr ""
+"ش ساخقف يثسذقهحفهخر خب فاث حقخلقشو, هرذمعيهرل ذخرذثحفس ذخدثقثي شري ثطحثذفثي "
+"خعفذخوثس (255 ذاشقشذفثق مهوهف)."
+
+#: cms/templates/js/programs/program_creator_form.underscore
+#: cms/templates/js/programs/program_details.underscore
+msgid "Marketing Slug"
+msgstr "وشقنثفهرل سمعل"
+
+#: cms/templates/js/programs/program_creator_form.underscore
+msgid "Slug used to generate links to the marketing site."
+msgstr "سمعل عسثي فخ لثرثقشفث مهرنس فخ فاث وشقنثفهرل سهفث."
+
+#: cms/templates/js/programs/program_details.underscore
+msgid "Edit the program title"
+msgstr "ثيهف فاث حقخلقشو فهفمث"
+
+#: cms/templates/js/programs/program_details.underscore
+msgid "Edit the program\\'s name."
+msgstr "ثيهف فاث حقخلقشو\\'س رشوث."
+
+#: cms/templates/js/programs/program_details.underscore
+msgid "Edit the program subtitle"
+msgstr "ثيهف فاث حقخلقشو سعزفهفمث"
+
+#: cms/templates/js/programs/program_details.underscore
+msgid "Edit the program\\'s subtitle."
+msgstr "ثيهف فاث حقخلقشو\\'س سعزفهفمث."
+
+#: cms/templates/js/programs/program_details.underscore
+msgid "Edit the program marketing slug"
+msgstr "ثيهف فاث حقخلقشو وشقنثفهرل سمعل"
+
+#: cms/templates/js/programs/program_details.underscore
+msgid "Edit the program\\'s marketing slug."
+msgstr "ثيهف فاث حقخلقشو\\'س وشقنثفهرل سمعل."
+
+#: cms/templates/js/programs/program_details.underscore
+msgid "Add a course"
+msgstr "شيي ش ذخعقسث"
 
 #: cms/templates/js/video/transcripts/metadata-videolist-entry.underscore
 msgid "Add URLs for additional versions"

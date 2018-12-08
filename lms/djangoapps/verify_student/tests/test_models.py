@@ -2,10 +2,10 @@
 from datetime import timedelta, datetime
 import json
 
+import boto
 import ddt
 from django.conf import settings
 from django.db import IntegrityError
-from django.test import TestCase
 from freezegun import freeze_time
 import mock
 from mock import patch
@@ -13,6 +13,7 @@ from nose.tools import assert_is_none, assert_equals, assert_raises, assert_true
 import pytz
 import requests.exceptions
 
+from common.test.utils import MockS3Mixin
 from student.tests.factories import UserFactory
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
@@ -50,41 +51,6 @@ iwIDAQAB
 }
 
 
-class MockKey(object):
-    """
-    Mocking a boto S3 Key object. It's a really dumb mock because once we
-    write data to S3, we never read it again. We simply generate a link to it
-    and pass that to Software Secure. Because of that, we don't even implement
-    the ability to pull back previously written content in this mock.
-
-    Testing that the encryption/decryption roundtrip on the data works is in
-    test_ssencrypt.py
-    """
-    def __init__(self, bucket):
-        self.bucket = bucket
-
-    def set_contents_from_string(self, contents):
-        self.contents = contents
-
-    def generate_url(self, duration):
-        return "http://fake-edx-s3.edx.org/"
-
-
-class MockBucket(object):
-    """Mocking a boto S3 Bucket object."""
-    def __init__(self, name):
-        self.name = name
-
-
-class MockS3Connection(object):
-    """Mocking a boto S3 Connection"""
-    def __init__(self, access_key, secret_key):
-        pass
-
-    def get_bucket(self, bucket_name):
-        return MockBucket(bucket_name)
-
-
 def mock_software_secure_post(url, headers=None, data=None, **kwargs):
     """
     Mocks our interface when we post to Software Secure. Does basic assertions
@@ -105,8 +71,8 @@ def mock_software_secure_post(url, headers=None, data=None, **kwargs):
         )
 
     # The keys should be stored as Base64 strings, i.e. this should not explode
-    photo_id_key = data_dict["PhotoIDKey"].decode("base64")
-    user_photo_key = data_dict["UserPhotoKey"].decode("base64")
+    data_dict["PhotoIDKey"].decode("base64")
+    data_dict["UserPhotoKey"].decode("base64")
 
     response = requests.Response()
     response.status_code = 200
@@ -129,13 +95,16 @@ def mock_software_secure_post_unavailable(url, headers=None, data=None, **kwargs
     raise requests.exceptions.ConnectionError
 
 
-# Lots of patching to stub in our own settings, S3 substitutes, and HTTP posting
+# Lots of patching to stub in our own settings, and HTTP posting
 @patch.dict(settings.VERIFY_STUDENT, FAKE_SETTINGS)
-@patch('lms.djangoapps.verify_student.models.S3Connection', new=MockS3Connection)
-@patch('lms.djangoapps.verify_student.models.Key', new=MockKey)
 @patch('lms.djangoapps.verify_student.models.requests.post', new=mock_software_secure_post)
 @ddt.ddt
-class TestPhotoVerification(ModuleStoreTestCase):
+class TestPhotoVerification(MockS3Mixin, ModuleStoreTestCase):
+
+    def setUp(self):
+        super(TestPhotoVerification, self).setUp()
+        connection = boto.connect_s3()
+        connection.create_bucket(FAKE_SETTINGS['SOFTWARE_SECURE']['S3_BUCKET'])
 
     def test_state_transitions(self):
         """

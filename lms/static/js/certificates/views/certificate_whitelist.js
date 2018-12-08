@@ -34,10 +34,10 @@
                     var template = this.loadTemplate('certificate-white-list');
                     this.$el.html(template({certificates: this.collection.models}));
                     if (!this.active_certificate || this.collection.isEmpty()){
-                        this.$("#generate-exception-certificates").addClass("is-disabled");
+                        this.$("#generate-exception-certificates").attr("disabled", "disabled");
                     }
                     else {
-                        this.$("#generate-exception-certificates").removeClass("is-disabled");
+                        this.$("#generate-exception-certificates").removeAttr("disabled");
                     }
                 },
 
@@ -67,7 +67,7 @@
                     }
                     else{
                         this.escapeAndShowMessage(
-                            gettext('Could not find Certificate Exception in white list. Please refresh the page and try again') // jshint ignore:line
+                            gettext('Could not find Certificate Exception in white list. Please refresh the page and try again')  // eslint-disable-line max-len
                         );
                     }
                 },
