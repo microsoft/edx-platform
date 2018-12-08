@@ -1,11 +1,27 @@
-define(["jquery", "underscore", "gettext", "js/models/asset", "js/views/paging", "js/views/asset",
-    "js/views/paging_header", "js/views/paging_footer", "js/utils/modal", "js/views/utils/view_utils",
-    "js/views/feedback_notification", "jquery.fileupload-process", "jquery.fileupload-validate"],
-    function($, _, gettext, AssetModel, PagingView, AssetView, PagingHeader, PagingFooter, ModalUtils, ViewUtils, NotificationView) {
+define([
+        "jquery",
+        "underscore",
+        "gettext",
+        "edx-ui-toolkit/js/utils/html-utils",
+        "js/views/baseview",
+        "js/models/asset",
+        "js/views/paging",
+        "js/views/asset",
+        "js/views/paging_header",
+        "common/js/components/views/paging_footer",
+        "js/utils/modal",
+        "common/js/components/utils/view_utils",
+        "common/js/components/views/feedback_notification",
+        "text!templates/asset-library.underscore",
+        "jquery.fileupload-process",
+        "jquery.fileupload-validate"
+    ],
+    function($, _, gettext, HtmlUtils, BaseView, AssetModel, PagingView, AssetView, PagingHeader, PagingFooter,
+             ModalUtils, ViewUtils, NotificationView, asset_library_template) {
 
         var CONVERSION_FACTOR_MBS_TO_BYTES = 1000 * 1000;
 
-        var AssetsView = PagingView.extend({
+        var AssetsView = BaseView.extend({
             // takes AssetCollection as model
 
             events : {
@@ -19,21 +35,14 @@ define(["jquery", "underscore", "gettext", "js/models/asset", "js/views/paging",
 
             allLabel: 'ALL',
 
-
             initialize : function(options) {
                 options = options || {};
 
-                PagingView.prototype.initialize.call(this);
+                BaseView.prototype.initialize.call(this);
                 var collection = this.collection;
-                this.template = this.loadTemplate("asset-library");
+                this.pagingView = this.createPagingView();
                 this.listenTo(collection, 'destroy', this.handleDestroy);
-                this.registerSortableColumn('js-asset-name-col', gettext('Name'), 'display_name', 'asc');
-                this.registerSortableColumn('js-asset-date-col', gettext('Date Added'), 'date_added', 'desc');
-                this.registerFilterableColumn('js-asset-type-col', gettext('Type'), 'asset_type');
-                this.setInitialSortColumn('js-asset-date-col');
-                this.setInitialFilterColumn('js-asset-type-col');
                 ViewUtils.showLoadingIndicator();
-                this.setPage(0);
                 // set default file size for uploads via template var,
                 // and default to static old value if none exists
                 this.uploadChunkSizeInMBs = options.uploadChunkSizeInMBs || 10;
@@ -41,66 +50,84 @@ define(["jquery", "underscore", "gettext", "js/models/asset", "js/views/paging",
                 this.uploadChunkSizeInBytes = this.uploadChunkSizeInMBs * CONVERSION_FACTOR_MBS_TO_BYTES;
                 this.maxFileSizeInBytes = this.maxFileSizeInMBs * CONVERSION_FACTOR_MBS_TO_BYTES;
                 this.maxFileSizeRedirectUrl = options.maxFileSizeRedirectUrl || '';
-                assetsView = this;
                 // error message modal for large file uploads
                 this.largeFileErrorMsg = null;
             },
 
-            render: function() {
-                // Wait until the content is loaded the first time to render
-                return this;
-            },
+            PagingAssetView: PagingView.extend({
+                renderPageItems: function() {
+                    var self = this,
+                    assets = this.collection,
+                    hasAssets = this.collection.assetType !== '' || assets.length > 0,
+                    tableBody = this.getTableBody();
+                    tableBody.empty();
+                    if (hasAssets) {
+                        assets.each(
+                            function(asset) {
+                                var view = new AssetView({model: asset});
+                                tableBody.append(view.render().el);
+                            }
+                        );
+                    }
+                    self.$('.assets-library').toggle(hasAssets);
+                    self.$('.no-asset-content').toggle(!hasAssets);
+                    return this;
+                },
 
-            afterRender: function(){
-                // Bind events with html elements
-                $('li a.upload-button').on('click', this.showUploadModal);
-                $('.upload-modal .close-button').on('click', this.hideModal);
-                $('.upload-modal .choose-file-button').on('click', this.showFileSelectionMenu);
-                return this;
-            },
+                getTableBody: function() {
+                    var tableBody = this.tableBody;
+                    if (!tableBody) {
+                        ViewUtils.hideLoadingIndicator();
 
-            getTableBody: function() {
-                var tableBody = this.tableBody;
-                if (!tableBody) {
+                        // Create the table
+                        HtmlUtils.setHtml(
+                            this.$el,
+                            HtmlUtils.template(asset_library_template)({typeData: this.typeData})
+                        );
+                        tableBody = this.$('#asset-table-body');
+                        this.tableBody = tableBody;
+                        this.pagingHeader = new PagingHeader({view: this, el: $('#asset-paging-header')});
+                        this.pagingFooter = new PagingFooter({collection: this.collection, el: $('#asset-paging-footer')});
+                        this.pagingHeader.render();
+                        this.pagingFooter.render();
+
+                        // Hide the contents until the collection has loaded the first time
+                        this.$('.assets-library').hide();
+                        this.$('.no-asset-content').hide();
+                    }
+                    return tableBody;
+                },
+
+                onError: function() {
                     ViewUtils.hideLoadingIndicator();
-
-                    // Create the table
-                    this.$el.html(this.template({typeData: this.typeData}));
-                    tableBody = this.$('#asset-table-body');
-                    this.tableBody = tableBody;
-                    this.pagingHeader = new PagingHeader({view: this, el: $('#asset-paging-header')});
-                    this.pagingFooter = new PagingFooter({view: this, el: $('#asset-paging-footer')});
-                    this.pagingHeader.render();
-                    this.pagingFooter.render();
-
-                    // Hide the contents until the collection has loaded the first time
-                    this.$('.assets-library').hide();
-                    this.$('.no-asset-content').hide();
                 }
-                return tableBody;
+            }),
+
+            createPagingView: function() {
+                var pagingView = new this.PagingAssetView({
+                    el: this.$el,
+                    collection: this.collection
+                });
+                pagingView.registerSortableColumn('js-asset-name-col', gettext('Name'), 'display_name', 'asc');
+                pagingView.registerSortableColumn('js-asset-date-col', gettext('Date Added'), 'date_added', 'desc');
+                pagingView.registerFilterableColumn('js-asset-type-col', gettext('Type'), 'asset_type');
+                pagingView.setInitialSortColumn('js-asset-date-col');
+                pagingView.setInitialFilterColumn('js-asset-type-col');
+                pagingView.setPage(1);
+                return pagingView;
             },
 
-            renderPageItems: function() {
-                var self = this,
-                assets = this.collection,
-                hasAssets = this.collection.assetType !== '' || assets.length > 0,
-                tableBody = this.getTableBody();
-                tableBody.empty();
-                if (hasAssets) {
-                    assets.each(
-                        function(asset) {
-                            var view = new AssetView({model: asset});
-                            tableBody.append(view.render().el);
-                        }
-                    );
-                }
-                self.$('.assets-library').toggle(hasAssets);
-                self.$('.no-asset-content').toggle(!hasAssets);
+            render: function() {
+                this.pagingView.render();
                 return this;
             },
 
-            onError: function() {
-                ViewUtils.hideLoadingIndicator();
+            afterRender: function() {
+                // Bind events with html elements
+                $('li a.upload-button').on('click', _.bind(this.showUploadModal, this));
+                $('.upload-modal .close-button').on('click', _.bind(this.hideModal, this));
+                $('.upload-modal .choose-file-button').on('click', _.bind(this.showFileSelectionMenu, this));
+                return this;
             },
 
             handleDestroy: function(model) {
@@ -114,9 +141,9 @@ define(["jquery", "underscore", "gettext", "js/models/asset", "js/views/paging",
             addAsset: function (model) {
                 // Switch the sort column back to the default (most recent date added) and show the first page
                 // so that the new asset is shown at the top of the page.
-                this.setInitialSortColumn('js-asset-date-col');
-                this.setInitialFilterColumn('js-asset-type-col');
-                this.setPage(0);
+                this.pagingView.setInitialSortColumn('js-asset-date-col');
+                this.pagingView.setInitialFilterColumn('js-asset-type-col');
+                this.pagingView.setPage(1);
 
                 analytics.track('Uploaded a File', {
                     'course': course_location_analytics,
@@ -126,7 +153,7 @@ define(["jquery", "underscore", "gettext", "js/models/asset", "js/views/paging",
 
             onToggleColumn: function(event) {
                 var columnName = event.target.id;
-                this.toggleSortOrder(columnName);
+                this.pagingView.toggleSortOrder(columnName);
             },
 
             onFilterColumn: function(event) {
@@ -140,13 +167,13 @@ define(["jquery", "underscore", "gettext", "js/models/asset", "js/views/paging",
                 }
                 $('.file-input').unbind('change.startUpload');
                 ModalUtils.hideModal();
-                if (assetsView.largeFileErrorMsg) {
-                  assetsView.largeFileErrorMsg.hide();
+                if (this.largeFileErrorMsg) {
+                  this.largeFileErrorMsg.hide();
                 }
             },
 
             showUploadModal: function (event) {
-                var self = assetsView;
+                var self = this;
                 event.preventDefault();
                 self.resetUploadModal();
                 ModalUtils.showModal();
@@ -180,35 +207,36 @@ define(["jquery", "underscore", "gettext", "js/models/asset", "js/views/paging",
                             error = error + " " + instructions;
                         }
 
-                        assetsView.largeFileErrorMsg = new NotificationView.Error({
+                        self.largeFileErrorMsg = new NotificationView.Error({
                             "title": gettext("Your file could not be uploaded"),
                             "message": error
                         });
-                        assetsView.largeFileErrorMsg.show();
+                        self.largeFileErrorMsg.show();
 
-                        assetsView.displayFailedUpload({
+                        self.displayFailedUpload({
                             "msg": gettext("Max file size exceeded")
                         });
                     },
                     processdone: function(event, data) {
-                        assetsView.largeFileErrorMsg = null;
+                        self.largeFileErrorMsg = null;
                     }
                 });
             },
 
             showFileSelectionMenu: function(event) {
                 event.preventDefault();
-                if (assetsView.largeFileErrorMsg) {
-                  assetsView.largeFileErrorMsg.hide();
+                if (this.largeFileErrorMsg) {
+                  this.largeFileErrorMsg.hide();
                 }
                 $('.file-input').click();
             },
 
             startUpload: function (event) {
                 var file = event.target.value;
-                if (!assetsView.largeFileErrorMsg) {
+
+                if (!this.largeFileErrorMsg) {
                     $('.upload-modal h1').text(gettext('Uploading'));
-                    $('.upload-modal .file-name').html(file.substring(file.lastIndexOf("\\") + 1));
+                    $('.upload-modal .file-name').text(file.substring(file.lastIndexOf('\\') + 1));
                     $('.upload-modal .choose-file-button').hide();
                     $('.upload-modal .progress-bar').removeClass('loaded').show();
                 }
@@ -217,24 +245,29 @@ define(["jquery", "underscore", "gettext", "js/models/asset", "js/views/paging",
             resetUploadModal: function () {
                 // Reset modal so it no longer displays information about previously
                 // completed uploads.
-                var percentVal = '0%';
-                $('.upload-modal .progress-fill').width(percentVal);
-                $('.upload-modal .progress-fill').html(percentVal);
+                var percentVal = '0%',
+                    $progressFill = $('.upload-modal .progress-fill'),
+                    $fileName = $('.upload-modal .file-name');
+
+                $progressFill.width(percentVal);
+                $progressFill.text(percentVal);
                 $('.upload-modal .progress-bar').hide();
 
-                $('.upload-modal .file-name').show();
-                $('.upload-modal .file-name').html('');
+                $fileName.show();
+                $fileName.text('');
                 $('.upload-modal .choose-file-button').text(gettext('Choose File'));
                 $('.upload-modal .embeddable-xml-input').val('');
                 $('.upload-modal .embeddable').hide();
 
-                assetsView.largeFileErrorMsg = null;
+                this.largeFileErrorMsg = null;
             },
 
             showUploadFeedback: function (event, percentComplete) {
-                var percentVal = percentComplete + '%';
-                $('.upload-modal .progress-fill').width(percentVal);
-                $('.upload-modal .progress-fill').html(percentVal);
+                var percentVal = percentComplete + '%',
+                    $progressFill = $('.upload-modal .progress-fill');
+
+                $progressFill.width(percentVal);
+                $progressFill.text(percentVal);
             },
 
             openFilterColumn: function($this) {
@@ -274,52 +307,55 @@ define(["jquery", "underscore", "gettext", "js/models/asset", "js/views/paging",
                 var filterColumn = this.$el.find('.filterable-column');
                 var resetFilter = filterColumn.find('.reset-filter');
                 var title = filterColumn.find('.title');
-                if(assettype === this.allLabel) {
+
+                if (assettype === this.allLabel) {
                     collection.assetType = '';
                     resetFilter.hide();
                     title.removeClass('column-selected-link');
-                }
-                else {
+                } else {
                     collection.assetType = assettype;
                     resetFilter.show();
                     title.addClass('column-selected-link');
                 }
 
-                this.filterableColumns['js-asset-type-col'].displayName = assettypeLabel;
-                this.selectFilter('js-asset-type-col');
+                this.pagingView.filterableColumns['js-asset-type-col'].displayName = assettypeLabel;
+                this.pagingView.selectFilter('js-asset-type-col');
                 this.closeFilterPopup(this.$el.find(
                     '.column-filter-link[data-assetfilter="' + assettype + '"]'));
             },
 
-            closeFilterPopup: function(element){
+            closeFilterPopup: function(element) {
                 var $menu = element.parents('.nav-dd > .nav-item');
                 this.toggleFilterColumnState($menu, element);
             },
 
             displayFinishedUpload: function (resp) {
-                var asset = resp.asset;
+                var asset = resp.asset,
+                    $progressFill = $('.upload-modal .progress-fill');
 
                 $('.upload-modal h1').text(gettext('Upload New File'));
                 $('.upload-modal .embeddable-xml-input').val(asset.portable_url).show();
                 $('.upload-modal .embeddable').show();
                 $('.upload-modal .file-name').hide();
-                $('.upload-modal .progress-fill').html(resp.msg);
+                $progressFill.text(resp.msg);
                 $('.upload-modal .choose-file-button').text(gettext('Load Another File')).show();
-                $('.upload-modal .progress-fill').width('100%');
+                $progressFill.width('100%');
 
-                assetsView.addAsset(new AssetModel(asset));
+                this.addAsset(new AssetModel(asset));
             },
 
             displayFailedUpload: function (resp) {
+                var $progressFill = $('.upload-modal .progress-fill');
+
                 $('.upload-modal h1').text(gettext('Upload New File'));
                 $('.upload-modal .embeddable-xml-input').hide();
                 $('.upload-modal .embeddable').hide();
                 $('.upload-modal .file-name').hide();
-                $('.upload-modal .progress-fill').html(resp.msg);
+                $progressFill.text(resp.msg);
                 $('.upload-modal .choose-file-button').text(gettext('Load Another File')).show();
-                $('.upload-modal .progress-fill').width('0%');
+                $progressFill.width('0%');
             }
         });
 
         return AssetsView;
-    }); // end define();
+    });

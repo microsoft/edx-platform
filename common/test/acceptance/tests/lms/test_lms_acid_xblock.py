@@ -3,7 +3,7 @@
 End-to-end tests for the LMS.
 """
 
-from unittest import expectedFailure, skip
+from unittest import expectedFailure
 
 from ..helpers import UniqueCourseTest
 from ...pages.lms.auto_auth import AutoAuthPage
@@ -45,7 +45,6 @@ class XBlockAcidBase(UniqueCourseTest):
         self.assertTrue(acid_block.scope_passed('user_info'))
 
 
-@skip('Jenkins builds are getting stuck on acid_block tests')
 class XBlockAcidNoChildTest(XBlockAcidBase):
     """
     Tests of an AcidBlock with no children
@@ -76,13 +75,12 @@ class XBlockAcidNoChildTest(XBlockAcidBase):
         """
 
         self.course_info_page.visit()
-        self.tab_nav.go_to_tab('Courseware')
+        self.tab_nav.go_to_tab('Course')
 
         acid_block = AcidView(self.browser, '.xblock-student_view[data-block-type=acid]')
         self.validate_acid_block_view(acid_block)
 
 
-@skip('Jenkins builds are getting stuck on acid_block tests')
 class XBlockAcidChildTest(XBlockAcidBase):
     """
     Tests of an AcidBlock with children
@@ -121,7 +119,7 @@ class XBlockAcidChildTest(XBlockAcidBase):
         """
 
         self.course_info_page.visit()
-        self.tab_nav.go_to_tab('Courseware')
+        self.tab_nav.go_to_tab('Course')
 
         acid_parent_block = AcidView(self.browser, '.xblock-student_view[data-block-type=acid_parent]')
         self.validate_acid_parent_block_view(acid_parent_block)
@@ -130,7 +128,6 @@ class XBlockAcidChildTest(XBlockAcidBase):
         self.validate_acid_block_view(acid_block)
 
 
-@skip('Jenkins builds are getting stuck on acid_block tests')
 class XBlockAcidAsideTest(XBlockAcidBase):
     """
     Tests of an AcidBlock with children
@@ -162,7 +159,7 @@ class XBlockAcidAsideTest(XBlockAcidBase):
         """
 
         self.course_info_page.visit()
-        self.tab_nav.go_to_tab('Courseware')
+        self.tab_nav.go_to_tab('Course')
 
         acid_aside = AcidView(self.browser, '.xblock_asides-v1-student_view[data-block-type=acid_aside]')
         self.validate_acid_aside_view(acid_aside)

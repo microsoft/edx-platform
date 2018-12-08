@@ -31,7 +31,7 @@ class FakeContentTask(FakeInfo):
 
     def __init__(self, email_id, num_sent, num_failed, sent_to):
         super(FakeContentTask, self).__init__()
-        self.task_input = {'email_id': email_id, 'to_option': sent_to}
+        self.task_input = {'email_id': email_id}
         self.task_input = json.dumps(self.task_input)
         self.task_output = {'succeeded': num_sent, 'failed': num_failed}
         self.task_output = json.dumps(self.task_output)
@@ -55,12 +55,29 @@ class FakeEmail(FakeInfo):
         super(FakeEmail, self).__init__()
         self.id = unicode(email_id)  # pylint: disable=invalid-name
         # Select a random data for create field
-        year = random.choice(range(1950, 2000))
-        month = random.choice(range(1, 12))
-        day = random.choice(range(1, 28))
-        hour = random.choice(range(0, 23))
-        minute = random.choice(range(0, 59))
+        year = random.randint(1950, 2000)
+        month = random.randint(1, 12)
+        day = random.randint(1, 28)
+        hour = random.randint(0, 23)
+        minute = random.randint(0, 59)
         self.created = datetime.datetime(year, month, day, hour, minute, tzinfo=utc)
+        self.targets = FakeTargetGroup()
+
+
+class FakeTarget(object):
+    """ Corresponding fake target for a fake email """
+    target_type = "expected"
+
+    def long_display(self):
+        """ Mocks out a class method """
+        return self.target_type
+
+
+class FakeTargetGroup(object):
+    """ Mocks out the M2M relationship between FakeEmail and FakeTarget """
+    def all(self):
+        """ Mocks out a django method """
+        return [FakeTarget()]
 
 
 class FakeEmailInfo(FakeInfo):
@@ -91,3 +108,4 @@ class FakeEmailInfo(FakeInfo):
         fake_email_dict = fake_email.to_dict()
         self.email = {feature: fake_email_dict[feature] for feature in self.EMAIL_FEATURES}
         self.requester = u'expected'
+        self.sent_to = [u'expected']

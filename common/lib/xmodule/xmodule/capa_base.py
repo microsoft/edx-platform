@@ -9,18 +9,18 @@ import os
 import traceback
 import struct
 import sys
+import re
 
 # We don't want to force a dependency on datadog, so make the import conditional
 try:
     import dogstats_wrapper as dog_stats_api
 except ImportError:
-    # pylint: disable=invalid-name
     dog_stats_api = None
 
 from capa.capa_problem import LoncapaProblem, LoncapaSystem
 from capa.responsetypes import StudentInputError, \
     ResponseError, LoncapaProblemError
-from capa.util import convert_files_to_filenames
+from capa.util import convert_files_to_filenames, get_inner_html_from_xpath
 from .progress import Progress
 from xmodule.exceptions import NotFoundError
 from xblock.fields import Scope, String, Boolean, Dict, Integer, Float
@@ -31,9 +31,9 @@ from django.conf import settings
 
 log = logging.getLogger("edx.courseware")
 
-# Make '_' a no-op so we can scrape strings
+# Make '_' a no-op so we can scrape strings. Using lambda instead of
+#  `django.utils.translation.ugettext_noop` because Django cannot be imported in this file
 _ = lambda text: text
-
 
 # Generate this many different variants of problems with rerandomize=per_student
 NUM_RANDOMIZATION_BINS = 20
@@ -142,9 +142,10 @@ class CapaFields(object):
     )
     rerandomize = Randomization(
         display_name=_("Randomization"),
-        help=_("Defines how often inputs are randomized when a student loads the problem. "
-               "This setting only applies to problems that can have randomly generated numeric values. "
-               "A default value can be set in Advanced Settings."),
+        help=_(
+            'Defines when to randomize the variables specified in the associated Python script. '
+            'For problems that do not randomize values, specify \"Never\". '
+        ),
         default=RANDOMIZATION.NEVER,
         scope=Scope.settings,
         values=[
@@ -191,12 +192,12 @@ class CapaFields(object):
         scope=Scope.settings
     )
     matlab_api_key = String(
-        display_name="Matlab API key",
-        help="Enter the API key provided by MathWorks for accessing the MATLAB Hosted Service. "
-             "This key is granted for exclusive use by this course for the specified duration. "
-             "Please do not share the API key with other courses and notify MathWorks immediately "
-             "if you believe the key is exposed or compromised. To obtain a key for your course, "
-             "or to report and issue, please contact moocsupport@mathworks.com",
+        display_name=_("Matlab API key"),
+        help=_("Enter the API key provided by MathWorks for accessing the MATLAB Hosted Service. "
+               "This key is granted for exclusive use by this course for the specified duration. "
+               "Please do not share the API key with other courses and notify MathWorks immediately "
+               "if you believe the key is exposed or compromised. To obtain a key for your course, "
+               "or to report an issue, please contact moocsupport@mathworks.com"),
         scope=Scope.settings
     )
 
@@ -205,7 +206,6 @@ class CapaMixin(CapaFields):
     """
         Core logic for Capa Problem, which can be used by XModules or XBlocks.
     """
-
     def __init__(self, *args, **kwargs):
         super(CapaMixin, self).__init__(*args, **kwargs)
 
@@ -319,6 +319,7 @@ class CapaMixin(CapaFields):
             state=state,
             seed=self.seed,
             capa_system=capa_system,
+            capa_module=self,  # njp
         )
 
     def get_state_for_lcp(self):
@@ -398,6 +399,7 @@ class CapaMixin(CapaFields):
             'ajax_url': self.runtime.ajax_url,
             'progress_status': Progress.to_js_status_str(progress),
             'progress_detail': Progress.to_js_detail_str(progress),
+            'content': self.get_problem_html(encapsulate=False),
         })
 
     def check_button_name(self):
@@ -468,7 +470,7 @@ class CapaMixin(CapaFields):
 
         # If the problem is closed (and not a survey question with max_attempts==0),
         # then do NOT show the reset button.
-        if (self.closed() and not is_survey_question):
+        if self.closed() and not is_survey_question:
             return False
 
         # Button only shows up for randomized problems if the question has been submitted
@@ -582,20 +584,59 @@ class CapaMixin(CapaFields):
             html = warning
             try:
                 html += self.lcp.get_html()
-            except Exception:  # pylint: disable=broad-except
+            except Exception:
                 # Couldn't do it. Give up.
                 log.exception("Unable to generate html from LoncapaProblem")
                 raise
 
         return html
 
+    def get_demand_hint(self, hint_index):
+        """
+        Return html for the problem.
+
+        Adds check, reset, save, and hint buttons as necessary based on the problem config
+        and state.
+        encapsulate: if True (the default) embed the html in a problem <div>
+        hint_index: (None is the default) if not None, this is the index of the next demand
+        hint to show.
+        """
+        demand_hints = self.lcp.tree.xpath("//problem/demandhint/hint")
+        hint_index = hint_index % len(demand_hints)
+
+        _ = self.runtime.service(self, "i18n").ugettext
+        hint_element = demand_hints[hint_index]
+        hint_text = get_inner_html_from_xpath(hint_element)
+        if len(demand_hints) == 1:
+            prefix = _('Hint: ')
+        else:
+            # Translators: e.g. "Hint 1 of 3" meaning we are showing the first of three hints.
+            prefix = _('Hint ({hint_num} of {hints_count}): ').format(hint_num=hint_index + 1,
+                                                                      hints_count=len(demand_hints))
+
+        # Log this demand-hint request
+        event_info = dict()
+        event_info['module_id'] = self.location.to_deprecated_string()
+        event_info['hint_index'] = hint_index
+        event_info['hint_len'] = len(demand_hints)
+        event_info['hint_text'] = hint_text
+        self.runtime.publish(self, 'edx.problem.hint.demandhint_displayed', event_info)
+
+        # We report the index of this hint, the client works out what index to use to get the next hint
+        return {
+            'success': True,
+            'contents': prefix + hint_text,
+            'hint_index': hint_index
+        }
+
     def get_problem_html(self, encapsulate=True):
         """
         Return html for the problem.
 
-        Adds check, reset, save buttons as necessary based on the problem config and state.
+        Adds check, reset, save, and hint buttons as necessary based on the problem config
+        and state.
+        encapsulate: if True (the default) embed the html in a problem <div>
         """
-
         try:
             html = self.lcp.get_html()
 
@@ -603,6 +644,8 @@ class CapaMixin(CapaFields):
         # then generate an error message instead.
         except Exception as err:  # pylint: disable=broad-except
             html = self.handle_problem_html_error(err)
+
+        html = self.remove_tags_from_html(html)
 
         # The convention is to pass the name of the check button if we want
         # to show a check button, and False otherwise This works because
@@ -621,6 +664,10 @@ class CapaMixin(CapaFields):
             'weight': self.weight,
         }
 
+        # If demand hints are available, emit hint button and div.
+        demand_hints = self.lcp.tree.xpath("//problem/demandhint/hint")
+        demand_hint_possible = len(demand_hints) > 0
+
         context = {
             'problem': content,
             'id': self.location.to_deprecated_string(),
@@ -631,6 +678,7 @@ class CapaMixin(CapaFields):
             'answer_available': self.answer_available(),
             'attempts_used': self.attempts,
             'attempts_allowed': self.max_attempts,
+            'demand_hint_possible': demand_hint_possible
         }
 
         html = self.runtime.render_template('problem.html', context)
@@ -650,6 +698,28 @@ class CapaMixin(CapaFields):
             html = self.runtime.replace_jump_to_id_urls(html)
 
         return html
+
+    def remove_tags_from_html(self, html):
+        """
+        The capa xml includes many tags such as <additional_answer> or <demandhint> which are not
+        meant to be part of the client html. We strip them all and return the resulting html.
+        """
+        tags = ['demandhint', 'choicehint', 'optionhint', 'stringhint', 'numerichint', 'optionhint',
+                'correcthint', 'regexphint', 'additional_answer', 'stringequalhint', 'compoundhint',
+                'stringequalhint']
+        for tag in tags:
+            html = re.sub(r'<%s.*?>.*?</%s>' % (tag, tag), '', html, flags=re.DOTALL)
+            # Some of these tags span multiple lines
+        # Note: could probably speed this up by calling sub() once with a big regex
+        # vs. simply calling sub() many times as we have here.
+        return html
+
+    def hint_button(self, data):
+        """
+        Hint button handler, returns new html using hint_index from the client.
+        """
+        hint_index = int(data['hint_index'])
+        return self.get_demand_hint(hint_index)
 
     def is_past_due(self):
         """
@@ -868,7 +938,7 @@ class CapaMixin(CapaFields):
         # We only want to consider each key a single time, so we use set(data.keys())
         for key in set(data.keys()):
             # e.g. input_resistor_1 ==> resistor_1
-            _, _, name = key.partition('_')  # pylint: disable=redefined-outer-name
+            _, _, name = key.partition('_')
 
             # If key has no underscores, then partition
             # will return (key, '', '')
@@ -979,8 +1049,6 @@ class CapaMixin(CapaFields):
 
         # Wait time between resets: check if is too soon for submission.
         if self.last_submission_time is not None and self.submission_wait_seconds != 0:
-            # pylint: disable=maybe-no-member
-            # pylint is unable to verify that .total_seconds() exists
             if (current_time - self.last_submission_time).total_seconds() < self.submission_wait_seconds:
                 remaining_secs = int(self.submission_wait_seconds - (current_time - self.last_submission_time).total_seconds())
                 msg = _(u'You must wait at least {wait_secs} between submissions. {remaining_secs} remaining.').format(
@@ -1049,17 +1117,15 @@ class CapaMixin(CapaFields):
 
         if dog_stats_api:
             dog_stats_api.increment(metric_name('checks'), tags=[u'result:success'])
-            dog_stats_api.histogram(
-                metric_name('correct_pct'),
-                float(published_grade['grade']) / published_grade['max_grade'],
-            )
+            if published_grade['max_grade'] != 0:
+                dog_stats_api.histogram(
+                    metric_name('correct_pct'),
+                    float(published_grade['grade']) / published_grade['max_grade'],
+                )
             dog_stats_api.histogram(
                 metric_name('attempts'),
                 self.attempts,
             )
-
-        if hasattr(self.runtime, 'psychometrics_handler'):  # update PsychometricsData using callback
-            self.runtime.psychometrics_handler(self.get_state_for_lcp())
 
         # render problem into HTML
         html = self.get_problem_html(encapsulate=False)
@@ -1079,7 +1145,7 @@ class CapaMixin(CapaFields):
         # avoiding problems where an event_info is unmasked twice.
         event_unmasked = copy.deepcopy(event_info)
         self.unmask_event(event_unmasked)
-        self.runtime.track_function(title, event_unmasked)
+        self.runtime.publish(self, title, event_unmasked)
 
     def unmask_event(self, event_info):
         """
@@ -1308,10 +1374,6 @@ class CapaMixin(CapaFields):
         event_info['attempts'] = self.attempts
         self.track_function_unmask('problem_rescore', event_info)
 
-        # psychometrics should be called on rescoring requests in the same way as check-problem
-        if hasattr(self.runtime, 'psychometrics_handler'):  # update PsychometricsData using callback
-            self.runtime.psychometrics_handler(self.get_state_for_lcp())
-
         return {'success': success}
 
     def save_problem(self, data):
@@ -1355,10 +1417,13 @@ class CapaMixin(CapaFields):
         self.track_function_unmask('save_problem_success', event_info)
         msg = _("Your answers have been saved.")
         if not self.max_attempts == 0:
-            msg = _("Your answers have been saved but not graded. Click 'Check' to grade them.")
+            msg = _(
+                "Your answers have been saved but not graded. Click '{button_name}' to grade them."
+            ).format(button_name=self.check_button_name())
         return {
             'success': True,
             'msg': msg,
+            'html': self.get_problem_html(encapsulate=False),
         }
 
     def reset_problem(self, _data):

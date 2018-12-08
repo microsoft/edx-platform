@@ -2,8 +2,8 @@
 Acceptance tests for Content Libraries in Studio
 """
 from ddt import ddt, data
-from flaky import flaky
 from nose.plugins.attrib import attr
+from flaky import flaky
 
 from .base_studio_test import StudioLibraryTest
 from ...fixtures.course import XBlockFixtureDesc
@@ -13,13 +13,13 @@ from ...pages.studio.library import LibraryEditPage
 from ...pages.studio.users import LibraryUsersPage
 
 
-@attr('shard_4')
+@attr('shard_2')
 @ddt
 class LibraryEditPageTest(StudioLibraryTest):
     """
     Test the functionality of the library edit page.
     """
-    def setUp(self):  # pylint: disable=arguments-differ
+    def setUp(self):
         """
         Ensure a library exists and navigate to the library edit page.
         """
@@ -121,7 +121,7 @@ class LibraryEditPageTest(StudioLibraryTest):
         # Check that the save worked:
         self.assertEqual(len(self.lib_page.xblocks), 1)
         problem_block = self.lib_page.xblocks[0]
-        self.assertIn("Laura Roslin", problem_block.student_content)
+        self.assertIn("Laura Roslin", problem_block.author_content)
 
     def test_no_discussion_button(self):
         """
@@ -129,6 +129,7 @@ class LibraryEditPageTest(StudioLibraryTest):
         """
         self.assertFalse(self.browser.find_elements_by_css_selector('span.large-discussion-icon'))
 
+    @flaky  # TODO fix this, see TNL-2322
     def test_library_pagination(self):
         """
         Scenario: Ensure that adding several XBlocks to a library results in pagination.
@@ -141,7 +142,7 @@ class LibraryEditPageTest(StudioLibraryTest):
         Then 10 are displayed.
         """
         self.assertEqual(len(self.lib_page.xblocks), 0)
-        for _ in range(0, 10):
+        for _ in range(10):
             add_component(self.lib_page, "problem", "Multiple Choice")
         self.assertEqual(len(self.lib_page.xblocks), 10)
         add_component(self.lib_page, "problem", "Multiple Choice")
@@ -185,13 +186,13 @@ class LibraryEditPageTest(StudioLibraryTest):
         self.assertIn("Checkboxes", problem_block.name)
 
 
-@attr('shard_4')
+@attr('shard_2')
 @ddt
 class LibraryNavigationTest(StudioLibraryTest):
     """
     Test common Navigation actions
     """
-    def setUp(self):  # pylint: disable=arguments-differ
+    def setUp(self):
         """
         Ensure a library exists and navigate to the library edit page.
         """
@@ -205,7 +206,6 @@ class LibraryNavigationTest(StudioLibraryTest):
         Create four pages worth of XBlocks, and offset by one so each is named
         after the number they should be in line by the user's perception.
         """
-        # pylint: disable=attribute-defined-outside-init
         self.blocks = [XBlockFixtureDesc('html', str(i)) for i in xrange(1, 41)]
         library_fixture.add_children(*self.blocks)
 
@@ -515,13 +515,13 @@ class LibraryUsersPageTest(StudioLibraryTest):
         self.page = LibraryUsersPage(self.browser, self.library_key)
         self.page.visit()
 
-    def _expect_refresh(self):
+    def _refresh_page(self):
         """
-        Wait for the page to reload.
+        Reload the page.
         """
-        self.page = LibraryUsersPage(self.browser, self.library_key).wait_for_page()
+        self.page = LibraryUsersPage(self.browser, self.library_key)
+        self.page.visit()
 
-    @flaky  # TODO fix this, see SOL-618
     def test_user_management(self):
         """
         Scenario: Ensure that we can edit the permissions of users.
@@ -531,7 +531,7 @@ class LibraryUsersPageTest(StudioLibraryTest):
         Then there should be one user listed (myself), and I must
         not be able to remove myself or my instructor privilege.
 
-        When I click Add Intructor
+        When I click Add Instructor
         Then I see a form to complete
         When I complete the form and submit it
         Then I can see the new user is listed as a "User" of the library
@@ -585,7 +585,7 @@ class LibraryUsersPageTest(StudioLibraryTest):
             else:
                 return users[1], users[0]
 
-        self._expect_refresh()
+        self._refresh_page()
         user_me, them = get_two_users()
         check_is_only_admin(user_me)
 
@@ -599,7 +599,7 @@ class LibraryUsersPageTest(StudioLibraryTest):
         # Add Staff permissions to the new user:
 
         them.click_promote()
-        self._expect_refresh()
+        self._refresh_page()
         user_me, them = get_two_users()
         check_is_only_admin(user_me)
 
@@ -614,7 +614,7 @@ class LibraryUsersPageTest(StudioLibraryTest):
         # Add Admin permissions to the new user:
 
         them.click_promote()
-        self._expect_refresh()
+        self._refresh_page()
         user_me, them = get_two_users()
         self.assertIn("admin", user_me.role_label.lower())
         self.assertFalse(user_me.can_promote)
@@ -632,7 +632,36 @@ class LibraryUsersPageTest(StudioLibraryTest):
         # Delete the new user:
 
         them.click_delete()
-        self._expect_refresh()
+        self._refresh_page()
         self.assertEqual(len(self.page.users), 1)
         user = self.page.users[0]
         self.assertTrue(user.is_current_user)
+
+
+@attr('a11y')
+class StudioLibraryA11yTest(StudioLibraryTest):
+    """
+    Class to test Studio pages accessibility.
+    """
+
+    def test_lib_edit_page_a11y(self):
+        """
+        Check accessibility of LibraryEditPage.
+        """
+        lib_page = LibraryEditPage(self.browser, self.library_key)
+        lib_page.visit()
+        lib_page.wait_until_ready()
+
+        # There are several existing color contrast errors on this page,
+        # we will ignore this error in the test until we fix them.
+        lib_page.a11y_audit.config.set_rules({
+            "ignore": [
+                'section',  # TODO: AC-491
+                'color-contrast',  # TODO: AC-225
+                'link-href',  # TODO: AC-226
+                'nav-aria-label',  # TODO: AC-227
+                'icon-aria-hidden',  # TODO: AC-229
+            ],
+        })
+
+        lib_page.a11y_audit.check_for_accessibility_errors()

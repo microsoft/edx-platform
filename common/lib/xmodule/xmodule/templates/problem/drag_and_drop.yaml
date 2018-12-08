@@ -2,23 +2,23 @@
 metadata:
     display_name: Drag and Drop
     markdown: !!null
+    showanswer: never
 data: |
     <problem>
       <p>
       In drag and drop problems, students respond to a question by dragging text or objects to a specific location on an image.
       </p>
       <p>
-      For more information, see 
-      <a href="http://edx.readthedocs.org/projects/edx-partner-course-staff/en/latest/exercises_tools/drag_and_drop.html" target="_blank">
-      Drag and Drop Problem</a> in <i>Building and Running an edX Course</i>.</p>
-      <p>When you add the problem, be sure to select <strong>Settings</strong> 
+      For more information, see
+      <a href="http://edx.readthedocs.io/projects/edx-partner-course-staff/en/latest/exercises_tools/drag_and_drop_deprecated.html" target="_blank">
+      Drag and Drop Problem (Deprecated)</a> in <i>Building and Running an edX Course</i>.</p>
+      <p>When you add the problem, be sure to select <strong>Settings</strong>
         to specify a <strong>Display Name</strong> and other values that apply.</p>
       <p>You can use the following example problems as models.</p>
-       <p>_____________________________________________________________________________</p>
+      <hr />
        <customresponse>
          <h3>Simple Drag and Drop</h3>
-        <fieldset>
-          <legend>Drag each word in the scrollbar to the bucket that matches the number of letters in the word.</legend>
+        <p>Drag each word in the scrollbar to the bucket that matches the number of letters in the word.</p>
                 <drag_and_drop_input img="https://studio.edx.org/c4x/edX/DemoX/asset/L9_buckets.png">
                   <draggable id="1" label="a"/>
                   <draggable id="2" label="bog"/>
@@ -32,7 +32,6 @@ data: |
                   <draggable id="10" label="strop"/>
                   <draggable id="11" label="few"/>
                 </drag_and_drop_input>
-        </fieldset>
         <answer type="loncapa/python">
     correct_answer = {
             '1':      [[70, 150], 121],
@@ -54,8 +53,7 @@ data: |
     </customresponse>
         <customresponse>
           <h3>Drag and Drop with Outline</h3>
-          <fieldset>
-            <legend>Label the hydrogen atoms connected with the left carbon atom.</legend>
+          <p>Label the hydrogen atoms connected with the left carbon atom.</p>
             <drag_and_drop_input img="https://studio.edx.org/c4x/edX/DemoX/asset/ethglycol.jpg" target_outline="true" one_per_target="true" no_labels="true" label_bg_color="rgb(222, 139, 238)">
                 <draggable id="1" label="Hydrogen" />
                 <draggable id="2" label="Hydrogen" />
@@ -71,7 +69,6 @@ data: |
                 <target id="t9_o" x="445" y="162" w="100" h="100"/>
                 <target id="t10" x="591" y="132" w="70" h="70"/>
             </drag_and_drop_input>
-          </fieldset>
           <answer type="loncapa/python">
     correct_answer = [{
         'draggables': ['1', '2'],

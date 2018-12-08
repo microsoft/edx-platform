@@ -1,15 +1,14 @@
 """
 Test courseware search
 """
-import os
 import json
 
 from nose.plugins.attrib import attr
-from flaky import flaky
 
-from ..helpers import UniqueCourseTest
+from ..helpers import UniqueCourseTest, remove_file
 from ...pages.common.logout import LogoutPage
-from ...pages.studio.utils import add_html_component, click_css, type_in_codemirror
+from ...pages.common.utils import click_css
+from ...pages.studio.utils import add_html_component, type_in_codemirror
 from ...pages.studio.auto_auth import AutoAuthPage
 from ...pages.studio.overview import CourseOutlinePage
 from ...pages.studio.container import ContainerPage
@@ -49,7 +48,7 @@ class CoursewareSearchTest(UniqueCourseTest):
         # create test file in which index for this test will live
         with open(self.TEST_INDEX_FILENAME, "w+") as index_file:
             json.dump({}, index_file)
-        self.addCleanup(os.remove, self.TEST_INDEX_FILENAME)
+        self.addCleanup(remove_file, self.TEST_INDEX_FILENAME)
 
         super(CoursewareSearchTest, self).setUp()
         self.courseware_search_page = CoursewareSearchPage(self.browser, self.course_id)
@@ -177,7 +176,6 @@ class CoursewareSearchTest(UniqueCourseTest):
         # Do the search again, this time we expect results.
         self.assertTrue(self._search_for_content(self.SEARCH_STRING))
 
-    @flaky  # TODO fix SOL-835
     def test_reindex(self):
         """
         Make sure new content gets reindexed on button press.

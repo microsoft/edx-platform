@@ -9,16 +9,20 @@
         size="${size}"
         % endif
         />
+    ${trailing_text | h}
 
-      <p class="status" id="${id}_status">
-           ${status.display_name}
-      </p>
+      <span class="status" id="${id}_status" data-tooltip="${status.display_tooltip}">
+        <span class="sr">
+          ${status.display_name}
+        </span>
+      </span>
+
+      <p id="answer_${id}" class="answer"></p>
 
       <div id="input_${id}_preview" class="equation">
-        \[\]
+        \(\)
         <img src="${STATIC_URL}images/spinner.gif" class="loading" alt="Loading"/>
       </div>
-    <p id="answer_${id}" class="answer"></p>
   </div>
 
   <div class="script_placeholder" data-src="${previewer}"/>

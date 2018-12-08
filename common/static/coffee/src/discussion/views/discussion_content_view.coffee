@@ -1,12 +1,12 @@
 if Backbone?
   class @DiscussionContentView extends Backbone.View
 
-  
+
     events:
       "click .discussion-flag-abuse": "toggleFlagAbuse"
       "keydown .discussion-flag-abuse":
         (event) -> DiscussionUtil.activateOnSpace(event, @toggleFlagAbuse)
-  
+
     attrRenderer:
       ability: (ability) ->
         for action, selector of @abilityRenderer
@@ -33,6 +33,12 @@ if Backbone?
             [".action-close", ".action-pin"],
             (selector) => @$(selector).closest(".actions-item").addClass("is-hidden")
           )
+      can_report:
+        enable: -> @$(".action-report").closest(".actions-item").removeClass("is-hidden")
+        disable: -> @$(".action-report").closest(".actions-item").addClass("is-hidden")
+      can_vote:
+        enable: -> @$(".action-vote").closest(".actions-item").removeClass("is-hidden")
+        disable: -> @$(".action-vote").closest(".actions-item").addClass("is-hidden")
 
     renderPartialAttrs: ->
       for attr, value of @model.changedAttributes()
@@ -56,7 +62,7 @@ if Backbone?
 
     setWmdContent: (cls_identifier, text) =>
       DiscussionUtil.setWmdContent @$el, $.proxy(@$, @), cls_identifier, text
-      
+
 
     initialize: ->
       @model.bind('change', @renderPartialAttrs, @)
@@ -138,7 +144,6 @@ if Backbone?
       closed: (closed) ->
         @updateButtonState(".action-close", closed)
         @$(".post-label-closed").toggleClass("is-hidden", not closed)
-        @$(".action-vote").toggle(not closed)
         @$(".display-vote").toggle(closed)
     })
 

@@ -41,6 +41,7 @@ class InMemorySystem(XMLParsingSystem, MakoDescriptorSystem):  # pylint: disable
 
     def process_xml(self, xml):  # pylint: disable=method-hidden
         """Parse `xml` as an XBlock, and add it to `self._descriptors`"""
+        self.get_asides = Mock(return_value=[])
         descriptor = self.xblock_from_node(
             etree.fromstring(xml),
             None,
@@ -49,14 +50,15 @@ class InMemorySystem(XMLParsingSystem, MakoDescriptorSystem):  # pylint: disable
         self._descriptors[descriptor.location.to_deprecated_string()] = descriptor
         return descriptor
 
-    def load_item(self, location):  # pylint: disable=method-hidden
+    def load_item(self, location, for_parent=None):  # pylint: disable=method-hidden, unused-argument
         """Return the descriptor loaded for `location`"""
         return self._descriptors[location.to_deprecated_string()]
 
 
 class XModuleXmlImportTest(TestCase):
     """Base class for tests that use basic XML parsing"""
-    def process_xml(self, xml_import_data):
+    @classmethod
+    def process_xml(cls, xml_import_data):
         """Use the `xml_import_data` to import an :class:`XBlock` from XML."""
         system = InMemorySystem(xml_import_data)
         return system.process_xml(xml_import_data.xml_string)

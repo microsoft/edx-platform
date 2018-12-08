@@ -1,6 +1,8 @@
-define(["jquery", "js/common_helpers/ajax_helpers", "js/common_helpers/template_helpers",
-        "js/spec_helpers/view_helpers", "js/views/utils/view_utils", "js/views/unit_outline", "js/models/xblock_info"],
-    function ($, AjaxHelpers, TemplateHelpers, ViewHelpers, ViewUtils, UnitOutlineView, XBlockInfo) {
+define(["jquery", "common/js/spec_helpers/ajax_helpers", "common/js/spec_helpers/template_helpers",
+        "common/js/spec_helpers/view_helpers", "common/js/components/utils/view_utils", "js/models/course",
+        "js/views/unit_outline", "js/models/xblock_info"],
+    function ($, AjaxHelpers, TemplateHelpers, ViewHelpers, ViewUtils,
+              Course, UnitOutlineView, XBlockInfo) {
 
         describe("UnitOutlineView", function() {
             var createUnitOutlineView, createMockXBlockInfo,
@@ -71,6 +73,14 @@ define(["jquery", "js/common_helpers/ajax_helpers", "js/common_helpers/template_
             };
 
             beforeEach(function () {
+                window.course = new Course({
+                    id: '5',
+                    name: 'Course Name',
+                    url_name: 'course_name',
+                    org: 'course_org',
+                    num: 'course_num',
+                    revision: 'course_rev'
+                });
                 ViewHelpers.installMockAnalytics();
                 ViewHelpers.installViewTemplates();
                 TemplateHelpers.installTemplate('unit-outline');
@@ -78,6 +88,7 @@ define(["jquery", "js/common_helpers/ajax_helpers", "js/common_helpers/template_
             });
 
             afterEach(function () {
+                delete window.course;
                 ViewHelpers.removeMockAnalytics();
             });
 

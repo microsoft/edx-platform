@@ -1,34 +1,38 @@
 """
-Tests for the language setting view
+Tests: lang pref views
 """
-from django.core.urlresolvers import reverse
+import json
 from django.test import TestCase
+from django.test.client import RequestFactory
+from django.core.urlresolvers import reverse
 from student.tests.factories import UserFactory
-from openedx.core.djangoapps.user_api.preferences.api import get_user_preference
-from lang_pref import LANGUAGE_KEY
+from django.utils.translation import LANGUAGE_SESSION_KEY
+from django.contrib.sessions.middleware import SessionMiddleware
+from django.utils.translation import get_language
 
 
-class TestLanguageSetting(TestCase):
+class TestLangPrefView(TestCase):
     """
-    Test setting languages
+    Language preference view tests.
     """
-    def test_set_preference_happy(self):
-        user = UserFactory.create()
-        self.client.login(username=user.username, password='test')
 
-        lang = 'en'
-        response = self.client.post(reverse('lang_pref_set_language'), {'language': lang})
+    def setUp(self):
+        super(TestLangPrefView, self).setUp()
+        self.session_middleware = SessionMiddleware()
+        self.user = UserFactory.create()
+        self.request = RequestFactory().get('/somewhere')
+        self.request.user = self.user
+        self.session_middleware.process_request(self.request)
 
-        self.assertEquals(response.status_code, 200)
-        user_pref = get_user_preference(user, LANGUAGE_KEY)
-        self.assertEqual(user_pref, lang)
+    def test_language_session_update(self):
+        # test language session updating correctly.
+        self.request.session[LANGUAGE_SESSION_KEY] = 'ar'  # pylint: disable=no-member
+        response = self.client.patch(reverse("session_language"), json.dumps({'pref-lang': 'eo'}))
+        self.assertEqual(response.status_code, 200)
+        self.client.get('/')
+        self.assertEquals(get_language(), 'eo')
 
-    def test_set_preference_missing_lang(self):
-        user = UserFactory.create()
-        self.client.login(username=user.username, password='test')
-
-        response = self.client.post(reverse('lang_pref_set_language'))
-
-        self.assertEquals(response.status_code, 400)
-
-        self.assertIsNone(get_user_preference(user, LANGUAGE_KEY))
+        response = self.client.patch(reverse("session_language"), json.dumps({'pref-lang': 'en'}))
+        self.assertEqual(response.status_code, 200)
+        self.client.get('/')
+        self.assertEquals(get_language(), 'en')

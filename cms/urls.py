@@ -1,11 +1,13 @@
 from django.conf import settings
 from django.conf.urls import patterns, include, url
-
 # There is a course creators admin table.
 from ratelimitbackend import admin
-admin.autodiscover()
 
-# pylint: disable=bad-continuation
+from cms.djangoapps.contentstore.views.program import ProgramAuthoringView, ProgramsIdTokenView
+from cms.djangoapps.contentstore.views.organization import OrganizationListView
+from student.views import LogoutView
+
+admin.autodiscover()
 
 # Pattern to match a course key or a library key
 COURSELIKE_KEY_PATTERN = r'(?P<course_key_string>({}|{}))'.format(
@@ -32,17 +34,12 @@ urlpatterns = patterns(
         'contentstore.views.component_handler', name='component_handler'),
 
     url(r'^xblock/resource/(?P<block_type>[^/]*)/(?P<uri>.*)$',
-        'contentstore.views.xblock.xblock_resource', name='xblock_resource_url'),
-
-    # temporary landing page for a course
-    url(r'^edge/(?P<org>[^/]+)/(?P<course>[^/]+)/course/(?P<coursename>[^/]+)$',
-        'contentstore.views.landing', name='landing'),
+        'openedx.core.djangoapps.common_views.xblock.xblock_resource', name='xblock_resource_url'),
 
     url(r'^not_found$', 'contentstore.views.not_found', name='not_found'),
     url(r'^server_error$', 'contentstore.views.server_error', name='server_error'),
+    url(r'^organizations$', OrganizationListView.as_view(), name='organizations'),
 
-    # temporary landing page for edge
-    url(r'^edge$', 'contentstore.views.edge', name='edge'),
     # noop to squelch ajax errors
     url(r'^event$', 'contentstore.views.event', name='event'),
 
@@ -50,7 +47,14 @@ urlpatterns = patterns(
     url(r'^heartbeat$', include('heartbeat.urls')),
 
     url(r'^user_api/', include('openedx.core.djangoapps.user_api.legacy_urls')),
-    url(r'^lang_pref/', include('lang_pref.urls')),
+
+    url(r'^i18n/', include('django.conf.urls.i18n')),
+
+    # User API endpoints
+    url(r'^api/user/', include('openedx.core.djangoapps.user_api.urls')),
+
+    # Update session view
+    url(r'^lang_pref/session_language', 'lang_pref.views.update_session_language', name='session_language'),
 )
 
 # User creation and updating views
@@ -62,7 +66,7 @@ urlpatterns += patterns(
 
     # ajax view that actually does the work
     url(r'^login_post$', 'student.views.login_user', name='login_post'),
-    url(r'^logout$', 'student.views.logout_user', name='logout'),
+    url(r'^logout$', LogoutView.as_view(), name='logout'),
 )
 
 # restful api
@@ -73,7 +77,7 @@ urlpatterns += patterns(
     url(r'^howitworks$', 'howitworks'),
     url(r'^signup$', 'signup', name='signup'),
     url(r'^signin$', 'login_page', name='login'),
-    url(r'^request_course_creator$', 'request_course_creator'),
+    url(r'^request_course_creator$', 'request_course_creator', name='request_course_creator'),
 
     url(r'^course_team/{}(?:/(?P<email>.+))?$'.format(COURSELIKE_KEY_PATTERN), 'course_team_handler'),
     url(r'^course_info/{}$'.format(settings.COURSE_KEY_PATTERN), 'course_info_handler'),
@@ -92,7 +96,6 @@ urlpatterns += patterns(
         'course_notifications_handler'),
     url(r'^course_rerun/{}$'.format(settings.COURSE_KEY_PATTERN), 'course_rerun_handler', name='course_rerun_handler'),
     url(r'^container/{}$'.format(settings.USAGE_KEY_PATTERN), 'container_handler'),
-    url(r'^checklists/{}/(?P<checklist_index>\d+)?$'.format(settings.COURSE_KEY_PATTERN), 'checklists_handler'),
     url(r'^orphan/{}$'.format(settings.COURSE_KEY_PATTERN), 'orphan_handler'),
     url(r'^assets/{}/{}?$'.format(settings.COURSE_KEY_PATTERN, settings.ASSET_KEY_PATTERN), 'assets_handler'),
     url(r'^import/{}$'.format(COURSELIKE_KEY_PATTERN), 'import_handler'),
@@ -113,7 +116,6 @@ urlpatterns += patterns(
     url(r'^group_configurations/{}$'.format(settings.COURSE_KEY_PATTERN), 'group_configurations_list_handler'),
     url(r'^group_configurations/{}/(?P<group_configuration_id>\d+)(/)?(?P<group_id>\d+)?$'.format(
         settings.COURSE_KEY_PATTERN), 'group_configurations_detail_handler'),
-
     url(r'^api/val/v0/', include('edxval.urls')),
 )
 
@@ -122,12 +124,6 @@ JS_INFO_DICT = {
     # We need to explicitly include external Django apps that are not in LOCALE_PATHS.
     'packages': ('openassessment',),
 }
-
-urlpatterns += patterns(
-    '',
-    # Serve catalog of localized strings to be rendered by Javascript
-    url(r'^i18n.js$', 'django.views.i18n.javascript_catalog', JS_INFO_DICT),
-)
 
 if settings.FEATURES.get('ENABLE_CONTENT_LIBRARIES'):
     urlpatterns += (
@@ -172,12 +168,39 @@ if settings.FEATURES.get('ENTRANCE_EXAMS'):
         url(r'^course/{}/entrance_exam/?$'.format(settings.COURSE_KEY_PATTERN), 'contentstore.views.entrance_exam'),
     )
 
+# Enable Web/HTML Certificates
+if settings.FEATURES.get('CERTIFICATES_HTML_VIEW'):
+    urlpatterns += (
+        url(r'^certificates/activation/{}/'.format(settings.COURSE_KEY_PATTERN),
+            'contentstore.views.certificates.certificate_activation_handler'),
+        url(r'^certificates/{}/(?P<certificate_id>\d+)/signatories/(?P<signatory_id>\d+)?$'.format(
+            settings.COURSE_KEY_PATTERN), 'contentstore.views.certificates.signatory_detail_handler'),
+        url(r'^certificates/{}/(?P<certificate_id>\d+)?$'.format(settings.COURSE_KEY_PATTERN),
+            'contentstore.views.certificates.certificates_detail_handler'),
+        url(r'^certificates/{}$'.format(settings.COURSE_KEY_PATTERN),
+            'contentstore.views.certificates.certificates_list_handler')
+    )
+
+urlpatterns += (
+    # These views use a configuration model to determine whether or not to
+    # display the Programs authoring app. If disabled, a 404 is returned.
+    url(r'^programs/id_token/$', ProgramsIdTokenView.as_view(), name='programs_id_token'),
+    # Drops into the Programs authoring app, which handles its own routing.
+    url(r'^program/', ProgramAuthoringView.as_view(), name='programs'),
+)
+
 if settings.DEBUG:
     try:
         from .urls_dev import urlpatterns as dev_urlpatterns
         urlpatterns += dev_urlpatterns
     except ImportError:
         pass
+
+if 'debug_toolbar' in settings.INSTALLED_APPS:
+    import debug_toolbar
+    urlpatterns += (
+        url(r'^__debug__/', include(debug_toolbar.urls)),
+    )
 
 # Custom error pages
 # pylint: disable=invalid-name
@@ -186,6 +209,6 @@ handler500 = 'contentstore.views.render_500'
 
 # display error page templates, for testing purposes
 urlpatterns += (
-    url(r'404', handler404),
-    url(r'500', handler500),
+    url(r'^404$', handler404),
+    url(r'^500$', handler500),
 )

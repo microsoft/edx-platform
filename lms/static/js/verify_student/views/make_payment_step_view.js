@@ -10,11 +10,23 @@ var edx = edx || {};
 
     edx.verify_student.MakePaymentStepView = edx.verify_student.StepView.extend({
 
+        templateName: "make_payment_step",
+        btnClass: 'action-primary',
+
+        initialize: function( obj ) {
+            _.extend( this, obj );
+           if (this.templateContext().isABTesting) {
+               this.templateName = 'make_payment_step_ab_testing';
+               this.btnClass = 'action-primary-blue';
+           }
+        },
+
         defaultContext: function() {
             return {
                 isActive: true,
                 suggestedPrices: [],
                 minPrice: 0,
+                sku: '',
                 currency: 'usd',
                 upgrade: false,
                 verificationDeadline: '',
@@ -23,8 +35,9 @@ var edx = edx || {};
                 hasVisibleReqs: false,
                 platformName: '',
                 alreadyVerified: false,
-                courseModeSlug: 'honor',
-                verificationGoodUntil: ''
+                courseModeSlug: 'audit',
+                verificationGoodUntil: '',
+                isABTesting: false
             };
         },
 
@@ -45,21 +58,21 @@ var edx = edx || {};
 
         _getPaymentButtonText: function(processorName) {
             if (processorName.toLowerCase().substr(0, 11)=='cybersource') {
-                return gettext('Pay with Credit Card');
+                return gettext('Checkout');
             } else if (processorName.toLowerCase()=='paypal') {
-                return gettext('Pay with PayPal');
+                return gettext('Checkout with PayPal');
             } else {
                 // This is mainly for testing as no other processors are supported right now.
                 // Translators: 'processor' is the name of a third-party payment processing vendor (example: "PayPal")
-                return interpolate_text(gettext('Pay with {processor}'), {processor: processorName});
+                return interpolate_text(gettext('Checkout with {processor}'), {processor: processorName});
             }
         },
 
         _getPaymentButtonHtml: function(processorName) {
             var self = this;
             return _.template(
-                '<a class="next action-primary payment-button" id="<%- name %>" tab-index="0"><%- text %></a> '
-            )({name: processorName, text: self._getPaymentButtonText(processorName)});
+                '<button class="next <%- btnClass %> payment-button" id="<%- name %>" ><%- text %></button> '
+            )({name: processorName, text: self._getPaymentButtonText(processorName), btnClass: this.btnClass});
         },
 
         postRender: function() {
@@ -68,6 +81,9 @@ var edx = edx || {};
                     templateContext.requirements,
                     function( isVisible ) { return isVisible; }
                 ),
+                // This a hack to appease /lms/static/js/spec/verify_student/pay_and_verify_view_spec.js,
+                // which does not load an actual template context.
+                processors = templateContext.processors || [],
                 self = this;
 
             // Track a virtual pageview, for easy funnel reconstruction.
@@ -99,10 +115,20 @@ var edx = edx || {};
                 self._getProductText( templateContext.courseModeSlug, templateContext.upgrade )
             );
 
-            // create a button for each payment processor
-            _.each(templateContext.processors, function(processorName) {
-                $( 'div.payment-buttons' ).append( self._getPaymentButtonHtml(processorName) );
-            });
+            if (processors.length === 0) {
+                // No payment processors are enabled at the moment, so show an error message
+                this.errorModel.set({
+                    errorTitle: gettext('All payment options are currently unavailable.'),
+                    errorMsg: gettext('Try the transaction again in a few minutes.'),
+                    shown: true
+                })
+            }
+            else {
+                // create a button for each payment processor
+                _.each(processors.reverse(), function(processorName) {
+                    $( 'div.payment-buttons' ).append( self._getPaymentButtonHtml(processorName) );
+                });
+            }
 
             // Handle payment submission
             $( '.payment-button' ).on( 'click', _.bind( this.createOrder, this ) );
@@ -128,11 +154,14 @@ var edx = edx || {};
                 postData = {
                     'processor': event.target.id,
                     'contribution': paymentAmount,
-                    'course_id': this.stepData.courseKey
+                    'course_id': this.stepData.courseKey,
+                    'sku': this.templateContext().sku
                 };
 
             // Disable the payment button to prevent multiple submissions
             this.setPaymentEnabled( false );
+
+            $( event.target ).toggleClass( 'is-selected' );
 
             // Create the order for the amount
             $.ajax({
@@ -194,6 +223,8 @@ var edx = edx || {};
 
             // Re-enable the button so the user can re-try
             this.setPaymentEnabled( true );
+
+            $( '.payment-button' ).toggleClass( 'is-selected', false );
         },
 
         getPaymentAmount: function() {

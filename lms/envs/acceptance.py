@@ -71,6 +71,15 @@ DATABASES = {
         'OPTIONS': {
             'timeout': 30,
         },
+        'ATOMIC_REQUESTS': True,
+    },
+    'student_module_history': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': TEST_ROOT / "db" / "test_student_module_history.db",
+        'TEST_NAME': TEST_ROOT / "db" / "test_student_module_history.db",
+        'OPTIONS': {
+            'timeout': 30,
+        },
     }
 }
 
@@ -118,9 +127,8 @@ THIRD_PARTY_AUTH = {
 # Enable fake payment processing page
 FEATURES['ENABLE_PAYMENT_FAKE'] = True
 
-# Enable email on the instructor dash
-FEATURES['ENABLE_INSTRUCTOR_EMAIL'] = True
-FEATURES['REQUIRE_COURSE_EMAIL_AUTH'] = False
+# Enable special exams
+FEATURES['ENABLE_SPECIAL_EXAMS'] = True
 
 # Don't actually send any requests to Software Secure for student identity
 # verification.
@@ -135,14 +143,16 @@ FEATURES['ENABLE_FEEDBACK_SUBMISSION'] = False
 
 # Include the lettuce app for acceptance testing, including the 'harvest' django-admin command
 INSTALLED_APPS += ('lettuce.django',)
-LETTUCE_APPS = ('courseware', 'instructor',)
+LETTUCE_APPS = ('courseware', 'instructor')
 
 # Lettuce appears to have a bug that causes it to search
 # `instructor_task` when we specify the `instructor` app.
 # This causes some pretty cryptic errors as lettuce tries
 # to parse files in `instructor_task` as features.
 # As a quick workaround, explicitly exclude the `instructor_task` app.
-LETTUCE_AVOID_APPS = ('instructor_task',)
+# The coursewarehistoryextended app also falls prey to this fuzzy
+# for the courseware app.
+LETTUCE_AVOID_APPS = ('instructor_task', 'coursewarehistoryextended')
 
 LETTUCE_BROWSER = os.environ.get('LETTUCE_BROWSER', 'chrome')
 
@@ -175,14 +185,24 @@ XQUEUE_INTERFACE = {
 }
 
 # Point the URL used to test YouTube availability to our stub YouTube server
-YOUTUBE['API'] = "127.0.0.1:{0}/get_youtube_api/".format(YOUTUBE_PORT)
-YOUTUBE['TEST_URL'] = "127.0.0.1:{0}/test_youtube/".format(YOUTUBE_PORT)
+YOUTUBE['API'] = "http://127.0.0.1:{0}/get_youtube_api/".format(YOUTUBE_PORT)
+YOUTUBE['METADATA_URL'] = "http://127.0.0.1:{0}/test_youtube/".format(YOUTUBE_PORT)
 YOUTUBE['TEXT_API']['url'] = "127.0.0.1:{0}/test_transcripts_youtube/".format(YOUTUBE_PORT)
 
-if FEATURES.get('ENABLE_COURSEWARE_SEARCH') or FEATURES.get('ENABLE_DASHBOARD_SEARCH'):
+if FEATURES.get('ENABLE_COURSEWARE_SEARCH') or \
+   FEATURES.get('ENABLE_DASHBOARD_SEARCH') or \
+   FEATURES.get('ENABLE_COURSE_DISCOVERY'):
     # Use MockSearchEngine as the search engine for test scenario
     SEARCH_ENGINE = "search.tests.mock_search_engine.MockSearchEngine"
 
 # Generate a random UUID so that different runs of acceptance tests don't break each other
 import uuid
 SECRET_KEY = uuid.uuid4().hex
+
+############################### PIPELINE #######################################
+
+PIPELINE_ENABLED = False
+
+# We want to make sure that any new migrations are run
+# see https://groups.google.com/forum/#!msg/django-developers/PWPj3etj3-U/kCl6pMsQYYoJ
+MIGRATION_MODULES = {}

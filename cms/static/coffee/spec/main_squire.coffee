@@ -1,15 +1,18 @@
 requirejs.config({
+    baseUrl: '/base/',
+
     paths: {
         "gettext": "xmodule_js/common_static/js/test/i18n",
         "mustache": "xmodule_js/common_static/js/vendor/mustache",
         "codemirror": "xmodule_js/common_static/js/vendor/CodeMirror/codemirror",
-        "jquery": "xmodule_js/common_static/js/vendor/jquery.min",
+        "jquery": "common/js/vendor/jquery",
+        "jquery-migrate": "common/js/vendor/jquery-migrate",
         "jquery.ui": "xmodule_js/common_static/js/vendor/jquery-ui.min",
         "jquery.form": "xmodule_js/common_static/js/vendor/jquery.form",
         "jquery.markitup": "xmodule_js/common_static/js/vendor/markitup/jquery.markitup",
-        "jquery.leanModal": "xmodule_js/common_static/js/vendor/jquery.leanModal.min",
+        "jquery.leanModal": "xmodule_js/common_static/js/vendor/jquery.leanModal",
         "jquery.smoothScroll": "xmodule_js/common_static/js/vendor/jquery.smooth-scroll.min",
-        "jquery.scrollTo": "xmodule_js/common_static/js/vendor/jquery.scrollTo-1.4.2-min",
+        "jquery.scrollTo": "common/js/vendor/jquery.scrollTo",
         "jquery.timepicker": "xmodule_js/common_static/js/vendor/timepicker/jquery.timepicker",
         "jquery.cookie": "xmodule_js/common_static/js/vendor/jquery.cookie",
         "jquery.qtip": "xmodule_js/common_static/js/vendor/jquery.qtip.min",
@@ -21,11 +24,12 @@ requirejs.config({
         "jquery.immediateDescendents": "xmodule_js/common_static/coffee/src/jquery.immediateDescendents",
         "datepair": "xmodule_js/common_static/js/vendor/timepicker/datepair",
         "date": "xmodule_js/common_static/js/vendor/date",
-        "underscore": "xmodule_js/common_static/js/vendor/underscore-min",
-        "underscore.string": "xmodule_js/common_static/js/vendor/underscore.string.min",
-        "backbone": "xmodule_js/common_static/js/vendor/backbone-min",
+        "text": "xmodule_js/common_static/js/vendor/requirejs/text",
+        "underscore": "common/js/vendor/underscore",
+        "underscore.string": "common/js/vendor/underscore.string",
+        "backbone": "common/js/vendor/backbone",
         "backbone.associations": "xmodule_js/common_static/js/vendor/backbone-associations-min",
-        "backbone.paginator": "xmodule_js/common_static/js/vendor/backbone.paginator.min",
+        "backbone.paginator": "common/js/vendor/backbone.paginator",
         "tinymce": "xmodule_js/common_static/js/vendor/tinymce/js/tinymce/tinymce.full.min",
         "jquery.tinymce": "xmodule_js/common_static/js/vendor/tinymce/js/tinymce/jquery.tinymce",
         "xmodule": "xmodule_js/src/xmodule",
@@ -33,17 +37,17 @@ requirejs.config({
         "xblock/core": "xmodule_js/common_static/js/xblock/core",
         "xblock": "xmodule_js/common_static/coffee/src/xblock",
         "utility": "xmodule_js/common_static/js/src/utility",
-        "sinon": "xmodule_js/common_static/js/vendor/sinon-1.7.1",
+        "sinon": "xmodule_js/common_static/js/vendor/sinon-1.17.0",
         "squire": "xmodule_js/common_static/js/vendor/Squire",
-        "jasmine-stealth": "xmodule_js/common_static/js/vendor/jasmine-stealth",
-        "jasmine.async": "xmodule_js/common_static/js/vendor/jasmine.async",
-        "draggabilly": "xmodule_js/common_static/js/vendor/draggabilly.pkgd",
+        "modernizr": "edx-pattern-library/js/modernizr-custom",
+        "afontgarde": "edx-pattern-library/js/afontgarde",
+        "edxicons": "edx-pattern-library/js/edx-icons",
+        "draggabilly": "xmodule_js/common_static/js/vendor/draggabilly",
         "domReady": "xmodule_js/common_static/js/vendor/domReady",
         "URI": "xmodule_js/common_static/js/vendor/URI.min",
 
-        "mathjax": "//cdn.mathjax.org/mathjax/2.4-latest/MathJax.js?config=TeX-MML-AM_HTMLorMML-full&delayStartupUntil=configured",
+        "mathjax": "//cdn.mathjax.org/mathjax/2.6-latest/MathJax.js?config=TeX-MML-AM_SVG&delayStartupUntil=configured",
         "youtube": "//www.youtube.com/player_api?noext",
-        "tender": "//api.tenderapp.com/tender_widget.js"
 
         "coffee/src/ajax_prefix": "xmodule_js/common_static/coffee/src/ajax_prefix"
     }
@@ -120,7 +124,7 @@ requirejs.config({
         },
         "backbone.paginator": {
             deps: ["backbone"],
-            exports: "Backbone.Paginator"
+            exports: "Backbone.PageableCollection"
         },
         "youtube": {
             exports: "YT"
@@ -155,12 +159,14 @@ requirejs.config({
         "sinon": {
             exports: "sinon"
         },
-        "jasmine-stealth": {
-            deps: ["jasmine"]
+        "common/js/spec_helpers/jasmine-extensions": {
+            deps: ["jquery"]
         },
-        "jasmine.async": {
-            deps: ["jasmine"],
-            exports: "AsyncSpec"
+        "common/js/spec_helpers/jasmine-stealth": {
+            deps: ["underscore", "underscore.string"]
+        },
+        "common/js/spec_helpers/jasmine-waituntil": {
+            deps: ["jquery"]
         },
         "xblock/core": {
             exports: "XBlock",
@@ -176,15 +182,37 @@ requirejs.config({
         },
         "coffee/src/ajax_prefix": {
             deps: ["jquery"]
+        },
+        "modernizr": {
+            exports: "Modernizr"
+        },
+        "afontgarde": {
+            exports: "AFontGarde"
         }
     }
 });
 
 jasmine.getFixtures().fixturesPath += 'coffee/fixtures'
 
-define([
-    "coffee/spec/views/assets_spec",
-    "js/spec/video/translations_editor_spec",
-    "js/spec/video/file_uploader_editor_spec",
-    "js/spec/models/group_configuration_spec"
-    ])
+testFiles = [
+    'coffee/spec/views/assets_spec',
+    'js/spec/video/translations_editor_spec',
+    'js/spec/video/file_uploader_editor_spec',
+    'js/spec/models/group_configuration_spec'
+]
+i = 0
+while i < testFiles.length
+    testFiles[i] = '/base/' + testFiles[i] + '.js'
+    i++
+
+specHelpers = [
+  'common/js/spec_helpers/jasmine-extensions',
+  'common/js/spec_helpers/jasmine-stealth',
+  'common/js/spec_helpers/jasmine-waituntil'
+]
+
+# Jasmine has a global stack for creating a tree of specs. We need to load
+# spec files one by one, otherwise some end up getting nested under others.
+requireSerial specHelpers.concat(testFiles), ->
+# start test run, once Require.js is done
+    window.__karma__.start()

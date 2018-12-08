@@ -2,31 +2,37 @@
 Tests for instructor.basic
 """
 
+import datetime
 import json
-from student.models import CourseEnrollment
+import pytz
+from mock import MagicMock, Mock, patch
+from nose.plugins.attrib import attr
 from django.core.urlresolvers import reverse
-from mock import patch
+from django.db.models import Q
+
+from course_modes.models import CourseMode
+from courseware.tests.factories import InstructorFactory
+from instructor_analytics.basic import (
+    StudentModule, sale_record_features, sale_order_record_features, enrolled_students_features,
+    course_registration_features, coupon_codes_features, get_proctored_exam_results, list_may_enroll,
+    list_problem_responses, AVAILABLE_FEATURES, STUDENT_FEATURES, PROFILE_FEATURES
+)
+from opaque_keys.edx.locator import UsageKey
+from openedx.core.djangoapps.course_groups.tests.helpers import CohortFactory
+from student.models import CourseEnrollment, CourseEnrollmentAllowed
 from student.roles import CourseSalesAdminRole
 from student.tests.factories import UserFactory, CourseModeFactory
 from shoppingcart.models import (
     CourseRegistrationCode, RegistrationCodeRedemption, Order,
     Invoice, Coupon, CourseRegCodeItem, CouponRedemption, CourseRegistrationCodeInvoiceItem
 )
-from course_modes.models import CourseMode
-from instructor_analytics.basic import (
-    sale_record_features, sale_order_record_features, enrolled_students_features, course_registration_features,
-    coupon_codes_features, AVAILABLE_FEATURES, STUDENT_FEATURES, PROFILE_FEATURES
-)
-from openedx.core.djangoapps.course_groups.tests.helpers import CohortFactory
-from courseware.tests.factories import InstructorFactory
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
-
-import datetime
-from django.db.models import Q
-import pytz
+from edx_proctoring.api import create_exam
+from edx_proctoring.models import ProctoredExamStudentAttempt
 
 
+@attr('shard_3')
 class TestAnalyticsBasic(ModuleStoreTestCase):
     """ Test basic analytics functions. """
 
@@ -43,6 +49,53 @@ class TestAnalyticsBasic(ModuleStoreTestCase):
                 "company": "Open edX Inc {}".format(user.id),
             })
             user.profile.save()
+        self.students_who_may_enroll = list(self.users) + [UserFactory() for _ in range(5)]
+        for student in self.students_who_may_enroll:
+            CourseEnrollmentAllowed.objects.create(
+                email=student.email, course_id=self.course_key
+            )
+
+    def test_list_problem_responses(self):
+        def result_factory(result_id):
+            """
+            Return a dummy StudentModule object that can be queried for
+            relevant info (student.username and state).
+            """
+            result = Mock(spec=['student', 'state'])
+            result.student.username.return_value = u'user{}'.format(result_id)
+            result.state.return_value = u'state{}'.format(result_id)
+            return result
+
+        # Ensure that UsageKey.from_string returns a problem key that list_problem_responses can work with
+        # (even when called with a dummy location):
+        mock_problem_key = Mock(return_value=u'')
+        mock_problem_key.course_key = self.course_key
+        with patch.object(UsageKey, 'from_string') as patched_from_string:
+            patched_from_string.return_value = mock_problem_key
+
+            # Ensure that StudentModule.objects.filter returns a result set that list_problem_responses can work with
+            # (this keeps us from having to create fixtures for this test):
+            mock_results = MagicMock(return_value=[result_factory(n) for n in range(5)])
+            with patch.object(StudentModule, 'objects') as patched_manager:
+                patched_manager.filter.return_value = mock_results
+
+                mock_problem_location = ''
+                problem_responses = list_problem_responses(self.course_key, problem_location=mock_problem_location)
+
+                # Check if list_problem_responses called UsageKey.from_string to look up problem key:
+                patched_from_string.assert_called_once_with(mock_problem_location)
+                # Check if list_problem_responses called StudentModule.objects.filter to obtain relevant records:
+                patched_manager.filter.assert_called_once_with(
+                    course_id=self.course_key, module_state_key=mock_problem_key
+                )
+
+                # Check if list_problem_responses returned expected results:
+                self.assertEqual(len(problem_responses), len(mock_results))
+                for mock_result in mock_results:
+                    self.assertTrue(
+                        {'username': mock_result.student.username, 'state': mock_result.state} in
+                        problem_responses
+                    )
 
     def test_enrolled_students_features_username(self):
         self.assertIn('username', AVAILABLE_FEATURES)
@@ -53,17 +106,35 @@ class TestAnalyticsBasic(ModuleStoreTestCase):
             self.assertIn(userreport['username'], [user.username for user in self.users])
 
     def test_enrolled_students_features_keys(self):
-        query_features = ('username', 'name', 'email')
+        query_features = ('username', 'name', 'email', 'city', 'country',)
+        for user in self.users:
+            user.profile.city = "Mos Eisley {}".format(user.id)
+            user.profile.country = "Tatooine {}".format(user.id)
+            user.profile.save()
         for feature in query_features:
             self.assertIn(feature, AVAILABLE_FEATURES)
         with self.assertNumQueries(1):
             userreports = enrolled_students_features(self.course_key, query_features)
         self.assertEqual(len(userreports), len(self.users))
-        for userreport in userreports:
+
+        userreports = sorted(userreports, key=lambda u: u["username"])
+        users = sorted(self.users, key=lambda u: u.username)
+        for userreport, user in zip(userreports, users):
             self.assertEqual(set(userreport.keys()), set(query_features))
-            self.assertIn(userreport['username'], [user.username for user in self.users])
-            self.assertIn(userreport['email'], [user.email for user in self.users])
-            self.assertIn(userreport['name'], [user.profile.name for user in self.users])
+            self.assertEqual(userreport['username'], user.username)
+            self.assertEqual(userreport['email'], user.email)
+            self.assertEqual(userreport['name'], user.profile.name)
+            self.assertEqual(userreport['city'], user.profile.city)
+            self.assertEqual(userreport['country'], user.profile.country)
+
+    def test_enrolled_student_with_no_country_city(self):
+        userreports = enrolled_students_features(self.course_key, ('username', 'city', 'country',))
+        for userreport in userreports:
+            # This behaviour is somewhat inconsistent: None string fields
+            # objects are converted to "None", but non-JSON serializable fields
+            # are converted to an empty string.
+            self.assertEqual(userreport['city'], "None")
+            self.assertEqual(userreport['country'], "")
 
     def test_enrolled_students_meta_features_keys(self):
         """
@@ -82,8 +153,8 @@ class TestAnalyticsBasic(ModuleStoreTestCase):
         course = CourseFactory.create(org="test", course="course1", display_name="run1")
         course.cohort_config = {'cohorted': True, 'auto_cohort': True, 'auto_cohort_groups': ['cohort']}
         self.store.update_item(course, self.instructor.id)
-        cohort = CohortFactory.create(name='cohort', course_id=course.id)
         cohorted_students = [UserFactory.create() for _ in xrange(10)]
+        cohort = CohortFactory.create(name='cohort', course_id=course.id, users=cohorted_students)
         cohorted_usernames = [student.username for student in cohorted_students]
         non_cohorted_student = UserFactory.create()
         for student in cohorted_students:
@@ -113,6 +184,44 @@ class TestAnalyticsBasic(ModuleStoreTestCase):
         self.assertEqual(len(AVAILABLE_FEATURES), len(STUDENT_FEATURES + PROFILE_FEATURES))
         self.assertEqual(set(AVAILABLE_FEATURES), set(STUDENT_FEATURES + PROFILE_FEATURES))
 
+    def test_list_may_enroll(self):
+        may_enroll = list_may_enroll(self.course_key, ['email'])
+        self.assertEqual(len(may_enroll), len(self.students_who_may_enroll) - len(self.users))
+        email_adresses = [student.email for student in self.students_who_may_enroll]
+        for student in may_enroll:
+            self.assertEqual(student.keys(), ['email'])
+            self.assertIn(student['email'], email_adresses)
+
+    def test_get_student_exam_attempt_features(self):
+        query_features = [
+            'user_email',
+            'exam_name',
+            'allowed_time_limit_mins',
+            'is_sample_attempt',
+            'started_at',
+            'completed_at',
+            'status',
+        ]
+
+        proctored_exam_id = create_exam(self.course_key, 'Test Content', 'Test Exam', 1)
+        ProctoredExamStudentAttempt.create_exam_attempt(
+            proctored_exam_id, self.users[0].id, '', 1,
+            'Test Code 1', True, False, 'ad13'
+        )
+        ProctoredExamStudentAttempt.create_exam_attempt(
+            proctored_exam_id, self.users[1].id, '', 2,
+            'Test Code 2', True, False, 'ad13'
+        )
+        ProctoredExamStudentAttempt.create_exam_attempt(
+            proctored_exam_id, self.users[2].id, '', 3,
+            'Test Code 3', True, False, 'asd'
+        )
+
+        proctored_exam_attempts = get_proctored_exam_results(self.course_key, query_features)
+        self.assertEqual(len(proctored_exam_attempts), 3)
+        for proctored_exam_attempt in proctored_exam_attempts:
+            self.assertEqual(set(proctored_exam_attempt.keys()), set(query_features))
+
 
 @patch.dict('django.conf.settings.FEATURES', {'ENABLE_PAID_COURSE_REGISTRATION': True})
 class TestCourseSaleRecordsAnalyticsBasic(ModuleStoreTestCase):
@@ -136,7 +245,7 @@ class TestCourseSaleRecordsAnalyticsBasic(ModuleStoreTestCase):
 
         query_features = [
             'company_name', 'company_contact_name', 'company_contact_email', 'total_codes', 'total_used_codes',
-            'total_amount', 'created_at', 'customer_reference_number', 'recipient_name', 'recipient_email',
+            'total_amount', 'created', 'customer_reference_number', 'recipient_name', 'recipient_email',
             'created_by', 'internal_reference', 'invoice_number', 'codes', 'course_id'
         ]
 
@@ -175,7 +284,44 @@ class TestCourseSaleRecordsAnalyticsBasic(ModuleStoreTestCase):
             self.assertEqual(sale_record['total_used_codes'], 0)
             self.assertEqual(sale_record['total_codes'], 5)
 
-    def test_sale_order_features(self):
+    def test_course_sale_no_codes(self):
+
+        query_features = [
+            'company_name', 'company_contact_name', 'company_contact_email', 'total_codes', 'total_used_codes',
+            'total_amount', 'created', 'customer_reference_number', 'recipient_name', 'recipient_email',
+            'created_by', 'internal_reference', 'invoice_number', 'codes', 'course_id'
+        ]
+
+        #create invoice
+        sale_invoice = Invoice.objects.create(
+            total_amount=0.00, company_name='Test1', company_contact_name='TestName',
+            company_contact_email='test@company.com', recipient_name='Testw_1', recipient_email='test2@test.com',
+            customer_reference_number='2Fwe23S', internal_reference="ABC", course_id=self.course.id
+        )
+        CourseRegistrationCodeInvoiceItem.objects.create(
+            invoice=sale_invoice,
+            qty=0,
+            unit_price=0.00,
+            course_id=self.course.id
+        )
+
+        course_sale_records_list = sale_record_features(self.course.id, query_features)
+
+        for sale_record in course_sale_records_list:
+            self.assertEqual(sale_record['total_amount'], sale_invoice.total_amount)
+            self.assertEqual(sale_record['recipient_email'], sale_invoice.recipient_email)
+            self.assertEqual(sale_record['recipient_name'], sale_invoice.recipient_name)
+            self.assertEqual(sale_record['company_name'], sale_invoice.company_name)
+            self.assertEqual(sale_record['company_contact_name'], sale_invoice.company_contact_name)
+            self.assertEqual(sale_record['company_contact_email'], sale_invoice.company_contact_email)
+            self.assertEqual(sale_record['internal_reference'], sale_invoice.internal_reference)
+            self.assertEqual(sale_record['customer_reference_number'], sale_invoice.customer_reference_number)
+            self.assertEqual(sale_record['invoice_number'], sale_invoice.id)
+            self.assertEqual(sale_record['created_by'], None)
+            self.assertEqual(sale_record['total_used_codes'], 0)
+            self.assertEqual(sale_record['total_codes'], 0)
+
+    def test_sale_order_features_with_discount(self):
         """
          Test Order Sales Report CSV
         """
@@ -253,6 +399,78 @@ class TestCourseSaleRecordsAnalyticsBasic(ModuleStoreTestCase):
             self.assertEqual(sale_order_record['status'], item.status)
             self.assertEqual(sale_order_record['coupon_code'], coupon_redemption[0].coupon.code)
 
+    def test_sale_order_features_without_discount(self):
+        """
+         Test Order Sales Report CSV
+        """
+        query_features = [
+            ('id', 'Order Id'),
+            ('company_name', 'Company Name'),
+            ('company_contact_name', 'Company Contact Name'),
+            ('company_contact_email', 'Company Contact Email'),
+            ('total_amount', 'Total Amount'),
+            ('total_codes', 'Total Codes'),
+            ('total_used_codes', 'Total Used Codes'),
+            ('logged_in_username', 'Login Username'),
+            ('logged_in_email', 'Login User Email'),
+            ('purchase_time', 'Date of Sale'),
+            ('customer_reference_number', 'Customer Reference Number'),
+            ('recipient_name', 'Recipient Name'),
+            ('recipient_email', 'Recipient Email'),
+            ('bill_to_street1', 'Street 1'),
+            ('bill_to_street2', 'Street 2'),
+            ('bill_to_city', 'City'),
+            ('bill_to_state', 'State'),
+            ('bill_to_postalcode', 'Postal Code'),
+            ('bill_to_country', 'Country'),
+            ('order_type', 'Order Type'),
+            ('status', 'Order Item Status'),
+            ('coupon_code', 'Coupon Code'),
+            ('unit_cost', 'Unit Price'),
+            ('list_price', 'List Price'),
+            ('codes', 'Registration Codes'),
+            ('course_id', 'Course Id'),
+            ('quantity', 'Quantity'),
+            ('total_discount', 'Total Discount'),
+            ('total_amount', 'Total Amount Paid'),
+        ]
+        # add the coupon code for the course
+        order = Order.get_cart_for_user(self.instructor)
+        order.order_type = 'business'
+        order.save()
+        order.add_billing_details(
+            company_name='Test Company',
+            company_contact_name='Test',
+            company_contact_email='test@123',
+            recipient_name='R1', recipient_email='',
+            customer_reference_number='PO#23'
+        )
+        CourseRegCodeItem.add_to_order(order, self.course.id, 4)
+        order.purchase()
+
+        # get the updated item
+        item = order.orderitem_set.all().select_subclasses()[0]
+
+        db_columns = [x[0] for x in query_features]
+        sale_order_records_list = sale_order_record_features(self.course.id, db_columns)
+
+        for sale_order_record in sale_order_records_list:
+            self.assertEqual(sale_order_record['recipient_email'], order.recipient_email)
+            self.assertEqual(sale_order_record['recipient_name'], order.recipient_name)
+            self.assertEqual(sale_order_record['company_name'], order.company_name)
+            self.assertEqual(sale_order_record['company_contact_name'], order.company_contact_name)
+            self.assertEqual(sale_order_record['company_contact_email'], order.company_contact_email)
+            self.assertEqual(sale_order_record['customer_reference_number'], order.customer_reference_number)
+            self.assertEqual(sale_order_record['unit_cost'], item.unit_cost)
+            # Make sure list price is not None and matches the unit price since no discount was applied.
+            self.assertIsNotNone(sale_order_record['list_price'])
+            self.assertEqual(sale_order_record['list_price'], item.unit_cost)
+            self.assertEqual(sale_order_record['status'], item.status)
+            self.assertEqual(sale_order_record['coupon_code'], 'N/A')
+            self.assertEqual(sale_order_record['total_amount'], item.unit_cost * item.qty)
+            self.assertEqual(sale_order_record['total_discount'], 0)
+            self.assertEqual(sale_order_record['quantity'], item.qty)
+
 
 class TestCourseRegistrationCodeAnalyticsBasic(ModuleStoreTestCase):
     """ Test basic course registration codes analytics functions. """
@@ -312,7 +530,7 @@ class TestCourseRegistrationCodeAnalyticsBasic(ModuleStoreTestCase):
             self.assertIn(
                 course_registration['company_name'],
                 [
-                    getattr(registration_code.invoice_item.invoice, 'company_name')
+                    registration_code.invoice_item.invoice.company_name
                     for registration_code in registration_codes
                 ]
             )
@@ -326,7 +544,8 @@ class TestCourseRegistrationCodeAnalyticsBasic(ModuleStoreTestCase):
 
     def test_coupon_codes_features(self):
         query_features = [
-            'course_id', 'percentage_discount', 'code_redeemed_count', 'description', 'expiration_date'
+            'course_id', 'percentage_discount', 'code_redeemed_count', 'description', 'expiration_date',
+            'total_discounted_amount', 'total_discounted_seats'
         ]
         for i in range(10):
             coupon = Coupon(
@@ -352,7 +571,7 @@ class TestCourseRegistrationCodeAnalyticsBasic(ModuleStoreTestCase):
             Q(expiration_date__gt=datetime.datetime.now(pytz.UTC)) |
             Q(expiration_date__isnull=True)
         )
-        active_coupons_list = coupon_codes_features(query_features, active_coupons)
+        active_coupons_list = coupon_codes_features(query_features, active_coupons, self.course.id)
         self.assertEqual(len(active_coupons_list), len(active_coupons))
         for active_coupon in active_coupons_list:
             self.assertEqual(set(active_coupon.keys()), set(query_features))

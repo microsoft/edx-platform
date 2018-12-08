@@ -13,6 +13,8 @@ from lms.envs.dev import (WIKI_ENABLED)
 
 DEBUG = True
 TEMPLATE_DEBUG = DEBUG
+HTTPS = 'off'
+
 LOGGING = get_logger_config(ENV_ROOT / "log",
                             logging_env="dev",
                             tracking_filename="tracking.log",
@@ -53,6 +55,7 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': ENV_ROOT / "db" / "edx.db",
+        'ATOMIC_REQUESTS': True,
     }
 }
 
@@ -115,7 +118,10 @@ CACHES = {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
         'LOCATION': 'edx_location_mem_cache',
     },
-
+    'course_structure_cache': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'edx_course_structure_mem_cache',
+    },
 }
 
 # Make the keyedcache startup warnings go away
@@ -126,7 +132,7 @@ SECRET_KEY = '85920908f28904ed733fe576320db18cabd7b6cd'
 
 ################################ PIPELINE #################################
 
-PIPELINE_SASS_ARGUMENTS = '--debug-info --require {proj_dir}/static/sass/bourbon/lib/bourbon.rb'.format(proj_dir=PROJECT_ROOT)
+PIPELINE_SASS_ARGUMENTS = '--debug-info'
 
 ################################# CELERY ######################################
 
@@ -159,12 +165,10 @@ FEATURES['ENABLE_SERVICE_STATUS'] = True
 
 ############################# SEGMENT-IO ##################################
 
-# If there's an environment variable set, grab it and turn on Segment.io
+# If there's an environment variable set, grab it to turn on Segment
 # Note that this is the Studio key. There is a separate key for the LMS.
 import os
-SEGMENT_IO_KEY = os.environ.get('SEGMENT_IO_KEY')
-if SEGMENT_IO_KEY:
-    FEATURES['SEGMENT_IO'] = True
+CMS_SEGMENT_KEY = os.environ.get('SEGMENT_KEY')
 
 
 #####################################################################

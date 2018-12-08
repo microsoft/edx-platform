@@ -1,5 +1,6 @@
 (function () {
     'use strict';
+    var origAjax = $.ajax;
 
     var stubbedYT = {
         Player: function () {
@@ -15,9 +16,9 @@
                 ]
             );
 
-            Player.getDuration.andReturn(60);
-            Player.getAvailablePlaybackRates.andReturn([0.50, 1.0, 1.50, 2.0]);
-            Player.getAvailableQualityLevels.andReturn(
+            Player.getDuration.and.returnValue(60);
+            Player.getAvailablePlaybackRates.and.returnValue([0.50, 1.0, 1.50, 2.0]);
+            Player.getAvailableQualityLevels.and.returnValue(
                 ['highres', 'hd1080', 'hd720', 'large', 'medium', 'small']
             );
 
@@ -36,7 +37,7 @@
             return f();
         }
     };
-
+    jasmine.YT = stubbedYT;
     // Stub YouTube API.
     window.YT = stubbedYT;
 
@@ -76,19 +77,27 @@
 
     jasmine.stubbedMetadata = {
         '7tqY6eQzVhE': {
-            id: '7tqY6eQzVhE',
-            duration: 300
+            contentDetails : {
+                id: '7tqY6eQzVhE',
+                duration: 'PT5M0S'
+            }
         },
         'cogebirgzzM': {
-            id: 'cogebirgzzM',
-            duration: 200
+            contentDetails : {
+                id: 'cogebirgzzM',
+                duration: 'PT3M20S'
+            }
         },
         'abcdefghijkl': {
-            id: 'abcdefghijkl',
-            duration: 400
+            contentDetails : {
+                id: 'abcdefghijkl',
+                duration: 'PT6M40S'
+            }
         },
         bogus: {
-            duration: 100
+            contentDetails : {
+                duration: 'PT1M40S'
+            }
         }
     };
 
@@ -116,13 +125,13 @@
 
     jasmine.stubRequests = function () {
         var spy = $.ajax;
-
-        if (!($.ajax.isSpy)) {
+        if (!jasmine.isSpy($.ajax)) {
             spy = spyOn($, 'ajax');
         }
-        return spy.andCallFake(function (settings) {
+
+        return spy.and.callFake(function (settings) {
             var match = settings.url
-                    .match(/youtube\.com\/.+\/videos\/(.+)\?v=2&alt=jsonc/),
+                    .match(/googleapis\.com\/.+\/videos\/\?id=(.+)&part=contentDetails/),
                 status, callCallback;
             if (match) {
                 status = match[1].split('_');
@@ -138,7 +147,7 @@
                     };
                 } else if (settings.success) {
                     return settings.success({
-                        data: jasmine.stubbedMetadata[match[1]]
+                        items: jasmine.stubbedMetadata[match[1]]
                     });
                 } else {
                     return {
@@ -168,58 +177,35 @@
                 return;
             } else if (settings.url === '/save_user_state') {
                 return {success: true};
-            } else if (settings.url === 'http://www.youtube.com/iframe_api') {
-                // Stub YouTube API.
-                window.YT = stubbedYT;
-
-                // Call the callback that must be called when YouTube API is
-                // loaded. By specification.
-                window.onYouTubeIframeAPIReady();
-
-                return {success: true};
+            } else if(settings.url.match(new RegExp(jasmine.getFixtures().fixturesPath + ".+", 'g'))) {
+                return origAjax(settings);
             } else {
-                throw 'External request attempted for ' +
-                    settings.url +
-                    ', which is not defined.';
+                $.ajax.and.callThrough();
             }
         });
     };
 
-    // Add custom Jasmine matchers.
-    beforeEach(function () {
-        this.addMatchers({
-            toHaveAttrs: function (attrs) {
-                var element;
-
-                if ($.isEmptyObject(attrs)) {
-                    return false;
-                }
-
-                element = this.actual;
-
-                return _.every(attrs, function (value, name) {
-                    return element.attr(name) === value;
-                });
-            },
-            toBeInRange: function (min, max) {
-                return min <= this.actual && this.actual <= max;
-            },
-            toBeInArray: function (array) {
-                return $.inArray(this.actual, array) > -1;
-            }
-        });
-
-        return this.addMatchers(window.imagediff.jasmine);
-    });
-
-    // Stub jQuery.cookie module.
-    $.cookie = jasmine.createSpy('jQuery.cookie').andReturn('1.0');
+   // Stub jQuery.cookie module.
+    $.cookie = jasmine.createSpy('jQuery.cookie').and.returnValue('1.0');
 
     // # Stub jQuery.qtip module.
     $.fn.qtip = jasmine.createSpy('jQuery.qtip');
 
     // Stub jQuery.scrollTo module.
     $.fn.scrollTo = jasmine.createSpy('jQuery.scrollTo');
+
+    // Stub window.Video.loadYouTubeIFrameAPI()
+    window.Video.loadYouTubeIFrameAPI = jasmine.createSpy('window.Video.loadYouTubeIFrameAPI').and.returnValue(
+        function (scriptTag) {
+            var event = document.createEvent('Event');
+            if (fixture === "video.html") {
+                event.initEvent('load', false, false);
+            } else {
+                event.initEvent('error', false, false);
+            }
+            scriptTag.dispatchEvent(event);
+        }
+    );
 
     jasmine.initializePlayer = function (fixture, params) {
         var state;
@@ -239,12 +225,11 @@
             loadFixtures('video_all.html');
         }
 
-        // If `params` is an object, assign it's properties as data attributes
+        // If `params` is an object, assign its properties as data attributes
         // to the main video DIV element.
         if (_.isObject(params)) {
-            $('#example')
-                .find('#video_id')
-                .data(params);
+            var metadata = _.extend($('#video_id').data('metadata'), params);
+            $('#video_id').data('metadata', metadata);
         }
 
         jasmine.stubRequests();
@@ -261,13 +246,13 @@
                 ],
                 obj = {},
                 delta = {
-                    add: jasmine.createSpy().andReturn(obj),
-                    substract: jasmine.createSpy().andReturn(obj),
-                    reset: jasmine.createSpy().andReturn(obj)
+                    add: jasmine.createSpy().and.returnValue(obj),
+                    substract: jasmine.createSpy().and.returnValue(obj),
+                    reset: jasmine.createSpy().and.returnValue(obj)
                 };
 
             $.each(methods, function (index, method) {
-                obj[method] = jasmine.createSpy(method).andReturn(obj);
+                obj[method] = jasmine.createSpy(method).and.returnValue(obj);
             });
 
             obj.delta = delta;

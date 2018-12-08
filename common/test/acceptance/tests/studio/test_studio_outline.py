@@ -1,17 +1,20 @@
 """
 Acceptance tests for studio related to the outline page.
 """
+import json
 from datetime import datetime, timedelta
 import itertools
 from pytz import UTC
 from bok_choy.promise import EmptyPromise
 from nose.plugins.attrib import attr
 
+from ...pages.studio.settings_advanced import AdvancedSettingsPage
 from ...pages.studio.overview import CourseOutlinePage, ContainerPage, ExpandCollapseLinkState
 from ...pages.studio.utils import add_discussion, drag, verify_ordering
 from ...pages.lms.courseware import CoursewarePage
 from ...pages.lms.course_nav import CourseNavPage
 from ...pages.lms.staff_view import StaffPage
+from ...fixtures.config import ConfigModelFixture
 from ...fixtures.course import XBlockFixtureDesc
 
 from base_studio_test import StudioCourseTest
@@ -35,6 +38,9 @@ class CourseOutlineTest(StudioCourseTest):
         """
         super(CourseOutlineTest, self).setUp()
         self.course_outline_page = CourseOutlinePage(
+            self.browser, self.course_info['org'], self.course_info['number'], self.course_info['run']
+        )
+        self.advanced_settings = AdvancedSettingsPage(
             self.browser, self.course_info['org'], self.course_info['number'], self.course_info['run']
         )
 
@@ -136,13 +142,16 @@ class WarningMessagesTest(CourseOutlineTest):
     FUTURE_UNPUBLISHED_WARNING = 'Unpublished changes to content that will release in the future'
     NEVER_PUBLISHED_WARNING = 'Unpublished units will not be released'
 
-    class PublishState:
+    class PublishState(object):
+        """
+        Default values for representing the published state of a unit
+        """
         NEVER_PUBLISHED = 1
         UNPUBLISHED_CHANGES = 2
         PUBLISHED = 3
         VALUES = [NEVER_PUBLISHED, UNPUBLISHED_CHANGES, PUBLISHED]
 
-    class UnitState:
+    class UnitState(object):
         """ Represents the state of a unit """
 
         def __init__(self, is_released, publish_state, is_locked):
@@ -363,22 +372,30 @@ class EditingSectionsTest(CourseOutlineTest):
 
         # Verify fields
         self.assertTrue(modal.has_release_date())
+        self.assertTrue(modal.has_release_time())
         self.assertTrue(modal.has_due_date())
+        self.assertTrue(modal.has_due_time())
         self.assertTrue(modal.has_policy())
 
         # Verify initial values
         self.assertEqual(modal.release_date, u'1/1/1970')
+        self.assertEqual(modal.release_time, u'00:00')
         self.assertEqual(modal.due_date, u'')
+        self.assertEqual(modal.due_time, u'')
         self.assertEqual(modal.policy, u'Not Graded')
 
         # Set new values
         modal.release_date = '3/12/1972'
+        modal.release_time = '04:01'
         modal.due_date = '7/21/2014'
+        modal.due_time = '23:39'
         modal.policy = 'Lab'
 
         modal.save()
         self.assertIn(u'Released: Mar 12, 1972', subsection.release_date)
+        self.assertIn(u'04:01', subsection.release_date)
         self.assertIn(u'Due: Jul 21, 2014', subsection.due_date)
+        self.assertIn(u'23:39', subsection.due_date)
         self.assertIn(u'Lab', subsection.policy)
 
     def test_can_edit_section(self):
@@ -1529,7 +1546,7 @@ class PublishSectionTest(CourseOutlineTest):
         self.assertTrue(section.publish_action)
         self.courseware.visit()
         self.assertEqual(1, self.courseware.num_xblock_components)
-        self.course_nav.go_to_sequential_position(2)
+        self.courseware.go_to_sequential_position(2)
         self.assertEqual(1, self.courseware.num_xblock_components)
 
     def test_section_publishing(self):
@@ -1554,7 +1571,7 @@ class PublishSectionTest(CourseOutlineTest):
         self.assertFalse(unit.publish_action)
         self.courseware.visit()
         self.assertEqual(1, self.courseware.num_xblock_components)
-        self.course_nav.go_to_sequential_position(2)
+        self.courseware.go_to_sequential_position(2)
         self.assertEqual(1, self.courseware.num_xblock_components)
         self.course_nav.go_to_section(SECTION_NAME, 'Test Subsection 2')
         self.assertEqual(1, self.courseware.num_xblock_components)
@@ -1578,3 +1595,224 @@ class PublishSectionTest(CourseOutlineTest):
         unit = subsection.expand_subsection().unit(UNIT_NAME)
 
         return (section, subsection, unit)
+
+
+@attr('shard_3')
+class DeprecationWarningMessageTest(CourseOutlineTest):
+    """
+    Feature: Verify deprecation warning message.
+    """
+    HEADING_TEXT = 'This course uses features that are no longer supported.'
+    COMPONENT_LIST_HEADING = 'You must delete or replace the following components.'
+    ADVANCE_MODULES_REMOVE_TEXT = ('To avoid errors, edX strongly recommends that you remove unsupported features '
+                                   'from the course advanced settings. To do this, go to the Advanced Settings '
+                                   'page, locate the "Advanced Module List" setting, and then delete the following '
+                                   'modules from the list.')
+    DEFAULT_DISPLAYNAME = "Deprecated Component"
+
+    def _add_deprecated_advance_modules(self, block_types):
+        """
+        Add `block_types` into `Advanced Module List`
+
+        Arguments:
+            block_types (list): list of block types
+        """
+        self.advanced_settings.visit()
+        self.advanced_settings.set_values({"Advanced Module List": json.dumps(block_types)})
+
+    def _create_deprecated_components(self):
+        """
+        Create deprecated components.
+        """
+        parent_vertical = self.course_fixture.get_nested_xblocks(category="vertical")[0]
+
+        self.course_fixture.create_xblock(
+            parent_vertical.locator,
+            XBlockFixtureDesc('poll', "Poll", data=load_data_str('poll_markdown.xml'))
+        )
+        self.course_fixture.create_xblock(parent_vertical.locator, XBlockFixtureDesc('survey', 'Survey'))
+
+    def _verify_deprecation_warning_info(
+            self,
+            deprecated_blocks_present,
+            components_present,
+            components_display_name_list=None,
+            deprecated_modules_list=None
+    ):
+        """
+        Verify deprecation warning
+
+        Arguments:
+            deprecated_blocks_present (bool): deprecated blocks remove text and
+                is list is visible if True else False
+            components_present (bool): components list shown if True else False
+            components_display_name_list (list): list of components display name
+            deprecated_modules_list (list): list of deprecated advance modules
+        """
+        self.assertTrue(self.course_outline_page.deprecated_warning_visible)
+        self.assertEqual(self.course_outline_page.warning_heading_text, self.HEADING_TEXT)
+        self.assertEqual(self.course_outline_page.modules_remove_text_shown, deprecated_blocks_present)
+        if deprecated_blocks_present:
+            self.assertEqual(self.course_outline_page.modules_remove_text, self.ADVANCE_MODULES_REMOVE_TEXT)
+            self.assertEqual(self.course_outline_page.deprecated_advance_modules, deprecated_modules_list)
+
+        self.assertEqual(self.course_outline_page.components_visible, components_present)
+        if components_present:
+            self.assertEqual(self.course_outline_page.components_list_heading, self.COMPONENT_LIST_HEADING)
+            self.assertItemsEqual(self.course_outline_page.components_display_names, components_display_name_list)
+
+    def test_no_deprecation_warning_message_present(self):
+        """
+        Scenario: Verify that deprecation warning message is not shown if no deprecated
+            advance modules are not present and also no deprecated component exist in
+            course outline.
+
+        When I goto course outline
+        Then I don't see any deprecation warning
+        """
+        self.course_outline_page.visit()
+        self.assertFalse(self.course_outline_page.deprecated_warning_visible)
+
+    def test_deprecation_warning_message_present(self):
+        """
+        Scenario: Verify deprecation warning message if deprecated modules
+            and components are present.
+
+        Given I have "poll" advance modules present in `Advanced Module List`
+        And I have created 2 poll components
+        When I go to course outline
+        Then I see poll deprecated warning
+        And I see correct poll deprecated warning heading text
+        And I see correct poll deprecated warning advance modules remove text
+        And I see list of poll components with correct display names
+        """
+        self._add_deprecated_advance_modules(block_types=['poll', 'survey'])
+        self._create_deprecated_components()
+        self.course_outline_page.visit()
+        self._verify_deprecation_warning_info(
+            deprecated_blocks_present=True,
+            components_present=True,
+            components_display_name_list=['Poll', 'Survey'],
+            deprecated_modules_list=['poll', 'survey']
+        )
+
+    def test_deprecation_warning_with_no_displayname(self):
+        """
+        Scenario: Verify deprecation warning message if poll components are present.
+
+        Given I have created 1 poll deprecated component
+        When I go to course outline
+        Then I see poll deprecated warning
+        And I see correct poll deprecated warning heading text
+        And I see list of poll components with correct message
+        """
+        parent_vertical = self.course_fixture.get_nested_xblocks(category="vertical")[0]
+
+        # Create a deprecated component with display_name to be empty and make sure
+        # the deprecation warning is displayed with
+        self.course_fixture.create_xblock(
+            parent_vertical.locator,
+            XBlockFixtureDesc(category='poll', display_name="", data=load_data_str('poll_markdown.xml'))
+        )
+        self.course_outline_page.visit()
+
+        self._verify_deprecation_warning_info(
+            deprecated_blocks_present=False,
+            components_present=True,
+            components_display_name_list=[self.DEFAULT_DISPLAYNAME],
+        )
+
+    def test_warning_with_poll_advance_modules_only(self):
+        """
+        Scenario: Verify that deprecation warning message is shown if only
+            poll advance modules are present and no poll component exist.
+
+        Given I have poll advance modules present in `Advanced Module List`
+        When I go to course outline
+        Then I see poll deprecated warning
+        And I see correct poll deprecated warning heading text
+        And I see correct poll deprecated warning advance modules remove text
+        And I don't see list of poll components
+        """
+        self._add_deprecated_advance_modules(block_types=['poll', 'survey'])
+        self.course_outline_page.visit()
+        self._verify_deprecation_warning_info(
+            deprecated_blocks_present=True,
+            components_present=False,
+            deprecated_modules_list=['poll', 'survey']
+        )
+
+    def test_warning_with_poll_components_only(self):
+        """
+        Scenario: Verify that deprecation warning message is shown if only
+            poll component exist and no poll advance modules are present.
+
+        Given I have created two poll components
+        When I go to course outline
+        Then I see poll deprecated warning
+        And I see correct poll deprecated warning heading text
+        And I don't see poll deprecated warning advance modules remove text
+        And I see list of poll components with correct display names
+        """
+        self._create_deprecated_components()
+        self.course_outline_page.visit()
+        self._verify_deprecation_warning_info(
+            deprecated_blocks_present=False,
+            components_present=True,
+            components_display_name_list=['Poll', 'Survey']
+        )
+
+
+@attr('shard_4')
+class SelfPacedOutlineTest(CourseOutlineTest):
+    """Test the course outline for a self-paced course."""
+
+    def populate_course_fixture(self, course_fixture):
+        course_fixture.add_children(
+            XBlockFixtureDesc('chapter', SECTION_NAME).add_children(
+                XBlockFixtureDesc('sequential', SUBSECTION_NAME).add_children(
+                    XBlockFixtureDesc('vertical', UNIT_NAME)
+                )
+            ),
+        )
+        self.course_fixture.add_course_details({
+            'self_paced': True,
+            'start_date': datetime.now() + timedelta(days=1)
+        })
+        ConfigModelFixture('/config/self_paced', {'enabled': True}).install()
+
+    def test_release_dates_not_shown(self):
+        """
+        Scenario: Ensure that block release dates are not shown on the
+            course outline page of a self-paced course.
+
+        Given I am the author of a self-paced course
+        When I go to the course outline
+        Then I should not see release dates for course content
+        """
+        self.course_outline_page.visit()
+        section = self.course_outline_page.section(SECTION_NAME)
+        self.assertEqual(section.release_date, '')
+        subsection = section.subsection(SUBSECTION_NAME)
+        self.assertEqual(subsection.release_date, '')
+
+    def test_edit_section_and_subsection(self):
+        """
+        Scenario: Ensure that block release/due dates are not shown
+            in their settings modals.
+
+        Given I am the author of a self-paced course
+        When I go to the course outline
+        And I click on settings for a section or subsection
+        Then I should not see release or due date settings
+        """
+        self.course_outline_page.visit()
+        section = self.course_outline_page.section(SECTION_NAME)
+        modal = section.edit()
+        self.assertFalse(modal.has_release_date())
+        self.assertFalse(modal.has_due_date())
+        modal.cancel()
+        subsection = section.subsection(SUBSECTION_NAME)
+        modal = subsection.edit()
+        self.assertFalse(modal.has_release_date())
+        self.assertFalse(modal.has_due_date())

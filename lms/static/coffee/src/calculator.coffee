@@ -51,6 +51,7 @@ class @Calculator
     $calcWrapper = $('#calculator_wrapper')
     text = gettext('Open Calculator')
     isExpanded = false
+    icon = 'fa-calculator'
 
     $('div.calc-main').toggleClass 'open'
     if $calc.hasClass('closed')
@@ -59,10 +60,11 @@ class @Calculator
         .attr 'tabindex', -1
     else
       text = gettext('Close Calculator')
+      icon = 'fa-close'
       isExpanded = true
 
       $calcWrapper
-        .find('input, a,')
+        .find('input, a')
         .attr 'tabindex', 0
       # TODO: Investigate why doing this without the timeout causes it to jump
       # down to the bottom of the page. I suspect it's because it's putting the
@@ -74,6 +76,12 @@ class @Calculator
         'title': text
         'aria-expanded': isExpanded
       .find('.utility-control-label').text text
+      
+    $calc
+      .find('.icon')
+      .removeClass('fa-calculator')
+      .removeClass('fa-close')
+      .addClass(icon)
 
     $calc.toggleClass 'closed'
 
@@ -81,6 +89,7 @@ class @Calculator
     @hintPopup
       .addClass('shown')
       .attr('aria-hidden', false)
+
 
     $(document).on('click', @handleClickOnDocument)
 
@@ -185,11 +194,14 @@ class @Calculator
     @hideHint()
 
   handleClickOnHintButton: (e) ->
+    e.preventDefault()
     e.stopPropagation()
     if @hintPopup.hasClass 'shown'
       @hideHint()
+      @hintButton.attr('aria-expanded', false)
     else
       @showHint()
+      @hintButton.attr('aria-expanded', true)
       @activeHint.focus()
 
   handleClickOnHintPopup: (e) ->

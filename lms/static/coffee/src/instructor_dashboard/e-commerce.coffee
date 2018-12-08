@@ -2,6 +2,10 @@
 E-Commerce Section
 ###
 
+# Load utilities
+PendingInstructorTasks = -> window.InstructorDashboard.util.PendingInstructorTasks
+ReportDownloads = -> window.InstructorDashboard.util.ReportDownloads
+
 class ECommerce
 # E-Commerce Section
   constructor: (@$section) ->
@@ -9,16 +13,23 @@ class ECommerce
     #  this object to call event handlers like 'onClickTitle'
     @$section.data 'wrapper', @
     # gather elements
-    @$list_sale_csv_btn = @$section.find("input[name='list-sale-csv']'")
-    @$list_order_sale_csv_btn = @$section.find("input[name='list-order-sale-csv']'")
-    @$download_company_name = @$section.find("input[name='download_company_name']'")
-    @$active_company_name = @$section.find("input[name='active_company_name']'")
+    @$list_sale_csv_btn = @$section.find("input[name='list-sale-csv']")
+    @$list_order_sale_csv_btn = @$section.find("input[name='list-order-sale-csv']")
+    @$download_company_name = @$section.find("input[name='download_company_name']")
+    @$active_company_name = @$section.find("input[name='active_company_name']")
     @$spent_company_name = @$section.find('input[name="spent_company_name"]')
     @$download_coupon_codes = @$section.find('input[name="download-coupon-codes-csv"]')
     
     @$download_registration_codes_form = @$section.find("form#download_registration_codes")
     @$active_registration_codes_form = @$section.find("form#active_registration_codes")
     @$spent_registration_codes_form = @$section.find("form#spent_registration_codes")
+
+    @$reports                         = @$section.find '.reports-download-container'
+    @$reports_request_response        = @$reports.find '.request-response'
+    @$reports_request_response_error  = @$reports.find '.request-response-error'
+
+    @report_downloads = new (ReportDownloads()) @$section
+    @instructor_tasks = new (PendingInstructorTasks()) @$section
 
     @$error_msg = @$section.find('#error-msg')
     
@@ -53,16 +64,20 @@ class ECommerce
   # handler for when the section title is clicked.
   onClickTitle: ->
     @clear_display()
-
-  # handler for when the section title is clicked.
-  onClickTitle: -> @clear_display()
+    @instructor_tasks.task_poller.start()
+    @report_downloads.downloads_poller.start()
 
   # handler for when the section is closed
-  onExit: -> @clear_display()
+  onExit: ->
+    @clear_display()
+    @instructor_tasks.task_poller.stop()
+    @report_downloads.downloads_poller.stop()
 
   clear_display: ->
     @$error_msg.attr('style', 'display: none')
     @$download_company_name.val('')
+    @$reports_request_response.empty()
+    @$reports_request_response_error.empty()
     @$active_company_name.val('')
     @$spent_company_name.val('')
 

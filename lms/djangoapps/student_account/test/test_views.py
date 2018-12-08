@@ -2,35 +2,42 @@
 """ Tests for student account views. """
 
 import re
+from nose.plugins.attrib import attr
 from unittest import skipUnless
 from urllib import urlencode
-import json
 
 import mock
 import ddt
-import markupsafe
 from django.conf import settings
-from django.core.urlresolvers import reverse
 from django.core import mail
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.urlresolvers import reverse
 from django.contrib import messages
 from django.contrib.messages.middleware import MessageMiddleware
 from django.test import TestCase
 from django.test.utils import override_settings
-from django.test.client import RequestFactory
+from django.http import HttpRequest
+from edx_rest_api_client import exceptions
 
-from embargo.test_utils import restrict_course
+from course_modes.models import CourseMode
+from commerce.models import CommerceConfiguration
+from commerce.tests import TEST_API_URL, TEST_API_SIGNING_KEY, factories
+from commerce.tests.mocks import mock_get_orders
+from openedx.core.djangoapps.programs.tests.mixins import ProgramsApiConfigMixin
 from openedx.core.djangoapps.user_api.accounts.api import activate_account, create_account
 from openedx.core.djangoapps.user_api.accounts import EMAIL_MAX_LENGTH
-from student.tests.factories import CourseModeFactory, UserFactory
-from student_account.views import account_settings_context
-from third_party_auth.tests.testutil import simulate_running_pipeline
+from openedx.core.djangolib.js_utils import dump_js_escaped_json
+from openedx.core.djangolib.testing.utils import CacheIsolationTestCase
+from student.tests.factories import UserFactory
+from student_account.views import account_settings_context, get_user_orders
+from third_party_auth.tests.testutil import simulate_running_pipeline, ThirdPartyAuthTestMixin
 from util.testing import UrlResetMixin
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
-from xmodule.modulestore.tests.factories import CourseFactory
+from openedx.core.djangoapps.theming.test_util import with_edx_domain_context
 
 
 @ddt.ddt
-class StudentAccountUpdateTest(UrlResetMixin, TestCase):
+class StudentAccountUpdateTest(CacheIsolationTestCase, UrlResetMixin):
     """ Tests for the student account views that update the user's account information. """
 
     USERNAME = u"heisenberg"
@@ -61,8 +68,12 @@ class StudentAccountUpdateTest(UrlResetMixin, TestCase):
 
     INVALID_KEY = u"123abc"
 
+    URLCONF_MODULES = ['student_accounts.urls']
+
+    ENABLED_CACHES = ['default']
+
     def setUp(self):
-        super(StudentAccountUpdateTest, self).setUp("student_account.urls")
+        super(StudentAccountUpdateTest, self).setUp()
 
         # Create/activate a new account
         activation_key = create_account(self.USERNAME, self.OLD_PASSWORD, self.OLD_EMAIL)
@@ -100,7 +111,7 @@ class StudentAccountUpdateTest(UrlResetMixin, TestCase):
             follow=True
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Your password has been set.")
+        self.assertContains(response, "Your password has been reset.")
 
         # Log the user out to clear session data
         self.client.logout()
@@ -116,7 +127,7 @@ class StudentAccountUpdateTest(UrlResetMixin, TestCase):
             follow=True
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "The password reset link was invalid, possibly because the link has already been used.")
+        self.assertContains(response, "This password reset link is invalid. It may have been used already.")
 
         self.client.logout()
 
@@ -203,29 +214,41 @@ class StudentAccountUpdateTest(UrlResetMixin, TestCase):
         return self.client.post(path=reverse('password_change_request'), data=data)
 
 
+@attr('shard_3')
 @ddt.ddt
-class StudentAccountLoginAndRegistrationTest(UrlResetMixin, ModuleStoreTestCase):
+class StudentAccountLoginAndRegistrationTest(ThirdPartyAuthTestMixin, UrlResetMixin, ModuleStoreTestCase):
     """ Tests for the student account views that update the user's account information. """
 
     USERNAME = "bob"
     EMAIL = "bob@example.com"
     PASSWORD = "password"
 
+    URLCONF_MODULES = ['embargo']
+
     @mock.patch.dict(settings.FEATURES, {'EMBARGO': True})
     def setUp(self):
-        super(StudentAccountLoginAndRegistrationTest, self).setUp('embargo')
+        super(StudentAccountLoginAndRegistrationTest, self).setUp()
+
+        # For these tests, three third party auth providers are enabled by default:
+        self.configure_google_provider(enabled=True)
+        self.configure_facebook_provider(enabled=True)
+        self.configure_dummy_provider(
+            enabled=True,
+            icon_class='',
+            icon_image=SimpleUploadedFile('icon.svg', '<svg><rect width="50" height="100"/></svg>'),
+        )
 
     @ddt.data(
-        ("account_login", "login"),
-        ("account_register", "register"),
+        ("signin_user", "login"),
+        ("register_user", "register"),
     )
     @ddt.unpack
     def test_login_and_registration_form(self, url_name, initial_mode):
         response = self.client.get(reverse(url_name))
-        expected_data = u"data-initial-mode=\"{mode}\"".format(mode=initial_mode)
+        expected_data = '"initial_mode": "{mode}"'.format(mode=initial_mode)
         self.assertContains(response, expected_data)
 
-    @ddt.data("account_login", "account_register")
+    @ddt.data("signin_user", "register_user")
     def test_login_and_registration_form_already_authenticated(self, url_name):
         # Create/activate a new account and log in
         activation_key = create_account(self.USERNAME, self.PASSWORD, self.EMAIL)
@@ -238,230 +261,118 @@ class StudentAccountLoginAndRegistrationTest(UrlResetMixin, ModuleStoreTestCase)
         self.assertRedirects(response, reverse("dashboard"))
 
     @ddt.data(
-        (False, "account_login"),
-        (False, "account_login"),
-        (True, "account_login"),
-        (True, "account_register"),
+        (False, "signin_user"),
+        (False, "register_user"),
+        (True, "signin_user"),
+        (True, "register_user"),
     )
     @ddt.unpack
     def test_login_and_registration_form_signin_preserves_params(self, is_edx_domain, url_name):
-        params = {
-            'enrollment_action': 'enroll',
-            'course_id': 'edX/DemoX/Demo_Course'
-        }
+        params = [
+            ('course_id', 'edX/DemoX/Demo_Course'),
+            ('enrollment_action', 'enroll'),
+        ]
 
         # The response should have a "Sign In" button with the URL
         # that preserves the querystring params
-        with mock.patch.dict(settings.FEATURES, {'IS_EDX_DOMAIN': is_edx_domain}):
+        with with_edx_domain_context(is_edx_domain):
             response = self.client.get(reverse(url_name), params)
-        self.assertContains(response, "login?course_id=edX%2FDemoX%2FDemo_Course&enrollment_action=enroll")
 
-        # Add an additional "course mode" parameter
-        params['course_mode'] = 'honor'
+        expected_url = '/login?{}'.format(self._finish_auth_url_param(params + [('next', '/dashboard')]))
+        self.assertContains(response, expected_url)
+
+        # Add additional parameters:
+        params = [
+            ('course_id', 'edX/DemoX/Demo_Course'),
+            ('enrollment_action', 'enroll'),
+            ('course_mode', CourseMode.DEFAULT_MODE_SLUG),
+            ('email_opt_in', 'true'),
+            ('next', '/custom/final/destination')
+        ]
 
         # Verify that this parameter is also preserved
-        with mock.patch.dict(settings.FEATURES, {'IS_EDX_DOMAIN': is_edx_domain}):
+        with with_edx_domain_context(is_edx_domain):
             response = self.client.get(reverse(url_name), params)
 
-        expected_url = (
-            "login?course_id=edX%2FDemoX%2FDemo_Course"
-            "&enrollment_action=enroll"
-            "&course_mode=honor"
-        )
+        expected_url = '/login?{}'.format(self._finish_auth_url_param(params))
         self.assertContains(response, expected_url)
 
     @mock.patch.dict(settings.FEATURES, {"ENABLE_THIRD_PARTY_AUTH": False})
-    @ddt.data("account_login", "account_register")
+    @ddt.data("signin_user", "register_user")
     def test_third_party_auth_disabled(self, url_name):
         response = self.client.get(reverse(url_name))
-        self._assert_third_party_auth_data(response, None, [])
+        self._assert_third_party_auth_data(response, None, None, [])
 
     @ddt.data(
-        ("account_login", None, None),
-        ("account_register", None, None),
-        ("account_login", "google-oauth2", "Google"),
-        ("account_register", "google-oauth2", "Google"),
-        ("account_login", "facebook", "Facebook"),
-        ("account_register", "facebook", "Facebook"),
+        ("signin_user", None, None),
+        ("register_user", None, None),
+        ("signin_user", "google-oauth2", "Google"),
+        ("register_user", "google-oauth2", "Google"),
+        ("signin_user", "facebook", "Facebook"),
+        ("register_user", "facebook", "Facebook"),
+        ("signin_user", "dummy", "Dummy"),
+        ("register_user", "dummy", "Dummy"),
     )
     @ddt.unpack
     def test_third_party_auth(self, url_name, current_backend, current_provider):
+        params = [
+            ('course_id', 'course-v1:Org+Course+Run'),
+            ('enrollment_action', 'enroll'),
+            ('course_mode', CourseMode.DEFAULT_MODE_SLUG),
+            ('email_opt_in', 'true'),
+            ('next', '/custom/final/destination'),
+        ]
+
         # Simulate a running pipeline
         if current_backend is not None:
             pipeline_target = "student_account.views.third_party_auth.pipeline"
             with simulate_running_pipeline(pipeline_target, current_backend):
-                response = self.client.get(reverse(url_name))
+                response = self.client.get(reverse(url_name), params)
 
         # Do NOT simulate a running pipeline
         else:
-            response = self.client.get(reverse(url_name))
+            response = self.client.get(reverse(url_name), params)
 
         # This relies on the THIRD_PARTY_AUTH configuration in the test settings
         expected_providers = [
             {
-                "name": "Facebook",
-                "iconClass": "fa-facebook",
-                "loginUrl": self._third_party_login_url("facebook", "login"),
-                "registerUrl": self._third_party_login_url("facebook", "register")
+                "id": "oa2-dummy",
+                "name": "Dummy",
+                "iconClass": None,
+                "iconImage": settings.MEDIA_URL + "icon.svg",
+                "loginUrl": self._third_party_login_url("dummy", "login", params),
+                "registerUrl": self._third_party_login_url("dummy", "register", params)
             },
             {
-                "name": "Google",
-                "iconClass": "fa-google-plus",
-                "loginUrl": self._third_party_login_url("google-oauth2", "login"),
-                "registerUrl": self._third_party_login_url("google-oauth2", "register")
-            }
-        ]
-        self._assert_third_party_auth_data(response, current_provider, expected_providers)
-
-    @ddt.data([], ["honor"], ["honor", "verified", "audit"], ["professional"], ["no-id-professional"])
-    def test_third_party_auth_course_id_verified(self, modes):
-        # Create a course with the specified course modes
-        course = CourseFactory.create()
-        for slug in modes:
-            CourseModeFactory.create(
-                course_id=course.id,
-                mode_slug=slug,
-                mode_display_name=slug
-            )
-
-        # Verify that the entry URL for third party auth
-        # contains the course ID and redirects to the track selection page.
-        course_modes_choose_url = reverse(
-            "course_modes_choose",
-            kwargs={"course_id": unicode(course.id)}
-        )
-        expected_providers = [
-            {
+                "id": "oa2-facebook",
                 "name": "Facebook",
                 "iconClass": "fa-facebook",
-                "loginUrl": self._third_party_login_url(
-                    "facebook", "login",
-                    course_id=unicode(course.id),
-                    redirect_url=course_modes_choose_url
-                ),
-                "registerUrl": self._third_party_login_url(
-                    "facebook", "register",
-                    course_id=unicode(course.id),
-                    redirect_url=course_modes_choose_url
-                )
+                "iconImage": None,
+                "loginUrl": self._third_party_login_url("facebook", "login", params),
+                "registerUrl": self._third_party_login_url("facebook", "register", params)
             },
             {
+                "id": "oa2-google-oauth2",
                 "name": "Google",
                 "iconClass": "fa-google-plus",
-                "loginUrl": self._third_party_login_url(
-                    "google-oauth2", "login",
-                    course_id=unicode(course.id),
-                    redirect_url=course_modes_choose_url
-                ),
-                "registerUrl": self._third_party_login_url(
-                    "google-oauth2", "register",
-                    course_id=unicode(course.id),
-                    redirect_url=course_modes_choose_url
-                )
-            }
-        ]
-
-        # Verify that the login page contains the correct provider URLs
-        response = self.client.get(reverse("account_login"), {"course_id": unicode(course.id)})
-        self._assert_third_party_auth_data(response, None, expected_providers)
-
-    def test_third_party_auth_course_id_shopping_cart(self):
-        # Create a course with a white-label course mode
-        course = CourseFactory.create()
-        CourseModeFactory.create(
-            course_id=course.id,
-            mode_slug="honor",
-            mode_display_name="Honor",
-            min_price=100
-        )
-
-        # Verify that the entry URL for third party auth
-        # contains the course ID and redirects to the shopping cart
-        shoppingcart_url = reverse("shoppingcart.views.show_cart")
-        expected_providers = [
-            {
-                "name": "Facebook",
-                "iconClass": "fa-facebook",
-                "loginUrl": self._third_party_login_url(
-                    "facebook", "login",
-                    course_id=unicode(course.id),
-                    redirect_url=shoppingcart_url
-                ),
-                "registerUrl": self._third_party_login_url(
-                    "facebook", "register",
-                    course_id=unicode(course.id),
-                    redirect_url=shoppingcart_url
-                )
+                "iconImage": None,
+                "loginUrl": self._third_party_login_url("google-oauth2", "login", params),
+                "registerUrl": self._third_party_login_url("google-oauth2", "register", params)
             },
-            {
-                "name": "Google",
-                "iconClass": "fa-google-plus",
-                "loginUrl": self._third_party_login_url(
-                    "google-oauth2", "login",
-                    course_id=unicode(course.id),
-                    redirect_url=shoppingcart_url
-                ),
-                "registerUrl": self._third_party_login_url(
-                    "google-oauth2", "register",
-                    course_id=unicode(course.id),
-                    redirect_url=shoppingcart_url
-                )
-            }
         ]
+        self._assert_third_party_auth_data(response, current_backend, current_provider, expected_providers)
 
-        # Verify that the login page contains the correct provider URLs
-        response = self.client.get(reverse("account_login"), {"course_id": unicode(course.id)})
-        self._assert_third_party_auth_data(response, None, expected_providers)
-
-    @mock.patch.dict(settings.FEATURES, {'EMBARGO': True})
-    def test_third_party_auth_enrollment_embargo(self):
-        course = CourseFactory.create()
-
-        # Start the pipeline attempting to enroll in a restricted course
-        with restrict_course(course.id) as redirect_url:
-            response = self.client.get(reverse("account_login"), {"course_id": unicode(course.id)})
-
-            # Expect that the course ID has been removed from the
-            # login URLs (so the user won't be enrolled) and
-            # the ?next param sends users to the blocked message.
-            expected_providers = [
-                {
-                    "name": "Facebook",
-                    "iconClass": "fa-facebook",
-                    "loginUrl": self._third_party_login_url(
-                        "facebook", "login",
-                        course_id=unicode(course.id),
-                        redirect_url=redirect_url
-                    ),
-                    "registerUrl": self._third_party_login_url(
-                        "facebook", "register",
-                        course_id=unicode(course.id),
-                        redirect_url=redirect_url
-                    )
-                },
-                {
-                    "name": "Google",
-                    "iconClass": "fa-google-plus",
-                    "loginUrl": self._third_party_login_url(
-                        "google-oauth2", "login",
-                        course_id=unicode(course.id),
-                        redirect_url=redirect_url
-                    ),
-                    "registerUrl": self._third_party_login_url(
-                        "google-oauth2", "register",
-                        course_id=unicode(course.id),
-                        redirect_url=redirect_url
-                    )
-                }
-            ]
-            self._assert_third_party_auth_data(response, None, expected_providers)
+    def test_hinted_login(self):
+        params = [("next", "/courses/something/?tpa_hint=oa2-google-oauth2")]
+        response = self.client.get(reverse('signin_user'), params)
+        self.assertContains(response, '"third_party_auth_hint": "oa2-google-oauth2"')
 
     @override_settings(SITE_NAME=settings.MICROSITE_TEST_HOSTNAME)
     def test_microsite_uses_old_login_page(self):
         # Retrieve the login page from a microsite domain
         # and verify that we're served the old page.
         resp = self.client.get(
-            reverse("account_login"),
+            reverse("signin_user"),
             HTTP_HOST=settings.MICROSITE_TEST_HOSTNAME
         )
         self.assertContains(resp, "Log into your Test Microsite Account")
@@ -471,41 +382,73 @@ class StudentAccountLoginAndRegistrationTest(UrlResetMixin, ModuleStoreTestCase)
         # Retrieve the register page from a microsite domain
         # and verify that we're served the old page.
         resp = self.client.get(
-            reverse("account_register"),
+            reverse("register_user"),
             HTTP_HOST=settings.MICROSITE_TEST_HOSTNAME
         )
         self.assertContains(resp, "Register for Test Microsite")
         self.assertContains(resp, "register-form")
 
-    def _assert_third_party_auth_data(self, response, current_provider, providers):
-        """Verify that third party auth info is rendered correctly in a DOM data attribute. """
-        auth_info = markupsafe.escape(
-            json.dumps({
-                "currentProvider": current_provider,
-                "providers": providers
-            })
+    def test_login_registration_xframe_protected(self):
+        resp = self.client.get(
+            reverse("register_user"),
+            {},
+            HTTP_REFERER="http://localhost/iframe"
         )
 
-        expected_data = u"data-third-party-auth='{auth_info}'".format(
+        self.assertEqual(resp['X-Frame-Options'], 'DENY')
+
+        self.configure_lti_provider(name='Test', lti_hostname='localhost', lti_consumer_key='test_key', enabled=True)
+
+        resp = self.client.get(
+            reverse("register_user"),
+            HTTP_REFERER="http://localhost/iframe"
+        )
+
+        self.assertEqual(resp['X-Frame-Options'], 'ALLOW')
+
+    def _assert_third_party_auth_data(self, response, current_backend, current_provider, providers):
+        """Verify that third party auth info is rendered correctly in a DOM data attribute. """
+        finish_auth_url = None
+        if current_backend:
+            finish_auth_url = reverse("social:complete", kwargs={"backend": current_backend}) + "?"
+
+        auth_info = {
+            "currentProvider": current_provider,
+            "providers": providers,
+            "secondaryProviders": [],
+            "finishAuthUrl": finish_auth_url,
+            "errorMessage": None,
+        }
+        auth_info = dump_js_escaped_json(auth_info)
+
+        expected_data = '"third_party_auth": {auth_info}'.format(
             auth_info=auth_info
         )
+
         self.assertContains(response, expected_data)
 
-    def _third_party_login_url(self, backend_name, auth_entry, course_id=None, redirect_url=None):
+    def _third_party_login_url(self, backend_name, auth_entry, login_params):
         """Construct the login URL to start third party authentication. """
-        params = [("auth_entry", auth_entry)]
-        if redirect_url:
-            params.append(("next", redirect_url))
-        if course_id:
-            params.append(("enroll_course_id", course_id))
-
-        return u"{url}?{params}".format(
+        return u"{url}?auth_entry={auth_entry}&{param_str}".format(
             url=reverse("social:begin", kwargs={"backend": backend_name}),
-            params=urlencode(params)
+            auth_entry=auth_entry,
+            param_str=self._finish_auth_url_param(login_params),
         )
 
+    def _finish_auth_url_param(self, params):
+        """
+        Make the next=... URL parameter that indicates where the user should go next.
 
-class AccountSettingsViewTest(TestCase):
+        >>> _finish_auth_url_param([('next', '/dashboard')])
+        '/account/finish_auth?next=%2Fdashboard'
+        """
+        return urlencode({
+            'next': '/account/finish_auth?{}'.format(urlencode(params))
+        })
+
+
+@override_settings(ECOMMERCE_API_URL=TEST_API_URL, ECOMMERCE_API_SIGNING_KEY=TEST_API_SIGNING_KEY)
+class AccountSettingsViewTest(ThirdPartyAuthTestMixin, TestCase, ProgramsApiConfigMixin):
     """ Tests for the account settings view. """
 
     USERNAME = 'student'
@@ -524,10 +467,15 @@ class AccountSettingsViewTest(TestCase):
     def setUp(self):
         super(AccountSettingsViewTest, self).setUp()
         self.user = UserFactory.create(username=self.USERNAME, password=self.PASSWORD)
+        CommerceConfiguration.objects.create(cache_ttl=10, enabled=True)
         self.client.login(username=self.USERNAME, password=self.PASSWORD)
 
-        self.request = RequestFactory()
+        self.request = HttpRequest()
         self.request.user = self.user
+
+        # For these tests, two third party auth providers are enabled by default:
+        self.configure_google_provider(enabled=True)
+        self.configure_facebook_provider(enabled=True)
 
         # Python-social saves auth failure notifcations in Django messages.
         # See pipeline.get_duplicate_provider() for details.
@@ -555,7 +503,7 @@ class AccountSettingsViewTest(TestCase):
             context['user_preferences_api_url'], reverse('preferences_api', kwargs={'username': self.user.username})
         )
 
-        self.assertEqual(context['duplicate_provider'].BACKEND_CLASS.name, 'facebook')
+        self.assertEqual(context['duplicate_provider'], 'facebook')
         self.assertEqual(context['auth']['providers'][0]['name'], 'Facebook')
         self.assertEqual(context['auth']['providers'][1]['name'], 'Google')
 
@@ -566,3 +514,163 @@ class AccountSettingsViewTest(TestCase):
 
         for attribute in self.FIELDS:
             self.assertIn(attribute, response.content)
+
+    def test_header_with_programs_listing_enabled(self):
+        """
+        Verify that tabs header will be shown while program listing is enabled.
+        """
+        self.create_programs_config(program_listing_enabled=True)
+        view_path = reverse('account_settings')
+        response = self.client.get(path=view_path)
+
+        self.assertContains(response, '<li class="tab-nav-item">')
+
+    def test_header_with_programs_listing_disabled(self):
+        """
+        Verify that nav header will be shown while program listing is disabled.
+        """
+        self.create_programs_config(program_listing_enabled=False)
+        view_path = reverse('account_settings')
+        response = self.client.get(path=view_path)
+
+        self.assertContains(response, '<li class="item nav-global-01">')
+
+    def test_commerce_order_detail(self):
+        with mock_get_orders():
+            order_detail = get_user_orders(self.user)
+
+        user_order = mock_get_orders.default_response['results'][0]
+        expected = [
+            {
+                'number': user_order['number'],
+                'price': user_order['total_excl_tax'],
+                'title': user_order['lines'][0]['title'],
+                'order_date': 'Jan 01, 2016',
+                'receipt_url': '/commerce/checkout/receipt/?orderNum=' + user_order['number']
+            }
+        ]
+        self.assertEqual(order_detail, expected)
+
+    def test_commerce_order_detail_exception(self):
+        with mock_get_orders(exception=exceptions.HttpNotFoundError):
+            order_detail = get_user_orders(self.user)
+
+        self.assertEqual(order_detail, [])
+
+    def test_incomplete_order_detail(self):
+        response = {
+            'results': [
+                factories.OrderFactory(
+                    status='Incomplete',
+                    lines=[
+                        factories.OrderLineFactory(
+                            product=factories.ProductFactory(attribute_values=[factories.ProductAttributeFactory()])
+                        )
+                    ]
+                )
+            ]
+        }
+        with mock_get_orders(response=response):
+            order_detail = get_user_orders(self.user)
+
+        self.assertEqual(order_detail, [])
+
+    def test_honor_course_order_detail(self):
+        response = {
+            'results': [
+                factories.OrderFactory(
+                    lines=[
+                        factories.OrderLineFactory(
+                            product=factories.ProductFactory(attribute_values=[factories.ProductAttributeFactory(
+                                name='certificate_type',
+                                value='honor'
+                            )])
+                        )
+                    ]
+                )
+            ]
+        }
+        with mock_get_orders(response=response):
+            order_detail = get_user_orders(self.user)
+
+        self.assertEqual(order_detail, [])
+
+    def test_order_history_with_no_product(self):
+        response = {
+            'results': [
+                factories.OrderFactory(
+                    lines=[
+                        factories.OrderLineFactory(
+                            product=None
+                        ),
+                        factories.OrderLineFactory(
+                            product=factories.ProductFactory(attribute_values=[factories.ProductAttributeFactory(
+                                name='certificate_type',
+                                value='verified'
+                            )])
+                        )
+                    ]
+                )
+            ]
+        }
+        with mock_get_orders(response=response):
+            order_detail = get_user_orders(self.user)
+
+        self.assertEqual(len(order_detail), 1)
+
+
+@override_settings(SITE_NAME=settings.MICROSITE_LOGISTRATION_HOSTNAME)
+class MicrositeLogistrationTests(TestCase):
+    """
+    Test to validate that microsites can display the logistration page
+    """
+
+    def test_login_page(self):
+        """
+        Make sure that we get the expected logistration page on our specialized
+        microsite
+        """
+
+        resp = self.client.get(
+            reverse('signin_user'),
+            HTTP_HOST=settings.MICROSITE_LOGISTRATION_HOSTNAME
+        )
+        self.assertEqual(resp.status_code, 200)
+
+        self.assertIn('<div id="login-and-registration-container"', resp.content)
+
+    def test_registration_page(self):
+        """
+        Make sure that we get the expected logistration page on our specialized
+        microsite
+        """
+
+        resp = self.client.get(
+            reverse('register_user'),
+            HTTP_HOST=settings.MICROSITE_LOGISTRATION_HOSTNAME
+        )
+        self.assertEqual(resp.status_code, 200)
+
+        self.assertIn('<div id="login-and-registration-container"', resp.content)
+
+    @override_settings(SITE_NAME=settings.MICROSITE_TEST_HOSTNAME)
+    def test_no_override(self):
+        """
+        Make sure we get the old style login/registration if we don't override
+        """
+
+        resp = self.client.get(
+            reverse('signin_user'),
+            HTTP_HOST=settings.MICROSITE_TEST_HOSTNAME
+        )
+        self.assertEqual(resp.status_code, 200)
+
+        self.assertNotIn('<div id="login-and-registration-container"', resp.content)
+
+        resp = self.client.get(
+            reverse('register_user'),
+            HTTP_HOST=settings.MICROSITE_TEST_HOSTNAME
+        )
+        self.assertEqual(resp.status_code, 200)
+
+        self.assertNotIn('<div id="login-and-registration-container"', resp.content)

@@ -1,8 +1,9 @@
-define(["jquery", "underscore", "js/views/utils/view_utils", "js/views/container", "js/utils/module", "gettext",
-        "js/views/feedback_notification", "js/views/paging_header", "js/views/paging_footer", "js/views/paging_mixin"],
-    function ($, _, ViewUtils, ContainerView, ModuleUtils, gettext, NotificationView, PagingHeader, PagingFooter, PagingMixin) {
-        var PagedContainerView = ContainerView.extend(PagingMixin).extend({
-            initialize: function(options){
+define(["jquery", "underscore", "common/js/components/utils/view_utils", "js/views/container", "js/utils/module", "gettext",
+        "common/js/components/views/feedback_notification", "js/views/paging_header", "common/js/components/views/paging_footer"],
+    function ($, _, ViewUtils, ContainerView, ModuleUtils, gettext, NotificationView, PagingHeader, PagingFooter) {
+        var PagedContainerView = ContainerView.extend({
+
+            initialize: function(options) {
                 var self = this;
                 ContainerView.prototype.initialize.call(this);
                 this.page_size = this.options.page_size;
@@ -26,7 +27,49 @@ define(["jquery", "underscore", "js/views/utils/view_utils", "js/views/container
                     // of paginator, on the current page.
                     size: function() { return self.collection._size; },
                     // Toggles the functionality for showing and hiding child previews.
-                    showChildrenPreviews: true
+                    showChildrenPreviews: true,
+
+                    // PagingFooter expects to be able to control paging through the collection instead of the view,
+                    // so we just make these functions act as pass-throughs
+                    setPage: function (page) {
+                        self.setPage(page - 1);
+                    },
+
+                    nextPage: function () {
+                        self.nextPage();
+                    },
+
+                    previousPage: function() {
+                        self.previousPage();
+                    },
+
+                    getPage: function () {
+                        return self.collection.currentPage + 1;
+                    },
+
+                    hasPreviousPage: function () {
+                        return self.collection.currentPage > 0;
+                    },
+
+                    hasNextPage: function () {
+                        return self.collection.currentPage < self.collection.totalPages - 1;
+                    },
+
+                    getTotalPages: function () {
+                        return this.totalPages;
+                    },
+
+                    getPageNumber: function () {
+                        return this.getPage();
+                    },
+
+                    getTotalRecords: function () {
+                        return this.totalCount;
+                    },
+
+                    getPageSize: function () {
+                        return self.page_size;
+                    }
                 };
             },
 
@@ -40,11 +83,12 @@ define(["jquery", "underscore", "js/views/utils/view_utils", "js/views/container
                 return this.renderPage(options);
             },
 
-            renderPage: function(options){
+            renderPage: function(options) {
                 var self = this,
                     view = this.view,
                     xblockInfo = this.model,
                     xblockUrl = xblockInfo.url();
+
                 return $.ajax({
                     url: decodeURIComponent(xblockUrl) + "/" + view,
                     type: 'GET',
@@ -75,8 +119,10 @@ define(["jquery", "underscore", "js/views/utils/view_utils", "js/views/container
                 };
             },
 
-            getPageCount: function(total_count){
-                if (total_count===0) return 1;
+            getPageCount: function(total_count) {
+                if (total_count === 0) {
+                    return 1;
+                }
                 return Math.ceil(total_count / this.page_size);
             },
 
@@ -84,6 +130,23 @@ define(["jquery", "underscore", "js/views/utils/view_utils", "js/views/container
                 additional_options = additional_options || {};
                 var options = _.extend({page_number: page_number}, additional_options);
                 this.render(options);
+            },
+
+            nextPage: function() {
+                var collection = this.collection,
+                    currentPage = collection.currentPage,
+                    lastPage = collection.totalPages - 1;
+                if (currentPage < lastPage) {
+                    this.setPage(currentPage + 1);
+                }
+            },
+
+            previousPage: function() {
+                var collection = this.collection,
+                    currentPage = collection.currentPage;
+                if (currentPage > 0) {
+                    this.setPage(currentPage - 1);
+                }
             },
 
             processPaging: function(options){
@@ -118,7 +181,7 @@ define(["jquery", "underscore", "js/views/utils/view_utils", "js/views/container
                     el: this.$el.find('.container-paging-header')
                 });
                 this.pagingFooter = new PagingFooter({
-                    view: this,
+                    collection: this.collection,
                     el: this.$el.find('.container-paging-footer')
                 });
 

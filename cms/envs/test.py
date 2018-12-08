@@ -20,9 +20,10 @@ sessions. Assumes structure:
 
 from .common import *
 import os
-from path import path
+from path import Path as path
 from warnings import filterwarnings, simplefilter
 from uuid import uuid4
+from util.db import NoOpMigrationModules
 
 # import settings from LMS for consistent behavior with CMS
 # pylint: disable=unused-import
@@ -33,9 +34,6 @@ from lms.envs.test import (
     DEFAULT_FILE_STORAGE,
     MEDIA_ROOT,
     MEDIA_URL,
-    # This is practically unused but needed by the oauth2_provider package, which
-    # some tests in common/ rely on.
-    OAUTH_OIDC_ISSUER,
 )
 
 # mongo connection settings
@@ -45,15 +43,21 @@ MONGO_HOST = os.environ.get('EDXAPP_TEST_MONGO_HOST', 'localhost')
 THIS_UUID = uuid4().hex[:5]
 
 # Nose Test Runner
-TEST_RUNNER = 'django_nose.NoseTestSuiteRunner'
+TEST_RUNNER = 'openedx.core.djangolib.nose.NoseTestSuiteRunner'
 
-_system = 'cms'
-_report_dir = REPO_ROOT / 'reports' / _system
-_report_dir.makedirs_p()
+_SYSTEM = 'cms'
+
+_REPORT_DIR = REPO_ROOT / 'reports' / _SYSTEM
+_REPORT_DIR.makedirs_p()
+_NOSEID_DIR = REPO_ROOT / '.testids' / _SYSTEM
+_NOSEID_DIR.makedirs_p()
 
 NOSE_ARGS = [
-    '--id-file', REPO_ROOT / '.testids' / _system / 'noseids',
-    '--xunit-file', _report_dir / 'nosetests.xml',
+    '--id-file', _NOSEID_DIR / 'noseids',
+]
+
+NOSE_PLUGINS = [
+    'openedx.core.djangolib.testing.utils.NoseDatabaseIsolation'
 ]
 
 TEST_ROOT = path('test_root')
@@ -62,6 +66,7 @@ TEST_ROOT = path('test_root')
 STATIC_ROOT = TEST_ROOT / "staticfiles"
 
 GITHUB_REPO_ROOT = TEST_ROOT / "data"
+DATA_DIR = TEST_ROOT / "data"
 COMMON_TEST_DATA_ROOT = COMMON_ROOT / "test" / "data"
 
 # For testing "push to lms"
@@ -88,10 +93,6 @@ STATICFILES_DIRS += [
 # http://stackoverflow.com/questions/12816941/unit-testing-with-django-pipeline
 STATICFILES_STORAGE = 'pipeline.storage.NonPackagingPipelineStorage'
 STATIC_URL = "/static/"
-PIPELINE_ENABLED = False
-
-TENDER_DOMAIN = "help.edge.edx.org"
-TENDER_SUBDOMAIN = "edxedge"
 
 # Update module store settings per defaults for tests
 update_module_store_settings(
@@ -128,11 +129,18 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': TEST_ROOT / "db" / "cms.db",
+        'ATOMIC_REQUESTS': True,
     },
 }
 
+if os.environ.get('DISABLE_MIGRATIONS'):
+    # Create tables directly from apps' models. This can be removed once we upgrade
+    # to Django 1.9, which allows setting MIGRATION_MODULES to None in order to skip migrations.
+    MIGRATION_MODULES = NoOpMigrationModules()
+
 LMS_BASE = "localhost:8000"
-FEATURES['PREVIEW_LMS_BASE'] = "preview"
+FEATURES['PREVIEW_LMS_BASE'] = "preview.localhost"
+
 
 CACHES = {
     # This is the cache used for most things. Askbot will not work without a
@@ -166,14 +174,10 @@ CACHES = {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
         'LOCATION': 'edx_location_mem_cache',
     },
-
+    'course_structure_cache': {
+        'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
+    },
 }
-
-# Add external_auth to Installed apps for testing
-INSTALLED_APPS += ('external_auth', )
-
-# Add milestones to Installed apps for testing
-INSTALLED_APPS += ('milestones', )
 
 # hide ratelimit warnings while running tests
 filterwarnings('ignore', message='No request passed to the backend, unable to rate-limit')
@@ -207,8 +211,8 @@ PASSWORD_HASHERS = (
     'django.contrib.auth.hashers.MD5PasswordHasher',
 )
 
-# dummy segment-io key
-SEGMENT_IO_KEY = '***REMOVED***'
+# No segment key
+CMS_SEGMENT_KEY = None
 
 FEATURES['ENABLE_SERVICE_STATUS'] = True
 
@@ -216,6 +220,8 @@ FEATURES['ENABLE_SERVICE_STATUS'] = True
 FEATURES['EMBARGO'] = True
 
 # set up some testing for microsites
+FEATURES['USE_MICROSITES'] = True
+MICROSITE_ROOT_DIR = COMMON_ROOT / 'test' / 'test_microsites'
 MICROSITE_CONFIGURATION = {
     "test_microsite": {
         "domain_prefix": "testmicrosite",
@@ -233,15 +239,51 @@ MICROSITE_CONFIGURATION = {
         "show_homepage_promo_video": False,
         "course_index_overlay_text": "This is a Test Microsite Overlay Text.",
         "course_index_overlay_logo_file": "test_microsite/images/header-logo.png",
-        "homepage_overlay_html": "<h1>This is a Test Microsite Overlay HTML</h1>"
+        "homepage_overlay_html": "<h1>This is a Test Microsite Overlay HTML</h1>",
+        "ALWAYS_REDIRECT_HOMEPAGE_TO_DASHBOARD_FOR_AUTHENTICATED_USER": False,
+        "COURSE_CATALOG_VISIBILITY_PERMISSION": "see_in_catalog",
+        "COURSE_ABOUT_VISIBILITY_PERMISSION": "see_about_page",
+        "ENABLE_SHOPPING_CART": True,
+        "ENABLE_PAID_COURSE_REGISTRATION": True,
+        "SESSION_COOKIE_DOMAIN": "test_microsite.localhost",
+        "urls": {
+            'ABOUT': 'testmicrosite/about',
+            'PRIVACY': 'testmicrosite/privacy',
+            'TOS_AND_HONOR': 'testmicrosite/tos-and-honor',
+        },
+    },
+    "microsite_with_logistration": {
+        "domain_prefix": "logistration",
+        "university": "logistration",
+        "platform_name": "Test logistration",
+        "logo_image_url": "test_microsite/images/header-logo.png",
+        "email_from_address": "test_microsite@edx.org",
+        "payment_support_email": "test_microsite@edx.org",
+        "ENABLE_MKTG_SITE": False,
+        "ENABLE_COMBINED_LOGIN_REGISTRATION": True,
+        "SITE_NAME": "test_microsite.localhost",
+        "course_org_filter": "LogistrationX",
+        "course_about_show_social_links": False,
+        "css_overrides_file": "test_microsite/css/test_microsite.css",
+        "show_partners": False,
+        "show_homepage_promo_video": False,
+        "course_index_overlay_text": "Logistration.",
+        "course_index_overlay_logo_file": "test_microsite/images/header-logo.png",
+        "homepage_overlay_html": "<h1>This is a Logistration HTML</h1>",
+        "ALWAYS_REDIRECT_HOMEPAGE_TO_DASHBOARD_FOR_AUTHENTICATED_USER": False,
+        "COURSE_CATALOG_VISIBILITY_PERMISSION": "see_in_catalog",
+        "COURSE_ABOUT_VISIBILITY_PERMISSION": "see_about_page",
+        "ENABLE_SHOPPING_CART": True,
+        "ENABLE_PAID_COURSE_REGISTRATION": True,
+        "SESSION_COOKIE_DOMAIN": "test_logistration.localhost",
     },
     "default": {
         "university": "default_university",
         "domain_prefix": "www",
     }
 }
-MICROSITE_ROOT_DIR = COMMON_ROOT / 'test' / 'test_microsites'
-FEATURES['USE_MICROSITES'] = True
+MICROSITE_TEST_HOSTNAME = 'testmicrosite.testserver'
+MICROSITE_LOGISTRATION_HOSTNAME = 'logistration.testserver'
 
 # For consistency in user-experience, keep the value of this setting in sync with
 # the one in lms/envs/test.py
@@ -277,3 +319,14 @@ FEATURES['ENABLE_TEAMS'] = True
 
 # Dummy secret key for dev/test
 SECRET_KEY = '85920908f28904ed733fe576320db18cabd7b6cd'
+
+######### custom courses #########
+INSTALLED_APPS += ('openedx.core.djangoapps.ccxcon',)
+FEATURES['CUSTOM_COURSES_EDX'] = True
+
+# API access management -- needed for simple-history to run.
+INSTALLED_APPS += ('openedx.core.djangoapps.api_admin',)
+
+# Set the default Oauth2 Provider Model so that migrations can run in
+# verbose mode
+OAUTH2_PROVIDER_APPLICATION_MODEL = 'oauth2_provider.Application'

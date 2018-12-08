@@ -1,4 +1,4 @@
-define(['backbone', 'jquery', 'underscore', 'js/common_helpers/ajax_helpers', 'js/common_helpers/template_helpers',
+define(['backbone', 'jquery', 'underscore', 'common/js/spec_helpers/ajax_helpers', 'common/js/spec_helpers/template_helpers',
         'js/views/fields',
         'js/spec/views/fields_helpers',
         'js/spec/student_account/account_settings_fields_helpers',
@@ -15,13 +15,12 @@ define(['backbone', 'jquery', 'underscore', 'js/common_helpers/ajax_helpers', 'j
                 timerCallback;
 
             beforeEach(function () {
-                TemplateHelpers.installTemplate('templates/fields/field_readonly');
-                TemplateHelpers.installTemplate('templates/fields/field_dropdown');
-                TemplateHelpers.installTemplate('templates/fields/field_link');
-                TemplateHelpers.installTemplate('templates/fields/field_text');
-
                 timerCallback = jasmine.createSpy('timerCallback');
-                jasmine.Clock.useMock();
+                jasmine.clock().install();
+            });
+
+            afterEach(function() {
+                jasmine.clock().uninstall();
             });
 
             it("sends request to reset password on clicking link in PasswordFieldView", function() {
@@ -33,7 +32,7 @@ define(['backbone', 'jquery', 'underscore', 'js/common_helpers/ajax_helpers', 'j
                 });
 
                 var view = new AccountSettingsFieldViews.PasswordFieldView(fieldData).render();
-                view.$('.u-field-value > a').click();
+                view.$('.u-field-value > button').click();
                 AjaxHelpers.expectRequest(requests, 'POST', '/password_reset', "email=legolas%40woodland.middlearth");
                 AjaxHelpers.respondWithJson(requests, {"success": "true"});
                 FieldViewsSpecHelpers.expectMessageContains(
@@ -49,7 +48,8 @@ define(['backbone', 'jquery', 'underscore', 'js/common_helpers/ajax_helpers', 'j
                 var selector = '.u-field-value > select';
                 var fieldData = FieldViewsSpecHelpers.createFieldData(AccountSettingsFieldViews.DropdownFieldView, {
                     valueAttribute: 'language',
-                    options: FieldViewsSpecHelpers.SELECT_OPTIONS
+                    options: FieldViewsSpecHelpers.SELECT_OPTIONS,
+                    persistChanges: true
                 });
 
                 var view = new AccountSettingsFieldViews.LanguagePreferenceFieldView(fieldData).render();
@@ -92,7 +92,8 @@ define(['backbone', 'jquery', 'underscore', 'js/common_helpers/ajax_helpers', 'j
                 var selector = '.u-field-value > select';
                 var fieldData = FieldViewsSpecHelpers.createFieldData(AccountSettingsFieldViews.DropdownFieldView, {
                     valueAttribute: 'language_proficiencies',
-                    options: FieldViewsSpecHelpers.SELECT_OPTIONS
+                    options: FieldViewsSpecHelpers.SELECT_OPTIONS,
+                    persistChanges: true
                 });
                 fieldData.model.set({'language_proficiencies': [{'code': FieldViewsSpecHelpers.SELECT_OPTIONS[0][0]}]});
 
@@ -114,6 +115,7 @@ define(['backbone', 'jquery', 'underscore', 'js/common_helpers/ajax_helpers', 'j
                     helpMessage: '',
                     valueAttribute: 'auth-yet-another',
                     connected: true,
+                    acceptsLogins: 'true',
                     connectUrl: 'yetanother.com/auth/connect',
                     disconnectUrl: 'yetanother.com/auth/disconnect'
                 });

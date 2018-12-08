@@ -1,4 +1,4 @@
-define([ "jquery", "js/common_helpers/ajax_helpers", "js/spec_helpers/edit_helpers",
+define([ "jquery", "common/js/spec_helpers/ajax_helpers", "js/spec_helpers/edit_helpers",
     "js/views/container", "js/models/xblock_info", "jquery.simulate",
     "xmodule", "coffee/src/main", "xblock/cms.runtime.v1"],
     function ($, AjaxHelpers, EditHelpers, ContainerView, XBlockInfo) {
@@ -7,7 +7,7 @@ define([ "jquery", "js/common_helpers/ajax_helpers", "js/spec_helpers/edit_helpe
 
             describe("Supports reordering components", function () {
 
-                var model, containerView, mockContainerHTML, respondWithMockXBlockFragment, init, getComponent,
+                var model, containerView, mockContainerHTML, init, getComponent,
                     getDragHandle, dragComponentVertically, dragComponentAbove,
                     verifyRequest, verifyNumReorderCalls, respondToRequest, notificationSpy,
 
@@ -27,11 +27,6 @@ define([ "jquery", "js/common_helpers/ajax_helpers", "js/spec_helpers/edit_helpe
                     groupBComponent3 = "locator-component-B3";
 
                 mockContainerHTML = readFixtures('mock/mock-container-xblock.underscore');
-
-                respondWithMockXBlockFragment = function (requests, response) {
-                    var requestIndex = requests.length - 1;
-                    AjaxHelpers.respondWithJson(requests, response, requestIndex);
-                };
 
                 beforeEach(function () {
                     EditHelpers.installMockXBlock();
@@ -60,7 +55,7 @@ define([ "jquery", "js/common_helpers/ajax_helpers", "js/spec_helpers/edit_helpe
                     var requests = AjaxHelpers.requests(caller);
                     containerView.render();
 
-                    respondWithMockXBlockFragment(requests, {
+                    AjaxHelpers.respondWithJson(requests, {
                         html: mockContainerHTML,
                         "resources": []
                     });

@@ -1,22 +1,22 @@
 """
-Views for accessing language preferences
+Language Preference Views
 """
-from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse, HttpResponseBadRequest
-
-from openedx.core.djangoapps.user_api.preferences.api import set_user_preference
+import json
+from django.conf import settings
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.utils.translation import LANGUAGE_SESSION_KEY
 from lang_pref import LANGUAGE_KEY
+from django.http import HttpResponse
 
 
-@login_required
-def set_language(request):
+@ensure_csrf_cookie
+def update_session_language(request):
     """
-    This view is called when the user would like to set a language preference
+    Update the language session key.
     """
-    lang_pref = request.POST.get('language', None)
-
-    if lang_pref:
-        set_user_preference(request.user, LANGUAGE_KEY, lang_pref)
-        return HttpResponse('{"success": true}')
-
-    return HttpResponseBadRequest('no language provided')
+    if request.method == 'PATCH':
+        data = json.loads(request.body)
+        language = data.get(LANGUAGE_KEY, settings.LANGUAGE_CODE)
+        if request.session.get(LANGUAGE_SESSION_KEY, None) != language:
+            request.session[LANGUAGE_SESSION_KEY] = unicode(language)
+    return HttpResponse(200)

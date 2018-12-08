@@ -2,10 +2,14 @@
 Classes used for defining and running nose test suites
 """
 import os
-from paver.easy import call_task
 from pavelib.utils.test import utils as test_utils
-from pavelib.utils.test.suites import TestSuite
+from pavelib.utils.test.suites.suite import TestSuite
 from pavelib.utils.envs import Env
+
+try:
+    from pygments.console import colorize
+except ImportError:
+    colorize = lambda color, text: text
 
 __test__ = False  # do not collect
 
@@ -34,6 +38,7 @@ class NoseTestSuite(TestSuite):
         self.test_ids = self.test_id_dir / 'noseids'
         self.extra_args = kwargs.get('extra_args', '')
         self.cov_args = kwargs.get('cov_args', '')
+        self.use_ids = True
 
     def __enter__(self):
         super(NoseTestSuite, self).__enter__()
@@ -63,10 +68,10 @@ class NoseTestSuite(TestSuite):
                 cmd0 = "`which {}`".format(cmd0)
 
             cmd = (
-                "python -m coverage run {cov_args} --rcfile={root}/.coveragerc "
+                "python -m coverage run {cov_args} --rcfile={rcfile} "
                 "{cmd0} {cmd_rest}".format(
                     cov_args=self.cov_args,
-                    root=self.root,
+                    rcfile=Env.PYTHON_COVERAGERC,
                     cmd0=cmd0,
                     cmd_rest=cmd_rest,
                 )
@@ -102,6 +107,9 @@ class NoseTestSuite(TestSuite):
         if self.pdb:
             opts += " --pdb"
 
+        if self.use_ids:
+            opts += " --with-id"
+
         return opts
 
 
@@ -114,25 +122,52 @@ class SystemTestSuite(NoseTestSuite):
         self.test_id = kwargs.get('test_id', self._default_test_id)
         self.fasttest = kwargs.get('fasttest', False)
 
+        self.processes = kwargs.get('processes', None)
+        self.randomize = kwargs.get('randomize', None)
+
+        if self.processes is None:
+            # Use one process per core for LMS tests, and no multiprocessing
+            # otherwise.
+            self.processes = 0
+
+        self.processes = int(self.processes)
+
+        if self.randomize is None:
+            self.randomize = self.root == 'lms'
+
+        if self.processes != 0 and self.verbosity > 1:
+            print colorize(
+                'red',
+                "The TestId module and multiprocessing module can't be run "
+                "together in verbose mode. Disabling TestId for {} tests.".format(self.root)
+            )
+            self.use_ids = False
+
     def __enter__(self):
         super(SystemTestSuite, self).__enter__()
 
     @property
     def cmd(self):
-        cmd = (
-            './manage.py {system} test --verbosity={verbosity} '
-            '{test_id} {test_opts} --traceback --settings=test {extra} '
-            '--with-xunit --xunit-file={xunit_report}'.format(
-                system=self.root,
-                verbosity=self.verbosity,
-                test_id=self.test_id,
-                test_opts=self.test_options_flags,
-                extra=self.extra_args,
-                xunit_report=self.report_dir / "nosetests.xml",
-            )
-        )
 
-        return self._under_coverage_cmd(cmd)
+        cmd = [
+            './manage.py', self.root, 'test',
+            '--verbosity={}'.format(self.verbosity),
+            self.test_id,
+            self.test_options_flags,
+            '--settings=test',
+            self.extra_args,
+            '--with-xunitmp',
+            '--xunitmp-file={}'.format(self.report_dir / "nosetests.xml"),
+            '--with-database-isolation',
+        ]
+
+        if self.processes != 0:
+            cmd.append('--processes={}'.format(self.processes))
+
+        if self.randomize:
+            cmd.append('--with-randomly')
+
+        return self._under_coverage_cmd(" ".join(cmd))
 
     @property
     def _default_test_id(self):
@@ -146,20 +181,25 @@ class SystemTestSuite(NoseTestSuite):
         # django-nose will import them early in the test process,
         # thereby making sure that we load any django models that are
         # only defined in test files.
-        default_test_id = "{system}/djangoapps/* common/djangoapps/* openedx/core/djangoapps/*".format(
-            system=self.root
+        default_test_id = (
+            "{system}/djangoapps/*"
+            " common/djangoapps/*"
+            " openedx/core/djangoapps/*"
+            " openedx/tests/*"
+            " openedx/core/lib/*"
         )
 
         if self.root in ('lms', 'cms'):
-            default_test_id += " {system}/lib/*".format(system=self.root)
+            default_test_id += " {system}/lib/*"
 
         if self.root == 'lms':
-            default_test_id += " {system}/tests.py".format(system=self.root)
+            default_test_id += " {system}/tests.py"
+            default_test_id += " openedx/core/djangolib"
 
         if self.root == 'cms':
-            default_test_id += " {system}/tests/*".format(system=self.root)
+            default_test_id += " {system}/tests/*"
 
-        return default_test_id
+        return default_test_id.format(system=self.root)
 
 
 class LibTestSuite(NoseTestSuite):

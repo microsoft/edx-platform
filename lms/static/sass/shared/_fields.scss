@@ -12,7 +12,7 @@
         border-radius: 3px;
 
         span {
-            color: $gray-l1;
+            color: $gray;
         }
 
         &:hover {
@@ -118,7 +118,7 @@
 
     .u-field-message-help,
     .u-field-message-notification {
-        color: $gray-l1;
+        color: $gray;
     }
 }
 
@@ -127,7 +127,18 @@
         display: none;
     }
 
-    &.mode-edit a.u-field-value-display {
+    button.u-field-value-display, button.u-field-value-display:active, button.u-field-value-display:focus, button.u-field-value-display:hover{
+        border-color: transparent;
+        background: transparent;
+        padding: 0;
+        box-shadow: none;
+        font-size: inherit;
+        font-weight: inherit;
+        text-shadow: none;
+    }
+
+
+    &.mode-edit button.u-field-value-display {
         display: none;
     }
 }

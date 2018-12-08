@@ -1,11 +1,9 @@
 define([
-    'jquery', 'underscore', 'js/common_helpers/template_helpers', 'js/spec/edxnotes/helpers',
+    'jquery', 'underscore', 'common/js/spec_helpers/template_helpers', 'js/spec/edxnotes/helpers',
     'js/edxnotes/collections/notes', 'js/edxnotes/collections/tabs',
-    'js/edxnotes/views/tabs/tags', 'js/spec/edxnotes/custom_matchers',
-    'jasmine-jquery'
+    'js/edxnotes/views/tabs/tags'
 ], function(
-    $, _, TemplateHelpers, Helpers, NotesCollection, TabsCollection, TagsView,
-    customMatchers
+    $, _, TemplateHelpers, Helpers, NotesCollection, TabsCollection, TagsView
 ) {
     'use strict';
     describe('EdxNotes TagsView', function() {
@@ -38,13 +36,12 @@ define([
         };
 
         beforeEach(function () {
-            customMatchers(this);
             loadFixtures('js/fixtures/edxnotes/edxnotes.html');
             TemplateHelpers.installTemplates([
                 'templates/edxnotes/note-item', 'templates/edxnotes/tab-item'
             ]);
 
-            this.collection = new NotesCollection(notes);
+            this.collection = new NotesCollection(notes, {perPage: 10, parse: true});
             this.tabsCollection = new TabsCollection();
         });
 
@@ -62,7 +59,8 @@ define([
                 identifier: 'view-tags',
                 icon: 'fa fa-tag',
                 is_active: true,
-                is_closable: false
+                is_closable: false,
+                view: 'Tags'
             });
             expect(view.$('#tags-panel')).toExist();
 

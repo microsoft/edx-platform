@@ -18,16 +18,26 @@ Longer TODO:
    just means that we stick them in a dict called FEATURES.
 3. We need to handle configuration for multiple courses. This could be as
    multiple sites, but we do need a way to map their data assets.
+
+When refering to XBlocks, we use the entry-point name. For example,
+|   setup(
+|       name='xblock-foobar',
+|       version='0.1',
+|       packages=[
+|           'foobar_xblock',
+|       ],
+|       entry_points={
+|           'xblock.v1': [
+|               'foobar-block = foobar_xblock:FoobarBlock',
+|           #    ^^^^^^^^^^^^ This is the one you want.
+|           ]
+|       },
+|   )
 """
 
 # We intentionally define lots of variables that aren't used, and
 # want to import all variables from base settings files
-# pylint: disable=wildcard-import, unused-import, unused-wildcard-import
-
-# Pylint gets confused by path.py instances, which report themselves as class
-# objects. As a result, pylint applies the wrong regex in validating names,
-# and throws spurious errors. Therefore, we disable invalid-name checking.
-# pylint: disable=invalid-name
+# pylint: disable=unused-import
 
 import imp
 import os
@@ -36,27 +46,41 @@ import lms.envs.common
 # Although this module itself may not use these imported variables, other dependent modules may.
 from lms.envs.common import (
     USE_TZ, TECH_SUPPORT_EMAIL, PLATFORM_NAME, BUGS_EMAIL, DOC_STORE_CONFIG, DATA_DIR, ALL_LANGUAGES, WIKI_ENABLED,
-    update_module_store_settings, ASSET_IGNORE_REGEX, COPYRIGHT_YEAR, PARENTAL_CONSENT_AGE_LIMIT,
+    update_module_store_settings, ASSET_IGNORE_REGEX, COPYRIGHT_YEAR,
+    PARENTAL_CONSENT_AGE_LIMIT, COMPREHENSIVE_THEME_DIR, REGISTRATION_EMAIL_PATTERNS_ALLOWED,
     # The following PROFILE_IMAGE_* settings are included as they are
     # indirectly accessed through the email opt-in API, which is
     # technically accessible through the CMS via legacy URLs.
     PROFILE_IMAGE_BACKEND, PROFILE_IMAGE_DEFAULT_FILENAME, PROFILE_IMAGE_DEFAULT_FILE_EXTENSION,
     PROFILE_IMAGE_SECRET_KEY, PROFILE_IMAGE_MIN_BYTES, PROFILE_IMAGE_MAX_BYTES,
+    # The following setting is included as it is used to check whether to
+    # display credit eligibility table on the CMS or not.
+    ENABLE_CREDIT_ELIGIBILITY, YOUTUBE_API_KEY,
+    DEFAULT_COURSE_ABOUT_IMAGE_URL,
+
+    # Django REST framework configuration
+    REST_FRAMEWORK,
+
+    STATICI18N_OUTPUT_DIR
 )
-from path import path
+from path import Path as path
 from warnings import simplefilter
 
 from lms.djangoapps.lms_xblock.mixin import LmsBlockMixin
 from cms.lib.xblock.authoring_mixin import AuthoringMixin
 import dealer.git
 from xmodule.modulestore.edit_info import EditInfoMixin
+from xmodule.mixin import LicenseMixin
 
 ############################ FEATURE CONFIGURATION #############################
+
+
+# Dummy secret key for dev/test
+SECRET_KEY = 'dev key'
+
 STUDIO_NAME = "Studio"
 STUDIO_SHORT_NAME = "Studio"
 FEATURES = {
-    'USE_DJANGO_PIPELINE': True,
-
     'GITHUB_PUSH': False,
 
     # for consistency in user-experience, keep the value of the following 3 settings
@@ -70,8 +94,8 @@ FEATURES = {
     # email address for studio staff (eg to request course creation)
     'STUDIO_REQUEST_EMAIL': '',
 
-    # Segment.io - must explicitly turn it on for production
-    'SEGMENT_IO': False,
+    # Segment - must explicitly turn it on for production
+    'CMS_SEGMENT_KEY': None,
 
     # Enable URL that shows information about the status of various services
     'ENABLE_SERVICE_STATUS': False,
@@ -85,10 +109,6 @@ FEATURES = {
 
     # whether to use password policy enforcement or not
     'ENFORCE_PASSWORD_POLICY': False,
-
-    # If set to True, Studio won't restrict the set of advanced components
-    # to just those pre-approved by edX
-    'ALLOW_ALL_ADVANCED_COMPONENTS': False,
 
     # Turn off account locking if failed login attempts exceeds a limit
     'ENABLE_MAX_FAILED_LOGIN_ATTEMPTS': False,
@@ -118,12 +138,6 @@ FEATURES = {
     # Turn off Video Upload Pipeline through Studio, by default
     'ENABLE_VIDEO_UPLOAD_PIPELINE': False,
 
-
-    # Is this an edX-owned domain? (edx.org)
-    # for consistency in user-experience, keep the value of this feature flag
-    # in sync with the one in lms/envs/common.py
-    'IS_EDX_DOMAIN': False,
-
     # let students save and manage their annotations
     # for consistency in user-experience, keep the value of this feature flag
     # in sync with the one in lms/envs/common.py
@@ -142,6 +156,9 @@ FEATURES = {
     # Toggle course entrance exams feature
     'ENTRANCE_EXAMS': False,
 
+    # Toggle platform-wide course licensing
+    'LICENSING': False,
+
     # Enable the courseware search functionality
     'ENABLE_COURSEWARE_INDEX': False,
 
@@ -151,18 +168,40 @@ FEATURES = {
     # Enable course reruns, which will always use the split modulestore
     'ALLOW_COURSE_RERUNS': True,
 
-    # Social Media Sharing on Student Dashboard
-    'DASHBOARD_SHARE_SETTINGS': {
-        # Note: Ensure 'CUSTOM_COURSE_URLS' has a matching value in lms/envs/common.py
-        'CUSTOM_COURSE_URLS': False
-    },
+    # Certificates Web/HTML Views
+    'CERTIFICATES_HTML_VIEW': False,
 
     # Teams feature
-    'ENABLE_TEAMS': False,
+    'ENABLE_TEAMS': True,
+
+    # Show video bumper in Studio
+    'ENABLE_VIDEO_BUMPER': False,
+
+    # How many seconds to show the bumper again, default is 7 days:
+    'SHOW_BUMPER_PERIODICITY': 7 * 24 * 3600,
+
+    # Enable credit eligibility feature
+    'ENABLE_CREDIT_ELIGIBILITY': ENABLE_CREDIT_ELIGIBILITY,
+
+    # Can the visibility of the discussion tab be configured on a per-course basis?
+    'ALLOW_HIDING_DISCUSSION_TAB': False,
+
+    # Special Exams, aka Timed and Proctored Exams
+    'ENABLE_SPECIAL_EXAMS': False,
+
+    'ORGANIZATIONS_APP': False,
+
+    # Show Language selector
+    'SHOW_LANGUAGE_SELECTOR': False,
 }
 
 ENABLE_JASMINE = False
 
+############################# SOCIAL MEDIA SHARING #############################
+SOCIAL_SHARING_SETTINGS = {
+    # Note: Ensure 'CUSTOM_COURSE_URLS' has a matching value in lms/envs/common.py
+    'CUSTOM_COURSE_URLS': False
+}
 
 ############################# SET PATH INFORMATION #############################
 PROJECT_ROOT = path(__file__).abspath().dirname().dirname()  # /edx-platform/cms
@@ -181,8 +220,9 @@ sys.path.append(COMMON_ROOT / 'djangoapps')
 GEOIP_PATH = REPO_ROOT / "common/static/data/geoip/GeoIP.dat"
 GEOIPV6_PATH = REPO_ROOT / "common/static/data/geoip/GeoIPv6.dat"
 
-############################# WEB CONFIGURATION #############################
-# This is where we stick our compiled template files.
+############################# TEMPLATE CONFIGURATION #############################
+# Mako templating
+# TODO: Move the Mako templating into a different engine in TEMPLATES below.
 import tempfile
 MAKO_MODULE_DIR = os.path.join(tempfile.gettempdir(), 'mako_cms')
 MAKO_TEMPLATES = {}
@@ -191,29 +231,49 @@ MAKO_TEMPLATES['main'] = [
     COMMON_ROOT / 'templates',
     COMMON_ROOT / 'djangoapps' / 'pipeline_mako' / 'templates',
     COMMON_ROOT / 'djangoapps' / 'pipeline_js' / 'templates',
+    COMMON_ROOT / 'static',  # required to statically include common Underscore templates
 ]
 
 for namespace, template_dirs in lms.envs.common.MAKO_TEMPLATES.iteritems():
     MAKO_TEMPLATES['lms.' + namespace] = template_dirs
 
-TEMPLATE_DIRS = MAKO_TEMPLATES['main']
+# Django templating
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        # Don't look for template source files inside installed applications.
+        'APP_DIRS': False,
+        # Instead, look for template source files in these dirs.
+        'DIRS': MAKO_TEMPLATES['main'],
+        # Options specific to this backend.
+        'OPTIONS': {
+            'loaders': (
+                'django.template.loaders.filesystem.Loader',
+                'django.template.loaders.app_directories.Loader',
+            ),
+            'context_processors': (
+                'django.template.context_processors.request',
+                'django.template.context_processors.static',
+                'django.contrib.messages.context_processors.messages',
+                'django.template.context_processors.i18n',
+                'django.contrib.auth.context_processors.auth',  # this is required for admin
+                'django.template.context_processors.csrf',
+                'dealer.contrib.django.staff.context_processor',  # access git revision
+                'contentstore.context_processors.doc_url',
+            ),
+            # Change 'debug' in your environment settings files - not here.
+            'debug': False
+        }
+    }
+]
+DEFAULT_TEMPLATE_ENGINE = TEMPLATES[0]
+
+##############################################################################
 
 EDX_ROOT_URL = ''
 
 LOGIN_REDIRECT_URL = EDX_ROOT_URL + '/signin'
 LOGIN_URL = EDX_ROOT_URL + '/signin'
-
-
-TEMPLATE_CONTEXT_PROCESSORS = (
-    'django.core.context_processors.request',
-    'django.core.context_processors.static',
-    'django.contrib.messages.context_processors.messages',
-    'django.core.context_processors.i18n',
-    'django.contrib.auth.context_processors.auth',  # this is required for admin
-    'django.core.context_processors.csrf',
-    'dealer.contrib.django.staff.context_processor',  # access git revision
-    'contentstore.context_processors.doc_url',
-)
 
 # use the ratelimit backend to prevent brute force attacks
 AUTHENTICATION_BACKENDS = (
@@ -228,12 +288,13 @@ from lms.envs.common import (
     COURSE_KEY_PATTERN, COURSE_ID_PATTERN, USAGE_KEY_PATTERN, ASSET_KEY_PATTERN
 )
 
-
 ######################### CSRF #########################################
 
 # Forwards-compatibility with Django 1.7
 CSRF_COOKIE_AGE = 60 * 60 * 24 * 7 * 52
-
+# It is highly recommended that you override this in any environment accessed by
+# end users
+CSRF_COOKIE_SECURE = False
 
 #################### CAPA External Code Evaluation #############################
 XQUEUE_INTERFACE = {
@@ -249,36 +310,35 @@ XQUEUE_INTERFACE = {
 simplefilter('ignore')
 
 ################################# Middleware ###################################
-# List of finder classes that know how to find static files in
-# various locations.
-STATICFILES_FINDERS = (
-    'staticfiles.finders.FileSystemFinder',
-    'staticfiles.finders.AppDirectoriesFinder',
-    'pipeline.finders.PipelineFinder',
-)
-
-# List of callables that know how to import templates from various sources.
-TEMPLATE_LOADERS = (
-    'django.template.loaders.filesystem.Loader',
-    'django.template.loaders.app_directories.Loader',
-)
 
 MIDDLEWARE_CLASSES = (
+    'crum.CurrentRequestUserMiddleware',
     'request_cache.middleware.RequestCache',
+    'header_control.middleware.HeaderControlMiddleware',
     'django.middleware.cache.UpdateCacheMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
+
+    # Instead of SessionMiddleware, we use a more secure version
+    # 'django.contrib.sessions.middleware.SessionMiddleware',
+    'openedx.core.djangoapps.safe_sessions.middleware.SafeSessionMiddleware',
+
     'method_override.middleware.MethodOverrideMiddleware',
 
     # Instead of AuthenticationMiddleware, we use a cache-backed version
     'cache_toolbox.middleware.CacheBackedAuthenticationMiddleware',
+    # Enable SessionAuthenticationMiddleware in order to invalidate
+    # user sessions after a password change.
+    'django.contrib.auth.middleware.SessionAuthenticationMiddleware',
+
     'student.middleware.UserStandingMiddleware',
     'contentserver.middleware.StaticContentServer',
-    'crum.CurrentRequestUserMiddleware',
 
     'django.contrib.messages.middleware.MessageMiddleware',
     'track.middleware.TrackMiddleware',
+
+    # This is used to set or update the user language preferences.
+    'lang_pref.middleware.LanguagePreferenceMiddleware',
 
     # Allows us to dark-launch particular languages
     'dark_lang.middleware.DarkLangMiddleware',
@@ -288,9 +348,7 @@ MIDDLEWARE_CLASSES = (
     # Detects user-requested locale from 'accept-language' header in http request
     'django.middleware.locale.LocaleMiddleware',
 
-    'django.middleware.transaction.TransactionMiddleware',
-    # needs to run after locale middleware (or anything that modifies the request context)
-    'edxmako.middleware.MakoMiddleware',
+    'codejail.django_integration.ConfigureCodeJailMiddleware',
 
     # catches any uncaught RateLimitExceptions and returns a 403 instead of a 500
     'ratelimitbackend.middleware.RateLimitMiddleware',
@@ -305,6 +363,9 @@ MIDDLEWARE_CLASSES = (
 # Clickjacking protection can be enabled by setting this to 'DENY'
 X_FRAME_OPTIONS = 'ALLOW'
 
+# Platform for Privacy Preferences header
+P3P_HEADER = 'CP="Open EdX does not have a P3P policy."'
+
 ############# XBlock Configuration ##########
 
 # Import after sys.path fixup
@@ -312,6 +373,7 @@ from xmodule.modulestore.inheritance import InheritanceMixin
 from xmodule.modulestore import prefer_xmodules
 from xmodule.x_module import XModuleMixin
 
+# These are the Mixins that should be added to every XBlock.
 # This should be moved into an XBlock Runtime/Application object
 # once the responsibility of XBlock creation is moved out of modulestore - cpennington
 XBLOCK_MIXINS = (
@@ -322,10 +384,10 @@ XBLOCK_MIXINS = (
     AuthoringMixin,
 )
 
-# Allow any XBlock in Studio
-# You should also enable the ALLOW_ALL_ADVANCED_COMPONENTS feature flag, so that
-# xblocks can be added via advanced settings
 XBLOCK_SELECT_FUNCTION = prefer_xmodules
+
+# Paths to wrapper methods which should be applied to every XBlock's FieldData.
+XBLOCK_FIELD_DATA_WRAPPERS = ()
 
 ############################ Modulestore Configuration ################################
 MODULESTORE_BRANCH = 'draft-preferred'
@@ -361,11 +423,32 @@ MODULESTORE = {
     }
 }
 
+# Modulestore-level field override providers. These field override providers don't
+# require student context.
+MODULESTORE_FIELD_OVERRIDE_PROVIDERS = ()
+
+#################### Python sandbox ############################################
+
+CODE_JAIL = {
+    # Path to a sandboxed Python executable.  None means don't bother.
+    'python_bin': None,
+    # User to run as in the sandbox.
+    'user': 'sandbox',
+
+    # Configurable limits.
+    'limits': {
+        # How many CPU seconds can jailed code use?
+        'CPU': 1,
+    },
+}
+
 ############################ DJANGO_BUILTINS ################################
-# Change DEBUG/TEMPLATE_DEBUG in your environment settings files, not here
+# Change DEBUG in your environment settings files, not here
 DEBUG = False
-TEMPLATE_DEBUG = False
 SESSION_COOKIE_SECURE = False
+SESSION_SAVE_EVERY_REQUEST = False
+SESSION_SERIALIZER = 'django.contrib.sessions.serializers.PickleSerializer'
+
 
 # Site info
 SITE_ID = 1
@@ -403,7 +486,6 @@ STATIC_ROOT = ENV_ROOT / "staticfiles" / EDX_PLATFORM_REVISION
 STATICFILES_DIRS = [
     COMMON_ROOT / "static",
     PROJECT_ROOT / "static",
-    LMS_ROOT / "static",
 
     # This is how you would use the textbook images locally
     # ("book", ENV_ROOT / "book_images"),
@@ -420,6 +502,8 @@ LANGUAGE_DICT = dict(LANGUAGES)
 USE_I18N = True
 USE_L10N = True
 
+STATICI18N_ROOT = PROJECT_ROOT / "static"
+
 # Localization strings (e.g. django.po) are under this directory
 LOCALE_PATHS = (REPO_ROOT + '/conf/locale',)  # edx-platform/conf/locale/
 
@@ -429,14 +513,32 @@ MESSAGE_STORAGE = 'django.contrib.messages.storage.session.SessionStorage'
 ##### EMBARGO #####
 EMBARGO_SITE_REDIRECT_URL = None
 
-############################### Pipeline #######################################
-STATICFILES_STORAGE = 'cms.lib.django_require.staticstorage.OptimizedCachedRequireJsStorage'
+############################### PIPELINE #######################################
+
+PIPELINE_ENABLED = True
+
+STATICFILES_STORAGE = 'openedx.core.storage.ProductionStorage'
+
+# List of finder classes that know how to find static files in various locations.
+# Note: the pipeline finder is included to be able to discover optimized files
+STATICFILES_FINDERS = [
+    'openedx.core.djangoapps.theming.finders.ComprehensiveThemeFinder',
+    'django.contrib.staticfiles.finders.FileSystemFinder',
+    'django.contrib.staticfiles.finders.AppDirectoriesFinder',
+    'openedx.core.lib.xblock_pipeline.finder.XBlockPipelineFinder',
+    'pipeline.finders.PipelineFinder',
+]
+
+# Don't use compression by default
+PIPELINE_CSS_COMPRESSOR = None
+PIPELINE_JS_COMPRESSOR = None
 
 from openedx.core.lib.rooted_paths import rooted_glob
 
 PIPELINE_CSS = {
     'style-vendor': {
         'source_filenames': [
+            'js/vendor/afontgarde/afontgarde.css',
             'css/vendor/normalize.css',
             'css/vendor/font-awesome.css',
             'css/vendor/html5-input-polyfills/number-polyfill.css',
@@ -462,17 +564,35 @@ PIPELINE_CSS = {
         ],
         'output_filename': 'css/cms-style-vendor-tinymce-skin.css',
     },
-    'style-app': {
+    'style-main-v1': {
         'source_filenames': [
-            'sass/style-app.css',
+            'css/studio-main-v1.css',
         ],
-        'output_filename': 'css/cms-style-app.css',
+        'output_filename': 'css/studio-main-v1.css',
     },
-    'style-app-rtl': {
+    'style-main-v1-rtl': {
         'source_filenames': [
-            'sass/style-app-rtl.css',
+            'css/studio-main-v1-rtl.css',
         ],
-        'output_filename': 'css/cms-style-app-rtl.css',
+        'output_filename': 'css/studio-main-v1-rtl.css',
+    },
+    'style-main-v2': {
+        'source_filenames': [
+            'css/studio-main-v2.css',
+        ],
+        'output_filename': 'css/studio-main-v2.css',
+    },
+    'style-main-v2-rtl': {
+        'source_filenames': [
+            'css/studio-main-v2-rtl.css',
+        ],
+        'output_filename': 'css/studio-main-v2-rtl.css',
+    },
+    'style-edx-icons': {
+        'source_filenames': [
+            'css/edx-icons.css',
+        ],
+        'output_filename': 'css/edx-icons.css',
     },
     'style-xmodule-annotations': {
         'source_filenames': [
@@ -516,8 +636,9 @@ PIPELINE_JS_COMPRESSOR = None
 
 STATICFILES_IGNORE_PATTERNS = (
     "*.py",
-    "*.pyc"
-    # it would be nice if we could do, for example, "**/*.scss",
+    "*.pyc",
+
+    # It would be nice if we could do, for example, "**/*.scss",
     # but these strings get passed down to the `fnmatch` module,
     # which doesn't support that. :(
     # http://docs.python.org/2/library/fnmatch.html
@@ -529,6 +650,10 @@ STATICFILES_IGNORE_PATTERNS = (
     "coffee/*/*.coffee",
     "coffee/*/*/*.coffee",
     "coffee/*/*/*/*.coffee",
+
+    # Ignore tests
+    "spec",
+    "spec_helpers",
 
     # Symlinks used by js-test-tool
     "xmodule_js",
@@ -546,10 +671,10 @@ REQUIRE_BASE_URL = "./"
 # A sensible value would be 'app.build.js'. Leave blank to use the built-in default build profile.
 # Set to False to disable running the default profile (e.g. if only using it to build Standalone
 # Modules)
-REQUIRE_BUILD_PROFILE = "build.js"
+REQUIRE_BUILD_PROFILE = "cms/js/build.js"
 
 # The name of the require.js script used by your project, relative to REQUIRE_BASE_URL.
-REQUIRE_JS = "js/vendor/require.js"
+REQUIRE_JS = "js/vendor/requiresjs/require.js"
 
 # A dictionary of standalone modules to build with almond.js.
 REQUIRE_STANDALONE_MODULES = {}
@@ -561,19 +686,21 @@ REQUIRE_DEBUG = False
 REQUIRE_EXCLUDE = ("build.txt",)
 
 # The execution environment in which to run r.js: auto, node or rhino.
-# auto will autodetect the environment and make use of node if available and rhino if not.
-# It can also be a path to a custom class that subclasses require.environments.Environment and defines some "args" function that returns a list with the command arguments to execute.
+# auto will autodetect the environment and make use of node if available and
+# rhino if not.
+# It can also be a path to a custom class that subclasses
+# require.environments.Environment and defines some "args" function that
+# returns a list with the command arguments to execute.
 REQUIRE_ENVIRONMENT = "node"
 
-# If you want to enable Tender integration (http://tenderapp.com/),
-# put in the subdomain where Tender hosts tender_widget.js. For example,
-# if you want to use the URL https://example.tenderapp.com/tender_widget.js,
-# you should use "example".
-TENDER_SUBDOMAIN = None
-# If you want to have a vanity domain that points to Tender, put that here.
-# For example, "help.myapp.com". Otherwise, should should be your full
-# tenderapp domain name: for example, "example.tenderapp.com".
-TENDER_DOMAIN = None
+
+########################## DJANGO DEBUG TOOLBAR ###############################
+
+# We don't enable Django Debug Toolbar universally, but whenever we do, we want
+# to avoid patching settings.  Patched settings can cause circular import
+# problems: http://django-debug-toolbar.readthedocs.org/en/1.0/installation.html#explicit-setup
+
+DEBUG_TOOLBAR_PATCH_SETTINGS = False
 
 ################################# CELERY ######################################
 
@@ -625,10 +752,10 @@ CELERY_QUEUES = {
 
 YOUTUBE = {
     # YouTube JavaScript API
-    'API': 'www.youtube.com/iframe_api',
+    'API': 'https://www.youtube.com/iframe_api',
 
-    # URL to test YouTube availability
-    'TEST_URL': 'gdata.youtube.com/feeds/api/videos/',
+    # URL to get YouTube metadata
+    'METADATA_URL': 'https://www.googleapis.com/youtube/v3/videos',
 
     # Current youtube api for requesting transcripts.
     # For example: http://video.google.com/timedtext?lang=en&v=j_jEn79vS3g.
@@ -639,6 +766,8 @@ YOUTUBE = {
             'v': 'set_youtube_id_of_11_symbols_here',
         },
     },
+
+    'IMAGE_API': 'http://img.youtube.com/vi/{youtube_id}/0.jpg',  # /maxresdefault.jpg for 1920*1080
 }
 
 ############################# VIDEO UPLOAD PIPELINE #############################
@@ -655,12 +784,19 @@ INSTALLED_APPS = (
     # Standard apps
     'django.contrib.auth',
     'django.contrib.contenttypes',
+    'django.contrib.redirects',
     'django.contrib.sessions',
     'django.contrib.sites',
     'django.contrib.messages',
+    'django.contrib.staticfiles',
     'djcelery',
-    'south',
     'method_override',
+
+    # Common views
+    'openedx.core.djangoapps.common_views',
+
+    # History tables
+    'simple_history',
 
     # Database-backed configuration
     'config_models',
@@ -673,14 +809,17 @@ INSTALLED_APPS = (
 
     # For CMS
     'contentstore',
+    'contentserver',
     'course_creators',
+    'external_auth',
     'student',  # misleading name due to sharing with lms
     'openedx.core.djangoapps.course_groups',  # not used in cms (yet), but tests run
+    'openedx.core.djangoapps.coursetalk',  # not used in cms (yet), but tests run
     'xblock_config',
 
     # Tracking
     'track',
-    'eventtracking.django',
+    'eventtracking.django.apps.EventTrackingConfig',
 
     # Monitoring
     'datadog',
@@ -688,9 +827,14 @@ INSTALLED_APPS = (
     # For asset pipelining
     'edxmako',
     'pipeline',
-    'staticfiles',
     'static_replace',
     'require',
+
+    # Theming
+    'openedx.core.djangoapps.theming',
+
+    # Site configuration for theming and behavioral modification
+    'openedx.core.djangoapps.site_configuration',
 
     # comment common
     'django_comment_common',
@@ -722,13 +866,62 @@ INSTALLED_APPS = (
     # Additional problem types
     'edx_jsme',    # Molecular Structure
 
+    'openedx.core.djangoapps.content.course_overviews',
     'openedx.core.djangoapps.content.course_structures',
+
+    # Credit courses
+    'openedx.core.djangoapps.credit',
+
+    'xblock_django',
+
+    # edX Proctoring
+    'edx_proctoring',
+
+    # Bookmarks
+    'openedx.core.djangoapps.bookmarks',
+
+    # programs support
+    'openedx.core.djangoapps.programs',
+
+    # Self-paced course configuration
+    'openedx.core.djangoapps.self_paced',
+
+    # django-oauth2-provider (deprecated)
+    'provider',
+    'provider.oauth2',
+    'edx_oauth2_provider',
+
+    # django-oauth-toolkit
+    'oauth2_provider',
+
+    # These are apps that aren't strictly needed by Studio, but are imported by
+    # other apps that are.  Django 1.8 wants to have imported models supported
+    # by installed apps.
+    'lms.djangoapps.verify_student',
+
+    # Microsite configuration application
+    'microsite_configuration',
+
+    # edx-milestones service
+    'milestones',
+
+    # Static i18n support
+    'statici18n',
+
+    # Tagging
+    'cms.lib.xblock.tagging',
+
+    # Enables default site and redirects
+    'django_sites_extensions',
 )
 
 
 ################# EDX MARKETING SITE ##################################
 
-EDXMKTG_COOKIE_NAME = 'edxloggedin'
+EDXMKTG_LOGGED_IN_COOKIE_NAME = 'edxloggedin'
+EDXMKTG_USER_INFO_COOKIE_NAME = 'edx-user-info'
+EDXMKTG_USER_INFO_COOKIE_VERSION = 1
+
 MKTG_URLS = {}
 MKTG_URL_LINK_MAP = {
 
@@ -769,7 +962,7 @@ EVENT_TRACKING_BACKENDS = {
             },
             'processors': [
                 {'ENGINE': 'track.shim.LegacyFieldMappingProcessor'},
-                {'ENGINE': 'track.shim.VideoEventProcessor'}
+                {'ENGINE': 'track.shim.PrefixedEventProcessor'}
             ]
         }
     },
@@ -785,6 +978,9 @@ EVENT_TRACKING_BACKENDS = {
                     'OPTIONS': {
                         'whitelist': []
                     }
+                },
+                {
+                    'ENGINE': 'track.shim.GoogleAnalyticsProcessor'
                 }
             ]
         }
@@ -823,8 +1019,8 @@ OPTIONAL_APPS = (
     # edxval
     'edxval',
 
-    # milestones
-    'milestones',
+    # Organizations App (http://github.com/edx/edx-organizations)
+    'organizations',
 )
 
 
@@ -862,58 +1058,22 @@ MAX_ASSET_UPLOAD_FILE_SIZE_URL = ""
 ### Default value for entrance exam minimum score
 ENTRANCE_EXAM_MIN_SCORE_PCT = 50
 
-################ ADVANCED_COMPONENT_TYPES ###############
+### Default language for a new course
+DEFAULT_COURSE_LANGUAGE = "en"
 
-ADVANCED_COMPONENT_TYPES = [
-    'annotatable',
-    'textannotation',  # module for annotating text (with annotation table)
-    'videoannotation',  # module for annotating video (with annotation table)
-    'imageannotation',  # module for annotating image (with annotation table)
-    'word_cloud',
-    'graphical_slider_tool',
-    'lti',
-    'library_content',
-    'edx_sga',
-    'problem-builder',
-    'pb-dashboard',
-    # XBlocks from pmitros repos are prototypes. They should not be used
-    # except for edX Learning Sciences experiments on edge.edx.org without
-    # further work to make them robust, maintainable, finalize data formats,
-    # etc.
-    'concept',  # Concept mapper. See https://github.com/pmitros/ConceptXBlock
-    'done',  # Lets students mark things as done. See https://github.com/pmitros/DoneXBlock
-    'audio',  # Embed an audio file. See https://github.com/pmitros/AudioXBlock
-    'recommender',  # Crowdsourced recommender. Prototype by dli&pmitros. Intended for roll-out in one place in one course.
-    'profile',  # Prototype user profile XBlock. Used to test XBlock parameter passing. See https://github.com/pmitros/ProfileXBlock
-
-    'split_test',
-    'combinedopenended',
-    'peergrading',
-    'notes',
-    'schoolyourself_review',
-    'schoolyourself_lesson',
-
-    # Google Drive embedded components. These XBlocks allow one to
-    # embed public google drive documents and calendars within edX units
-    'google-document',
-    'google-calendar',
-]
-
-# Adding components in this list will disable the creation of new problem for those
-# compoenents in studio. Existing problems will work fine and one can edit them in studio
-DEPRECATED_ADVANCED_COMPONENT_TYPES = []
-
-# Specify xblocks that should be treated as advanced problems. Each entry is a tuple
-# specifying the xblock name and an optional YAML template to be used.
+# Specify XBlocks that should be treated as advanced problems. Each entry is a
+# dict:
+#       'component': the entry-point name of the XBlock.
+#       'boilerplate_name': an optional YAML template to be used.  Specify as
+#               None to omit.
+#
 ADVANCED_PROBLEM_TYPES = [
     {
         'component': 'openassessment',
         'boilerplate_name': None,
-    }
+    },
 ]
 
-#date format the api will be formatting the datetime values
-API_DATE_FORMAT = '%Y-%m-%d'
 
 # Files and Uploads type filter values
 
@@ -942,3 +1102,95 @@ ELASTIC_FIELD_MAPPINGS = {
         "type": "date"
     }
 }
+
+XBLOCK_SETTINGS = {
+    "VideoDescriptor": {
+        "licensing_enabled": FEATURES.get("LICENSING", False)
+    },
+    'VideoModule': {
+        'YOUTUBE_API_KEY': YOUTUBE_API_KEY
+    }
+}
+
+################################ XBlock Deprecation ################################
+
+# The following settings are used for deprecating XBlocks.
+
+# Adding an XBlock to this list does the following:
+# 1. Shows a warning on the course outline if the XBlock is listed in
+#    "Advanced Module List" in "Advanced Settings" page.
+# 2. List all instances of that XBlock on the top of the course outline page asking
+#    course authors to delete or replace the instances.
+DEPRECATED_BLOCK_TYPES = [
+    'peergrading',
+    'combinedopenended',
+    'graphical_slider_tool',
+    'randomize',
+]
+
+# Adding components in this list will disable the creation of new problems for
+# those advanced components in Studio. Existing problems will work fine
+# and one can edit them in Studio.
+# DEPRECATED. Please use /admin/xblock_django/xblockdisableconfig instead.
+DEPRECATED_ADVANCED_COMPONENT_TYPES = []
+
+# XBlocks can be disabled from rendering in LMS Courseware by adding them to
+# /admin/xblock_django/xblockdisableconfig/.
+
+################################ Settings for Credit Course Requirements ################################
+# Initial delay used for retrying tasks.
+# Additional retries use longer delays.
+# Value is in seconds.
+CREDIT_TASK_DEFAULT_RETRY_DELAY = 30
+
+# Maximum number of retries per task for errors that are not related
+# to throttling.
+CREDIT_TASK_MAX_RETRIES = 5
+
+# Maximum age in seconds of timestamps we will accept
+# when a credit provider notifies us that a student has been approved
+# or denied for credit.
+CREDIT_PROVIDER_TIMESTAMP_EXPIRATION = 15 * 60
+
+################################ Settings for Microsites ################################
+
+### Select an implementation for the microsite backend
+# for MICROSITE_BACKEND possible choices are
+# 1. microsite_configuration.backends.filebased.FilebasedMicrositeBackend
+# 2. microsite_configuration.backends.database.DatabaseMicrositeBackend
+MICROSITE_BACKEND = 'microsite_configuration.backends.filebased.FilebasedMicrositeBackend'
+# for MICROSITE_TEMPLATE_BACKEND possible choices are
+# 1. microsite_configuration.backends.filebased.FilebasedMicrositeTemplateBackend
+# 2. microsite_configuration.backends.database.DatabaseMicrositeTemplateBackend
+MICROSITE_TEMPLATE_BACKEND = 'microsite_configuration.backends.filebased.FilebasedMicrositeTemplateBackend'
+# TTL for microsite database template cache
+MICROSITE_DATABASE_TEMPLATE_CACHE_TTL = 5 * 60
+
+############################### PROCTORING CONFIGURATION DEFAULTS ##############
+PROCTORING_BACKEND_PROVIDER = {
+    'class': 'edx_proctoring.backends.null.NullBackendProvider',
+    'options': {},
+}
+PROCTORING_SETTINGS = {}
+
+############################ Global Database Configuration #####################
+
+DATABASE_ROUTERS = [
+    'openedx.core.lib.django_courseware_routers.StudentModuleHistoryExtendedRouter',
+]
+
+############################ OAUTH2 Provider ###################################
+
+# OpenID Connect issuer ID. Normally the URL of the authentication endpoint.
+OAUTH_OIDC_ISSUER = 'https://www.example.com/oauth2'
+
+# 5 minute expiration time for JWT id tokens issued for external API requests.
+OAUTH_ID_TOKEN_EXPIRATION = 5 * 60
+
+USERNAME_PATTERN = r'(?P<username>[\w.@+-]+)'
+
+# Partner support link for CMS footer
+PARTNER_SUPPORT_EMAIL = ''
+
+# Affiliate cookie tracking
+AFFILIATE_COOKIE_NAME = 'affiliate_id'

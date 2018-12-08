@@ -33,14 +33,15 @@ codekit-config.json
 *.mo
 *.po
 *.prob
+*.dup
 !django.po
 !django.mo
 !djangojs.po
 !djangojs.mo
-conf/locale/en/LC_MESSAGES/*.po
 conf/locale/en/LC_MESSAGES/*.mo
 conf/locale/fake*/LC_MESSAGES/*.po
 conf/locale/fake*/LC_MESSAGES/*.mo
+# this was a mistake in i18n_tools, now fixed.
 conf/locale/messages.mo
 
 ### Testing artifacts
@@ -57,8 +58,8 @@ jscover.log
 jscover.log.*
 .tddium*
 common/test/data/test_unicode/static/
+test_root/courses/
 django-pyfs
-test_root/uploads/*.txt
 
 ### Installation artifacts
 *.egg-info
@@ -66,29 +67,34 @@ test_root/uploads/*.txt
 .prereqs_cache
 .vagrant/
 node_modules
-.bundle/
 bin/
 
 ### Static assets pipeline artifacts
 *.scssc
 lms/static/css/
+lms/static/certificates/css/
+cms/static/css/
+common/static/common/js/vendor/
+
+### Styling generated from templates
 lms/static/sass/*.css
 lms/static/sass/*.css.map
-lms/static/sass/application.scss
-lms/static/sass/application-rtl.scss
-lms/static/sass/course.scss
-lms/static/sass/course-rtl.scss
+lms/static/certificates/sass/*.css
+lms/static/themed_sass/
 cms/static/css/
 cms/static/sass/*.css
 cms/static/sass/*.css.map
-
-
+cms/static/themed_sass/
+themes/**/css/*.css
 
 ### Logging artifacts
 log/
 logs
 chromedriver.log
 ghostdriver.log
+
+### Celery artifacts ###
+celerybeat-schedule
 
 ### Unknown artifacts
 database.sqlite

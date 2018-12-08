@@ -30,10 +30,10 @@ class UnitTestLibraries(ModuleStoreTestCase):
     """
 
     def setUp(self):
-        user_password = super(UnitTestLibraries, self).setUp()
+        super(UnitTestLibraries, self).setUp()
 
         self.client = AjaxEnabledTestClient()
-        self.client.login(username=self.user.username, password=user_password)
+        self.client.login(username=self.user.username, password=self.user_password)
 
     ######################################################
     # Tests for /library/ - list and create libraries:
@@ -51,7 +51,7 @@ class UnitTestLibraries(ModuleStoreTestCase):
         Test that we can GET /library/ to list all libraries visible to the current user.
         """
         # Create some more libraries
-        libraries = [LibraryFactory.create() for _ in range(0, 3)]
+        libraries = [LibraryFactory.create() for _ in range(3)]
         lib_dict = dict([(lib.location.library_key, lib) for lib in libraries])
 
         response = self.client.get_json(LIBRARY_REST_URL)
@@ -87,8 +87,8 @@ class UnitTestLibraries(ModuleStoreTestCase):
     @patch.dict('django.conf.settings.FEATURES', {'ENABLE_CREATOR_GROUP': True})
     def test_lib_create_permission(self):
         """
-        Users who aren't given course creator roles shouldn't be able to create
-        libraries either.
+        Users who are not given course creator roles should still be able to
+        create libraries.
         """
         self.client.logout()
         ns_user, password = self.create_non_staff_user()
@@ -97,7 +97,7 @@ class UnitTestLibraries(ModuleStoreTestCase):
         response = self.client.ajax_post(LIBRARY_REST_URL, {
             'org': 'org', 'library': 'lib', 'display_name': "New Library",
         })
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 200)
 
     @ddt.data(
         {},

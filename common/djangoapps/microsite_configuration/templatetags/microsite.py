@@ -6,6 +6,7 @@ from django import template
 from django.conf import settings
 from microsite_configuration import microsite
 from django.templatetags.static import static
+from django.contrib.staticfiles.storage import staticfiles_storage
 
 register = template.Library()
 
@@ -48,7 +49,7 @@ def favicon_path(default=getattr(settings, 'FAVICON_PATH', 'images/favicon.ico')
     Django template tag that outputs the configured favicon:
     {% favicon_path %}
     """
-    return static(microsite.get_value('favicon_path', default))
+    return staticfiles_storage.url(microsite.get_value('favicon_path', default))
 
 
 @register.simple_tag(name="microsite_css_overrides_file")
@@ -62,3 +63,14 @@ def microsite_css_overrides_file():
         return "<link href='{}' rel='stylesheet' type='text/css'>".format(static(file_path))
     else:
         return ""
+
+
+@register.filter
+def microsite_template_path(template_name):
+    """
+    Django template filter to apply template overriding to microsites.
+    The django_templates loader does not support the leading slash, therefore
+    it is stripped before returning.
+    """
+    template_name = microsite.get_template_path(template_name)
+    return template_name[1:] if template_name[0] == '/' else template_name

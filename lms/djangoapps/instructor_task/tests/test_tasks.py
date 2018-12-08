@@ -9,8 +9,11 @@ import json
 from uuid import uuid4
 
 from mock import Mock, MagicMock, patch
+from nose.plugins.attrib import attr
 
 from celery.states import SUCCESS, FAILURE
+from django.utils.translation import ugettext_noop
+from functools import partial
 
 from xmodule.modulestore.exceptions import ItemNotFoundError
 from opaque_keys.edx.locations import i4xEncoder
@@ -22,8 +25,17 @@ from student.tests.factories import UserFactory, CourseEnrollmentFactory
 from instructor_task.models import InstructorTask
 from instructor_task.tests.test_base import InstructorTaskModuleTestCase
 from instructor_task.tests.factories import InstructorTaskFactory
-from instructor_task.tasks import rescore_problem, reset_problem_attempts, delete_problem_state
-from instructor_task.tasks_helper import UpdateProblemModuleStateError
+from instructor_task.tasks import (
+    rescore_problem,
+    reset_problem_attempts,
+    delete_problem_state,
+    generate_certificates,
+    export_ora2_data,
+)
+from instructor_task.tasks_helper import (
+    UpdateProblemModuleStateError,
+    upload_ora2_data,
+)
 
 PROBLEM_URL_NAME = "test_urlname"
 
@@ -35,10 +47,10 @@ class TestTaskFailure(Exception):
 class TestInstructorTasks(InstructorTaskModuleTestCase):
 
     def setUp(self):
-        super(InstructorTaskModuleTestCase, self).setUp()
+        super(TestInstructorTasks, self).setUp()
         self.initialize_course()
         self.instructor = self.create_instructor('instructor')
-        self.location = InstructorTaskModuleTestCase.problem_location(PROBLEM_URL_NAME)
+        self.location = self.problem_location(PROBLEM_URL_NAME)
 
     def _create_input_entry(self, student_ident=None, use_problem_url=True, course_id=None):
         """Creates a InstructorTask entry for testing."""
@@ -97,15 +109,20 @@ class TestInstructorTasks(InstructorTaskModuleTestCase):
         with self.assertRaises(ItemNotFoundError):
             self._run_task_with_mock_celery(task_class, task_entry.id, task_entry.task_id)
 
-    def _test_run_with_task(self, task_class, action_name, expected_num_succeeded, expected_num_skipped=0):
+    def _test_run_with_task(self, task_class, action_name, expected_num_succeeded,
+                            expected_num_skipped=0, expected_attempted=0, expected_total=0):
         """Run a task and check the number of StudentModules processed."""
         task_entry = self._create_input_entry()
         status = self._run_task_with_mock_celery(task_class, task_entry.id, task_entry.task_id)
+        expected_attempted = expected_attempted \
+            if expected_attempted else expected_num_succeeded + expected_num_skipped
+        expected_total = expected_total \
+            if expected_total else expected_num_succeeded + expected_num_skipped
         # check return value
-        self.assertEquals(status.get('attempted'), expected_num_succeeded + expected_num_skipped)
+        self.assertEquals(status.get('attempted'), expected_attempted)
         self.assertEquals(status.get('succeeded'), expected_num_succeeded)
         self.assertEquals(status.get('skipped'), expected_num_skipped)
-        self.assertEquals(status.get('total'), expected_num_succeeded + expected_num_skipped)
+        self.assertEquals(status.get('total'), expected_total)
         self.assertEquals(status.get('action_name'), action_name)
         self.assertGreater(status.get('duration_ms'), 0)
         # compare with entry in table:
@@ -197,6 +214,7 @@ class TestInstructorTasks(InstructorTaskModuleTestCase):
         self.assertEquals(output['traceback'][-3:], "...")
 
 
+@attr('shard_3')
 class TestRescoreInstructorTask(TestInstructorTasks):
     """Tests problem-rescoring instructor task."""
 
@@ -299,6 +317,7 @@ class TestRescoreInstructorTask(TestInstructorTasks):
         self.assertGreater(output.get('duration_ms'), 0)
 
 
+@attr('shard_3')
 class TestResetAttemptsInstructorTask(TestInstructorTasks):
     """Tests instructor task that resets problem attempts."""
 
@@ -397,6 +416,7 @@ class TestResetAttemptsInstructorTask(TestInstructorTasks):
         self._test_reset_with_student(True)
 
 
+@attr('shard_3')
 class TestDeleteStateInstructorTask(TestInstructorTasks):
     """Tests instructor task that deletes problem state."""
 
@@ -438,3 +458,54 @@ class TestDeleteStateInstructorTask(TestInstructorTasks):
                 StudentModule.objects.get(course_id=self.course.id,
                                           student=student,
                                           module_state_key=self.location)
+
+
+class TestCertificateGenerationnstructorTask(TestInstructorTasks):
+    """Tests instructor task that generates student certificates."""
+
+    def test_generate_certificates_missing_current_task(self):
+        """
+        Test error is raised when certificate generation task run without current task
+        """
+        self._test_missing_current_task(generate_certificates)
+
+    def test_generate_certificates_task_run(self):
+        """
+        Test certificate generation task run without any errors
+        """
+        self._test_run_with_task(
+            generate_certificates,
+            'certificates generated',
+            0,
+            0,
+            expected_attempted=1,
+            expected_total=1
+        )
+
+
+class TestOra2ResponsesInstructorTask(TestInstructorTasks):
+    """Tests instructor task that fetches ora2 response data."""
+
+    def test_ora2_missing_current_task(self):
+        self._test_missing_current_task(export_ora2_data)
+
+    def test_ora2_with_failure(self):
+        self._test_run_with_failure(export_ora2_data, 'We expected this to fail')
+
+    def test_ora2_with_long_error_msg(self):
+        self._test_run_with_long_error_msg(export_ora2_data)
+
+    def test_ora2_with_short_error_msg(self):
+        self._test_run_with_short_error_msg(export_ora2_data)
+
+    def test_ora2_runs_task(self):
+        task_entry = self._create_input_entry()
+        task_xmodule_args = self._get_xmodule_instance_args()
+
+        with patch('instructor_task.tasks.run_main_task') as mock_main_task:
+            export_ora2_data(task_entry.id, task_xmodule_args)
+
+            action_name = ugettext_noop('generated')
+            task_fn = partial(upload_ora2_data, task_xmodule_args)
+
+            mock_main_task.assert_called_once_with_args(task_entry.id, task_fn, action_name)

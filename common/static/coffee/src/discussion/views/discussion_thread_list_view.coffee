@@ -39,9 +39,9 @@ if Backbone?
 
       @searchAlertCollection.on "add", (searchAlert) =>
         content = _.template(
-          $("#search-alert-template").html(),
+          $("#search-alert-template").html())(
           {'message': searchAlert.attributes.message, 'cid': searchAlert.cid}
-          )
+        )
         @$(".search-alerts").append(content)
         @$("#search-alert-" + searchAlert.cid + " a.dismiss").bind "click", searchAlert, (event) =>
           @removeSearchAlert(event.data.cid)
@@ -129,7 +129,8 @@ if Backbone?
           isPrivilegedUser: DiscussionUtil.isPrivilegedUser()
         })
       )
-      @$(".forum-nav-sort-control").val(@collection.sort_preference)
+      @$(".forum-nav-sort-control option").removeProp("selected")
+      @$(".forum-nav-sort-control option[value=#{@collection.sort_preference}]").prop("selected", true)
 
       $(window).bind "load scroll resize", @updateSidebar
 
@@ -161,7 +162,7 @@ if Backbone?
       voteCounts.hide()
       commentCounts.hide()
       switch @$(".forum-nav-sort-control").val()
-        when "date", "comments"
+        when "activity", "comments"
           commentCounts.show()
         when "votes"
           voteCounts.show()
@@ -248,7 +249,7 @@ if Backbone?
       @$(".forum-nav-thread[data-id='#{thread_id}'] .forum-nav-thread-link").addClass("is-active").find(".forum-nav-thread-wrapper-1").prepend('<span class="sr">' + gettext("Current conversation") + '</span>')
 
     goHome: ->
-      @template = _.template($("#discussion-home").html())
+      @template = _.template($("#discussion-home-template").html())
       $(".forum-content").html(@template)
       $(".forum-nav-thread-list a").removeClass("is-active").find(".sr").remove()
       $("input.email-setting").bind "click", @updateEmailNotifications
@@ -337,8 +338,6 @@ if Backbone?
 
     fitName: (name) ->
       @maxNameWidth = @$(".forum-nav-browse").width() -
-        parseInt(@$(".forum-nav-browse").css("padding-left")) -
-        parseInt(@$(".forum-nav-browse").css("padding-right")) -
         @$(".forum-nav-browse .icon").outerWidth(true) -
         @$(".forum-nav-browse-drop-arrow").outerWidth(true)
       width = @getNameWidth(name)
@@ -491,7 +490,7 @@ if Backbone?
             message = interpolate(
               _.escape(gettext('Show posts by %(username)s.')),
               {"username":
-                _.template('<a class="link-jump" href="<%= url %>"><%- username %></a>', {
+                _.template('<a class="link-jump" href="<%= url %>"><%- username %></a>')({
                   url: DiscussionUtil.urlFor("user_profile", response.users[0].id),
                   username: response.users[0].username
                 })
@@ -526,5 +525,3 @@ if Backbone?
           type: "POST"
           error: () =>
             $('input.email-setting').attr('checked','checked')
-
-

@@ -8,14 +8,32 @@ from django.conf import settings
 settings.INSTALLED_APPS  # pylint: disable=pointless-statement
 
 from openedx.core.lib.django_startup import autostartup
-from monkey_patch import django_utils_translation
+import django
+from monkey_patch import (
+    third_party_auth,
+    django_db_models_options
+)
+from openedx.core.lib.xblock_utils import xblock_local_resource_url
+
+import xmodule.x_module
+import cms.lib.xblock.runtime
+
+from openedx.core.djangoapps.theming.core import enable_comprehensive_theme
 
 
 def run():
     """
     Executed during django startup
     """
-    django_utils_translation.patch()
+    third_party_auth.patch()
+    django_db_models_options.patch()
+
+    # Comprehensive theming needs to be set up before django startup,
+    # because modifying django template paths after startup has no effect.
+    if settings.COMPREHENSIVE_THEME_DIR:
+        enable_comprehensive_theme(settings.COMPREHENSIVE_THEME_DIR)
+
+    django.setup()
 
     autostartup()
 
@@ -23,6 +41,13 @@ def run():
 
     if settings.FEATURES.get('USE_CUSTOM_THEME', False):
         enable_theme()
+
+    # In order to allow descriptors to use a handler url, we need to
+    # monkey-patch the x_module library.
+    # TODO: Remove this code when Runtimes are no longer created by modulestores
+    # https://openedx.atlassian.net/wiki/display/PLAT/Convert+from+Storage-centric+runtimes+to+Application-centric+runtimes
+    xmodule.x_module.descriptor_global_handler_url = cms.lib.xblock.runtime.handler_url
+    xmodule.x_module.descriptor_global_local_resource_url = xblock_local_resource_url
 
 
 def add_mimetypes():

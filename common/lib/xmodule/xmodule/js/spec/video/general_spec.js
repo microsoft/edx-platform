@@ -1,27 +1,29 @@
 (function (undefined) {
     describe('Video', function () {
-        var oldOTBD;
-
-        beforeEach(function () {
-            jasmine.stubRequests();
-        });
+        var oldOTBD, state;
 
         afterEach(function () {
             $('source').remove();
             window.VideoState = {};
             window.VideoState.id = {};
+            window.YT = jasmine.YT;
         });
 
         describe('constructor', function () {
             describe('YT', function () {
                 beforeEach(function () {
                     loadFixtures('video.html');
-                    $.cookie.andReturn('0.50');
+                    $.cookie.and.returnValue('0.50');
                 });
 
                 describe('by default', function () {
                     beforeEach(function () {
-                        this.state = new window.Video('#example');
+                        this.state = jasmine.initializePlayerYouTube('video_html5.html');
+                    });
+
+                    afterEach(function () {
+                        this.state.storage.clear();
+                        this.state.videoPlayer.destroy();
                     });
 
                     it('check videoType', function () {
@@ -29,7 +31,7 @@
                     });
 
                     it('set the elements', function () {
-                        expect(this.state.el).toBe('#video_id');
+                        expect(this.state.el).toEqual($('#video_id'));
                     });
 
                     it('parse the videos', function () {
@@ -54,25 +56,22 @@
                 var state;
 
                 beforeEach(function () {
-                    loadFixtures('video_html5.html');
-                    $.cookie.andReturn('0.75');
+                    $.cookie.and.returnValue('0.75');
+                    state = jasmine.initializePlayer('video_html5.html');
+                });
+
+                afterEach(function () {
+                    state.storage.clear();
+                    state.videoPlayer.destroy();
                 });
 
                 describe('by default', function () {
-                    beforeEach(function () {
-                        state = new window.Video('#example');
-                    });
-
-                    afterEach(function () {
-                        state = undefined;
-                    });
-
                     it('check videoType', function () {
                         expect(state.videoType).toEqual('html5');
                     });
 
                     it('set the elements', function () {
-                        expect(state.el).toBe('#video_id');
+                        expect(state.el).toEqual($('#video_id'));
                     });
 
                     it('doesn\'t have `videos` dictionary', function () {
@@ -95,14 +94,6 @@
                 // the stand alone HTML5 player object is already loaded, so no
                 // further testing in that case is required.
                 describe('HTML5 API is available', function () {
-                    beforeEach(function () {
-                        state = new Video('#example');
-                    });
-
-                    afterEach(function () {
-                        state = null;
-                    });
-
                     it('create the Video Player', function () {
                         expect(state.videoPlayer.player).not.toBeUndefined();
                     });
@@ -111,26 +102,34 @@
         });
 
         describe('YouTube API is not loaded', function () {
+            var state;
             beforeEach(function () {
                 window.YT = undefined;
-
-                state = jasmine.initializePlayerYouTube('video.html');
+                state = jasmine.initializePlayerYouTube();
             });
 
-            it('callback, to be called after YouTube API loads, exists and is called', function () {
-                waitsFor(function () {
-                    return state.youtubeApiAvailable === true;
-                }, 'YouTube API is loaded', 3000);
+            afterEach(function () {
+                state.storage.clear();
+                state.videoPlayer.destroy();
+            });
 
-                runs(function () {
+            it('callback, to be called after YouTube API loads, exists and is called', function (done) {
+                window.YT = jasmine.YT;
+                // Call the callback that must be called when YouTube API is
+                // loaded. By specification.
+                window.onYouTubeIframeAPIReady();
+                jasmine.waitUntil(function () {
+                    return state.youtubeApiAvailable === true;
+                }).done(function(){
                     // If YouTube API is not loaded, then the code will should create
                     // a global callback that will be called by API once it is loaded.
                     expect(window.onYouTubeIframeAPIReady).not.toBeUndefined();
-                });
+                }).always(done);
             });
         });
 
         describe('checking start and end times', function () {
+            var state;
             var miniTestSuite = [
                 {
                     itDescription: 'both times are proper',
@@ -159,9 +158,9 @@
                 }
             ];
 
-            beforeEach(function () {
-                loadFixtures('video.html');
-
+            afterEach(function () {
+                state.storage.clear();
+                state.videoPlayer.destroy();
             });
 
             $.each(miniTestSuite, function (index, test) {
@@ -172,13 +171,10 @@
 
             function itFabrique(itDescription, data, expectData) {
                 it(itDescription, function () {
-                    $('#example').find('.video')
-                        .data({
-                            'start': data.start,
-                            'end': data.end
-                        });
-
-                    state = new Video('#example');
+                    state = jasmine.initializePlayer('video.html', {
+                        'start': data.start,
+                        'end': data.end
+                    });
 
                     expect(state.config.startTime).toBe(expectData.start);
                     expect(state.config.endTime).toBe(expectData.end);
@@ -236,27 +232,6 @@
                 //
                 //     this.youtubeXhr = this.getVideoMetadata();
                 expect(numAjaxCalls).toBe(1);
-            });
-        });
-
-        describe('log', function () {
-            beforeEach(function () {
-                loadFixtures('video_html5.html');
-                state = new Video('#example');
-                spyOn(Logger, 'log');
-                state.videoPlayer.log('someEvent', {
-                    currentTime: 25,
-                    speed: '1.0'
-                });
-            });
-
-            it('call the logger with valid extra parameters', function () {
-                expect(Logger.log).toHaveBeenCalledWith('someEvent', {
-                    id: 'id',
-                    code: 'html5',
-                    currentTime: 25,
-                    speed: '1.0'
-                });
             });
         });
     });

@@ -6,7 +6,7 @@
  */
  var edx = edx || {};
 
- (function( $, _, _s, Backbone, gettext ) {
+ (function( $, _, _s, Backbone, gettext, HtmlUtils ) {
     'use strict';
 
     edx.verify_student = edx.verify_student || {};
@@ -26,32 +26,29 @@
 
             this.errorModel = obj.errorModel || null;
             this.courseKey = obj.courseKey || null;
-            this.checkpointName = obj.checkpointName || null;
             this.platformName = obj.platformName || null;
             this.usageId = obj.usageId || null;
 
 
-            this.model = new edx.verify_student.ReverificationModel({
+            this.model = new edx.verify_student.VerificationModel({
                 courseKey: this.courseKey,
-                checkpointName: this.checkpointName,
-                usageId: this.usageId
+                checkpoint: this.usageId
             });
 
             this.listenTo( this.model, 'sync', _.bind( this.handleSubmitPhotoSuccess, this ));
             this.listenTo( this.model, 'error', _.bind( this.handleSubmissionError, this ));
-            this.render();
         },
 
         render: function() {
-            var renderedTemplate = _.template(
-                $( this.templateId ).html(),
-                {
-                    courseKey: this.courseKey,
-                    checkpointName: this.checkpointName,
-                    platformName: this.platformName
-                }
+            HtmlUtils.setHtml(
+                this.el,
+                HtmlUtils.template($( this.templateId ).html())(
+                    {
+                        courseKey: this.courseKey,
+                        platformName: this.platformName
+                    }
+                )
             );
-            $( this.el ).html( renderedTemplate );
 
             // Render the webcam view *after* the parent view
             // so that the container div for the webcam
@@ -73,13 +70,12 @@
 
         submitPhoto: function() {
             // disable the submit button to prevent multiple submissions.
-            this.setSubmitButtonEnabled(false)
+            this.setSubmitButtonEnabled(false);
             this.model.save();
         },
 
         handleSubmitPhotoSuccess: function(redirect_url) {
-            // Eventually this will be a redirect back into the courseware,
-            // but for now we can return to the student dashboard.
+            // Redirect back to the courseware at the checkpoint location
             window.location.href = redirect_url;
         },
 
@@ -106,4 +102,4 @@
                 .attr('aria-disabled', !isEnabled);
         }
     });
-})(jQuery, _, _.str, Backbone, gettext);
+})(jQuery, _, _.str, Backbone, gettext, edx.HtmlUtils);

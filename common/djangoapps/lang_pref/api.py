@@ -4,7 +4,7 @@
 from collections import namedtuple
 
 from django.conf import settings
-from django.utils.translation import get_language
+from django.utils.translation import ugettext as _
 from dark_lang.models import DarkLangConfig
 
 
@@ -48,36 +48,14 @@ def released_languages():
     return released_languages
 
 
-def preferred_language(preferred_language_code):
-    """Retrieve the name of the user's preferred language.
-
-    Note:
-        The preferred_language_code may be None. If this is the case,
-        the if/else block will handle it by returning either the active
-        language or the default language.
-
-    Args:
-        preferred_language_code (str): The ISO 639 code corresponding
-            to the user's preferred language.
+def all_languages():
+    """Retrieve the list of all languages, translated and sorted.
 
     Returns:
-       unicode: The name of the user's preferred language.
+        list of (language code (str), language name (str)): the language names
+        are translated in the current activated language and the results sorted
+        alphabetically.
 
     """
-    active_language_code = get_language()
-
-    if preferred_language_code in settings.LANGUAGE_DICT:
-        # If the user has indicated a preference for a valid
-        # language, record their preferred language
-        pass
-    elif active_language_code in settings.LANGUAGE_DICT:
-        # Otherwise, set the language used in the current thread
-        # as the preferred language
-        preferred_language_code = active_language_code
-    else:
-        # Otherwise, use the default language
-        preferred_language_code = settings.LANGUAGE_CODE
-
-    preferred_language = settings.LANGUAGE_DICT[preferred_language_code]
-
-    return Language(preferred_language_code, preferred_language)
+    languages = [(lang[0], _(lang[1])) for lang in settings.ALL_LANGUAGES]  # pylint: disable=translation-of-non-string
+    return sorted(languages, key=lambda lang: lang[1])

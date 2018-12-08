@@ -1,5 +1,8 @@
-<%! from django.utils.translation import ugettext as _ %>
-<%! from third_party_auth import pipeline %>
+<%page expression_filter="h"/>
+<%!
+from django.utils.translation import ugettext as _
+from third_party_auth import pipeline
+%>
 
 <li class="controls--account">
     <span class="title">
@@ -12,15 +15,15 @@
             <div class="auth-provider">
                 <div class="status">
                     % if state.has_account:
-                        <i class="icon fa fa-link"></i> <span class="copy">${_('Linked')}</span>
+                        <span class="icon fa fa-link" aria-hidden="true"></span> <span class="copy">${_('Linked')}</span>
                     % else:
-                        <i class="icon fa fa-unlink"></i><span class="copy">${_('Not Linked')}</span>
+                        <span class="icon fa fa-unlink" aria-hidden="true"></span><span class="copy">${_('Not Linked')}</span>
                     % endif
                 </div>
-                <span class="provider">${state.provider.NAME}</span>
+                <span class="provider">${state.provider.name}</span>
                 <span class="control">
                     <form
-                        action="${pipeline.get_disconnect_url(state.provider.NAME)}"
+                        action="${pipeline.get_disconnect_url(state.provider.provider_id, state.association_id)}"
                         method="post"
                         name="${state.get_unlink_form_name()}">
                         % if state.has_account:
@@ -30,8 +33,8 @@
                                 ## Translators: clicking on this removes the link between a user's edX account and their account with an external authentication provider (like Google or LinkedIn).
                                 ${_("Unlink")}
                             </a>
-                        % else:
-                            <a href="${pipeline.get_login_url(state.provider.NAME, pipeline.AUTH_ENTRY_PROFILE)}">
+                        % elif state.provider.accepts_logins:
+                            <a href="${pipeline.get_login_url(state.provider.provider_id, pipeline.AUTH_ENTRY_PROFILE)}">
                                 ## Translators: clicking on this creates a link between a user's edX account and their account with an external authentication provider (like Google or LinkedIn).
                                 ${_("Link")}
                             </a>

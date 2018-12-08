@@ -6,7 +6,9 @@ import unittest
 
 from django.test import TestCase
 from django.test.client import Client
+from django.test.utils import override_settings
 from django.conf import settings
+from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.core.urlresolvers import reverse, NoReverseMatch
 from django.http import HttpResponseBadRequest, HttpResponse
@@ -15,6 +17,7 @@ from mock import patch
 from social.apps.django_app.default.models import UserSocialAuth
 
 from external_auth.models import ExternalAuthMap
+from openedx.core.djangolib.testing.utils import CacheIsolationTestCase
 from student.tests.factories import UserFactory, RegistrationFactory, UserProfileFactory
 from student.views import login_oauth_token
 from third_party_auth.tests.utils import (
@@ -26,10 +29,12 @@ from xmodule.modulestore.tests.factories import CourseFactory
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 
 
-class LoginTest(TestCase):
+class LoginTest(CacheIsolationTestCase):
     '''
     Test student.views.login_user() view
     '''
+
+    ENABLED_CACHES = ['default']
 
     def setUp(self):
         super(LoginTest, self).setUp()
@@ -158,6 +163,57 @@ class LoginTest(TestCase):
         self.assertEqual(response.status_code, 302)
         self._assert_audit_log(mock_audit_log, 'info', [u'Logout', u'test'])
 
+    def test_login_user_info_cookie(self):
+        response, _ = self._login_response('test@edx.org', 'test_password')
+        self._assert_response(response, success=True)
+
+        # Verify the format of the "user info" cookie set on login
+        cookie = self.client.cookies[settings.EDXMKTG_USER_INFO_COOKIE_NAME]
+        user_info = json.loads(cookie.value)
+
+        # Check that the version is set
+        self.assertEqual(user_info["version"], settings.EDXMKTG_USER_INFO_COOKIE_VERSION)
+
+        # Check that the username and email are set
+        self.assertEqual(user_info["username"], self.user.username)
+        self.assertEqual(user_info["email"], self.user.email)
+
+        # Check that the URLs are absolute
+        for url in user_info["header_urls"].values():
+            self.assertIn("http://testserver/", url)
+
+    def test_logout_deletes_mktg_cookies(self):
+        response, _ = self._login_response('test@edx.org', 'test_password')
+        self._assert_response(response, success=True)
+
+        # Check that the marketing site cookies have been set
+        self.assertIn(settings.EDXMKTG_LOGGED_IN_COOKIE_NAME, self.client.cookies)
+        self.assertIn(settings.EDXMKTG_USER_INFO_COOKIE_NAME, self.client.cookies)
+
+        # Log out
+        logout_url = reverse('logout')
+        response = self.client.post(logout_url)
+
+        # Check that the marketing site cookies have been deleted
+        # (cookies are deleted by setting an expiration date in 1970)
+        for cookie_name in [settings.EDXMKTG_LOGGED_IN_COOKIE_NAME, settings.EDXMKTG_USER_INFO_COOKIE_NAME]:
+            cookie = self.client.cookies[cookie_name]
+            self.assertIn("01-Jan-1970", cookie.get('expires'))
+
+    @override_settings(
+        EDXMKTG_LOGGED_IN_COOKIE_NAME=u"unicode-logged-in",
+        EDXMKTG_USER_INFO_COOKIE_NAME=u"unicode-user-info",
+    )
+    def test_unicode_mktg_cookie_names(self):
+        # When logged in cookie names are loaded from JSON files, they may
+        # have type `unicode` instead of `str`, which can cause errors
+        # when calling Django cookie manipulation functions.
+        response, _ = self._login_response('test@edx.org', 'test_password')
+        self._assert_response(response, success=True)
+
+        response = self.client.post(reverse('logout'))
+        self.assertRedirects(response, "/")
+
     @patch.dict("django.conf.settings.FEATURES", {'SQUELCH_PII_IN_LOGS': True})
     def test_logout_logging_no_pii(self):
         response, _ = self._login_response('test@edx.org', 'test_password')
@@ -200,9 +256,51 @@ class LoginTest(TestCase):
         self._assert_response(response, success=True)
 
         # Reload the user from the database
-        self.user = UserFactory.FACTORY_FOR.objects.get(pk=self.user.pk)
+        self.user = User.objects.get(pk=self.user.pk)
 
         self.assertEqual(self.user.profile.get_meta()['session_id'], client1.session.session_key)
+
+        # second login should log out the first
+        response = client2.post(self.url, creds)
+        self._assert_response(response, success=True)
+
+        try:
+            # this test can be run with either lms or studio settings
+            # since studio does not have a dashboard url, we should
+            # look for another url that is login_required, in that case
+            url = reverse('dashboard')
+        except NoReverseMatch:
+            url = reverse('upload_transcripts')
+        response = client1.get(url)
+        # client1 will be logged out
+        self.assertEqual(response.status_code, 302)
+
+    @patch.dict("django.conf.settings.FEATURES", {'PREVENT_CONCURRENT_LOGINS': True})
+    def test_single_session_with_no_user_profile(self):
+        """
+        Assert that user login with cas (Central Authentication Service) is
+        redirect to dashboard in case of lms or upload_transcripts in case of
+        cms
+        """
+        user = UserFactory.build(username='tester', email='tester@edx.org')
+        user.set_password('test_password')
+        user.save()
+
+        # Assert that no profile is created.
+        self.assertFalse(hasattr(user, 'profile'))
+
+        creds = {'email': 'tester@edx.org', 'password': 'test_password'}
+        client1 = Client()
+        client2 = Client()
+
+        response = client1.post(self.url, creds)
+        self._assert_response(response, success=True)
+
+        # Reload the user from the database
+        user = User.objects.get(pk=user.pk)
+
+        # Assert that profile is created.
+        self.assertTrue(hasattr(user, 'profile'))
 
         # second login should log out the first
         response = client2.post(self.url, creds)
@@ -230,6 +328,9 @@ class LoginTest(TestCase):
 
         response = client1.post(self.url, creds)
         self._assert_response(response, success=True)
+
+        # Reload the user from the database
+        self.user = User.objects.get(pk=self.user.pk)
 
         self.assertEqual(self.user.profile.get_meta()['session_id'], client1.session.session_key)
 
@@ -276,24 +377,6 @@ class LoginTest(TestCase):
             )
         response_content = json.loads(response.content)
         self.assertIsNone(response_content["redirect_url"])
-        self._assert_response(response, success=True)
-
-    def test_change_enrollment_200_redirect(self):
-        """
-        Tests that "redirect_url" is the content of the HttpResponse returned
-        by change_enrollment, if there is content
-        """
-        # add this post param to trigger a call to change_enrollment
-        extra_post_params = {"enrollment_action": "enroll"}
-        with patch('student.views.change_enrollment') as mock_change_enrollment:
-            mock_change_enrollment.return_value = HttpResponse("in/nature/there/is/nothing/melancholy")
-            response, _ = self._login_response(
-                'test@edx.org',
-                'test_password',
-                extra_post_params=extra_post_params,
-            )
-        response_content = json.loads(response.content)
-        self.assertEqual(response_content["redirect_url"], "in/nature/there/is/nothing/melancholy")
         self._assert_response(response, success=True)
 
     def _login_response(self, email, password, patched_audit_log='student.views.AUDIT_LOG', extra_post_params=None):
@@ -410,7 +493,7 @@ class ExternalAuthShibTest(ModuleStoreTestCase):
         """
         response = self.client.get(reverse('dashboard'))
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response['Location'], 'http://testserver/accounts/login?next=/dashboard')
+        self.assertEqual(response['Location'], 'http://testserver/login?next=/dashboard')
 
     @unittest.skipUnless(settings.FEATURES.get('AUTH_USE_SHIB'), "AUTH_USE_SHIB not set")
     def test_externalauth_login_required_course_context(self):
@@ -421,7 +504,7 @@ class ExternalAuthShibTest(ModuleStoreTestCase):
         TARGET_URL = reverse('courseware', args=[self.course.id.to_deprecated_string()])            # pylint: disable=invalid-name
         noshib_response = self.client.get(TARGET_URL, follow=True)
         self.assertEqual(noshib_response.redirect_chain[-1],
-                         ('http://testserver/accounts/login?next={url}'.format(url=TARGET_URL), 302))
+                         ('http://testserver/login?next={url}'.format(url=TARGET_URL), 302))
         self.assertContains(noshib_response, ("Sign in or Register | {platform_name}"
                                               .format(platform_name=settings.PLATFORM_NAME)))
         self.assertEqual(noshib_response.status_code, 200)
@@ -466,7 +549,7 @@ class LoginOAuthTokenMixin(ThirdPartyOAuthTestMixin):
         self._setup_provider_response(success=True)
         response = self.client.post(self.url, {"access_token": "dummy"})
         self.assertEqual(response.status_code, 204)
-        self.assertEqual(self.client.session['_auth_user_id'], self.user.id)  # pylint: disable=no-member
+        self.assertEqual(int(self.client.session['_auth_user_id']), self.user.id)  # pylint: disable=no-member
 
     def test_invalid_token(self):
         self._setup_provider_response(success=False)

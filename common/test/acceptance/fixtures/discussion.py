@@ -12,9 +12,11 @@ from . import COMMENTS_STUB_URL
 
 
 class ContentFactory(factory.Factory):
-    FACTORY_FOR = dict
+    class Meta(object):
+        model = dict
+
     id = None
-    user_id = "dummy-user-id"
+    user_id = "1234"
     username = "dummy-username"
     course_id = "dummy-course-id"
     commentable_id = "dummy-commentable-id"
@@ -63,7 +65,9 @@ class Response(Comment):
 
 
 class SearchResult(factory.Factory):
-    FACTORY_FOR = dict
+    class Meta(object):
+        model = dict
+
     discussion_data = []
     annotated_content_info = {}
     num_pages = 1
@@ -134,6 +138,20 @@ class MultipleThreadFixture(DiscussionContentFixture):
     def get_config_data(self):
         threads_list = {thread['id']: thread for thread in self.threads}
         return {"threads": json.dumps(threads_list), "comments": '{}'}
+
+    def add_response(self, response, comments, thread):
+        """
+        Add responses to the thread
+        """
+        response['children'] = comments
+        if thread["thread_type"] == "discussion":
+            response_list_attr = "children"
+        elif response["endorsed"]:
+            response_list_attr = "endorsed_responses"
+        else:
+            response_list_attr = "non_endorsed_responses"
+        thread.setdefault(response_list_attr, []).append(response)
+        thread['comments_count'] += len(comments) + 1
 
 
 class UserProfileViewFixture(DiscussionContentFixture):

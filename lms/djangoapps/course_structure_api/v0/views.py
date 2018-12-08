@@ -4,19 +4,20 @@ import logging
 
 from django.conf import settings
 from django.http import Http404
-from rest_framework.authentication import OAuth2Authentication, SessionAuthentication
-from rest_framework.exceptions import PermissionDenied, AuthenticationFailed
+from rest_framework.authentication import SessionAuthentication
+from rest_framework_oauth.authentication import OAuth2Authentication
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.generics import RetrieveAPIView, ListAPIView
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from xmodule.modulestore.django import modulestore
 from opaque_keys.edx.keys import CourseKey
 
-from course_structure_api.v0 import api, serializers
-from course_structure_api.v0.errors import CourseNotFoundError, CourseStructureNotAvailableError
+from course_structure_api.v0 import serializers
 from courseware import courses
 from courseware.access import has_access
-from openedx.core.lib.api.permissions import IsAuthenticatedOrDebug
-from openedx.core.lib.api.serializers import PaginationSerializer
+from openedx.core.djangoapps.content.course_structures.api.v0 import api, errors
+from openedx.core.lib.exceptions import CourseNotFoundError
 from student.roles import CourseInstructorRole, CourseStaffRole
 
 
@@ -29,7 +30,7 @@ class CourseViewMixin(object):
     """
     lookup_field = 'course_id'
     authentication_classes = (OAuth2Authentication, SessionAuthentication,)
-    permission_classes = (IsAuthenticatedOrDebug,)
+    permission_classes = (IsAuthenticated,)
 
     def get_course_or_404(self):
         """
@@ -76,17 +77,19 @@ class CourseViewMixin(object):
         Determines if the user is staff or an instructor for the course.
         Always returns True if DEBUG mode is enabled.
         """
-        return (settings.DEBUG
-                or has_access(user, CourseStaffRole.ROLE, course)
-                or has_access(user, CourseInstructorRole.ROLE, course))
+        return bool(
+            settings.DEBUG
+            or has_access(user, CourseStaffRole.ROLE, course)
+            or has_access(user, CourseInstructorRole.ROLE, course)
+        )
 
     def check_course_permissions(self, user, course):
         """
         Checks if the request user can access the course.
-        Raises PermissionDenied if the user does not have course access.
+        Raises 404 if the user does not have course access.
         """
         if not self.user_can_access_course(user, course):
-            raise PermissionDenied
+            raise Http404
 
     def perform_authentication(self, request):
         """
@@ -148,13 +151,10 @@ class CourseList(CourseViewMixin, ListAPIView):
             * end: The course end date. If course end date is not specified, the
               value is null.
     """
-    paginate_by = 10
-    paginate_by_param = 'page_size'
-    pagination_serializer_class = PaginationSerializer
     serializer_class = serializers.CourseSerializer
 
     def get_queryset(self):
-        course_ids = self.request.QUERY_PARAMS.get('course_id', None)
+        course_ids = self.request.query_params.get('course_id', None)
 
         results = []
         if course_ids:
@@ -248,14 +248,14 @@ class CourseStructure(CourseViewMixin, RetrieveAPIView):
           * format: The assignment type.
 
           * children: If the block has child blocks, a list of IDs of the child
-            blocks.
+            blocks in the order they appear in the course.
     """
 
     @CourseViewMixin.course_check
     def get(self, request, **kwargs):
         try:
             return Response(api.course_structure(self.course_key))
-        except CourseStructureNotAvailableError:
+        except errors.CourseStructureNotAvailableError:
             # If we don't have data stored, we will try to regenerate it, so
             # return a 503 and as them to retry in 2 minutes.
             return Response(status=503, headers={'Retry-After': '120'})

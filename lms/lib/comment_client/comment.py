@@ -12,6 +12,7 @@ class Comment(models.Model):
         'endorsed', 'parent_id', 'thread_id', 'username', 'votes', 'user_id',
         'closed', 'created_at', 'updated_at', 'depth', 'at_position_list',
         'type', 'commentable_id', 'abuse_flaggers', 'endorsement',
+        'child_count',
     ]
 
     updatable_fields = [
@@ -30,12 +31,17 @@ class Comment(models.Model):
     def thread(self):
         return Thread(id=self.thread_id, type='thread')
 
+    @property
+    def context(self):
+        """Return the context of the thread which this comment belongs to."""
+        return self.thread.context
+
     @classmethod
     def url_for_comments(cls, params={}):
-        if params.get('thread_id'):
-            return _url_for_thread_comments(params['thread_id'])
-        else:
+        if params.get('parent_id'):
             return _url_for_comment(params['parent_id'])
+        else:
+            return _url_for_thread_comments(params['thread_id'])
 
     @classmethod
     def url(cls, action, params={}):

@@ -2,17 +2,25 @@
   <div class="review view">
     <% if ( !upgrade ) { %>
       <h2 class="title center-col">
-        <%= _.sprintf(
-            gettext( "You are enrolling in: %(courseName)s"),
-            { courseName: '<span class="course-title">' + courseName + '</span>' }
-          ) %>
+        <%= HtmlUtils.interpolateHtml(
+            gettext( "You are enrolling in: {courseName}"),
+            { courseName: HtmlUtils.joinHtml(
+                HtmlUtils.HTML('<span class="course-title">'),
+                courseName,
+                HtmlUtils.HTML('</span>')
+            ) }
+        ) %>
       </h2>
     <% } else { %>
       <h2 class="title">
-        <%= _.sprintf(
-            gettext( "You are upgrading your enrollment for: %(courseName)s"),
-            { courseName: '<span class="course-title">' + courseName + '</span>' }
-          ) %>
+        <%= HtmlUtils.interpolateHtml(
+            gettext( "You are upgrading your enrollment for: {courseName}"),
+            { courseName: HtmlUtils.joinHtml(
+                HtmlUtils.HTML('<span class="course-title">'),
+                courseName,
+                HtmlUtils.HTML('</span>')
+            ) }
+        ) %>
       </h2>
       <div class="instruction">
         <%- gettext( "You can now enter your payment information and complete your enrollment." ) %>
@@ -43,7 +51,7 @@
           <li class="req req-0 req-activate">
             <h3 class="title"><%- gettext( "Activate Your Account" ) %></h3>
             <div class="placeholder-art">
-              <i class="icon fa fa-envelope-o" aria-hidden="true"></i>
+              <span class="icon fa fa-envelope-o" aria-hidden="true"></span>
             </div>
 
             <div class="copy">
@@ -57,8 +65,8 @@
           <li class="req req-1 req-id">
             <h3 class="title"><%- gettext( "Government-Issued Photo ID" ) %></h3>
             <div class="placeholder-art fa-lg">
-              <i class="icon fa fa-list-alt fa-stack-2x" aria-hidden="true"></i>
-              <i class="icon fa fa-user id-photo fa-stack-1x" aria-hidden="true"></i>
+              <span class="icon fa fa-list-alt fa-stack-2x" aria-hidden="true"></span>
+              <span class="icon fa fa-user id-photo fa-stack-1x" aria-hidden="true"></span>
             </div>
 
             <div class="copy"></div>
@@ -69,7 +77,7 @@
           <li class="req req-2 req-webcam">
             <h3 class="title"><%- gettext( "Webcam" ) %></h3>
             <div class="placeholder-art">
-              <i class="icon fa fa-video-camera" aria-hidden="true"></i>
+              <span class="icon fa fa-video-camera" aria-hidden="true"></span>
             </div>
 
             <div class="copy"></div>
@@ -89,9 +97,9 @@
     <div class="container register is-verified">
       <h3 class="title"><%- gettext( "You have already verified your ID!" ) %></h3>
       <p>
-        <%= _.sprintf(
-        gettext( "Your verification status is good until %(verificationGoodUntil)s." ),
-         { verificationGoodUntil: verificationGoodUntil }
+        <%- StringUtils.interpolate(
+          gettext( "Your verification status is good until {verificationGoodUntil}." ),
+          { verificationGoodUntil: verificationGoodUntil }
         ) %>
       </p>
     </div>
@@ -100,8 +108,9 @@
   <% if ( isActive ) { %>
   <div class="payment-buttons nav-wizard is-ready center">
     <input type="hidden" name="contribution" value="<%- minPrice %>" />
+    <input type="hidden" name="sku" value="<%- sku %>" />
     <div class="purchase">
-      <p class="product-info"><span class="product-name"></span> <%- gettext( "price" ) %>: <span class="price">$<%- minPrice %></span></p>
+      <p class="product-info"><span class="product-name"></span> <%- gettext( "price" ) %>: <span class="price">$<%- minPrice %> USD</span></p>
     </div>
     <div class="pay-options">
       <%

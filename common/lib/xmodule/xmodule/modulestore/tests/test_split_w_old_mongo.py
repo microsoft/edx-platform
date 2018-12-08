@@ -13,11 +13,11 @@ from xmodule.modulestore.inheritance import InheritanceMixin
 from xmodule.modulestore.mongo import DraftMongoModuleStore
 from xmodule.modulestore.split_mongo.split import SplitMongoModuleStore
 from xmodule.modulestore.tests.mongo_connection import MONGO_PORT_NUM, MONGO_HOST
-from xmodule.modulestore.tests.test_cross_modulestore_import_export import MemoryCache
+from xmodule.modulestore.tests.utils import MemoryCache
 
 
 @attr('mongo')
-class SplitWMongoCourseBoostrapper(unittest.TestCase):
+class SplitWMongoCourseBootstrapper(unittest.TestCase):
     """
     Helper for tests which need to construct split mongo & old mongo based courses to get interesting internal structure.
     Override _create_course and after invoking the super() _create_course, have it call _create_item for
@@ -51,40 +51,22 @@ class SplitWMongoCourseBoostrapper(unittest.TestCase):
         self.db_config['collection'] = 'modulestore{0}'.format(uuid.uuid4().hex[:5])
 
         self.user_id = random.getrandbits(32)
-        super(SplitWMongoCourseBoostrapper, self).setUp()
+        super(SplitWMongoCourseBootstrapper, self).setUp()
         self.split_mongo = SplitMongoModuleStore(
             None,
             self.db_config,
             **self.modulestore_options
         )
-        self.addCleanup(self.split_mongo.db.connection.close)
-        self.addCleanup(self.tear_down_split)
+        self.addCleanup(self.split_mongo._drop_database)  # pylint: disable=protected-access
         self.draft_mongo = DraftMongoModuleStore(
             None, self.db_config, branch_setting_func=lambda: ModuleStoreEnum.Branch.draft_preferred,
             metadata_inheritance_cache_subsystem=MemoryCache(),
             **self.modulestore_options
         )
-        self.addCleanup(self.tear_down_mongo)
+        self.addCleanup(self.draft_mongo._drop_database)  # pylint: disable=protected-access
         self.old_course_key = None
         self.runtime = None
         self._create_course()
-
-    def tear_down_split(self):
-        """
-        Remove the test collections, close the db connection
-        """
-        split_db = self.split_mongo.db
-        split_db.drop_collection(split_db.course_index.proxied_object)
-        split_db.drop_collection(split_db.structures.proxied_object)
-        split_db.drop_collection(split_db.definitions.proxied_object)
-
-    def tear_down_mongo(self):
-        """
-        Remove the test collections, close the db connection
-        """
-        split_db = self.split_mongo.db
-        # old_mongo doesn't give a db attr, but all of the dbs are the same
-        split_db.drop_collection(self.draft_mongo.collection.proxied_object)
 
     def _create_item(self, category, name, data, metadata, parent_category, parent_name, draft=True, split=True):
         """

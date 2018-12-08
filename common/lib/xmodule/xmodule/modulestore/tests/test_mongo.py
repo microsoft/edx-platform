@@ -1,14 +1,13 @@
 """
 Unit tests for the Mongo modulestore
 """
-# pylint: disable=no-member
 # pylint: disable=protected-access
 # pylint: disable=no-name-in-module
 # pylint: disable=bad-continuation
 from nose.tools import assert_equals, assert_raises, \
     assert_not_equals, assert_false, assert_true, assert_greater, assert_is_instance, assert_is_none
 # pylint: enable=E0611
-from path import path
+from path import Path as path
 import pymongo
 import logging
 import shutil
@@ -17,6 +16,7 @@ from uuid import uuid4
 from datetime import datetime
 from pytz import UTC
 import unittest
+from mock import patch
 from xblock.core import XBlock
 
 from xblock.fields import Scope, Reference, ReferenceList, ReferenceValueDict
@@ -41,7 +41,7 @@ from git.test.lib.asserts import assert_not_none
 from xmodule.x_module import XModuleMixin
 from xmodule.modulestore.mongo.base import as_draft
 from xmodule.modulestore.tests.mongo_connection import MONGO_PORT_NUM, MONGO_HOST
-from xmodule.modulestore.tests.utils import LocationMixin
+from xmodule.modulestore.tests.utils import LocationMixin, mock_tab_from_json
 from xmodule.modulestore.edit_info import EditInfoMixin
 from xmodule.modulestore.exceptions import ItemNotFoundError
 from xmodule.modulestore.inheritance import InheritanceMixin
@@ -59,7 +59,7 @@ DEFAULT_CLASS = 'xmodule.raw_module.RawDescriptor'
 RENDER_TEMPLATE = lambda t_n, d, ctx=None, nsp='main': ''
 
 
-class ReferenceTestXBlock(XBlock, XModuleMixin):
+class ReferenceTestXBlock(XModuleMixin):
     """
     Test xblock type to test the reference field types
     """
@@ -129,36 +129,38 @@ class TestMongoModuleStoreBase(unittest.TestCase):
             xblock_mixins=(EditInfoMixin, InheritanceMixin, LocationMixin, XModuleMixin)
 
         )
-        import_course_from_xml(
-            draft_store,
-            999,
-            DATA_DIR,
-            cls.courses,
-            static_content_store=content_store
-        )
 
-        # also test a course with no importing of static content
-        import_course_from_xml(
-            draft_store,
-            999,
-            DATA_DIR,
-            ['test_import_course'],
-            static_content_store=content_store,
-            do_import_static=False,
-            verbose=True
-        )
+        with patch('xmodule.tabs.CourseTab.from_json', side_effect=mock_tab_from_json):
+            import_course_from_xml(
+                draft_store,
+                999,
+                DATA_DIR,
+                cls.courses,
+                static_content_store=content_store
+            )
 
-        # also import a course under a different course_id (especially ORG)
-        import_course_from_xml(
-            draft_store,
-            999,
-            DATA_DIR,
-            ['test_import_course'],
-            static_content_store=content_store,
-            do_import_static=False,
-            verbose=True,
-            target_id=SlashSeparatedCourseKey('guestx', 'foo', 'bar')
-        )
+            # also test a course with no importing of static content
+            import_course_from_xml(
+                draft_store,
+                999,
+                DATA_DIR,
+                ['test_import_course'],
+                static_content_store=content_store,
+                do_import_static=False,
+                verbose=True
+            )
+
+            # also import a course under a different course_id (especially ORG)
+            import_course_from_xml(
+                draft_store,
+                999,
+                DATA_DIR,
+                ['test_import_course'],
+                static_content_store=content_store,
+                do_import_static=False,
+                verbose=True,
+                target_id=SlashSeparatedCourseKey('guestx', 'foo', 'bar')
+            )
 
         return content_store, draft_store
 
@@ -203,17 +205,12 @@ class TestMongoModuleStore(TestMongoModuleStoreBase):
         )
         assert_equals(store.get_modulestore_type(''), ModuleStoreEnum.Type.mongo)
 
-    def test_get_courses(self):
+    @patch('xmodule.tabs.CourseTab.from_json', side_effect=mock_tab_from_json)
+    def test_get_courses(self, _from_json):
         '''Make sure the course objects loaded properly'''
         courses = self.draft_store.get_courses()
 
-        # note, the number of courses expected is really
-        # 6, but due to a lack of cache flushing between
-        # test case runs, we will get back 7.
-        # When we fix the caching issue, we should reduce this
-        # to 6 and remove the 'treexport_peer_component' course_id
-        # from the list below
-        assert_equals(len(courses), 7)  # pylint: disable=no-value-for-parameter
+        assert_equals(len(courses), 6)
         course_ids = [course.id for course in courses]
 
         for course_key in [
@@ -226,9 +223,6 @@ class TestMongoModuleStore(TestMongoModuleStoreBase):
                 ['edX', 'test_unicode', '2012_Fall'],
                 ['edX', 'toy', '2012_Fall'],
                 ['guestx', 'foo', 'bar'],
-                # This course below is due to a caching issue in the modulestore
-                # which is not cleared between test runs. This means
-                ['edX', 'treeexport_peer_component', 'export_peer_component'],
             ]
         ]:
             assert_in(course_key, course_ids)
@@ -241,13 +235,14 @@ class TestMongoModuleStore(TestMongoModuleStoreBase):
             assert_false(self.draft_store.has_course(mix_cased))
             assert_true(self.draft_store.has_course(mix_cased, ignore_case=True))
 
-    def test_get_org_courses(self):
+    @patch('xmodule.tabs.CourseTab.from_json', side_effect=mock_tab_from_json)
+    def test_get_org_courses(self, _from_json):
         """
         Make sure that we can query for a filtered list of courses for a given ORG
         """
 
         courses = self.draft_store.get_courses(org='guestx')
-        assert_equals(len(courses), 1)  # pylint: disable=no-value-for-parameter
+        assert_equals(len(courses), 1)
         course_ids = [course.id for course in courses]
 
         for course_key in [
@@ -256,16 +251,10 @@ class TestMongoModuleStore(TestMongoModuleStoreBase):
                 ['guestx', 'foo', 'bar']
             ]
         ]:
-            assert_in(course_key, course_ids)  # pylint: disable=no-value-for-parameter
+            assert_in(course_key, course_ids)
 
         courses = self.draft_store.get_courses(org='edX')
-        # note, the number of courses expected is really
-        # 5, but due to a lack of cache flushing between
-        # test case runs, we will get back 6.
-        # When we fix the caching issue, we should reduce this
-        # to 6 and remove the 'treexport_peer_component' course_id
-        # from the list below
-        assert_equals(len(courses), 6)  # pylint: disable=no-value-for-parameter
+        assert_equals(len(courses), 5)
         course_ids = [course.id for course in courses]
 
         for course_key in [
@@ -276,12 +265,9 @@ class TestMongoModuleStore(TestMongoModuleStoreBase):
                 ['edX', 'test_import_course', '2012_Fall'],
                 ['edX', 'test_unicode', '2012_Fall'],
                 ['edX', 'toy', '2012_Fall'],
-                # This course below is due to a caching issue in the modulestore
-                # which is not cleared between test runs. This means
-                ['edX', 'treeexport_peer_component', 'export_peer_component'],
             ]
         ]:
-            assert_in(course_key, course_ids)  # pylint: disable=no-value-for-parameter
+            assert_in(course_key, course_ids)
 
     def test_no_such_course(self):
         """
@@ -373,25 +359,6 @@ class TestMongoModuleStore(TestMongoModuleStoreBase):
                 '{0} is a template course'.format(course)
             )
 
-    def test_static_tab_names(self):
-
-        def get_tab_name(index):
-            """
-            Helper function for pulling out the name of a given static tab.
-
-            Assumes the information is desired for courses[4] ('toy' course).
-            """
-            course = self.draft_store.get_course(SlashSeparatedCourseKey('edX', 'toy', '2012_Fall'))
-            return course.tabs[index]['name']
-
-        # There was a bug where model.save was not getting called after the static tab name
-        # was set set for tabs that have a URL slug. 'Syllabus' and 'Resources' fall into that
-        # category, but for completeness, I'm also testing 'Course Info' and 'Discussion' (no url slug).
-        assert_equals('Course Info', get_tab_name(1))
-        assert_equals('Syllabus', get_tab_name(2))
-        assert_equals('Resources', get_tab_name(3))
-        assert_equals('Discussion', get_tab_name(4))
-
     def test_contentstore_attrs(self):
         """
         Test getting, setting, and defaulting the locked attr and arbitrary attrs.
@@ -456,7 +423,8 @@ class TestMongoModuleStore(TestMongoModuleStoreBase):
             {'displayname': 'hello'}
         )
 
-    def test_get_courses_for_wiki(self):
+    @patch('xmodule.tabs.CourseTab.from_json', side_effect=mock_tab_from_json)
+    def test_get_courses_for_wiki(self, _from_json):
         """
         Test the get_courses_for_wiki method
         """
@@ -571,7 +539,8 @@ class TestMongoModuleStore(TestMongoModuleStoreBase):
         check_xblock_fields()
         check_mongo_fields()
 
-    def test_export_course_image(self):
+    @patch('xmodule.tabs.CourseTab.from_json', side_effect=mock_tab_from_json)
+    def test_export_course_image(self, _from_json):
         """
         Test to make sure that we have a course image in the contentstore,
         then export it to ensure it gets copied to both file locations.
@@ -583,14 +552,13 @@ class TestMongoModuleStore(TestMongoModuleStoreBase):
         self.content_store.find(location)
 
         root_dir = path(mkdtemp())
-        try:
-            export_course_to_xml(self.draft_store, self.content_store, course_key, root_dir, 'test_export')
-            assert_true(path(root_dir / 'test_export/static/images/course_image.jpg').isfile())
-            assert_true(path(root_dir / 'test_export/static/images_course_image.jpg').isfile())
-        finally:
-            shutil.rmtree(root_dir)
+        self.addCleanup(shutil.rmtree, root_dir)
+        export_course_to_xml(self.draft_store, self.content_store, course_key, root_dir, 'test_export')
+        self.assertTrue(path(root_dir / 'test_export/static/images/course_image.jpg').isfile())
+        self.assertTrue(path(root_dir / 'test_export/static/images_course_image.jpg').isfile())
 
-    def test_export_course_image_nondefault(self):
+    @patch('xmodule.tabs.CourseTab.from_json', side_effect=mock_tab_from_json)
+    def test_export_course_image_nondefault(self, _from_json):
         """
         Make sure that if a non-default image path is specified that we
         don't export it to the static default location
@@ -599,12 +567,10 @@ class TestMongoModuleStore(TestMongoModuleStoreBase):
         assert_true(course.course_image, 'just_a_test.jpg')
 
         root_dir = path(mkdtemp())
-        try:
-            export_course_to_xml(self.draft_store, self.content_store, course.id, root_dir, 'test_export')
-            assert_true(path(root_dir / 'test_export/static/just_a_test.jpg').isfile())
-            assert_false(path(root_dir / 'test_export/static/images/course_image.jpg').isfile())
-        finally:
-            shutil.rmtree(root_dir)
+        self.addCleanup(shutil.rmtree, root_dir)
+        export_course_to_xml(self.draft_store, self.content_store, course.id, root_dir, 'test_export')
+        self.assertTrue(path(root_dir / 'test_export/static/just_a_test.jpg').isfile())
+        self.assertFalse(path(root_dir / 'test_export/static/images/course_image.jpg').isfile())
 
     def test_course_without_image(self):
         """
@@ -613,12 +579,10 @@ class TestMongoModuleStore(TestMongoModuleStoreBase):
         """
         course = self.draft_store.get_course(SlashSeparatedCourseKey('edX', 'simple_with_draft', '2012_Fall'))
         root_dir = path(mkdtemp())
-        try:
-            export_course_to_xml(self.draft_store, self.content_store, course.id, root_dir, 'test_export')
-            assert_false(path(root_dir / 'test_export/static/images/course_image.jpg').isfile())
-            assert_false(path(root_dir / 'test_export/static/images_course_image.jpg').isfile())
-        finally:
-            shutil.rmtree(root_dir)
+        self.addCleanup(shutil.rmtree, root_dir)
+        export_course_to_xml(self.draft_store, self.content_store, course.id, root_dir, 'test_export')
+        self.assertFalse(path(root_dir / 'test_export/static/images/course_image.jpg').isfile())
+        self.assertFalse(path(root_dir / 'test_export/static/images_course_image.jpg').isfile())
 
     def _create_test_tree(self, name, user_id=None):
         """
@@ -696,59 +660,6 @@ class TestMongoModuleStore(TestMongoModuleStoreBase):
         self.assertEqual(component.published_on, published_date)
         self.assertEqual(component.published_by, published_by)
 
-    def test_export_course_with_peer_component(self):
-        """
-        Test export course when link_to_location is given in peer grading interface settings.
-        """
-
-        name = "export_peer_component"
-
-        locations = self._create_test_tree(name)
-
-        # Insert the test block directly into the module store
-        problem_location = Location('edX', 'tree{}'.format(name), name, 'combinedopenended', 'test_peer_problem')
-
-        self.draft_store.create_child(
-            self.dummy_user,
-            locations["child"],
-            problem_location.block_type,
-            block_id=problem_location.block_id
-        )
-
-        interface_location = Location('edX', 'tree{}'.format(name), name, 'peergrading', 'test_peer_interface')
-
-        self.draft_store.create_child(
-            self.dummy_user,
-            locations["child"],
-            interface_location.block_type,
-            block_id=interface_location.block_id
-        )
-
-        self.draft_store._update_single_item(
-            as_draft(interface_location),
-            {
-                'definition.data': {},
-                'metadata': {
-                    'link_to_location': unicode(problem_location),
-                    'use_for_single_location': True,
-                },
-            },
-        )
-
-        component = self.draft_store.get_item(interface_location)
-        self.assertEqual(unicode(component.link_to_location), unicode(problem_location))
-
-        root_dir = path(mkdtemp())
-
-        # export_course_to_xml should work.
-        try:
-            export_course_to_xml(
-                self.draft_store, self.content_store, interface_location.course_key,
-                root_dir, 'test_export'
-            )
-        finally:
-            shutil.rmtree(root_dir)
-
     def test_draft_modulestore_create_child_with_position(self):
         """
         This test is designed to hit a specific set of use cases having to do with
@@ -777,6 +688,13 @@ class TestMongoModuleStore(TestMongoModuleStoreBase):
 
         # Clean up the data so we don't break other tests which apparently expect a particular state
         self.draft_store.delete_course(course.id, self.dummy_user)
+
+    def test_make_course_usage_key(self):
+        """Test that we get back the appropriate usage key for the root of a course key."""
+        course_key = CourseLocator(org="edX", course="101", run="2015")
+        root_block_key = self.draft_store.make_course_usage_key(course_key)
+        self.assertEqual(root_block_key.block_type, "course")
+        self.assertEqual(root_block_key.name, "2015")
 
 
 class TestMongoModuleStoreWithNoAssetCollection(TestMongoModuleStore):
@@ -849,15 +767,15 @@ class TestMongoKeyValueStore(unittest.TestCase):
     def test_write(self):
         yield (self._check_write, KeyValueStore.Key(Scope.content, None, None, 'foo'), 'new_data')
         yield (self._check_write, KeyValueStore.Key(Scope.children, None, None, 'children'), [])
+        yield (self._check_write, KeyValueStore.Key(Scope.children, None, None, 'parent'), None)
         yield (self._check_write, KeyValueStore.Key(Scope.settings, None, None, 'meta'), 'new_settings')
-        # write Scope.parent raises InvalidScope, which is covered in test_write_invalid_scope
 
     def test_write_non_dict_data(self):
         self.kvs = MongoKeyValueStore('xml_data', self.parent, self.children, self.metadata)
         self._check_write(KeyValueStore.Key(Scope.content, None, None, 'data'), 'new_data')
 
     def test_write_invalid_scope(self):
-        for scope in (Scope.preferences, Scope.user_info, Scope.user_state, Scope.parent):
+        for scope in (Scope.preferences, Scope.user_info, Scope.user_state):
             with assert_raises(InvalidScopeError):
                 self.kvs.set(KeyValueStore.Key(scope, None, None, 'foo'), 'new_value')
 

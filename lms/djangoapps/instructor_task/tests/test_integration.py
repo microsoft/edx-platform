@@ -8,6 +8,7 @@ paths actually work.
 import json
 import logging
 from mock import patch
+from nose.plugins.attrib import attr
 import textwrap
 
 from celery.states import SUCCESS, FAILURE
@@ -19,7 +20,6 @@ from capa.tests.response_xml_factory import (CodeResponseXMLFactory,
                                              CustomResponseXMLFactory)
 from xmodule.modulestore.tests.factories import ItemFactory
 from xmodule.modulestore import ModuleStoreEnum
-from xmodule.partitions.partitions import Group, UserPartition
 
 from courseware.model_data import StudentModule
 
@@ -29,8 +29,12 @@ from instructor_task.api import (submit_rescore_problem_for_all_students,
                                  submit_delete_problem_state_for_all_students)
 from instructor_task.models import InstructorTask
 from instructor_task.tasks_helper import upload_grades_csv
-from instructor_task.tests.test_base import (InstructorTaskModuleTestCase, TestReportMixin, TEST_COURSE_ORG,
-                                             TEST_COURSE_NUMBER, OPTION_1, OPTION_2)
+from instructor_task.tests.test_base import (
+    InstructorTaskModuleTestCase,
+    TestReportMixin,
+    OPTION_1,
+    OPTION_2,
+)
 from capa.responsetypes import StudentInputError
 from lms.djangoapps.lms_xblock.runtime import quote_slashes
 
@@ -60,6 +64,7 @@ class TestIntegrationTask(InstructorTaskModuleTestCase):
         self.assertEqual(status['message'], expected_message)
 
 
+@attr('shard_3')
 class TestRescoringTask(TestIntegrationTask):
     """
     Integration-style tests for rescoring problems in a background task.
@@ -503,7 +508,7 @@ class TestGradeReportConditionalContent(TestReportMixin, TestConditionalContent,
             """Return a dict having single key with value equals to students group in partition"""
             group_config_hdr_tpl = 'Experiment Group ({})'
             return {
-                group_config_hdr_tpl.format(self.partition.name): self.partition.scheme.get_group_for_user(   # pylint: disable=E1101
+                group_config_hdr_tpl.format(self.partition.name): self.partition.scheme.get_group_for_user(
                     self.course.id, user, self.partition, track_function=None
                 ).name
             }

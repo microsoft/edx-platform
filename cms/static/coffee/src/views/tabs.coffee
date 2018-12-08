@@ -1,9 +1,9 @@
-define ["jquery", "jquery.ui", "backbone", "js/views/feedback_prompt", "js/views/feedback_notification",
-    "coffee/src/views/module_edit", "js/models/module_info", "js/utils/module"],
-($, ui, Backbone, PromptView, NotificationView, ModuleEditView, ModuleModel, ModuleUtils) ->
+define ["underscore", "jquery", "jquery.ui", "backbone", "common/js/components/views/feedback_prompt",
+        "common/js/components/views/feedback_notification", "coffee/src/views/module_edit", "js/models/module_info", "js/utils/module"],
+(_, $, ui, Backbone, PromptView, NotificationView, ModuleEditView, ModuleModel, ModuleUtils) ->
   class TabsEdit extends Backbone.View
 
-    initialize: =>
+    initialize: (options) =>
       @$('.component').each((idx, element) =>
           model = new ModuleModel({
               id: $(element).data('locator')
@@ -15,7 +15,7 @@ define ["jquery", "jquery.ui", "backbone", "js/views/feedback_prompt", "js/views
               model: model
           )
       )
-
+      @options = _.extend({}, options)
       @options.mast.find('.new-tab').on('click', @addNewTab)
       $('.add-pages .new-tab').on('click', @addNewTab)
       $('.toggle-checkbox').on('click', @toggleVisibilityOfTab)
@@ -89,7 +89,9 @@ define ["jquery", "jquery.ui", "backbone", "js/views/feedback_prompt", "js/views
       editor.$el.addClass('new')
       setTimeout(=>
         editor.$el.removeClass('new')
-      , 500)
+      , 1000)
+      $('html, body').animate {scrollTop: $('.new-component-item').offset().top}, 500
+      
 
       editor.createItem(
         @model.get('id'),

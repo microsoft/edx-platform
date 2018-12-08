@@ -2,7 +2,10 @@
  * Interface for retrieving webcam photos.
  * Supports HTML5 and Flash.
  */
- var edx = edx || {};
+ var edx = edx || {},
+    key = {
+        enter: 13
+    };
 
  (function( $, _, Backbone, gettext ) {
     'use strict';
@@ -12,6 +15,7 @@
     edx.verify_student.WebcamPhotoView = Backbone.View.extend({
 
         template: "#webcam_photo-tpl",
+        el: "#webcam",
 
         backends: {
             "html5": {
@@ -82,6 +86,7 @@
                     this.stream = stream;
                     video.src = this.URL.createObjectURL( stream );
                     video.play();
+                    this.trigger('webcam-loaded');
                 },
 
                 getVideo: function() {
@@ -211,15 +216,17 @@
             this.modelAttribute = obj.modelAttribute || "";
             this.errorModel = obj.errorModel || null;
             this.backend = this.backends[obj.backendName] || obj.backend;
+            this.captureSoundPath =  obj.captureSoundPath || "";
 
+            _.extend( this.backend, Backbone.Events );
             this.backend.initialize({
                 wrapper: "#camera",
                 video: '#photo_id_video',
                 canvas: '#photo_id_canvas'
             });
 
-            _.extend( this.backend, Backbone.Events );
             this.listenTo( this.backend, 'error', this.handleError );
+            this.listenTo( this.backend, 'webcam-loaded', this.handleWebcamLoaded );
         },
 
         isSupported: function() {
@@ -227,24 +234,32 @@
         },
 
         render: function() {
-            var renderedHtml;
+            var renderedHtml,
+                $resetBtn,
+                $captureBtn;
 
             // Set the submit button to disabled by default
             this.setSubmitButtonEnabled( false );
 
             // Load the template for the webcam into the DOM
-            renderedHtml = _.template(
-                $( this.template ).html(),
+            renderedHtml = _.template($( this.template ).html())(
                 { backendName: this.backend.name }
             );
             $( this.el ).html( renderedHtml );
 
+            $resetBtn = this.$el.find('#webcam_reset_button');
+            $captureBtn = this.$el.find('#webcam_capture_button');
+
             // Install event handlers
-            $( "#webcam_reset_button", this.el ).on( 'click', _.bind( this.reset, this ) );
-            $( "#webcam_capture_button", this.el ).on( 'click', _.bind( this.capture, this ) );
+            $resetBtn.on( 'click', _.bind( this.reset, this ) );
+            $captureBtn.on( 'click', _.bind( this.capture, this ) );
+
+            $resetBtn.on( 'keyup', _.bind( this.resetByEnter, this ) );
 
             // Show the capture button
+            $captureBtn.removeClass('is-hidden');
             $( "#webcam_capture_button", this.el ).removeClass('is-hidden');
+            $( "#webcam_capture_sound", this.el ).attr('src', this.captureSoundPath);
 
             return this;
         },
@@ -262,8 +277,15 @@
             // Go back to the initial button state
             $( "#webcam_reset_button", this.el ).addClass('is-hidden');
             $( "#webcam_capture_button", this.el ).removeClass('is-hidden');
+            $( this.submitButton ).attr('title', '');
         },
 
+
+        resetByEnter: function(event){
+            if(event.keyCode == key.enter){
+                this.reset();
+            }
+        },
         capture: function() {
             // Take a snapshot of the video
             var success = this.backend.snapshot();
@@ -282,7 +304,14 @@
 
                 // Enable the submit button
                 this.setSubmitButtonEnabled( true );
+                this.setSubmitButtonFocused();
+                this.captureSound();
             }
+        },
+
+        handleWebcamLoaded: function( errorTitle, errorMsg ) {
+            // Hide the text behind camera
+            $( "#camera .placeholder-art", this.el ).hide();
         },
 
         handleError: function( errorTitle, errorMsg ) {
@@ -305,6 +334,16 @@
                 .toggleClass( 'is-disabled', !isEnabled )
                 .prop( 'disabled', !isEnabled )
                 .attr('aria-disabled', !isEnabled);
+        },
+
+        captureSound: function(){
+            $( '#webcam_capture_sound' )[0].play();
+        },
+
+        setSubmitButtonFocused: function(){
+            $( this.submitButton )
+                .trigger('focus')
+                .attr('title', gettext( 'Photo Captured successfully.'));
         },
 
         isMobileDevice: function() {

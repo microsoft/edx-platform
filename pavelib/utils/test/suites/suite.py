@@ -3,12 +3,16 @@ A class used for defining and running test suites
 """
 import sys
 import subprocess
+
+from paver import tasks
+from paver.easy import sh
+
 from pavelib.utils.process import kill_process
 
 try:
     from pygments.console import colorize
 except ImportError:
-    colorize = lambda color, text: text  # pylint: disable-msg=invalid-name
+    colorize = lambda color, text: text
 
 __test__ = False  # do not collect
 
@@ -35,7 +39,7 @@ class TestSuite(object):
 
         i.e. Checking for and defining required directories.
         """
-        print("\nSetting up for {suite_name}".format(suite_name=self.root))
+        print "\nSetting up for {suite_name}".format(suite_name=self.root)
         self.failed_suites = []
 
     def __exit__(self, exc_type, exc_value, traceback):
@@ -48,7 +52,7 @@ class TestSuite(object):
 
         i.e. Cleaning mongo after the lms tests run.
         """
-        print("\nCleaning up after {suite_name}".format(suite_name=self.root))
+        print "\nCleaning up after {suite_name}".format(suite_name=self.root)
 
     @property
     def cmd(self):
@@ -57,6 +61,14 @@ class TestSuite(object):
         """
         return None
 
+    def generate_optimized_static_assets(self):
+        """
+        Collect static assets using test_static_optimized.py which generates
+        optimized files to a dedicated test static root.
+        """
+        print colorize('green', "Generating optimized static assets...")
+        sh("paver update_assets --settings=test_static_optimized")
+
     def run_test(self):
         """
         Runs a self.cmd in a subprocess and waits for it to finish.
@@ -64,6 +76,11 @@ class TestSuite(object):
         returns True.
         """
         cmd = self.cmd
+
+        if tasks.environment.dry_run:
+            tasks.environment.info(cmd)
+            return
+
         sys.stdout.write(cmd)
 
         msg = colorize(
@@ -84,7 +101,7 @@ class TestSuite(object):
             kill_process(process)
             sys.exit(1)
         else:
-            return (process.returncode == 0)
+            return process.returncode == 0
 
     def run_suite_tests(self):
         """
@@ -113,13 +130,17 @@ class TestSuite(object):
         else:
             msg = colorize('green', "\n\n{bar}\nNo test failures ".format(bar="=" * 48))
 
-        print(msg)
+        print msg
 
     def run(self):
         """
         Runs the tests in the suite while tracking and reporting failures.
         """
         self.run_suite_tests()
+
+        if tasks.environment.dry_run:
+            return
+
         self.report_test_results()
 
         if len(self.failed_suites) > 0:

@@ -1,11 +1,11 @@
-<%! from django.utils.translation import ugettext as _ %>
-
+<%page expression_filter="h"/>
 <%inherit file="../main.html" />
-
 <%namespace name='static' file='../static_content.html'/>
-
-<%! from django.core.urlresolvers import reverse %>
-<%! from django.utils import html %>
+<%!
+from django.utils.translation import ugettext as _
+from django.core.urlresolvers import reverse
+from django.utils import html
+%>
 
 <%block name="pagetitle">${_("User Survey")}</%block>
 
@@ -22,6 +22,8 @@
       <input type="hidden" name="_redirect_url" value="${redirect_url}" />
 
       % if course:
+        <input type="hidden" name="course_id" value="${unicode(course.id)}" />
+
         <div class="header-survey">
           <h4 class="course-info">
             <span class="course-org">${course.display_org_with_default}</span><span class="course-number"> ${course.display_number_with_default}</span>
@@ -40,7 +42,7 @@
         <ul class="message-copy"> </ul>
       </div>
 
-      ${survey_form}
+      ${survey_form | n, unicode}
 
       <div class="form-actions">
         <button name="submit" type="submit" id="submit" class="action action-primary action-update">${_('Submit')}</button>

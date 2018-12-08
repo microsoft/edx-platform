@@ -1,10 +1,16 @@
 """
 Import/Export pages.
 """
+import time
+from datetime import datetime
+
 from bok_choy.promise import EmptyPromise
 import os
+import re
 import requests
-from .utils import click_css
+
+from ..common.utils import click_css
+
 from .library import LibraryPage
 from .course_page import CoursePage
 from . import BASE_URL
@@ -118,6 +124,25 @@ class ImportMixin(object):
 
     url_path = "import"
 
+    @property
+    def timestamp(self):
+        """
+        The timestamp is displayed on the page as "(MM/DD/YYYY at HH:mm)"
+        It parses the timestamp and returns a (date, time) tuple
+        """
+        string = self.q(css='.item-progresspoint-success-date').text[0]
+
+        return re.match(r'\(([^ ]+).+?(\d{2}:\d{2})', string).groups()
+
+    @property
+    def parsed_timestamp(self):
+        """
+        Return python datetime object from the parsed timestamp tuple (date, time)
+        """
+        timestamp = "{0} {1}".format(*self.timestamp)
+        formatted_timestamp = time.strptime(timestamp, "%m/%d/%Y %H:%M")
+        return datetime.fromtimestamp(time.mktime(formatted_timestamp))
+
     def is_browser_on_page(self):
         """
         Verify this is the export page
@@ -153,7 +178,15 @@ class ImportMixin(object):
         asset_file_path = self.file_path(tarball_filename)
         # Make the upload elements visible to the WebDriver.
         self.browser.execute_script('$(".file-name-block").show();$(".file-input").show()')
+        # Upload the file.
         self.q(css='input[type="file"]')[0].send_keys(asset_file_path)
+        # Upload the same file again. Reason behind this is to decrease the
+        # probability or fraction of times the failure occur. Please be
+        # noted this doesn't eradicate the root cause of the error, it
+        # just decreases to failure rate to minimal.
+        # Jira ticket reference: TNL-4191.
+        self.q(css='input[type="file"]')[0].send_keys(asset_file_path)
+        # Some of the tests need these lines to pass so don't remove them.
         self._wait_for_button()
         click_css(self, '.submit-button', require_notification=False)
 
@@ -225,6 +258,18 @@ class ImportMixin(object):
         Tell us whether it's currently visible.
         """
         return self.q(css='.wrapper-status').visible
+
+    def is_timestamp_visible(self):
+        """
+        Checks if the UTC timestamp of the last successful import is visible
+        """
+        return self.q(css='.item-progresspoint-success-date').visible
+
+    def wait_for_timestamp_visible(self):
+        """
+        Wait for the timestamp of the last successful import to be visible.
+        """
+        EmptyPromise(self.is_timestamp_visible, 'Timestamp Visible', timeout=30).fulfill()
 
     def wait_for_filename_error(self):
         """

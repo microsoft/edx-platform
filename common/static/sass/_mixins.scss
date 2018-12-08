@@ -1,7 +1,7 @@
-// studio - utilities - mixins and extends
+// common - utilities - mixins and extends
 // ====================
 
-// Table of Contents 
+// Table of Contents
 // * +Font Sizing - Mixin
 // * +Line Height - Mixin
 // * +Sizing - Mixin
@@ -23,36 +23,38 @@
 // * +Content - Screenreader Text - Extend
 // * +Content - Text Wrap - Extend
 // * +Content - Text Truncate - Extend
+// * +Icon - Font-Awesome  - Extend
+// * +Icon - SSO icon images
 
 // +Font Sizing - Mixin
-// ==================== 
+// ====================
 @mixin font-size($sizeValue: 16){
   font-size: $sizeValue + px;
   font-size: ($sizeValue/10) + rem;
 }
 
 // +Line Height - Mixin
-// ==================== 
+// ====================
 @mixin line-height($fontSize: auto){
   line-height: ($fontSize*1.48) + px;
   line-height: (($fontSize/10)*1.48) + rem;
 }
 
 // +Sizing - Mixin
-// ==================== 
+// ====================
 @mixin size($width: $baseline, $height: $baseline) {
   height: $height;
   width: $width;
 }
 
 // +Square - Mixin
-// ==================== 
+// ====================
 @mixin square($size: $baseline) {
   @include size($size);
 }
 
 // +Placeholder Styling - Mixin
-// ==================== 
+// ====================
 @mixin placeholder($color) {
   :-moz-placeholder {
     color: $color;
@@ -66,7 +68,7 @@
 }
 
 // +Flex Support - Mixin
-// ==================== 
+// ====================
 @mixin ui-flexbox() {
   display: -webkit-box;
   display: -moz-box;
@@ -76,7 +78,7 @@
 }
 
 // +Flex PolyFill - Extends
-// ==================== 
+// ====================
 
 // justify-content right for display:flex alignment in older browsers
 %ui-justify-right-flex {
@@ -106,7 +108,7 @@
 
 
 // +UI - Wrapper - Extends
-// ==================== 
+// ====================
 // used for page/view-level wrappers (for centering/grids)
 %ui-wrapper {
   @include clearfix();
@@ -127,7 +129,7 @@
 }
 
 // +UI - Window - Extends
-// ==================== 
+// ====================
 %ui-window {
   @include clearfix();
   border-radius: ($baseline/10);
@@ -143,13 +145,13 @@
 }
 
 // +UI - Visual Link - Extends
-// ==================== 
+// ====================
 %ui-fake-link {
   cursor: pointer;
 }
 
 // +UI - Functional Disable - Extends
-// ==================== 
+// ====================
 %ui-disabled {
   pointer-events: none;
   outline: none;
@@ -157,7 +159,7 @@
 }
 
 // +UI - Depth Levels - Extends
-// ==================== 
+// ====================
 %ui-depth0 { z-index: 0; }
 %ui-depth1 { z-index: 10; }
 %ui-depth2 { z-index: 100; }
@@ -167,7 +169,7 @@
 
 
 // +UI - Clear Children - Extends
-// ==================== 
+// ====================
 // extends - UI - utility - first child clearing
 %wipe-first-child {
 
@@ -189,7 +191,7 @@
 }
 
 // +UI - Buttons - Extends
-// ==================== 
+// ====================
 %ui-btn {
   @include box-sizing(border-box);
   @include transition(color $tmg-f2 ease-in-out 0s, border-color $tmg-f2 ease-in-out 0s, background $tmg-f2 ease-in-out 0s, box-shadow $tmg-f2 ease-in-out 0s);
@@ -311,10 +313,6 @@
     background-color: $gray-l1;
     color: $white;
   }
-
-  span {
-    @extend %cont-text-sr;
-  }
 }
 
 // button with no button shell until hover for understated actions
@@ -328,7 +326,7 @@
 }
 
 // +UI - Well Archetype - Extends
-// ==================== 
+// ====================
 %ui-well {
   box-shadow: inset 0 1px 2px 1px $shadow;
   padding: ($baseline*0.75) $baseline;
@@ -377,7 +375,7 @@
 }
 
 // +Content - No List - Extends
-// ==================== 
+// ====================
 // removes list styling/spacing when using uls, ols for navigation and less content-centric cases
 %cont-no-list {
   list-style: none;
@@ -392,7 +390,7 @@
 }
 
 // +Content - Hidden Image Text - Extend
-// ==================== 
+// ====================
 // image-replacement hidden text
 %cont-text-hide {
   text-indent: 100%;
@@ -401,29 +399,63 @@
 }
 
 // +Content - Screenreader Text - Extend
-// ==================== 
+// ====================
 %cont-text-sr {
-  border: 0;
-  clip: rect(0 0 0 0);
-  height: 1px;
-  margin: -1px;
-  overflow: hidden;
-  padding: 0;
-  position: absolute;
-  width: 1px;
+    // clip has been deprecated but is still supported
+    clip: rect(1px 1px 1px 1px);
+    clip: rect(1px, 1px, 1px, 1px);
+    position: absolute;
+    margin: -1px;
+    height: 1px;
+    width: 1px;
+    border: 0;
+    padding: 0;
+    overflow: hidden;
+    // ensure there are spaces in sr text
+    word-wrap: normal;
 }
 
 // +Content - Text Wrap - Extend
-// ==================== 
+// ====================
 %cont-text-wrap {
   word-wrap: break-word;
 }
 
 // +Content - Text Truncate - Extend
-// ==================== 
+// ====================
 %cont-truncated {
   @include box-sizing(border-box);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+// * +Icon - Font-Awesome  - Extend
+// ====================
+%use-font-awesome {
+  display: inline-block;
+  font-family: FontAwesome;
+  -webkit-font-smoothing: antialiased;
+  speak: none;
+}
+
+%btn-no-style {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+
+// * +Icon - SSO icon images
+// ====================
+
+%sso-icon {
+  .icon-image {
+    width: auto;
+    height: auto;
+    max-height: 1.4em;
+    max-width: 1.4em;
+    margin-top: -2px;
+  }
 }
