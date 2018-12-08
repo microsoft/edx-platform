@@ -25,9 +25,9 @@ class TestSuite(object):
         self.root = args[0]
         self.subsuites = kwargs.get('subsuites', [])
         self.failed_suites = []
-        self.verbosity = kwargs.get('verbosity', 1)
+        self.verbosity = int(kwargs.get('verbosity', 1))
         self.skip_clean = kwargs.get('skip_clean', False)
-        self.pdb = kwargs.get('pdb', False)
+        self.passthrough_options = kwargs.get('passthrough_options', [])
 
     def __enter__(self):
         """
@@ -61,13 +61,19 @@ class TestSuite(object):
         """
         return None
 
-    def generate_optimized_static_assets(self):
+    def generate_optimized_static_assets(self, log_dir=None):
         """
         Collect static assets using test_static_optimized.py which generates
-        optimized files to a dedicated test static root.
+        optimized files to a dedicated test static root. Optionally use
+        a log file for collectstatic output.
         """
         print colorize('green', "Generating optimized static assets...")
-        sh("paver update_assets --settings=test_static_optimized")
+        if not log_dir:
+            sh("paver update_assets --settings=test_static_optimized")
+        else:
+            sh("paver update_assets --settings=test_static_optimized --collect-log={log_dir}/collectstatic.log".format(
+                log_dir=log_dir
+            ))
 
     def run_test(self):
         """
@@ -75,7 +81,7 @@ class TestSuite(object):
         It returns False if errors or failures occur. Otherwise, it
         returns True.
         """
-        cmd = self.cmd
+        cmd = " ".join(self.cmd)
 
         if tasks.environment.dry_run:
             tasks.environment.info(cmd)

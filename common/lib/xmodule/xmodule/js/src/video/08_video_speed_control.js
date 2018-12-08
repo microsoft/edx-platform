@@ -38,11 +38,8 @@ define(
                     'title="',
                         gettext('Adjust video speed'),
                     '" aria-describedby="speed-instructions">',
-                    '<span class="icon-fallback-img">',
+                    '<span>',
                         '<span class="icon fa fa-caret-right" aria-hidden="true"></span>',
-                        '<span class="sr control-text">',
-                            gettext('Speed'),
-                        '</span>',
                     '</span>',
                     '<span class="label" aria-hidden="true">',
                         gettext('Speed'),
@@ -103,13 +100,14 @@ define(
                 reversedSpeeds = speeds.concat().reverse(),
                 speedsList = $.map(reversedSpeeds, function (speed) {
                     return HtmlUtils.interpolateHtml(
-                        HtmlUtils.joinHtml(
-                            HtmlUtils.HTML('<li data-speed="{speed}">'),
-                            HtmlUtils.HTML('<button class="control speed-option" tabindex="-1" aria-pressed="false">'),
-                            HtmlUtils.HTML(speed),
-                            HtmlUtils.HTML('x'),
-                            HtmlUtils.HTML('</button>'),
-                            HtmlUtils.HTML('</li>')
+                        HtmlUtils.HTML(
+                            [
+                                '<li data-speed="{speed}">',
+                                    '<button class="control speed-option" tabindex="-1" aria-pressed="false">',
+                                        '{speed}x',
+                                    '</button>',
+                                '</li>'
+                            ].join('')
                         ),
                         {
                             speed: speed

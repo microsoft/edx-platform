@@ -966,22 +966,22 @@ class InlineDiscussionTest(UniqueCourseTest, DiscussionResponsePaginationTestMix
         self.assertFalse(self.thread_page.is_comment_deletable("comment1"))
         self.assertFalse(self.thread_page.is_comment_deletable("comment2"))
 
-    def test_dual_discussion_module(self):
+    def test_dual_discussion_xblock(self):
         """
-        Scenario: Two discussion module in one unit shouldn't override their actions
+        Scenario: Two discussion xblocks in one unit shouldn't override their actions
         Given that I'm on courseware page where there are two inline discussion
-        When I click on one discussion module new post button
-        Then it should add new post form of that module in DOM
-        And I should be shown new post form of that module
-        And I shouldn't be shown second discussion module new post form
-        And I click on second discussion module new post button
-        Then it should add new post form of second module in DOM
+        When I click on one discussion xblock new post button
+        Then it should add new post form of that xblock in DOM
+        And I should be shown new post form of that xblock
+        And I shouldn't be shown second discussion xblock new post form
+        And I click on second discussion xblock new post button
+        Then it should add new post form of second xblock in DOM
         And I should be shown second discussion new post form
-        And I shouldn't be shown first discussion module new post form
+        And I shouldn't be shown first discussion xblock new post form
         And I have two new post form in the DOM
-        When I click back on first module new post button
-        And I should be shown new post form of that module
-        And I shouldn't be shown second discussion module new post form
+        When I click back on first xblock new post button
+        And I should be shown new post form of that xblock
+        And I shouldn't be shown second discussion xblock new post form
         """
         self.discussion_page.wait_for_page()
         self.additional_discussion_page.wait_for_page()
@@ -1228,7 +1228,6 @@ class DiscussionSortPreferenceTest(UniqueCourseTest):
         self.sort_page = DiscussionSortPreferencePage(self.browser, self.course_id)
         self.sort_page.visit()
 
-    @flaky  # TODO fix this, see TNL-4682
     def test_default_sort_preference(self):
         """
         Test to check the default sorting preference of user. (Default = date )
@@ -1247,7 +1246,6 @@ class DiscussionSortPreferenceTest(UniqueCourseTest):
             selected_sort = self.sort_page.get_selected_sort_preference()
             self.assertEqual(selected_sort, sort_type)
 
-    @flaky  # TODO fix this, see TNL-4682
     def test_last_preference_saved(self):
         """
         Test that user last preference is saved.

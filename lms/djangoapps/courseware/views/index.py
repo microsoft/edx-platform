@@ -26,6 +26,7 @@ from lang_pref import LANGUAGE_KEY
 from xblock.fragment import Fragment
 from opaque_keys.edx.keys import CourseKey
 from openedx.core.lib.gating import api as gating_api
+from openedx.core.lib.time_zone_utils import get_user_time_zone
 from openedx.core.djangoapps.user_api.preferences.api import get_user_preference
 from shoppingcart.models import CourseRegistrationCode
 from student.models import CourseEnrollment
@@ -295,6 +296,12 @@ class CoursewareIndex(View):
         """
         return self.masquerade and self.masquerade.role == 'student'
 
+    def _is_masquerading_as_specific_student(self):
+        """
+        Returns whether the current request is masqueurading as a specific student.
+        """
+        return self._is_masquerading_as_student() and self.masquerade.user_name
+
     def _find_block(self, parent, url_name, block_type, min_depth=None):
         """
         Finds the block in the parent with the specified url_name.
@@ -464,6 +471,8 @@ class CoursewareIndex(View):
             section_context['prev_url'] = _compute_section_url(previous_of_active_section, 'last')
         if next_of_active_section:
             section_context['next_url'] = _compute_section_url(next_of_active_section, 'first')
+        # sections can hide data that masquerading staff should see when debugging issues with specific students
+        section_context['specific_masquerade'] = self._is_masquerading_as_specific_student()
         return section_context
 
     def _handle_unexpected_error(self):
@@ -506,6 +515,7 @@ def render_accordion(request, course, table_of_contents):
             ('course_id', unicode(course.id)),
             ('csrf', csrf(request)['csrf_token']),
             ('due_date_display_format', course.due_date_display_format),
+            ('time_zone', get_user_time_zone(request.user).zone),
         ] + TEMPLATE_IMPORTS.items()
     )
     return render_to_string('courseware/accordion.html', context)

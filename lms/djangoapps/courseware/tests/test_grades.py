@@ -11,10 +11,8 @@ from opaque_keys.edx.locations import SlashSeparatedCourseKey
 from opaque_keys.edx.locator import CourseLocator, BlockUsageLocator
 
 from courseware.grades import (
-    field_data_cache_for_grading,
     grade,
     iterate_grades_for,
-    MaxScoresCache,
     ProgressSummary,
     get_module_score
 )
@@ -31,7 +29,7 @@ from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
 from xmodule.modulestore.tests.django_utils import SharedModuleStoreTestCase
 
 
-def _grade_with_errors(student, request, course, keep_raw_scores=False):
+def _grade_with_errors(student, course, keep_raw_scores=False):
     """This fake grade method will throw exceptions for student3 and
     student4, but allow any other students to go through normal grading.
 
@@ -42,7 +40,7 @@ def _grade_with_errors(student, request, course, keep_raw_scores=False):
     if student.username in ['student3', 'student4']:
         raise Exception("I don't like {}".format(student.username))
 
-    return grade(student, request, course, keep_raw_scores=keep_raw_scores)
+    return grade(student, course, keep_raw_scores=keep_raw_scores)
 
 
 @attr('shard_1')
@@ -146,54 +144,6 @@ class TestGradeIteration(SharedModuleStoreTestCase):
         return students_to_gradesets, students_to_errors
 
 
-class TestMaxScoresCache(SharedModuleStoreTestCase):
-    """
-    Tests for the MaxScoresCache
-    """
-
-    ENABLED_CACHES = ['default', 'mongo_metadata_inheritance', 'loc_cache']
-
-    @classmethod
-    def setUpClass(cls):
-        super(TestMaxScoresCache, cls).setUpClass()
-        cls.course = CourseFactory.create()
-        cls.problems = []
-        for _ in xrange(3):
-            cls.problems.append(
-                ItemFactory.create(category='problem', parent=cls.course)
-            )
-
-    def setUp(self):
-        super(TestMaxScoresCache, self).setUp()
-        self.student = UserFactory.create()
-
-        CourseEnrollment.enroll(self.student, self.course.id)
-        self.request = RequestFactory().get('/')
-        self.locations = [problem.location for problem in self.problems]
-
-    def test_max_scores_cache(self):
-        """
-        Tests the behavior fo the MaxScoresCache
-        """
-        max_scores_cache = MaxScoresCache("test_max_scores_cache")
-        self.assertEqual(max_scores_cache.num_cached_from_remote(), 0)
-        self.assertEqual(max_scores_cache.num_cached_updates(), 0)
-
-        # add score to cache
-        max_scores_cache.set(self.locations[0], 1)
-        self.assertEqual(max_scores_cache.num_cached_updates(), 1)
-
-        # push to remote cache
-        max_scores_cache.push_to_remote()
-
-        # create a new cache with the same params, fetch from remote cache
-        max_scores_cache = MaxScoresCache("test_max_scores_cache")
-        max_scores_cache.fetch_from_remote(self.locations)
-
-        # see cache is populated
-        self.assertEqual(max_scores_cache.num_cached_from_remote(), 1)
-
-
 class TestFieldDataCacheScorableLocations(SharedModuleStoreTestCase):
     """
     Make sure we can filter the locations we pull back student state for via
@@ -216,15 +166,6 @@ class TestFieldDataCacheScorableLocations(SharedModuleStoreTestCase):
         self.student = UserFactory.create()
 
         CourseEnrollment.enroll(self.student, self.course.id)
-
-    def test_field_data_cache_scorable_locations(self):
-        """Only scorable locations should be in FieldDataCache.scorable_locations."""
-        fd_cache = field_data_cache_for_grading(self.course, self.student)
-        block_types = set(loc.block_type for loc in fd_cache.scorable_locations)
-        self.assertNotIn('video', block_types)
-        self.assertNotIn('html', block_types)
-        self.assertNotIn('discussion', block_types)
-        self.assertIn('problem', block_types)
 
 
 class TestProgressSummary(TestCase):

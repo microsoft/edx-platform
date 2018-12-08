@@ -138,17 +138,19 @@ class TestBlockStructureData(TestCase, ChildrenMapTestMixin):
 
         # verify fields have not been collected yet
         for block in blocks:
+            bs_block = block_structure[block.location]
             for field in fields:
-                self.assertIsNone(block_structure.get_xblock_field(block.location, field))
+                self.assertIsNone(getattr(bs_block, field, None))
 
         # collect fields
         block_structure._collect_requested_xblock_fields()
 
         # verify values of collected fields
         for block in blocks:
+            bs_block = block_structure[block.location]
             for field in fields:
                 self.assertEquals(
-                    block_structure.get_xblock_field(block.location, field),
+                    getattr(bs_block, field, None),
                     block.field_map.get(field),
                 )
 
@@ -215,7 +217,7 @@ class TestBlockStructureData(TestCase, ChildrenMapTestMixin):
 
         self.assert_block_structure(block_structure, pruned_children_map, missing_blocks)
 
-    def test_remove_block_if(self):
+    def test_remove_block_traversal(self):
         block_structure = self.create_block_structure(ChildrenMapTestMixin.LINEAR_CHILDREN_MAP)
-        block_structure.remove_block_if(lambda block: block == 2)
+        block_structure.remove_block_traversal(lambda block: block == 2)
         self.assert_block_structure(block_structure, [[1], [], [], []], missing_blocks=[2])

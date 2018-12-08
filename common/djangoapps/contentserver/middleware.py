@@ -17,7 +17,7 @@ from xmodule.contentstore.content import StaticContent, XASSET_LOCATION_TAG
 from xmodule.modulestore import InvalidLocationError
 from opaque_keys import InvalidKeyError
 from opaque_keys.edx.locator import AssetLocator
-from cache_toolbox.core import get_cached_content, set_cached_content
+from .caching import get_cached_content, set_cached_content
 from xmodule.modulestore.exceptions import ItemNotFoundError
 from xmodule.exceptions import NotFoundError
 
@@ -67,13 +67,13 @@ class StaticContentServer(object):
             actual_digest = None
             try:
                 content = self.load_asset_from_location(loc)
-                actual_digest = content.content_digest
+                actual_digest = getattr(content, "content_digest", None)
             except (ItemNotFoundError, NotFoundError):
                 return HttpResponseNotFound()
 
             # If this was a versioned asset, and the digest doesn't match, redirect
             # them to the actual version.
-            if requested_digest is not None and (actual_digest != requested_digest):
+            if requested_digest is not None and actual_digest is not None and (actual_digest != requested_digest):
                 actual_asset_path = StaticContent.add_version_to_asset_path(asset_path, actual_digest)
                 return HttpResponsePermanentRedirect(actual_asset_path)
 

@@ -494,6 +494,8 @@ MICROSITE_CONFIGURATION = {
 MICROSITE_TEST_HOSTNAME = 'testmicrosite.testserver'
 MICROSITE_LOGISTRATION_HOSTNAME = 'logistration.testserver'
 
+TEST_THEME = COMMON_ROOT / "test" / "test-theme"
+
 # add extra template directory for test-only templates
 MAKO_TEMPLATES['main'].extend([
     COMMON_ROOT / 'test' / 'templates',
@@ -577,13 +579,10 @@ JWT_AUTH.update({
     'JWT_AUDIENCE': 'test-key',
 })
 
-# Disable the use of the plugin manager in the transformer registry for
-# better performant unit tests.
-from openedx.core.lib.block_structure.transformer_registry import TransformerRegistry
-TransformerRegistry.USE_PLUGIN_MANAGER = False
-
 # Set the default Oauth2 Provider Model so that migrations can run in
 # verbose mode
 OAUTH2_PROVIDER_APPLICATION_MODEL = 'oauth2_provider.Application'
 
 COURSE_CATALOG_API_URL = 'https://catalog.example.com/api/v1'
+
+COMPREHENSIVE_THEME_DIRS = [REPO_ROOT / "themes", REPO_ROOT / "common/test"]
