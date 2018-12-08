@@ -61,7 +61,7 @@ class Thread(models.Model):
             if params.get('commentable_id'):
                 del params['commentable_id']
         paged_results = True
-        if params.get('paged_results', None) == False:
+        if not params.get('paged_results', None):
             paged_results = False
         response = perform_request(
             'get',

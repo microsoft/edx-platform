@@ -533,6 +533,7 @@ def _validate_email(email):
             u"Email '{email}' format is not valid".format(email=email)
         )
 
+
 @intercept_errors(UserAPIInternalError, ignore_errors=[UserAPIRequestError])
 def delete_user_account(user_id):
     """
@@ -616,11 +617,9 @@ def anonymize_user_discussions(user_id, username, enc_username, **kwargs):
     # Getting all courses for the user
     user = User.objects.get(id=user_id)
     courses = get_courses(user)
-
     # Updating discussion user instance
     updated_user = ThreadUser.from_django_user(user)
     updated_user.save()
-    
     # Updating each discussion entity for each course
     query_params = {}
     query_params['paged_results'] = False

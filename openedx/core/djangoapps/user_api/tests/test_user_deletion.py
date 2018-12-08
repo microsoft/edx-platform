@@ -16,7 +16,6 @@ from openedx.core.djangolib.testing.utils import CacheIsolationTestCase
 from student.tests.factories import UserFactory, RegistrationFactory, UserProfileFactory
 from openedx.core.djangoapps.user_api.accounts.api import delete_user_account
 
-
 class UserDeleteTest(CacheIsolationTestCase):
     """
     Test student account deletion api

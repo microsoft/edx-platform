@@ -203,6 +203,7 @@ def users_social_auth_mapping(request):
         - The launch data is correctly signed using a known client key/secret
           pair
     """
+    request.META['wsgi.url_scheme'] = 'https'
     if request.method != 'POST':
         return HttpResponseNotAllowed('POST')
 
@@ -262,7 +263,7 @@ def users_delete_user_account(request):
         - The launch data is correctly signed using a known client key/secret pair
     LTI delete user response code 0 user not exists, 1 exists deleted, 2 exists failed to delete
     """
-
+    request.META['wsgi.url_scheme'] = 'https'
     if request.method != 'POST':
         return HttpResponseNotAllowed('POST')
 
