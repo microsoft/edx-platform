@@ -26,12 +26,6 @@ Feature: LMS.LTI component
   | False              |
   Then I view the LTI but incorrect_signature warning is rendered
 
-  #4
-  Scenario: LTI component in LMS is correctly rendered in new page
-  Given the course has correct LTI credentials with registered Instructor
-  And the course has an LTI component with correct fields
-  Then I view the LTI and it is rendered in new page
-
   #5
   Scenario: LTI component in LMS is correctly rendered in iframe
   Given the course has correct LTI credentials with registered Instructor
@@ -51,7 +45,7 @@ Feature: LMS.LTI component
   Then I see text "Problem Scores: 5/10"
   And I see graph with total progress "5%"
   Then I click on the "Instructor" tab
-  And I click on the "Student Admin" tab
+  And I click the "Student Admin" button
   And I click on the "View Gradebook" link
   And I see in the gradebook table that "HW" is "50"
   And I see in the gradebook table that "Total" is "5"
@@ -90,7 +84,7 @@ Feature: LMS.LTI component
   Then I see text "Problem Scores: 8/10"
   And I see graph with total progress "8%"
   Then I click on the "Instructor" tab
-  And I click on the "Student Admin" tab
+  And I click the "Student Admin" button
   And I click on the "View Gradebook" link
   And I see in the gradebook table that "HW" is "80"
   And I see in the gradebook table that "Total" is "8"
@@ -116,7 +110,7 @@ Feature: LMS.LTI component
   Then I see text "Problem Scores: 0/10"
   And I see graph with total progress "0%"
   Then I click on the "Instructor" tab
-  And I click on the "Student Admin" tab
+  And I click the "Student Admin" button
   And I click on the "View Gradebook" link
   And I see in the gradebook table that "HW" is "0"
   And I see in the gradebook table that "Total" is "0"
@@ -154,57 +148,3 @@ Feature: LMS.LTI component
   | description             |
   | Application description |
   Then I see LTI component description with text "Application description"
-
-  #15
-  Scenario: LTI component requests permission for username and is rejected
-  Given the course has correct LTI credentials with registered Instructor
-  And the course has an LTI component with correct fields:
-  | ask_to_send_username |
-  | True                 |
-  Then I view the permission alert
-  Then I reject the permission alert and do not view the LTI
-
-  #16
-  Scenario: LTI component requests permission for username and displays LTI when accepted
-  Given the course has correct LTI credentials with registered Instructor
-  And the course has an LTI component with correct fields:
-  | ask_to_send_username |
-  | True                 |
-  Then I view the permission alert
-  Then I accept the permission alert and view the LTI
-
-  #17
-  Scenario: LTI component requests permission for email and is rejected
-  Given the course has correct LTI credentials with registered Instructor
-  And the course has an LTI component with correct fields:
-  | ask_to_send_email |
-  | True              |
-  Then I view the permission alert
-  Then I reject the permission alert and do not view the LTI
-
-  #18
-  Scenario: LTI component requests permission for email and displays LTI when accepted
-  Given the course has correct LTI credentials with registered Instructor
-  And the course has an LTI component with correct fields:
-  | ask_to_send_email |
-  | True              |
-  Then I view the permission alert
-  Then I accept the permission alert and view the LTI
-
-  #19
-  Scenario: LTI component requests permission for email and username and is rejected
-  Given the course has correct LTI credentials with registered Instructor
-  And the course has an LTI component with correct fields:
-  | ask_to_send_email | ask_to_send_username |
-  | True              | True                 |
-  Then I view the permission alert
-  Then I reject the permission alert and do not view the LTI
-
-  #20
-  Scenario: LTI component requests permission for email and username and displays LTI when accepted
-  Given the course has correct LTI credentials with registered Instructor
-  And the course has an LTI component with correct fields:
-  | ask_to_send_email | ask_to_send_username |
-  | True              | True                 |
-  Then I view the permission alert
-  Then I accept the permission alert and view the LTI

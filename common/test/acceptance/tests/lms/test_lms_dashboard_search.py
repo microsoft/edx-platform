@@ -1,25 +1,26 @@
 """
 Test dashboard search
 """
-import os
 import json
+import os
 
-from bok_choy.web_app_test import WebAppTest
-from ..helpers import generate_course_key
-from ...pages.common.logout import LogoutPage
-from ...pages.common.utils import click_css
-from ...pages.studio.utils import add_html_component, type_in_codemirror
-from ...pages.studio.auto_auth import AutoAuthPage
-from ...pages.studio.overview import CourseOutlinePage
-from ...pages.studio.container import ContainerPage
-from ...pages.lms.dashboard_search import DashboardSearchPage
-from ...fixtures.course import CourseFixture, XBlockFixtureDesc
+from common.test.acceptance.fixtures.course import CourseFixture, XBlockFixtureDesc
+from common.test.acceptance.pages.common.auto_auth import AutoAuthPage
+from common.test.acceptance.pages.common.logout import LogoutPage
+from common.test.acceptance.pages.common.utils import click_css
+from common.test.acceptance.pages.lms.dashboard_search import DashboardSearchPage
+from common.test.acceptance.pages.studio.container import ContainerPage
+from common.test.acceptance.pages.studio.overview import CourseOutlinePage as StudioCourseOutlinePage
+from common.test.acceptance.pages.studio.utils import add_html_component, type_in_codemirror
+from common.test.acceptance.tests.helpers import AcceptanceTest, generate_course_key
 
 
-class DashboardSearchTest(WebAppTest):
+class DashboardSearchTest(AcceptanceTest):
     """
     Test dashboard search.
     """
+    shard = 7
+
     USERNAME = 'STUDENT_TESTER'
     EMAIL = 'student101@example.com'
 
@@ -61,10 +62,10 @@ class DashboardSearchTest(WebAppTest):
         }
 
         # generate course fixtures and outline pages
-        self.course_outlines = {}
+        self.studio_course_outlines = {}
         self.course_fixtures = {}
         for key, course_info in self.courses.iteritems():
-            course_outline = CourseOutlinePage(
+            studio_course_outline = StudioCourseOutlinePage(
                 self.browser,
                 course_info['org'],
                 course_info['number'],
@@ -90,7 +91,7 @@ class DashboardSearchTest(WebAppTest):
                 )
             ).install()
 
-            self.course_outlines[key] = course_outline
+            self.studio_course_outlines[key] = studio_course_outline
             self.course_fixtures[key] = course_fix
 
     def tearDown(self):
@@ -107,13 +108,13 @@ class DashboardSearchTest(WebAppTest):
         LogoutPage(self.browser).visit()
         AutoAuthPage(self.browser, username=username, email=email, staff=staff).visit()
 
-    def _studio_add_content(self, course_outline, html_content):
+    def _studio_add_content(self, studio_course_outline, html_content):
         """
         Add content to first section on studio course page.
         """
         # create a unit in course outline
-        course_outline.visit()
-        subsection = course_outline.section_at(0).subsection_at(0)
+        studio_course_outline.visit()
+        subsection = studio_course_outline.section_at(0).subsection_at(0)
         subsection.expand_subsection()
         subsection.add_unit()
 
@@ -127,12 +128,12 @@ class DashboardSearchTest(WebAppTest):
         type_in_codemirror(unit_page, 0, html_content)
         click_css(unit_page, '.action-save', 0)
 
-    def _studio_publish_content(self, course_outline):
+    def _studio_publish_content(self, studio_course_outline):
         """
         Publish content in first section on studio course page.
         """
-        course_outline.visit()
-        subsection = course_outline.section_at(0).subsection_at(0)
+        studio_course_outline.visit()
+        subsection = studio_course_outline.section_at(0).subsection_at(0)
         subsection.expand_subsection()
         unit = subsection.unit_at(0)
         unit.publish()
@@ -168,9 +169,9 @@ class DashboardSearchTest(WebAppTest):
 
         # Create content in studio without publishing.
         self._auto_auth(self.STAFF_USERNAME, self.STAFF_EMAIL, True)
-        self._studio_add_content(self.course_outlines['A'], html_content)
-        self._studio_add_content(self.course_outlines['B'], html_content)
-        self._studio_add_content(self.course_outlines['C'], html_content)
+        self._studio_add_content(self.studio_course_outlines['A'], html_content)
+        self._studio_add_content(self.studio_course_outlines['B'], html_content)
+        self._studio_add_content(self.studio_course_outlines['C'], html_content)
 
         # Do a search, there should be no results shown.
         self._auto_auth(self.USERNAME, self.EMAIL, False)
@@ -180,9 +181,9 @@ class DashboardSearchTest(WebAppTest):
 
         # Publish in studio to trigger indexing.
         self._auto_auth(self.STAFF_USERNAME, self.STAFF_EMAIL, True)
-        self._studio_publish_content(self.course_outlines['A'])
-        self._studio_publish_content(self.course_outlines['B'])
-        self._studio_publish_content(self.course_outlines['C'])
+        self._studio_publish_content(self.studio_course_outlines['A'])
+        self._studio_publish_content(self.studio_course_outlines['B'])
+        self._studio_publish_content(self.studio_course_outlines['C'])
 
         # Do the search again, this time we expect results from courses A & B, but not C
         self._auto_auth(self.USERNAME, self.EMAIL, False)

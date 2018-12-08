@@ -1,9 +1,10 @@
 # pylint: disable=missing-docstring
 
-from lettuce import world, step
 from django.conf import settings
-from common import upload_file
+from lettuce import step, world
 from nose.tools import assert_equal
+
+from common import upload_file
 
 TEST_ROOT = settings.COMMON_TEST_DATA_ROOT
 
@@ -89,7 +90,7 @@ def check_textbook(_step, textbook_name, chapter_name):
     assert_equal(chapter, chapter_name)
 
 
-@step(u'I should see a textbook named "([^"]*)" with (\d+) chapters')
+@step(r'I should see a textbook named "([^"]*)" with (\d+) chapters')
 def check_textbook_chapters(_step, textbook_name, num_chapters_str):
     num_chapters = int(num_chapters_str)
     title = world.css_text(".textbook .view-textbook h3.textbook-title", index=0)

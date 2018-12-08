@@ -1,38 +1,50 @@
 """
 Test for LMS instructor background task queue management
 """
-from mock import patch, Mock
-from bulk_email.models import CourseEmail, SEND_TO_ALL
-from courseware.tests.factories import UserFactory
-from xmodule.modulestore.exceptions import ItemNotFoundError
+import ddt
+from mock import MagicMock, Mock, patch
+from nose.plugins.attrib import attr
 
-from instructor_task.api import (
-    get_running_instructor_tasks,
+from bulk_email.models import SEND_TO_LEARNERS, SEND_TO_MYSELF, SEND_TO_STAFF, CourseEmail
+from lms.djangoapps.certificates.models import CertificateGenerationHistory, CertificateStatuses
+from common.test.utils import normalize_repr
+from courseware.tests.factories import UserFactory
+from lms.djangoapps.instructor_task.api import (
+    SpecificStudentIdMissingError,
+    generate_certificates_for_students,
     get_instructor_task_history,
-    submit_rescore_problem_for_all_students,
-    submit_rescore_problem_for_student,
-    submit_reset_problem_attempts_for_all_students,
-    submit_delete_problem_state_for_all_students,
+    get_running_instructor_tasks,
+    regenerate_certificates,
     submit_bulk_course_email,
+    submit_calculate_may_enroll_csv,
     submit_calculate_problem_responses_csv,
     submit_calculate_students_features_csv,
     submit_cohort_students,
-    submit_detailed_enrollment_features_csv,
-    submit_calculate_may_enroll_csv,
-    submit_executive_summary_report,
     submit_course_survey_report,
-    generate_certificates_for_students,
-    regenerate_certificates
+    submit_delete_entrance_exam_state_for_student,
+    submit_delete_problem_state_for_all_students,
+    submit_detailed_enrollment_features_csv,
+    submit_executive_summary_report,
+    submit_export_ora2_data,
+    submit_override_score,
+    submit_rescore_entrance_exam_for_student,
+    submit_rescore_problem_for_all_students,
+    submit_rescore_problem_for_student,
+    submit_reset_problem_attempts_for_all_students,
+    submit_reset_problem_attempts_in_entrance_exam
 )
-
-from instructor_task.api_helper import AlreadyRunningError
-from instructor_task.models import InstructorTask, PROGRESS
-from instructor_task.tests.test_base import (InstructorTaskTestCase,
-                                             InstructorTaskCourseTestCase,
-                                             InstructorTaskModuleTestCase,
-                                             TestReportMixin,
-                                             TEST_COURSE_KEY)
-from certificates.models import CertificateStatuses, CertificateGenerationHistory
+from lms.djangoapps.instructor_task.api_helper import AlreadyRunningError, QueueConnectionError
+from lms.djangoapps.instructor_task.models import PROGRESS, InstructorTask
+from lms.djangoapps.instructor_task.tasks import export_ora2_data
+from lms.djangoapps.instructor_task.tests.test_base import (
+    TEST_COURSE_KEY,
+    InstructorTaskCourseTestCase,
+    InstructorTaskModuleTestCase,
+    InstructorTaskTestCase,
+    TestReportMixin
+)
+from xmodule.modulestore.exceptions import ItemNotFoundError
+from celery.states import FAILURE
 
 
 class InstructorTaskReportTest(InstructorTaskTestCase):
@@ -77,6 +89,8 @@ class InstructorTaskReportTest(InstructorTaskTestCase):
         self.assertEquals(set(task_ids), set())
 
 
+@attr(shard=3)
+@ddt.ddt
 class InstructorTaskModuleSubmitTest(InstructorTaskModuleTestCase):
     """Tests API methods that involve the submission of module-based background tasks."""
 
@@ -133,15 +147,60 @@ class InstructorTaskModuleSubmitTest(InstructorTaskModuleTestCase):
     def test_submit_delete_all_with_long_url(self):
         self._test_submit_with_long_url(submit_delete_problem_state_for_all_students)
 
-    def _test_submit_task(self, task_function, student=None):
-        # tests submit, and then tests a second identical submission.
+    @ddt.data(
+        (normalize_repr(submit_rescore_problem_for_all_students), 'rescore_problem'),
+        (
+            normalize_repr(submit_rescore_problem_for_all_students),
+            'rescore_problem_if_higher',
+            {'only_if_higher': True}
+        ),
+        (normalize_repr(submit_rescore_problem_for_student), 'rescore_problem', {'student': True}),
+        (
+            normalize_repr(submit_rescore_problem_for_student),
+            'rescore_problem_if_higher',
+            {'student': True, 'only_if_higher': True}
+        ),
+        (normalize_repr(submit_reset_problem_attempts_for_all_students), 'reset_problem_attempts'),
+        (normalize_repr(submit_delete_problem_state_for_all_students), 'delete_problem_state'),
+        (normalize_repr(submit_rescore_entrance_exam_for_student), 'rescore_problem', {'student': True}),
+        (
+            normalize_repr(submit_rescore_entrance_exam_for_student),
+            'rescore_problem_if_higher',
+            {'student': True, 'only_if_higher': True},
+        ),
+        (normalize_repr(submit_reset_problem_attempts_in_entrance_exam), 'reset_problem_attempts', {'student': True}),
+        (normalize_repr(submit_delete_entrance_exam_state_for_student), 'delete_problem_state', {'student': True}),
+        (normalize_repr(submit_override_score), 'override_problem_score', {'student': True, 'score': 0})
+    )
+    @ddt.unpack
+    def test_submit_task(self, task_function, expected_task_type, params=None):
+        """
+        Tests submission of instructor task.
+        """
+        if params is None:
+            params = {}
+        if params.get('student'):
+            params['student'] = self.student
+
         problem_url_name = 'H1P1'
         self.define_option_problem(problem_url_name)
         location = InstructorTaskModuleTestCase.problem_location(problem_url_name)
-        if student is not None:
-            instructor_task = task_function(self.create_task_request(self.instructor), location, student)
-        else:
-            instructor_task = task_function(self.create_task_request(self.instructor), location)
+
+        # unsuccessful submission, exception raised while submitting.
+        with patch('lms.djangoapps.instructor_task.tasks_base.BaseInstructorTask.apply_async') as apply_async:
+
+            error = Exception()
+            apply_async.side_effect = error
+
+            with self.assertRaises(QueueConnectionError):
+                instructor_task = task_function(self.create_task_request(self.instructor), location, **params)
+
+            most_recent_task = InstructorTask.objects.latest('id')
+            self.assertEquals(most_recent_task.task_state, FAILURE)
+
+        # successful submission
+        instructor_task = task_function(self.create_task_request(self.instructor), location, **params)
+        self.assertEquals(instructor_task.task_type, expected_task_type)
 
         # test resubmitting, by updating the existing record:
         instructor_task = InstructorTask.objects.get(id=instructor_task.id)
@@ -149,24 +208,10 @@ class InstructorTaskModuleSubmitTest(InstructorTaskModuleTestCase):
         instructor_task.save()
 
         with self.assertRaises(AlreadyRunningError):
-            if student is not None:
-                task_function(self.create_task_request(self.instructor), location, student)
-            else:
-                task_function(self.create_task_request(self.instructor), location)
-
-    def test_submit_rescore_all(self):
-        self._test_submit_task(submit_rescore_problem_for_all_students)
-
-    def test_submit_rescore_student(self):
-        self._test_submit_task(submit_rescore_problem_for_student, self.student)
-
-    def test_submit_reset_all(self):
-        self._test_submit_task(submit_reset_problem_attempts_for_all_students)
-
-    def test_submit_delete_all(self):
-        self._test_submit_task(submit_delete_problem_state_for_all_students)
+            task_function(self.create_task_request(self.instructor), location, **params)
 
 
+@attr(shard=3)
 @patch('bulk_email.models.html_to_text', Mock(return_value='Mocking CourseEmail.text_message', autospec=True))
 class InstructorTaskCourseSubmitTest(TestReportMixin, InstructorTaskCourseTestCase):
     """Tests API methods that involve the submission of course-based background tasks."""
@@ -180,7 +225,13 @@ class InstructorTaskCourseSubmitTest(TestReportMixin, InstructorTaskCourseTestCa
 
     def _define_course_email(self):
         """Create CourseEmail object for testing."""
-        course_email = CourseEmail.create(self.course.id, self.instructor, SEND_TO_ALL, "Test Subject", "<p>This is a test message</p>")
+        course_email = CourseEmail.create(
+            self.course.id,
+            self.instructor,
+            [SEND_TO_MYSELF, SEND_TO_STAFF, SEND_TO_LEARNERS],
+            "Test Subject",
+            "<p>This is a test message</p>"
+        )
         return course_email.id
 
     def _test_resubmission(self, api_call):
@@ -256,6 +307,16 @@ class InstructorTaskCourseSubmitTest(TestReportMixin, InstructorTaskCourseTestCa
         )
         self._test_resubmission(api_call)
 
+    def test_submit_ora2_request_task(self):
+        request = self.create_task_request(self.instructor)
+
+        with patch('lms.djangoapps.instructor_task.api.submit_task') as mock_submit_task:
+            mock_submit_task.return_value = MagicMock()
+            submit_export_ora2_data(request, self.course.id)
+
+            mock_submit_task.assert_called_once_with(
+                request, 'export_ora2_data', export_ora2_data, self.course.id, {}, '')
+
     def test_submit_generate_certs_students(self):
         """
         Tests certificates generation task submission api
@@ -280,6 +341,18 @@ class InstructorTaskCourseSubmitTest(TestReportMixin, InstructorTaskCourseTestCa
                 [CertificateStatuses.downloadable, CertificateStatuses.generating]
             )
         self._test_resubmission(api_call)
+
+    def test_certificate_generation_no_specific_student_id(self):
+        """
+        Raises ValueError when student_set is 'specific_student' and 'specific_student_id' is None.
+        """
+        with self.assertRaises(SpecificStudentIdMissingError):
+            generate_certificates_for_students(
+                self.create_task_request(self.instructor),
+                self.course.id,
+                student_set='specific_student',
+                specific_student_id=None
+            )
 
     def test_certificate_generation_history(self):
         """

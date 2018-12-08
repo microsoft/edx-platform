@@ -1,8 +1,7 @@
-from .utils import CommentClientRequestError, perform_request
+from lms.lib.comment_client import models, settings
 
 from .thread import Thread, _url_for_flag_abuse_thread, _url_for_unflag_abuse_thread
-from lms.lib.comment_client import models
-from lms.lib.comment_client import settings
+from .utils import CommentClientRequestError, perform_request
 
 
 class Comment(models.Model):
@@ -12,6 +11,7 @@ class Comment(models.Model):
         'endorsed', 'parent_id', 'thread_id', 'username', 'votes', 'user_id',
         'closed', 'created_at', 'updated_at', 'depth', 'at_position_list',
         'type', 'commentable_id', 'abuse_flaggers', 'endorsement',
+        'child_count',
     ]
 
     updatable_fields = [
@@ -26,9 +26,15 @@ class Comment(models.Model):
     base_url = "{prefix}/comments".format(prefix=settings.PREFIX)
     type = 'comment'
 
+    def __init__(self, *args, **kwargs):
+        super(Comment, self).__init__(*args, **kwargs)
+        self._cached_thread = None
+
     @property
     def thread(self):
-        return Thread(id=self.thread_id, type='thread')
+        if not self._cached_thread:
+            self._cached_thread = Thread(id=self.thread_id, type='thread')
+        return self._cached_thread
 
     @property
     def context(self):

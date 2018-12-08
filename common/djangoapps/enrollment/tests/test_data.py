@@ -2,22 +2,30 @@
 Test the Data Aggregation Layer for Course Enrollments.
 
 """
-import ddt
-from mock import patch
-from nose.tools import raises
+import datetime
 import unittest
 
+import ddt
 from django.conf import settings
+from mock import patch
+from nose.tools import raises
+from pytz import UTC
+
+from course_modes.models import CourseMode
+from course_modes.tests.factories import CourseModeFactory
+from enrollment import data
+from enrollment.errors import (
+    CourseEnrollmentClosedError,
+    CourseEnrollmentExistsError,
+    CourseEnrollmentFullError,
+    UserNotFoundError
+)
+from enrollment.serializers import CourseEnrollmentSerializer
+from openedx.core.lib.exceptions import CourseNotFoundError
+from student.models import AlreadyEnrolledError, CourseEnrollment, CourseFullError, EnrollmentClosedError
+from student.tests.factories import UserFactory
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
-from enrollment.errors import (
-    UserNotFoundError, CourseEnrollmentClosedError,
-    CourseEnrollmentFullError, CourseEnrollmentExistsError,
-)
-from openedx.core.lib.exceptions import CourseNotFoundError
-from student.tests.factories import UserFactory, CourseModeFactory
-from student.models import CourseEnrollment, EnrollmentClosedError, CourseFullError, AlreadyEnrolledError
-from enrollment import data
 
 
 @ddt.ddt
@@ -67,6 +75,7 @@ class EnrollmentDataTest(ModuleStoreTestCase):
         # Confirm the returned enrollment and the data match up.
         self.assertEqual(course_mode, enrollment['mode'])
         self.assertEqual(is_active, enrollment['is_active'])
+        self.assertEqual(self.course.display_name_with_default, enrollment['course_details']['course_name'])
 
     def test_unenroll(self):
         # Enroll the user in the course
@@ -174,6 +183,51 @@ class EnrollmentDataTest(ModuleStoreTestCase):
     @ddt.data(
         # Default (no course modes in the database)
         # Expect that users are automatically enrolled as "honor".
+        ([], 'honor'),
+
+        # Audit / Verified / Honor
+        # We should always go to the "choose your course" page.
+        # We should also be enrolled as "honor" by default.
+        (['honor', 'verified', 'audit'], 'verified'),
+    )
+    @ddt.unpack
+    def test_get_user_enrollments(self, course_modes, enrollment_mode):
+        self._create_course_modes(course_modes)
+
+        # Try to get enrollments before they exist.
+        result = data.get_user_enrollments(self.course.id)
+        self.assertFalse(result.exists())
+
+        # Create 10 test users to enroll in the course
+        users = []
+        for i in xrange(10):
+            users.append(UserFactory.create(
+                username=self.USERNAME + str(i),
+                email=self.EMAIL + str(i),
+                password=self.PASSWORD + str(i)
+            ))
+
+        # Create the original enrollments.
+        created_enrollments = []
+        for user in users:
+            created_enrollments.append(data.create_course_enrollment(
+                user.username,
+                unicode(self.course.id),
+                enrollment_mode,
+                True
+            ))
+
+        # Compare the created enrollments with the results
+        # from the get user enrollments request.
+        results = data.get_user_enrollments(
+            self.course.id
+        )
+        self.assertTrue(result.exists())
+        self.assertEqual(CourseEnrollmentSerializer(results, many=True).data, created_enrollments)
+
+    @ddt.data(
+        # Default (no course modes in the database)
+        # Expect that users are automatically enrolled as "honor".
         ([], 'credit'),
 
         # Audit / Verified / Honor
@@ -240,13 +294,13 @@ class EnrollmentDataTest(ModuleStoreTestCase):
 
     @raises(CourseEnrollmentFullError)
     @patch.object(CourseEnrollment, "enroll")
-    def test_enrollment_for_closed_course(self, mock_enroll):
+    def test_enrollment_for_full_course(self, mock_enroll):
         mock_enroll.side_effect = CourseFullError("Bad things happened")
         data.create_course_enrollment(self.user.username, unicode(self.course.id), 'honor', True)
 
     @raises(CourseEnrollmentExistsError)
     @patch.object(CourseEnrollment, "enroll")
-    def test_enrollment_for_closed_course(self, mock_enroll):
+    def test_enrollment_for_enrolled_course(self, mock_enroll):
         mock_enroll.side_effect = AlreadyEnrolledError("Bad things happened")
         data.create_course_enrollment(self.user.username, unicode(self.course.id), 'honor', True)
 
@@ -257,3 +311,34 @@ class EnrollmentDataTest(ModuleStoreTestCase):
     def test_update_for_non_existent_course(self):
         enrollment = data.update_course_enrollment(self.user.username, "some/fake/course", is_active=False)
         self.assertIsNone(enrollment)
+
+    def test_get_course_with_expired_mode_included(self):
+        """Verify that method returns expired modes if include_expired
+        is true."""
+        modes = ['honor', 'verified', 'audit']
+        self._create_course_modes(modes, course=self.course)
+        self._update_verified_mode_as_expired(self.course.id)
+        self.assert_enrollment_modes(modes, True)
+
+    def test_get_course_without_expired_mode_included(self):
+        """Verify that method does not returns expired modes if include_expired
+        is false."""
+        self._create_course_modes(['honor', 'verified', 'audit'], course=self.course)
+        self._update_verified_mode_as_expired(self.course.id)
+        self.assert_enrollment_modes(['audit', 'honor'], False)
+
+    def _update_verified_mode_as_expired(self, course_id):
+        """Dry method to change verified mode expiration."""
+        mode = CourseMode.objects.get(course_id=course_id, mode_slug=CourseMode.VERIFIED)
+        mode.expiration_datetime = datetime.datetime(year=1970, month=1, day=1, tzinfo=UTC)
+        mode.save()
+
+    def assert_enrollment_modes(self, expected_modes, include_expired):
+        """Get enrollment data and assert response with expected modes."""
+        result_course = data.get_course_enrollment_info(unicode(self.course.id), include_expired=include_expired)
+        result_slugs = [mode['slug'] for mode in result_course['course_modes']]
+        for course_mode in expected_modes:
+            self.assertIn(course_mode, result_slugs)
+
+        if not include_expired:
+            self.assertNotIn('verified', result_slugs)

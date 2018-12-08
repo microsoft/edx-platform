@@ -1,40 +1,38 @@
 """
 tests for the models
 """
+import json
 from datetime import datetime, timedelta
-from django.utils.timezone import UTC
-from mock import patch
+
+import ddt
 from nose.plugins.attrib import attr
+from pytz import utc
+
 from student.roles import CourseCcxCoachRole
-from student.tests.factories import (
-    AdminFactory,
-)
-from util.tests.test_date_utils import fake_ugettext
-from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
-from xmodule.modulestore.tests.factories import (
-    CourseFactory,
-    check_mongo_calls
-)
+from student.tests.factories import AdminFactory
+from xmodule.modulestore.tests.django_utils import TEST_DATA_SPLIT_MODULESTORE, ModuleStoreTestCase
+from xmodule.modulestore.tests.factories import CourseFactory, check_mongo_calls
 
-from .factories import (
-    CcxFactory,
-)
 from ..overrides import override_field_for_ccx
+from .factories import CcxFactory
 
 
-@attr('shard_1')
+@ddt.ddt
+@attr(shard=7)
 class TestCCX(ModuleStoreTestCase):
     """Unit tests for the CustomCourseForEdX model
     """
 
+    MODULESTORE = TEST_DATA_SPLIT_MODULESTORE
+
     def setUp(self):
         """common setup for all tests"""
         super(TestCCX, self).setUp()
-        self.course = course = CourseFactory.create()
-        coach = AdminFactory.create()
-        role = CourseCcxCoachRole(course.id)
-        role.add_users(coach)
-        self.ccx = CcxFactory(course_id=course.id, coach=coach)
+        self.course = CourseFactory.create()
+        self.coach = AdminFactory.create()
+        role = CourseCcxCoachRole(self.course.id)
+        role.add_users(self.coach)
+        self.ccx = CcxFactory(course_id=self.course.id, coach=self.coach)
 
     def set_ccx_override(self, field, value):
         """Create a field override for the test CCX on <field> with <value>"""
@@ -48,7 +46,7 @@ class TestCCX(ModuleStoreTestCase):
 
     def test_ccx_course_caching(self):
         """verify that caching the propery works to limit queries"""
-        with check_mongo_calls(1):
+        with check_mongo_calls(3):
             # these statements are used entirely to demonstrate the
             # instance-level caching of these values on CCX objects. The
             # check_mongo_calls context is the point here.
@@ -64,7 +62,7 @@ class TestCCX(ModuleStoreTestCase):
         For this reason we test the difference between and make sure it is less
         than one second.
         """
-        expected = datetime.now(UTC())
+        expected = datetime.now(utc)
         self.set_ccx_override('start', expected)
         actual = self.ccx.start  # pylint: disable=no-member
         diff = expected - actual
@@ -72,9 +70,9 @@ class TestCCX(ModuleStoreTestCase):
 
     def test_ccx_start_caching(self):
         """verify that caching the start property works to limit queries"""
-        now = datetime.now(UTC())
+        now = datetime.now(utc)
         self.set_ccx_override('start', now)
-        with check_mongo_calls(1):
+        with check_mongo_calls(3):
             # these statements are used entirely to demonstrate the
             # instance-level caching of these values on CCX objects. The
             # check_mongo_calls context is the point here.
@@ -89,7 +87,7 @@ class TestCCX(ModuleStoreTestCase):
 
     def test_ccx_due_is_correct(self):
         """verify that the due datetime for a ccx is correctly retrieved"""
-        expected = datetime.now(UTC())
+        expected = datetime.now(utc)
         self.set_ccx_override('due', expected)
         actual = self.ccx.due  # pylint: disable=no-member
         diff = expected - actual
@@ -97,9 +95,9 @@ class TestCCX(ModuleStoreTestCase):
 
     def test_ccx_due_caching(self):
         """verify that caching the due property works to limit queries"""
-        expected = datetime.now(UTC())
+        expected = datetime.now(utc)
         self.set_ccx_override('due', expected)
-        with check_mongo_calls(1):
+        with check_mongo_calls(3):
             # these statements are used entirely to demonstrate the
             # instance-level caching of these values on CCX objects. The
             # check_mongo_calls context is the point here.
@@ -109,7 +107,7 @@ class TestCCX(ModuleStoreTestCase):
 
     def test_ccx_has_started(self):
         """verify that a ccx marked as starting yesterday has started"""
-        now = datetime.now(UTC())
+        now = datetime.now(utc)
         delta = timedelta(1)
         then = now - delta
         self.set_ccx_override('start', then)
@@ -117,7 +115,7 @@ class TestCCX(ModuleStoreTestCase):
 
     def test_ccx_has_not_started(self):
         """verify that a ccx marked as starting tomorrow has not started"""
-        now = datetime.now(UTC())
+        now = datetime.now(utc)
         delta = timedelta(1)
         then = now + delta
         self.set_ccx_override('start', then)
@@ -125,7 +123,7 @@ class TestCCX(ModuleStoreTestCase):
 
     def test_ccx_has_ended(self):
         """verify that a ccx that has a due date in the past has ended"""
-        now = datetime.now(UTC())
+        now = datetime.now(utc)
         delta = timedelta(1)
         then = now - delta
         self.set_ccx_override('due', then)
@@ -134,7 +132,7 @@ class TestCCX(ModuleStoreTestCase):
     def test_ccx_has_not_ended(self):
         """verify that a ccx that has a due date in the future has not eneded
         """
-        now = datetime.now(UTC())
+        now = datetime.now(utc)
         delta = timedelta(1)
         then = now + delta
         self.set_ccx_override('due', then)
@@ -144,63 +142,6 @@ class TestCCX(ModuleStoreTestCase):
         """verify that a ccx without a due date has not ended"""
         self.assertFalse(self.ccx.has_ended())  # pylint: disable=no-member
 
-    # ensure that the expected localized format will be found by the i18n
-    # service
-    @patch('util.date_utils.ugettext', fake_ugettext(translations={
-        "SHORT_DATE_FORMAT": "%b %d, %Y",
-    }))
-    def test_start_datetime_short_date(self):
-        """verify that the start date for a ccx formats properly by default"""
-        start = datetime(2015, 1, 1, 12, 0, 0, tzinfo=UTC())
-        expected = "Jan 01, 2015"
-        self.set_ccx_override('start', start)
-        actual = self.ccx.start_datetime_text()  # pylint: disable=no-member
-        self.assertEqual(expected, actual)
-
-    @patch('util.date_utils.ugettext', fake_ugettext(translations={
-        "DATE_TIME_FORMAT": "%b %d, %Y at %H:%M",
-    }))
-    def test_start_datetime_date_time_format(self):
-        """verify that the DATE_TIME format also works as expected"""
-        start = datetime(2015, 1, 1, 12, 0, 0, tzinfo=UTC())
-        expected = "Jan 01, 2015 at 12:00 UTC"
-        self.set_ccx_override('start', start)
-        actual = self.ccx.start_datetime_text('DATE_TIME')  # pylint: disable=no-member
-        self.assertEqual(expected, actual)
-
-    @patch('util.date_utils.ugettext', fake_ugettext(translations={
-        "SHORT_DATE_FORMAT": "%b %d, %Y",
-    }))
-    def test_end_datetime_short_date(self):
-        """verify that the end date for a ccx formats properly by default"""
-        end = datetime(2015, 1, 1, 12, 0, 0, tzinfo=UTC())
-        expected = "Jan 01, 2015"
-        self.set_ccx_override('due', end)
-        actual = self.ccx.end_datetime_text()  # pylint: disable=no-member
-        self.assertEqual(expected, actual)
-
-    @patch('util.date_utils.ugettext', fake_ugettext(translations={
-        "DATE_TIME_FORMAT": "%b %d, %Y at %H:%M",
-    }))
-    def test_end_datetime_date_time_format(self):
-        """verify that the DATE_TIME format also works as expected"""
-        end = datetime(2015, 1, 1, 12, 0, 0, tzinfo=UTC())
-        expected = "Jan 01, 2015 at 12:00 UTC"
-        self.set_ccx_override('due', end)
-        actual = self.ccx.end_datetime_text('DATE_TIME')  # pylint: disable=no-member
-        self.assertEqual(expected, actual)
-
-    @patch('util.date_utils.ugettext', fake_ugettext(translations={
-        "DATE_TIME_FORMAT": "%b %d, %Y at %H:%M",
-    }))
-    def test_end_datetime_no_due_date(self):
-        """verify that without a due date, the end date is an empty string"""
-        expected = ''
-        actual = self.ccx.end_datetime_text()  # pylint: disable=no-member
-        self.assertEqual(expected, actual)
-        actual = self.ccx.end_datetime_text('DATE_TIME')  # pylint: disable=no-member
-        self.assertEqual(expected, actual)
-
     def test_ccx_max_student_enrollment_correct(self):
         """
         Verify the override value for max_student_enrollments_allowed
@@ -209,3 +150,35 @@ class TestCCX(ModuleStoreTestCase):
         self.set_ccx_override('max_student_enrollments_allowed', expected)
         actual = self.ccx.max_student_enrollments_allowed  # pylint: disable=no-member
         self.assertEqual(expected, actual)
+
+    def test_structure_json_default_empty(self):
+        """
+        By default structure_json does not contain anything
+        """
+        self.assertEqual(self.ccx.structure_json, None)  # pylint: disable=no-member
+        self.assertEqual(self.ccx.structure, None)  # pylint: disable=no-member
+
+    def test_structure_json(self):
+        """
+        Test a json stored in the structure_json
+        """
+        dummy_struct = [
+            "block-v1:Organization+CN101+CR-FALL15+type@chapter+block@Unit_4",
+            "block-v1:Organization+CN101+CR-FALL15+type@chapter+block@Unit_5",
+            "block-v1:Organization+CN101+CR-FALL15+type@chapter+block@Unit_11"
+        ]
+        json_struct = json.dumps(dummy_struct)
+        ccx = CcxFactory(
+            course_id=self.course.id,
+            coach=self.coach,
+            structure_json=json_struct
+        )
+        self.assertEqual(ccx.structure_json, json_struct)  # pylint: disable=no-member
+        self.assertEqual(ccx.structure, dummy_struct)  # pylint: disable=no-member
+
+    def test_locator_property(self):
+        """
+        Verify that the locator helper property returns a correct CCXLocator
+        """
+        locator = self.ccx.locator  # pylint: disable=no-member
+        self.assertEqual(self.ccx.id, long(locator.ccx))

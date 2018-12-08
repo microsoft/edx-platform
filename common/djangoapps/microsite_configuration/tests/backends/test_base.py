@@ -1,11 +1,13 @@
 """
 Test Microsite base backends.
 """
+import logging
+
 from django.test import TestCase
 
-from microsite_configuration.backends.base import (
-    AbstractBaseMicrositeBackend,
-)
+from microsite_configuration.backends.base import AbstractBaseMicrositeBackend
+
+log = logging.getLogger(__name__)
 
 
 class NullBackend(AbstractBaseMicrositeBackend):

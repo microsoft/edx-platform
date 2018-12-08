@@ -5,24 +5,20 @@ Code related to the handling of Proctored Exams in Studio
 import logging
 
 from django.conf import settings
-
-from xmodule.modulestore.django import modulestore
+from edx_proctoring.api import (
+    create_exam,
+    create_exam_review_policy,
+    get_all_exams_for_course,
+    get_exam_by_content_id,
+    remove_review_policy,
+    update_exam,
+    update_review_policy
+)
+from edx_proctoring.exceptions import ProctoredExamNotFoundException, ProctoredExamReviewPolicyNotFoundException
 
 from contentstore.views.helpers import is_item_in_course_tree
-
-from edx_proctoring.api import (
-    get_exam_by_content_id,
-    update_exam,
-    create_exam,
-    get_all_exams_for_course,
-    update_review_policy,
-    create_exam_review_policy,
-    remove_review_policy,
-)
-from edx_proctoring.exceptions import (
-    ProctoredExamNotFoundException,
-    ProctoredExamReviewPolicyNotFoundException
-)
+from xmodule.modulestore.django import modulestore
+from xmodule.modulestore.exceptions import ItemNotFoundError
 
 log = logging.getLogger(__name__)
 
@@ -40,6 +36,9 @@ def register_special_exams(course_key):
         return
 
     course = modulestore().get_course(course_key)
+    if course is None:
+        raise ItemNotFoundError("Course {} does not exist", unicode(course_key))
+
     if not course.enable_proctored_exams and not course.enable_timed_exams:
         # likewise if course does not have these features turned on
         # then quickly exit
@@ -83,7 +82,8 @@ def register_special_exams(course_key):
                 due_date=timed_exam.due,
                 is_proctored=timed_exam.is_proctored_exam,
                 is_practice_exam=timed_exam.is_practice_exam,
-                is_active=True
+                is_active=True,
+                hide_after_due=timed_exam.hide_after_due,
             )
             msg = 'Updated timed exam {exam_id}'.format(exam_id=exam['id'])
             log.info(msg)
@@ -97,7 +97,8 @@ def register_special_exams(course_key):
                 due_date=timed_exam.due,
                 is_proctored=timed_exam.is_proctored_exam,
                 is_practice_exam=timed_exam.is_practice_exam,
-                is_active=True
+                is_active=True,
+                hide_after_due=timed_exam.hide_after_due,
             )
             msg = 'Created new timed exam {exam_id}'.format(exam_id=exam_id)
             log.info(msg)

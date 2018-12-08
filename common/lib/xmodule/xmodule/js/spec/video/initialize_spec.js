@@ -1,30 +1,29 @@
-(function (requirejs, require, define, undefined) {
+(function(require) {
+    'use strict';
 
-'use strict';
-
-require(
+    require(
 ['video/01_initialize.js'],
-function (Initialize) {
-    describe('Initialize', function () {
+function(Initialize) {
+    describe('Initialize', function() {
         var state = {};
 
-        afterEach(function () {
+        afterEach(function() {
             state = {};
         });
 
-        describe('getCurrentLanguage', function () {
+        describe('getCurrentLanguage', function() {
             var msg;
 
-            beforeEach(function () {
+            beforeEach(function() {
                 state.config = {};
                 state.config.transcriptLanguages = {
-                    'de': 'German',
-                    'en': 'English',
-                    'uk': 'Ukrainian',
+                    de: 'German',
+                    en: 'English',
+                    uk: 'Ukrainian'
                 };
             });
 
-            it ('returns current language', function () {
+            it('returns current language', function() {
                 var expected;
 
                 state.lang = 'de';
@@ -33,7 +32,7 @@ function (Initialize) {
             });
 
             msg = 'returns `en`, if language isn\'t available for the video';
-            it (msg, function () {
+            it(msg, function() {
                 var expected;
 
                 state.lang = 'zh';
@@ -43,19 +42,19 @@ function (Initialize) {
 
             msg = 'returns any available language, if current and `en` ' +
                     'languages aren\'t available for the video';
-            it (msg, function () {
+            it(msg, function() {
                 var expected;
 
                 state.lang = 'zh';
                 state.config.transcriptLanguages = {
-                    'de': 'German',
-                    'uk': 'Ukrainian',
+                    de: 'German',
+                    uk: 'Ukrainian'
                 };
                 expected = Initialize.prototype.getCurrentLanguage.call(state);
                 expect(expected).toBe('uk');
             });
 
-            it ('returns `null`, if transcript unavailable', function () {
+            it('returns `null`, if transcript unavailable', function() {
                 var expected;
 
                 state.lang = 'zh';
@@ -65,15 +64,15 @@ function (Initialize) {
             });
         });
 
-        describe('getDuration', function () {
-            beforeEach(function () {
+        describe('getDuration', function() {
+            beforeEach(function() {
                 state = {
                     speed: '1.50',
                     metadata: {
-                        'testId': {
+                        testId: {
                             duration: 'PT6M40S'
                         },
-                        'videoId': {
+                        videoId: {
                             duration: 'PT1M40S'
                         }
                     },
@@ -82,12 +81,11 @@ function (Initialize) {
                         '1.50': 'videoId'
                     },
                     youtubeId: Initialize.prototype.youtubeId,
-                    isFlashMode: jasmine.createSpy().andReturn(false)
+                    isFlashMode: jasmine.createSpy().and.returnValue(false)
                 };
             });
 
-            var msg = 'returns duration for the 1.0 speed if speed is not 1.0';
-            it(msg, function () {
+            it('returns duration for the 1.0 speed if speed is not 1.0', function() {
                 var expected;
 
                 state.speed = '1.50';
@@ -96,21 +94,20 @@ function (Initialize) {
                 expect(expected).toEqual(400);
             });
 
-            describe('Flash mode', function () {
-                it('returns duration for current video', function () {
+            describe('Flash mode', function() {
+                it('returns duration for current video', function() {
                     var expected;
 
-                    state.isFlashMode.andReturn(true);
+                    state.isFlashMode.and.returnValue(true);
                     expected = Initialize.prototype.getDuration.call(state);
 
                     expect(expected).toEqual(100);
                 });
 
-                var msg = 'returns duration for the 1.0 speed as a fall-back';
-                it(msg, function () {
+                it('returns duration for the 1.0 speed as a fall-back', function() {
                     var expected;
 
-                    state.isFlashMode.andReturn(true);
+                    state.isFlashMode.and.returnValue(true);
                     state.speed = '2.0';
                     expected = Initialize.prototype.getDuration.call(state);
 
@@ -119,8 +116,8 @@ function (Initialize) {
             });
         });
 
-        describe('youtubeId', function () {
-            beforeEach(function () {
+        describe('youtubeId', function() {
+            beforeEach(function() {
                 state = {
                     speed: '1.50',
                     videos: {
@@ -128,12 +125,12 @@ function (Initialize) {
                         '1.0': 'cogebirgzzM',
                         '1.50': 'abcdefghijkl'
                     },
-                    isFlashMode: jasmine.createSpy().andReturn(false)
+                    isFlashMode: jasmine.createSpy().and.returnValue(false)
                 };
             });
 
-            describe('with speed', function () {
-                it('return the video id for given speed', function () {
+            describe('with speed', function() {
+                it('return the video id for given speed', function() {
                     $.each(state.videos, function(speed, videoId) {
                         var expected = Initialize.prototype.youtubeId.call(
                                 state, speed
@@ -144,27 +141,27 @@ function (Initialize) {
                 });
             });
 
-            describe('without speed for flash mode', function () {
-                it('return the video id for current speed', function () {
+            describe('without speed for flash mode', function() {
+                it('return the video id for current speed', function() {
                     var expected;
 
-                    state.isFlashMode.andReturn(true);
+                    state.isFlashMode.and.returnValue(true);
                     expected = Initialize.prototype.youtubeId.call(state);
 
                     expect(expected).toEqual('abcdefghijkl');
                 });
             });
 
-            describe('without speed for youtube html5 mode', function () {
-                it('return the video id for 1.0x speed', function () {
+            describe('without speed for youtube html5 mode', function() {
+                it('return the video id for 1.0x speed', function() {
                     var expected = Initialize.prototype.youtubeId.call(state);
 
                     expect(expected).toEqual('cogebirgzzM');
                 });
             });
 
-            describe('speed is absent in the list of video speeds', function () {
-                it('return the video id for 1.0x speed', function () {
+            describe('speed is absent in the list of video speeds', function() {
+                it('return the video id for 1.0x speed', function() {
                     var expected = Initialize.prototype.youtubeId.call(state, '0.0');
 
                     expect(expected).toEqual('cogebirgzzM');
@@ -172,19 +169,19 @@ function (Initialize) {
             });
         });
 
-        describe('setSpeed', function () {
-            describe('YT', function () {
-                beforeEach(function () {
+        describe('setSpeed', function() {
+            describe('YT', function() {
+                beforeEach(function() {
                     state = {
                         speeds: ['0.25', '0.50', '1.0', '1.50', '2.0'],
                         storage: jasmine.createSpyObj('storage', ['setItem'])
                     };
                 });
 
-                it('check mapping', function () {
+                it('check mapping', function() {
                     var map = {
-                        '0.75': '0.50',
-                        '1.25': '1.50'
+                        0.75: '0.50',
+                        1.25: '1.50'
                     };
 
                     $.each(map, function(key, expected) {
@@ -194,37 +191,37 @@ function (Initialize) {
                 });
             });
 
-            describe('HTML5', function () {
-                beforeEach(function () {
+            describe('HTML5', function() {
+                beforeEach(function() {
                     state = {
                         speeds: ['0.75', '1.0', '1.25', '1.50'],
                         storage: jasmine.createSpyObj('storage', ['setItem'])
                     };
                 });
 
-                describe('when new speed is available', function () {
-                    beforeEach(function () {
+                describe('when new speed is available', function() {
+                    beforeEach(function() {
                         Initialize.prototype.setSpeed.call(state, '0.75');
                     });
 
-                    it('set new speed', function () {
+                    it('set new speed', function() {
                         expect(state.speed).toEqual('0.75');
                     });
                 });
 
-                describe('when new speed is not available', function () {
-                    beforeEach(function () {
+                describe('when new speed is not available', function() {
+                    beforeEach(function() {
                         Initialize.prototype.setSpeed.call(state, '1.75');
                     });
 
-                    it('set speed to 1.0x', function () {
+                    it('set speed to 1.0x', function() {
                         expect(state.speed).toEqual('1.0');
                     });
                 });
 
-                it('check mapping', function () {
+                it('check mapping', function() {
                     var map = {
-                        '0.25': '0.75',
+                        0.25: '0.75',
                         '0.50': '0.75',
                         '2.0': '1.50'
                     };
@@ -237,14 +234,14 @@ function (Initialize) {
             });
         });
 
-        describe('setPlayerMode', function () {
-            beforeEach(function () {
+        describe('setPlayerMode', function() {
+            beforeEach(function() {
                 state = {
-                    currentPlayerMode: 'flash',
+                    currentPlayerMode: 'flash'
                 };
             });
 
-            it('updates player mode', function () {
+            it('updates player mode', function() {
                 var setPlayerMode = Initialize.prototype.setPlayerMode;
 
                 setPlayerMode.call(state, 'html5');
@@ -253,7 +250,7 @@ function (Initialize) {
                 expect(state.currentPlayerMode).toBe('flash');
             });
 
-            it('sets default mode if passed is not supported', function () {
+            it('sets default mode if passed is not supported', function() {
                 var setPlayerMode = Initialize.prototype.setPlayerMode;
 
                 setPlayerMode.call(state, '77html77');
@@ -261,14 +258,14 @@ function (Initialize) {
             });
         });
 
-        describe('getPlayerMode', function () {
-            beforeEach(function () {
+        describe('getPlayerMode', function() {
+            beforeEach(function() {
                 state = {
-                    currentPlayerMode: 'flash',
+                    currentPlayerMode: 'flash'
                 };
             });
 
-            it('returns current player mode', function () {
+            it('returns current player mode', function() {
                 var getPlayerMode = Initialize.prototype.getPlayerMode,
                     actual = getPlayerMode.call(state);
 
@@ -276,50 +273,49 @@ function (Initialize) {
             });
         });
 
-        describe('isFlashMode', function () {
-            it('returns `true` if player in `flash` mode', function () {
-                var state = {
-                        getPlayerMode: jasmine.createSpy().andReturn('flash'),
+        describe('isFlashMode', function() {
+            it('returns `true` if player in `flash` mode', function() {
+                var testState = {
+                        getPlayerMode: jasmine.createSpy().and.returnValue('flash')
                     },
                     isFlashMode = Initialize.prototype.isFlashMode,
-                    actual = isFlashMode.call(state);
+                    actual = isFlashMode.call(testState);
 
                 expect(actual).toBeTruthy();
             });
 
-            it('returns `false` if player is not in `flash` mode', function () {
-                var state = {
-                        getPlayerMode: jasmine.createSpy().andReturn('html5'),
+            it('returns `false` if player is not in `flash` mode', function() {
+                var testState = {
+                        getPlayerMode: jasmine.createSpy().and.returnValue('html5')
                     },
                     isFlashMode = Initialize.prototype.isFlashMode,
-                    actual = isFlashMode.call(state);
+                    actual = isFlashMode.call(testState);
 
                 expect(actual).toBeFalsy();
             });
         });
 
-        describe('isHtml5Mode', function () {
-            it('returns `true` if player in `html5` mode', function () {
-                var state = {
-                        getPlayerMode: jasmine.createSpy().andReturn('html5'),
+        describe('isHtml5Mode', function() {
+            it('returns `true` if player in `html5` mode', function() {
+                var testState = {
+                        getPlayerMode: jasmine.createSpy().and.returnValue('html5')
                     },
                     isHtml5Mode = Initialize.prototype.isHtml5Mode,
-                    actual = isHtml5Mode.call(state);
+                    actual = isHtml5Mode.call(testState);
 
                 expect(actual).toBeTruthy();
             });
 
-            it('returns `false` if player is not in `html5` mode', function () {
-                var state = {
-                        getPlayerMode: jasmine.createSpy().andReturn('flash'),
+            it('returns `false` if player is not in `html5` mode', function() {
+                var testState = {
+                        getPlayerMode: jasmine.createSpy().and.returnValue('flash')
                     },
                     isHtml5Mode = Initialize.prototype.isHtml5Mode,
-                    actual = isHtml5Mode.call(state);
+                    actual = isHtml5Mode.call(testState);
 
                 expect(actual).toBeFalsy();
             });
         });
     });
 });
-
-}(RequireJS.requirejs, RequireJS.require, RequireJS.define));
+}(require));

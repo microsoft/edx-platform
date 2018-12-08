@@ -2,33 +2,39 @@
 Discussion API views
 """
 from django.core.exceptions import ValidationError
+from django.contrib.auth import get_user_model
+from edx_rest_framework_extensions.authentication import JwtAuthentication
+from opaque_keys.edx.keys import CourseKey
+from rest_framework import permissions
+from rest_framework import status
 from rest_framework.exceptions import UnsupportedMediaType
 from rest_framework.parsers import JSONParser
-
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ViewSet
+from six import text_type
 
-from opaque_keys.edx.keys import CourseKey
-from xmodule.modulestore.django import modulestore
-
+from lms.lib import comment_client
 from discussion_api.api import (
     create_comment,
     create_thread,
-    delete_thread,
     delete_comment,
+    delete_thread,
     get_comment_list,
-    get_response_comments,
     get_course,
     get_course_topics,
+    get_response_comments,
     get_thread,
     get_thread_list,
     update_comment,
-    update_thread,
+    update_thread
 )
-from discussion_api.forms import CommentListGetForm, ThreadListGetForm, _PaginationForm
+from discussion_api.forms import CommentGetForm, CommentListGetForm, ThreadListGetForm
 from openedx.core.lib.api.parsers import MergePatchParser
 from openedx.core.lib.api.view_utils import DeveloperErrorViewMixin, view_auth_classes
+from openedx.core.djangoapps.user_api.accounts.permissions import CanRetireUser
+from openedx.core.djangoapps.user_api.models import UserRetirementStatus
+from xmodule.modulestore.django import modulestore
 
 
 @view_auth_classes()
@@ -75,11 +81,11 @@ class CourseTopicsView(DeveloperErrorViewMixin, APIView):
     **Example Requests**:
 
         GET /api/discussion/v1/course_topics/course-v1:ExampleX+Subject101+2015
+            ?topic_id={topic_id_1, topid_id_2}
 
     **Response Values**:
-
         * courseware_topics: The list of topic trees for courseware-linked
-          topics. Each item in the list includes:
+            topics. Each item in the list includes:
 
             * id: The id of the discussion topic (null for a topic that only
               has children but cannot contain threads itself).
@@ -92,10 +98,17 @@ class CourseTopicsView(DeveloperErrorViewMixin, APIView):
               courseware. Items are of the same format as in courseware_topics.
     """
     def get(self, request, course_id):
-        """Implements the GET method as described in the class docstring."""
+        """
+        Implements the GET method as described in the class docstring.
+        """
         course_key = CourseKey.from_string(course_id)
+        topic_ids = self.request.GET.get('topic_id')
         with modulestore().bulk_operations(course_key):
-            response = get_course_topics(request, course_key)
+            response = get_course_topics(
+                request,
+                course_key,
+                set(topic_ids.strip(',').split(',')) if topic_ids else None,
+            )
         return Response(response)
 
 
@@ -111,7 +124,7 @@ class ThreadViewSet(DeveloperErrorViewMixin, ViewSet):
 
         GET /api/discussion/v1/threads/?course_id=ExampleX/Demo/2015
 
-        GET /api/discussion/v1/threads/thread_id
+        GET /api/discussion/v1/threads/{thread_id}
 
         POST /api/discussion/v1/threads
         {
@@ -148,8 +161,9 @@ class ThreadViewSet(DeveloperErrorViewMixin, ViewSet):
             "vote_count". The key to sort the threads by. The default is
             "last_activity_at".
 
-        * order_direction: Must be "asc" or "desc". The direction in which to
-            sort the threads by. The default is "desc".
+        * order_direction: Must be "desc". The direction in which to sort the
+            threads by. The default and only value is "desc". This will be
+            removed in a future major version.
 
         * following: If true, retrieve only threads the requesting user is
             following
@@ -158,8 +172,18 @@ class ThreadViewSet(DeveloperErrorViewMixin, ViewSet):
             "unanswered" for question threads with no marked answer. Only one
             can be selected.
 
+        * requested_fields: (list) Indicates which additional fields to return
+          for each thread. (supports 'profile_image')
+
         The topic_id, text_search, and following parameters are mutually
         exclusive (i.e. only one may be specified in a request)
+
+    **GET Thread Parameters**:
+
+        * thread_id (required): The id of the thread
+
+        * requested_fields (optional parameter): (list) Indicates which additional
+         fields to return for each thread. (supports 'profile_image')
 
     **POST Parameters**:
 
@@ -272,13 +296,15 @@ class ThreadViewSet(DeveloperErrorViewMixin, ViewSet):
             form.cleaned_data["view"],
             form.cleaned_data["order_by"],
             form.cleaned_data["order_direction"],
+            form.cleaned_data["requested_fields"]
         )
 
     def retrieve(self, request, thread_id=None):
         """
         Implements the GET method for thread ID
         """
-        return Response(get_thread(request, thread_id))
+        requested_fields = request.GET.get('requested_fields')
+        return Response(get_thread(request, thread_id, requested_fields))
 
     def create(self, request):
         """
@@ -344,6 +370,9 @@ class CommentViewSet(DeveloperErrorViewMixin, ViewSet):
 
         * page_size: The number of items per page (default is 10, max is 100)
 
+        * requested_fields: (list) Indicates which additional fields to return
+          for each thread. (supports 'profile_image')
+
     **GET Child Comment List Parameters**:
 
         * comment_id (required): The comment to retrieve child comments for
@@ -351,6 +380,9 @@ class CommentViewSet(DeveloperErrorViewMixin, ViewSet):
         * page: The (1-indexed) page to retrieve (default is 1)
 
         * page_size: The number of items per page (default is 10, max is 100)
+
+        * requested_fields: (list) Indicates which additional fields to return
+          for each thread. (supports 'profile_image')
 
 
     **POST Parameters**:
@@ -446,21 +478,23 @@ class CommentViewSet(DeveloperErrorViewMixin, ViewSet):
             form.cleaned_data["thread_id"],
             form.cleaned_data["endorsed"],
             form.cleaned_data["page"],
-            form.cleaned_data["page_size"]
+            form.cleaned_data["page_size"],
+            form.cleaned_data["requested_fields"],
         )
 
     def retrieve(self, request, comment_id=None):
         """
         Implements the GET method for comments against response ID
         """
-        form = _PaginationForm(request.GET)
+        form = CommentGetForm(request.GET)
         if not form.is_valid():
             raise ValidationError(form.errors)
         return get_response_comments(
             request,
             comment_id,
             form.cleaned_data["page"],
-            form.cleaned_data["page_size"]
+            form.cleaned_data["page_size"],
+            form.cleaned_data["requested_fields"],
         )
 
     def create(self, request):
@@ -486,3 +520,51 @@ class CommentViewSet(DeveloperErrorViewMixin, ViewSet):
         if request.content_type != MergePatchParser.media_type:
             raise UnsupportedMediaType(request.content_type)
         return Response(update_comment(request, comment_id, request.data))
+
+
+class RetireUserView(APIView):
+    """
+    **Use Cases**
+
+        A superuser or the user with the settings.RETIREMENT_SERVICE_WORKER_USERNAME
+        can "retire" the user's data from the comments service, which will remove
+        personal information and blank all posts / comments the user has made.
+
+    **Example Requests**:
+        POST /api/discussion/v1/retire_user/
+        {
+            "username": "an_original_user_name"
+        }
+
+    **Example Response**:
+        Empty string
+    """
+
+    authentication_classes = (JwtAuthentication,)
+    permission_classes = (permissions.IsAuthenticated, CanRetireUser)
+
+    def post(self, request):
+        """
+        Implements the retirement endpoint.
+        """
+        username = request.data['username']
+
+        try:
+            retirement = UserRetirementStatus.get_retirement_for_retirement_action(username)
+            cc_user = comment_client.User.from_django_user(retirement.user)
+
+            # Send the retired username to the forums service, as the service cannot generate
+            # the retired username itself. Forums users are referenced by Django auth_user id.
+            cc_user.retire(retirement.retired_username)
+        except UserRetirementStatus.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        except comment_client.CommentClientRequestError as exc:
+            # 404s from client service for users that don't exist there are expected
+            # we can just pass those up.
+            if exc.status_code == 404:
+                return Response(status=status.HTTP_404_NOT_FOUND)
+            raise
+        except Exception as exc:  # pylint: disable=broad-except
+            return Response(text_type(exc), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response(status=status.HTTP_204_NO_CONTENT)

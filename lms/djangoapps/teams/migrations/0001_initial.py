@@ -4,8 +4,8 @@ from __future__ import unicode_literals
 from django.db import migrations, models
 import django_countries.fields
 from django.conf import settings
+from opaque_keys.edx.django.models import CourseKeyField
 import student.models
-import xmodule_django.models
 
 
 class Migration(migrations.Migration):
@@ -22,7 +22,7 @@ class Migration(migrations.Migration):
                 ('team_id', models.CharField(unique=True, max_length=255)),
                 ('discussion_topic_id', models.CharField(unique=True, max_length=255)),
                 ('name', models.CharField(max_length=255, db_index=True)),
-                ('course_id', xmodule_django.models.CourseKeyField(max_length=255, db_index=True)),
+                ('course_id', CourseKeyField(max_length=255, db_index=True)),
                 ('topic_id', models.CharField(db_index=True, max_length=255, blank=True)),
                 ('date_created', models.DateTimeField(auto_now_add=True)),
                 ('description', models.CharField(max_length=300)),
@@ -38,8 +38,8 @@ class Migration(migrations.Migration):
                 ('id', models.AutoField(verbose_name='ID', serialize=False, auto_created=True, primary_key=True)),
                 ('date_joined', models.DateTimeField(auto_now_add=True)),
                 ('last_activity_at', models.DateTimeField()),
-                ('team', models.ForeignKey(related_name='membership', to='teams.CourseTeam')),
-                ('user', models.ForeignKey(to=settings.AUTH_USER_MODEL)),
+                ('team', models.ForeignKey(related_name='membership', to='teams.CourseTeam', on_delete=models.CASCADE)),
+                ('user', models.ForeignKey(to=settings.AUTH_USER_MODEL, on_delete=models.CASCADE)),
             ],
         ),
         migrations.AddField(

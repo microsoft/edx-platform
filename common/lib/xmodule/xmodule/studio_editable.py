@@ -1,7 +1,7 @@
 """
 Mixin to support editing in Studio.
 """
-from xmodule.x_module import module_attr, STUDENT_VIEW, AUTHOR_VIEW
+from xmodule.x_module import AUTHOR_VIEW, STUDENT_VIEW, module_attr
 
 
 class StudioEditableBlock(object):
@@ -24,7 +24,7 @@ class StudioEditableBlock(object):
                 context['reorderable_items'].add(child.location)
             context['can_add'] = can_add
             rendered_child = child.render(StudioEditableModule.get_preview_view_name(child), context)
-            fragment.add_frag_resources(rendered_child)
+            fragment.add_fragment_resources(rendered_child)
 
             contents.append({
                 'id': unicode(child.location),
@@ -43,7 +43,7 @@ class StudioEditableBlock(object):
         """
         Helper method for getting preview view name (student_view or author_view) for a given module.
         """
-        return AUTHOR_VIEW if hasattr(block, AUTHOR_VIEW) else STUDENT_VIEW
+        return AUTHOR_VIEW if has_author_view(block) else STUDENT_VIEW
 
 
 StudioEditableModule = StudioEditableBlock
@@ -58,3 +58,10 @@ class StudioEditableDescriptor(object):
     """
     author_view = module_attr(AUTHOR_VIEW)
     has_author_view = True
+
+
+def has_author_view(descriptor):
+    """
+    Returns True if the xmodule linked to the descriptor supports "author_view".
+    """
+    return getattr(descriptor, 'has_author_view', False)

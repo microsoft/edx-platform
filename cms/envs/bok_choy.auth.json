@@ -1,5 +1,4 @@
 {
-    "ANALYTICS_API_KEY": "",
     "AWS_ACCESS_KEY_ID": "",
     "AWS_SECRET_ACCESS_KEY": "",
     "CELERY_BROKER_PASSWORD": "celery",
@@ -27,6 +26,14 @@
             "ENGINE": "django.db.backends.mysql",
             "HOST": "localhost",
             "NAME": "edxtest",
+            "PASSWORD": "",
+            "PORT": "3306",
+            "USER": "root"
+        },
+        "student_module_history": {
+            "ENGINE": "django.db.backends.mysql",
+            "HOST": "localhost",
+            "NAME": "student_module_history_test",
             "PASSWORD": "",
             "PORT": "3306",
             "USER": "root"

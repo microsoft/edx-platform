@@ -4,49 +4,46 @@ Acceptance tests for the teams feature.
 import json
 import random
 import time
-
-from dateutil.parser import parse
-import ddt
-from flaky import flaky
-from nose.plugins.attrib import attr
-from selenium.common.exceptions import TimeoutException
 from uuid import uuid4
 
-from ..helpers import get_modal_alert, EventsTestMixin, UniqueCourseTest
-from ...fixtures import LMS_BASE_URL
-from ...fixtures.course import CourseFixture
-from ...fixtures.discussion import (
-    Thread,
-    MultipleThreadFixture
-)
-from ...pages.lms.auto_auth import AutoAuthPage
-from ...pages.lms.course_info import CourseInfoPage
-from ...pages.lms.learner_profile import LearnerProfilePage
-from ...pages.lms.tab_nav import TabNavPage
-from ...pages.lms.teams import (
-    TeamsPage,
-    MyTeamsPage,
-    BrowseTopicsPage,
-    BrowseTeamsPage,
-    TeamManagementPage,
-    EditMembershipPage,
-    TeamPage
-)
-from ...pages.common.utils import confirm_prompt
+import ddt
+from dateutil.parser import parse
+from nose.plugins.attrib import attr
+from selenium.common.exceptions import TimeoutException
 
+from common.test.acceptance.fixtures import LMS_BASE_URL
+from common.test.acceptance.fixtures.course import CourseFixture
+from common.test.acceptance.fixtures.discussion import ForumsConfigMixin, MultipleThreadFixture, Thread
+from common.test.acceptance.pages.common.auto_auth import AutoAuthPage
+from common.test.acceptance.pages.common.utils import confirm_prompt
+from common.test.acceptance.pages.lms.course_home import CourseHomePage
+from common.test.acceptance.pages.lms.learner_profile import LearnerProfilePage
+from common.test.acceptance.pages.lms.tab_nav import TabNavPage
+from common.test.acceptance.pages.lms.teams import (
+    BrowseTeamsPage,
+    BrowseTopicsPage,
+    EditMembershipPage,
+    MyTeamsPage,
+    TeamManagementPage,
+    TeamPage,
+    TeamsPage
+)
+from common.test.acceptance.tests.helpers import EventsTestMixin, UniqueCourseTest, get_modal_alert
 
 TOPICS_PER_PAGE = 12
 
 
-class TeamsTabBase(EventsTestMixin, UniqueCourseTest):
+class TeamsTabBase(EventsTestMixin, ForumsConfigMixin, UniqueCourseTest):
     """Base class for Teams Tab tests"""
     def setUp(self):
         super(TeamsTabBase, self).setUp()
         self.tab_nav = TabNavPage(self.browser)
-        self.course_info_page = CourseInfoPage(self.browser, self.course_id)
+        self.course_home_page = CourseHomePage(self.browser, self.course_id)
         self.teams_page = TeamsPage(self.browser, self.course_id)
         # TODO: Refactor so resetting events database is not necessary
         self.reset_event_tracking()
+
+        self.enable_forums()
 
     def create_topics(self, num_topics):
         """Create `num_topics` test topics."""
@@ -68,6 +65,7 @@ class TeamsTabBase(EventsTestMixin, UniqueCourseTest):
             # Sadly, this sleep is necessary in order to ensure that
             # sorting by last_activity_at works correctly when running
             # in Jenkins.
+            # THIS IS AN ANTI-PATTERN - DO NOT COPY.
             time.sleep(time_between_creation)
         return teams
 
@@ -117,7 +115,7 @@ class TeamsTabBase(EventsTestMixin, UniqueCourseTest):
         enroll_course_id = self.course_id if enroll_in_course else None
         #pylint: disable=attribute-defined-outside-init
         self.user_info = AutoAuthPage(self.browser, course_id=enroll_course_id, staff=global_staff).visit().user_info
-        self.course_info_page.visit()
+        self.course_home_page.visit()
 
     def verify_teams_present(self, present):
         """
@@ -158,7 +156,7 @@ class TeamsTabBase(EventsTestMixin, UniqueCourseTest):
 
 
 @ddt.ddt
-@attr('shard_5')
+@attr(shard=5)
 class TeamsTabTest(TeamsTabBase):
     """
     Tests verifying when the Teams tab is present.
@@ -181,21 +179,6 @@ class TeamsTabTest(TeamsTabBase):
         Then I should not see the Teams tab
         """
         self.set_team_configuration({u"max_team_size": 10, u"topics": []})
-        self.verify_teams_present(False)
-
-    def test_teams_not_enabled_not_enrolled(self):
-        """
-        Scenario: teams tab should not be present if student is not enrolled in the course
-        Given there is a course with team configuration and topics
-
-        And I am not enrolled in that course, and am not global staff
-        When I view the course info page
-        Then I should not see the Teams tab
-        """
-        self.set_team_configuration(
-            {u"max_team_size": 10, u"topics": self.create_topics(1)},
-            enroll_in_course=False
-        )
         self.verify_teams_present(False)
 
     def test_teams_enabled(self):
@@ -304,7 +287,7 @@ class TeamsTabTest(TeamsTabBase):
         self.assertTrue(self.teams_page.q(css=selector).visible)
 
 
-@attr('shard_5')
+@attr(shard=5)
 class MyTeamsTest(TeamsTabBase):
     """
     Tests for the "My Teams" tab of the Teams page.
@@ -368,7 +351,7 @@ class MyTeamsTest(TeamsTabBase):
         self.assertEqual(self.my_teams_page.team_memberships[0], '4 / 10 Members')
 
 
-@attr('shard_5')
+@attr(shard=5)
 @ddt.ddt
 class BrowseTopicsTest(TeamsTabBase):
     """
@@ -424,19 +407,16 @@ class BrowseTopicsTest(TeamsTabBase):
         topic = [t for t in topics if t['name'] == topic_name][0]
         self.topics_page.browse_teams_for_topic(topic_name)
         browse_teams_page = BrowseTeamsPage(self.browser, self.course_id, topic)
-        self.assertTrue(browse_teams_page.is_browser_on_page())
+        browse_teams_page.wait_for_page()
         browse_teams_page.click_create_team_link()
         create_team_page = TeamManagementPage(self.browser, self.course_id, topic)
-        create_team_page.value_for_text_field(field_id='name', value='Team Name', press_enter=False)
-        create_team_page.set_value_for_textarea_field(
-            field_id='description',
-            value='Team description.'
-        )
-        create_team_page.submit_form()
+        create_team_page.create_team()
+
         team_page = TeamPage(self.browser, self.course_id)
-        self.assertTrue(team_page.is_browser_on_page())
+        team_page.wait_for_page()
+
         team_page.click_all_topics()
-        self.assertTrue(self.topics_page.is_browser_on_page())
+        self.topics_page.wait_for_page()
         self.topics_page.wait_for_ajax()
         self.assertEqual(topic_name, self.topics_page.topic_names[0])
 
@@ -522,6 +502,23 @@ class BrowseTopicsTest(TeamsTabBase):
         self.assertEqual(len(self.topics_page.topic_cards), TOPICS_PER_PAGE)
         self.assertTrue(self.topics_page.get_pagination_header_text().startswith('Showing 1-12 out of 13 total'))
 
+    def test_topic_pagination_one_page(self):
+        """
+        Scenario: Browsing topics when there are fewer topics than the page size i.e. 12
+            all topics should show on one page
+        Given I am enrolled in a course with team configuration and topics
+        When I visit the Teams page
+        And I browse topics
+        And I should see corrected number of topic cards
+        And I should see the correct page header
+        And I should not see a pagination footer
+        """
+        self.set_team_configuration({u"max_team_size": 10, u"topics": self.create_topics(10)})
+        self.topics_page.visit()
+        self.assertEqual(len(self.topics_page.topic_cards), 10)
+        self.assertTrue(self.topics_page.get_pagination_header_text().startswith('Showing 1-10 out of 10 total'))
+        self.assertFalse(self.topics_page.pagination_controls_visible())
+
     def test_topic_description_truncation(self):
         """
         Scenario: excessively long topic descriptions should be truncated so
@@ -559,7 +556,7 @@ class BrowseTopicsTest(TeamsTabBase):
         self.topics_page.visit()
         self.topics_page.browse_teams_for_topic('Example Topic')
         browse_teams_page = BrowseTeamsPage(self.browser, self.course_id, topic)
-        self.assertTrue(browse_teams_page.is_browser_on_page())
+        browse_teams_page.wait_for_page()
         self.assertEqual(browse_teams_page.header_name, 'Example Topic')
         self.assertEqual(browse_teams_page.header_description, 'Description')
 
@@ -586,7 +583,7 @@ class BrowseTopicsTest(TeamsTabBase):
             self.topics_page.visit()
 
 
-@attr('shard_5')
+@attr(shard=5)
 @ddt.ddt
 class BrowseTeamsWithinTopicTest(TeamsTabBase):
     """
@@ -811,7 +808,7 @@ class BrowseTeamsWithinTopicTest(TeamsTabBase):
         self.verify_page_header()
 
         self.browse_teams_page.click_browse_all_teams_link()
-        self.assertTrue(self.topics_page.is_browser_on_page())
+        self.topics_page.wait_for_page()
 
     def test_search(self):
         """
@@ -890,7 +887,6 @@ class BrowseTeamsWithinTopicTest(TeamsTabBase):
             alert.accept()
 
 
-@attr('shard_5')
 class TeamFormActions(TeamsTabBase):
     """
     Base class for create, edit, and delete team.
@@ -989,6 +985,7 @@ class TeamFormActions(TeamsTabBase):
         )
 
 
+@attr(shard=5)
 @ddt.ddt
 class CreateTeamTest(TeamFormActions):
     """
@@ -1026,8 +1023,21 @@ class CreateTeamTest(TeamFormActions):
         Then I should see the error message and highlighted fields.
         """
         self.verify_and_navigate_to_create_team_page()
-        self.team_management_page.submit_form()
 
+        # `submit_form` clicks on a button, but that button doesn't always
+        # have the click event handler registered on it in time. That's why
+        # this test is flaky. Unfortunately, I don't know of a straightforward
+        # way to write something that waits for that event handler to be bound
+        # to the button element. So I used time.sleep as well, even though
+        # the bok choy docs explicitly ask us not to:
+        # http://bok-choy.readthedocs.io/en/latest/guidelines.html
+        # Sorry! For the story to address this anti-pattern, see TNL-5820
+        time.sleep(0.5)
+        self.team_management_page.submit_form()
+        self.team_management_page.wait_for(
+            lambda: self.team_management_page.validation_message_text,
+            "Validation message text never loaded."
+        )
         self.assertEqual(
             self.team_management_page.validation_message_text,
             'Check the highlighted fields below and try again.'
@@ -1134,9 +1144,16 @@ class CreateTeamTest(TeamFormActions):
         self.assertTrue(self.browse_teams_page.get_pagination_header_text().startswith('Showing 0 out of 0 total'))
 
         self.verify_and_navigate_to_create_team_page()
+
+        # We add a sleep here to allow time for the click event handler to bind
+        # to the cancel button. Using time.sleep in bok-choy tests is,
+        # generally, an anti-pattern. So don't copy this :).
+        # For the story to address this anti-pattern, see TNL-5820
+        time.sleep(0.5)
+
         self.team_management_page.cancel_team()
 
-        self.assertTrue(self.browse_teams_page.is_browser_on_page())
+        self.browse_teams_page.wait_for_page()
         self.assertTrue(self.browse_teams_page.get_pagination_header_text().startswith('Showing 0 out of 0 total'))
 
         self.teams_page.click_all_topics()
@@ -1163,6 +1180,7 @@ class CreateTeamTest(TeamFormActions):
             self.verify_and_navigate_to_create_team_page()
 
 
+@attr(shard=21)
 @ddt.ddt
 class DeleteTeamTest(TeamFormActions):
     """
@@ -1199,7 +1217,7 @@ class DeleteTeamTest(TeamFormActions):
         Then I should still see the team
         """
         self.delete_team(cancel=True)
-        self.assertTrue(self.team_management_page.is_browser_on_page())
+        self.team_management_page.wait_for_page()
         self.browser.refresh()
         self.team_management_page.wait_for_page()
         self.assertEqual(
@@ -1232,7 +1250,7 @@ class DeleteTeamTest(TeamFormActions):
         self.team_page.visit()
         self.delete_team(require_notification=False)
         browse_teams_page = BrowseTeamsPage(self.browser, self.course_id, self.topic)
-        self.assertTrue(browse_teams_page.is_browser_on_page())
+        browse_teams_page.wait_for_page()
         self.assertNotIn(self.team['name'], browse_teams_page.team_names)
 
     def delete_team(self, **kwargs):
@@ -1282,10 +1300,11 @@ class DeleteTeamTest(TeamFormActions):
         self.delete_team(require_notification=False)
         BrowseTeamsPage(self.browser, self.course_id, self.topic).click_all_topics()
         topics_page = BrowseTopicsPage(self.browser, self.course_id)
-        self.assertTrue(topics_page.is_browser_on_page())
+        topics_page.wait_for_page()
         self.teams_page.verify_topic_team_count(0)
 
 
+@attr(shard=17)
 @ddt.ddt
 class EditTeamTest(TeamFormActions):
     """
@@ -1502,6 +1521,7 @@ class EditTeamTest(TeamFormActions):
             self.verify_and_navigate_to_edit_team_page()
 
 
+@attr(shard=17)
 @ddt.ddt
 class EditMembershipTest(TeamFormActions):
     """
@@ -1568,7 +1588,7 @@ class EditMembershipTest(TeamFormActions):
             ):
                 self.edit_membership_page.confirm_delete_membership_dialog()
             self.assertEqual(self.edit_membership_page.team_members, 0)
-        self.assertTrue(self.edit_membership_page.is_browser_on_page)
+        self.edit_membership_page.wait_for_page()
 
     @ddt.data('Moderator', 'Community TA', 'Administrator', None)
     def test_remove_membership(self, role):
@@ -1603,7 +1623,7 @@ class EditMembershipTest(TeamFormActions):
         self.edit_membership_helper(role, cancel=True)
 
 
-@attr('shard_5')
+@attr(shard=17)
 @ddt.ddt
 class TeamPageTest(TeamsTabBase):
     """Tests for viewing a specific team"""
@@ -1652,7 +1672,8 @@ class TeamPageTest(TeamsTabBase):
         thread = Thread(
             id="test_thread_{}".format(uuid4().hex),
             commentable_id=self.teams[0]['discussion_topic_id'],
-            body="Dummy text body."
+            body="Dummy text body.",
+            context="standalone",
         )
         thread_fixture = MultipleThreadFixture([thread])
         thread_fixture.push()
@@ -1681,15 +1702,15 @@ class TeamPageTest(TeamsTabBase):
         thread = self.setup_thread()
         self.team_page.visit()
         self.assertEqual(self.team_page.discussion_id, self.teams[0]['discussion_topic_id'])
-        discussion = self.team_page.discussion_page
-        self.assertTrue(discussion.is_browser_on_page())
-        self.assertTrue(discussion.is_discussion_expanded())
-        self.assertEqual(discussion.get_num_displayed_threads(), 1)
-        self.assertTrue(discussion.has_thread(thread['id']))
+        discussion_page = self.team_page.discussion_page
+        discussion_page.wait_for_page()
+        self.assertTrue(discussion_page.is_discussion_expanded())
+        self.assertEqual(discussion_page.get_num_displayed_threads(), 1)
+        discussion_page.show_thread(thread['id'])
+        thread_page = discussion_page.thread_page
         assertion = self.assertTrue if should_have_permission else self.assertFalse
-        assertion(discussion.q(css='.post-header-actions').present)
-        assertion(discussion.q(css='.add-response').present)
-        assertion(discussion.q(css='.new-post-btn').present)
+        assertion(thread_page.q(css='.post-header-actions').present)
+        assertion(thread_page.q(css='.add-response').present)
 
     def test_discussion_on_my_team_page(self):
         """
@@ -1925,6 +1946,13 @@ class TeamPageTest(TeamsTabBase):
             }
         ]
         with self.assert_events_match_during(event_filter=self.only_team_events, expected_events=expected_events):
+            # I think we're seeing the same problem that we're seeing in
+            # CreateTeamTest.test_user_can_see_error_message_for_missing_data.
+            # We click on the "leave team" link after it's loaded, but before
+            # its JavaScript event handler is added. Adding this sleep gives
+            # enough time for that event handler to bind to the link. Sorry!
+            # For the story to address this anti-pattern, see TNL-5820
+            time.sleep(0.5)
             self.team_page.click_leave_team_link()
         self.assert_team_details(num_members=0, is_member=False)
         self.assertTrue(self.team_page.join_team_button_present)

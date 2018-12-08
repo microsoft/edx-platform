@@ -1,15 +1,16 @@
 """
 Fixture to manipulate configuration models.
 """
-import requests
-import re
 import json
+import re
 
+import requests
 from lazy import lazy
-from . import LMS_BASE_URL
+
+from common.test.acceptance.fixtures import LMS_BASE_URL, STUDIO_BASE_URL
 
 
-class ConfigModelFixureError(Exception):
+class ConfigModelFixtureError(Exception):
     """
     Error occurred while configuring the stub XQueue.
     """
@@ -21,18 +22,21 @@ class ConfigModelFixture(object):
     Configure a ConfigurationModel by using it's JSON api.
     """
 
-    def __init__(self, api_base, configuration):
+    def __init__(self, api_base, configuration, platform='lms'):
         """
         Configure a ConfigurationModel exposed at `api_base` to have the configuration `configuration`.
         """
         self._api_base = api_base
         self._configuration = configuration
+        self._platform = platform
 
     def install(self):
         """
         Configure the stub via HTTP.
         """
-        url = LMS_BASE_URL + self._api_base
+        base_url = STUDIO_BASE_URL if self._platform == 'cms' else LMS_BASE_URL
+
+        url = base_url + self._api_base
 
         response = self.session.post(
             url,
@@ -41,7 +45,7 @@ class ConfigModelFixture(object):
         )
 
         if not response.ok:
-            raise ConfigModelFixureError(
+            raise ConfigModelFixtureError(
                 "Could not configure url '{}'.  response: {} - {}".format(
                     self._api_base,
                     response,
@@ -53,7 +57,7 @@ class ConfigModelFixture(object):
     def session_cookies(self):
         """
         Log in as a staff user, then return the cookies for the session (as a dict)
-        Raises a `ConfigModelFixureError` if the login fails.
+        Raises a `ConfigModelFixtureError` if the login fails.
         """
         return {key: val for key, val in self.session.cookies.items()}
 
@@ -92,4 +96,4 @@ class ConfigModelFixture(object):
 
         else:
             msg = "Could not log in to use ConfigModel restful API.  Status code: {0}".format(response.status_code)
-            raise ConfigModelFixureError(msg)
+            raise ConfigModelFixtureError(msg)

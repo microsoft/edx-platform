@@ -1,22 +1,22 @@
-define(["backbone", "underscore"], function(Backbone, _) {
+define(['backbone', 'underscore'], function(Backbone, _) {
     var Location = Backbone.Model.extend({
         defaults: {
-            tag: "",
-            org: "",
-            course: "",
-            category: "",
-            name: ""
+            tag: '',
+            org: '',
+            course: '',
+            category: '',
+            name: ''
         },
         toUrl: function(overrides) {
-            return
-                (overrides && overrides['tag'] ? overrides['tag'] : this.get('tag')) + "://" +
-                (overrides && overrides['org'] ? overrides['org'] : this.get('org')) + "/" +
-                (overrides && overrides['course'] ? overrides['course'] : this.get('course')) + "/" +
-                (overrides && overrides['category'] ? overrides['category'] : this.get('category')) + "/" +
-                (overrides && overrides['name'] ? overrides['name'] : this.get('name')) + "/";
+            return;
+            (overrides && overrides.tag ? overrides.tag : this.get('tag')) + '://' +
+                (overrides && overrides.org ? overrides.org : this.get('org')) + '/' +
+                (overrides && overrides.course ? overrides.course : this.get('course')) + '/' +
+                (overrides && overrides.category ? overrides.category : this.get('category')) + '/' +
+                (overrides && overrides.name ? overrides.name : this.get('name')) + '/';
         },
-        _tagPattern : /[^:]+/g,
-        _fieldPattern : new RegExp('[^/]+','g'),
+        _tagPattern: /[^:]+/g,
+        _fieldPattern: new RegExp('[^/]+', 'g'),
 
         parse: function(payload) {
             if (_.isArray(payload)) {
@@ -27,8 +27,7 @@ define(["backbone", "underscore"], function(Backbone, _) {
                     category: payload[3],
                     name: payload[4]
                 };
-            }
-            else if (_.isString(payload)) {
+            } else if (_.isString(payload)) {
                 this._tagPattern.lastIndex = 0; // odd regex behavior requires this to be reset sometimes
                 var foundTag = this._tagPattern.exec(payload);
                 if (foundTag) {
@@ -40,19 +39,16 @@ define(["backbone", "underscore"], function(Backbone, _) {
                         category: this.getNextField(payload),
                         name: this.getNextField(payload)
                     };
-                }
-                else return null;
-            }
-            else {
+                } else return null;
+            } else {
                 return payload;
             }
         },
-        getNextField : function(payload) {
+        getNextField: function(payload) {
             try {
                 return this._fieldPattern.exec(payload)[0];
-            }
-            catch (err) {
-                return "";
+            } catch (err) {
+                return '';
             }
         }
     });

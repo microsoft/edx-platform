@@ -2,10 +2,12 @@
 # pylint: disable=missing-docstring
 
 import json
-from lettuce import world, step
+
+from lettuce import step, world
 from nose.tools import assert_equal, assert_true
-from common import type_in_codemirror, open_new_course
-from advanced_settings import change_value, ADVANCED_MODULES_KEY
+
+from advanced_settings import ADVANCED_MODULES_KEY, change_value
+from common import open_new_course, type_in_codemirror
 from course_import import import_file
 
 DISPLAY_NAME = "Display Name"
@@ -125,6 +127,9 @@ def my_display_name_change_is_persisted_on_save(step):
 
 @step('the problem display name is "(.*)"$')
 def verify_problem_display_name(step, name):
+    """
+    name is uppercased because the heading styles are uppercase in css
+    """
     assert_equal(name, world.browser.find_by_css('.problem-header').text)
 
 

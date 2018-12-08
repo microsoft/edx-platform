@@ -2,10 +2,10 @@ define(
     [
         'jquery', 'underscore', 'squire'
     ],
-function ($, _, Squire) {
+function($, _, Squire) {
     'use strict';
     // TODO: fix BLD-1100 Disabled due to intermittent failure on master and in PR builds
-    xdescribe('VideoTranslations', function () {
+    xdescribe('VideoTranslations', function() {
         var TranslationsEntryTemplate = readFixtures(
                 'video/metadata-translations-entry.underscore'
             ),
@@ -14,8 +14,8 @@ function ($, _, Squire) {
             ),
             modelStub = {
                 default_value: {
-                    'en': 'en.srt',
-                    'ru': 'ru.srt'
+                    en: 'en.srt',
+                    ru: 'ru.srt'
                 },
                 display_name: 'Transcript Translation',
                 explicitly_set: false,
@@ -30,97 +30,148 @@ function ($, _, Squire) {
                     {code: 'uk', label: 'Ukrainian'}
                 ],
                 value: {
-                    'en': 'en.srt',
-                    'ru': 'ru.srt',
-                    'uk': 'uk.srt',
-                    'fr': 'fr.srt'
+                    en: 'en.srt',
+                    ru: 'ru.srt',
+                    uk: 'uk.srt',
+                    fr: 'fr.srt'
                 }
             },
             self, injector;
 
-        var setValue = function (view, value) {
+        var setValue = function(view, value) {
             view.setValueInEditor(value);
             view.updateModel();
         };
 
-        var createPromptSpy = function (name) {
+        var createPromptSpy = function(name) {
             var spy = jasmine.createSpyObj(name, ['constructor', 'show', 'hide']);
-            spy.constructor.andReturn(spy);
-            spy.show.andReturn(spy);
-            spy.extend = jasmine.createSpy().andReturn(spy.constructor);
+            spy.constructor.and.returnValue(spy);
+            spy.show.and.returnValue(spy);
+            spy.extend = jasmine.createSpy().and.returnValue(spy.constructor);
 
             return spy;
         };
 
-        beforeEach(function () {
+        beforeEach(function(done) {
             self = this;
 
-            this.addMatchers({
-                assertValueInView: function(expected) {
-                    var value = this.actual.getValueFromEditor();
-                    return this.env.equals_(value, expected);
+            jasmine.addMatchers({
+                assertValueInView: function() {
+                    return {
+                        compare: function(actual, expected) {
+                            var value = actual.getValueFromEditor();
+                            var passed = _.isEqual(value, expected);
+
+                            return {
+                                pass: passed,
+                                message: 'Expected ' + actual + (passed ? '' : ' not') + ' to equal ' + expected
+                            };
+                        }
+                    };
                 },
-                assertCanUpdateView: function (expected) {
-                    var view = this.actual,
-                        value;
+                assertCanUpdateView: function() {
+                    return {
+                        compare: function(actual, expected) {
+                            var view = actual,
+                                value,
+                                passed;
 
-                    view.setValueInEditor(expected);
-                    value = view.getValueFromEditor();
+                            view.setValueInEditor(expected);
+                            value = view.getValueFromEditor();
+                            passed = _.isEqual(value, expected);
 
-                    return this.env.equals_(value, expected);
+                            return {
+                                pass: passed,
+                                message: 'Expected ' + actual + (passed ? '' : ' not') + ' to equal ' + expected
+                            };
+                        }
+                    };
                 },
-                assertClear: function (modelValue) {
-                    var env = this.env,
-                        view = this.actual,
-                        model = view.model;
+                assertClear: function() {
+                    return {
+                        compare: function(actual, modelValue) {
+                            var view = actual,
+                                model = view.model,
+                                passed;
 
-                    return model.getValue() === null &&
-                           env.equals_(model.getDisplayValue(), modelValue) &&
-                           env.equals_(view.getValueFromEditor(), modelValue);
+                            passed = model.getValue() === null &&
+                                _.isEqual(model.getDisplayValue(), modelValue) &&
+                                _.isEqual(view.getValueFromEditor(), modelValue);
+
+                            return {
+                                pass: passed
+                            };
+                        }
+                    };
                 },
-                assertUpdateModel: function (originalValue, newValue) {
-                    var env = this.env,
-                        view = this.actual,
-                        model = view.model,
-                        expectOriginal;
+                assertUpdateModel: function() {
+                    return {
+                        compare: function(actual, originalValue, newValue) {
+                            var view = actual,
+                                model = view.model,
+                                expectOriginal,
+                                passed;
 
-                    view.setValueInEditor(newValue);
-                    expectOriginal = env.equals_(model.getValue(), originalValue);
-                    view.updateModel();
+                            view.setValueInEditor(newValue);
+                            expectOriginal = _.isEqual(model.getValue(), originalValue);
+                            view.updateModel();
 
-                    return expectOriginal &&
-                           env.equals_(model.getValue(), newValue);
+                            passed = expectOriginal &&
+                                _.isEqual(model.getValue(), newValue);
+
+                            return {
+                                pass: passed
+                            };
+                        }
+                    };
                 },
-                verifyKeysUnique: function (initial, expected, testData) {
-                    var env = this.env,
-                        view = this.actual,
-                        item, value;
+                verifyKeysUnique: function() {
+                    return {
+                        compare: function(actual, initial, expected, testData) {
+                            var view = this.actual,
+                                item,
+                                value,
+                                passed;
 
-                    view.setValueInEditor(initial);
-                    view.updateModel();
-                    view.$el.find('.create-setting').click();
-                    item = view.$el.find('.list-settings-item').last();
-                    item.find('select').val(testData.key);
-                    item.find('input:hidden').val(testData.value);
-                    value = view.getValueFromEditor();
+                            view.setValueInEditor(initial);
+                            view.updateModel();
+                            view.$el.find('.create-setting').click();
+                            item = view.$el.find('.list-settings-item').last();
+                            item.find('select').val(testData.key);
+                            item.find('input:hidden').val(testData.value);
+                            value = view.getValueFromEditor();
 
-                    return env.equals_(value, expected);
+                            passed = _.isEqual(value, expected);
+
+                            return {
+                                pass: passed
+                            };
+                        }
+                    };
                 },
-                verifyButtons: function (upload, download, remove, index) {
-                    var view = this.actual,
-                        items = view.$el.find('.list-settings-item'),
-                        item  = index ? items.eq(index) : items.last(),
-                        uploadBtn = item.find('.upload-setting'),
-                        downloadBtn = item.find('.download-setting'),
-                        removeBtn = item.find('.remove-setting');
+                verifyButtons: function() {
+                    return {
+                        compare: function(actual, upload, download, remove, index) {
+                            var view = this.actual,
+                                items = view.$el.find('.list-settings-item'),
+                                item = index ? items.eq(index) : items.last(),
+                                uploadBtn = item.find('.upload-setting'),
+                                downloadBtn = item.find('.download-setting'),
+                                removeBtn = item.find('.remove-setting'),
+                                passed;
 
 
-                    upload = upload ? uploadBtn.length : !uploadBtn.length;
-                    download = download ? downloadBtn.length : !downloadBtn.length;
-                    remove = remove ? removeBtn.length : !removeBtn.length;
+                            upload = upload ? uploadBtn.length : !uploadBtn.length;
+                            download = download ? downloadBtn.length : !downloadBtn.length;
+                            remove = remove ? removeBtn.length : !removeBtn.length;
 
-                    return upload && download && remove;
+                            passed = upload && download && remove;
 
+                            return {
+                                pass: passed
+                            };
+                        }
+                    };
                 }
             });
 
@@ -137,58 +188,54 @@ function ($, _, Squire) {
             this.uploadSpies = createPromptSpy('UploadDialog');
 
             injector = new Squire();
-            injector.mock('js/views/uploads', function () {
+            injector.mock('js/views/uploads', function() {
                 return self.uploadSpies;
             });
 
-            runs(function() {
-                injector.require([
-                    'js/models/metadata', 'js/views/video/translations_editor'
-                ],
+            injector.require([
+                'js/models/metadata', 'js/views/video/translations_editor'
+            ],
                 function(MetadataModel, Translations) {
                     var model = new MetadataModel($.extend(true, {}, modelStub));
                     self.view = new Translations({model: model});
-                });
-            });
 
-            waitsFor(function() {
-                return self.view;
-            }, 'VideoTranslations was not created', 1000);
+                    done();
+                });
         });
 
-        afterEach(function () {
+        afterEach(function() {
             injector.clean();
             injector.remove();
         });
 
-        it('returns the initial value upon initialization', function () {
+        it('returns the initial value upon initialization', function() {
             expect(this.view).assertValueInView({
-                'en': 'en.srt',
-                'ru': 'ru.srt',
-                'uk': 'uk.srt',
-                'fr': 'fr.srt'
+                en: 'en.srt',
+                ru: 'ru.srt',
+                uk: 'uk.srt',
+                fr: 'fr.srt'
             });
 
             expect(this.view).verifyButtons(true, true, true);
         });
 
-        it('updates its value correctly', function () {
+        it('updates its value correctly', function() {
             expect(this.view).assertCanUpdateView({
-                'ru': 'ru.srt',
-                'uk': 'uk.srt',
-                'fr': 'fr.srt'
+                ru: 'ru.srt',
+                uk: 'uk.srt',
+                fr: 'fr.srt'
             });
         });
 
-        it('upload works correctly', function () {
+        it('upload works correctly', function() {
             var options;
 
             setValue(this.view, {
-                'en': 'en.srt',
-                'ru': 'ru.srt',
-                'uk': 'uk.srt',
-                'fr': 'fr.srt',
-                'zh': ''
+                en: 'en.srt',
+                ru: 'ru.srt',
+                uk: 'uk.srt',
+                fr: 'fr.srt',
+                zh: ''
             });
 
             expect(this.view).verifyButtons(true, false, true);
@@ -198,24 +245,24 @@ function ($, _, Squire) {
             expect(this.uploadSpies.constructor).toHaveBeenCalled();
             expect(this.uploadSpies.show).toHaveBeenCalled();
 
-            options = this.uploadSpies.constructor.mostRecentCall.args[0];
-            options.onSuccess({'filename': 'zh.srt'});
+            options = this.uploadSpies.constructor.calls.mostRecent().args[0];
+            options.onSuccess({filename: 'zh.srt'});
 
             expect(this.view).verifyButtons(true, true, true);
 
             expect(this.view.getValueFromEditor()).toEqual({
-                'en': 'en.srt',
-                'ru': 'ru.srt',
-                'uk': 'uk.srt',
-                'fr': 'fr.srt',
-                'zh': 'zh.srt'
+                en: 'en.srt',
+                ru: 'ru.srt',
+                uk: 'uk.srt',
+                fr: 'fr.srt',
+                zh: 'zh.srt'
             });
         });
 
-        it('has a clear method to revert to the model default', function () {
+        it('has a clear method to revert to the model default', function() {
             setValue(this.view, {
-                'fr': 'en.srt',
-                'uk': 'ru.srt'
+                fr: 'en.srt',
+                uk: 'ru.srt'
             });
 
             this.view.$el.find('.create-setting').click();
@@ -223,56 +270,56 @@ function ($, _, Squire) {
             this.view.clear();
 
             expect(this.view).assertClear({
-                'en': 'en.srt',
-                'ru': 'ru.srt'
+                en: 'en.srt',
+                ru: 'ru.srt'
             });
 
             expect(this.view.$el.find('.create-setting')).not.toHaveClass('is-disabled');
         });
 
-        it('has an update model method', function () {
-            expect(this.view).assertUpdateModel(null, {'fr': 'fr.srt'});
+        it('has an update model method', function() {
+            expect(this.view).assertUpdateModel(null, {fr: 'fr.srt'});
         });
 
-        it('can add an entry', function () {
+        it('can add an entry', function() {
             expect(_.keys(this.view.model.get('value')).length).toEqual(4);
             this.view.$el.find('.create-setting').click();
             expect(this.view.$el.find('select').length).toEqual(5);
         });
 
-        it('can remove an entry', function () {
+        it('can remove an entry', function() {
             setValue(this.view, {
-                'en': 'en.srt',
-                'ru': 'ru.srt',
-                'fr': ''
+                en: 'en.srt',
+                ru: 'ru.srt',
+                fr: ''
             });
             expect(_.keys(this.view.model.get('value')).length).toEqual(3);
             this.view.$el.find('.remove-setting').last().click();
             expect(_.keys(this.view.model.get('value')).length).toEqual(2);
         });
 
-        it('only allows one blank entry at a time', function () {
+        it('only allows one blank entry at a time', function() {
             expect(this.view.$el.find('select').length).toEqual(4);
             this.view.$el.find('.create-setting').click();
             this.view.$el.find('.create-setting').click();
             expect(this.view.$el.find('select').length).toEqual(5);
         });
 
-        it('only allows unique keys', function () {
+        it('only allows unique keys', function() {
             expect(this.view).verifyKeysUnique(
-                {'ru': 'ru.srt'}, {'ru': 'ru.srt'}, {'key': 'ru', 'value': ''}
+                {ru: 'ru.srt'}, {ru: 'ru.srt'}, {key: 'ru', value: ''}
             );
 
             expect(this.view).verifyKeysUnique(
-                {'ru': 'en.srt'}, {'ru': 'ru.srt'}, {'key': 'ru', 'value': 'ru.srt'}
+                {ru: 'en.srt'}, {ru: 'ru.srt'}, {key: 'ru', value: 'ru.srt'}
             );
 
             expect(this.view).verifyKeysUnique(
-                {'ru': 'ru.srt'}, {'ru': 'ru.srt'}, {'key': '', 'value': ''}
+                {ru: 'ru.srt'}, {ru: 'ru.srt'}, {key: '', value: ''}
             );
         });
 
-        it('re-enables the add setting button after entering a new value', function () {
+        it('re-enables the add setting button after entering a new value', function() {
             expect(this.view.$el.find('select').length).toEqual(4);
             this.view.$el.find('.create-setting').click();
             expect(this.view).verifyButtons(false, false, true);

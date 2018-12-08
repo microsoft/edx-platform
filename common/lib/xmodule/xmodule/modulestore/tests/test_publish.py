@@ -25,6 +25,7 @@ from xmodule.modulestore.tests.utils import (
 )
 
 
+@attr(shard=1)
 @attr('mongo')
 class TestPublish(SplitWMongoCourseBootstrapper):
     """
@@ -114,8 +115,7 @@ class TestPublish(SplitWMongoCourseBootstrapper):
         #      compute inheritance
         #   15 get published vert
         #   16-18 get ancestor chain
-        #   19 compute inheritance
-        #   20-22 get draft and published vert, compute parent
+        #   19 compute inheritance #   20-22 get draft and published vert, compute parent
         # Sends:
         #   delete the subtree of drafts (1 call),
         #   update the published version of each node in subtree (4 calls),
@@ -157,6 +157,7 @@ class TestPublish(SplitWMongoCourseBootstrapper):
         self.assertTrue(self.draft_mongo.has_item(other_child_loc), "Oops, lost moved item")
 
 
+@attr(shard=1)
 class DraftPublishedOpTestCourseSetup(unittest.TestCase):
     """
     This class exists to test XML import and export between different modulestore
@@ -209,7 +210,7 @@ class DraftPublishedOpTestCourseSetup(unittest.TestCase):
             Add a level of the binary course structure by creating the items as children of the proper parents.
             """
             parent_id = 'course'
-            for idx in xrange(0, num_items):
+            for idx in xrange(num_items):
                 if parent_type != 'course':
                     parent_id = _make_block_id(parent_type, idx / 2)
                 parent_item = getattr(self, parent_id)
@@ -245,13 +246,13 @@ class DraftPublishedOpTestCourseSetup(unittest.TestCase):
 
         # Create a list of all verticals for convenience.
         block_type = 'vertical'
-        for idx in xrange(0, 8):
+        for idx in xrange(8):
             block_id = _make_block_id(block_type, idx)
             self.all_verticals.append((block_type, block_id))
 
         # Create a list of all html units for convenience.
         block_type = 'html'
-        for idx in xrange(0, 16):
+        for idx in xrange(16):
             block_id = _make_block_id(block_type, idx)
             self.all_units.append((block_type, block_id))
 
@@ -271,6 +272,7 @@ class DraftPublishedOpTestCourseSetup(unittest.TestCase):
         super(DraftPublishedOpTestCourseSetup, self).setUp()
 
 
+@attr(shard=1)
 class OLXFormatChecker(unittest.TestCase):
     """
     Examines the on-disk course export to verify that specific items are present/missing
@@ -497,8 +499,8 @@ class DraftPublishedOpBaseTestSetup(OLXFormatChecker, DraftPublishedOpTestCourse
     Setup base class for draft/published/OLX tests.
     """
 
-    EXPORTED_COURSE_BEFORE_DIR_NAME = 'exported_course_before'
-    EXPORTED_COURSE_AFTER_DIR_NAME = 'exported_course_after_{}'
+    EXPORTED_COURSE_BEFORE_DIR_NAME = u'exported_course_before'
+    EXPORTED_COURSE_AFTER_DIR_NAME = u'exported_course_after_{}'
 
     def setUp(self):
         super(DraftPublishedOpBaseTestSetup, self).setUp()
@@ -643,6 +645,7 @@ class DraftPublishedOpBaseTestSetup(OLXFormatChecker, DraftPublishedOpTestCourse
         self.export_dir = self._make_new_export_dir_name()
 
 
+@attr(shard=1)
 @ddt.ddt
 class ElementalPublishingTests(DraftPublishedOpBaseTestSetup):
     """
@@ -817,6 +820,7 @@ class ElementalPublishingTests(DraftPublishedOpBaseTestSetup):
             self.assertOLXIsDraftOnly(block_list_untouched)
 
 
+@attr(shard=1)
 @ddt.ddt
 class ElementalUnpublishingTests(DraftPublishedOpBaseTestSetup):
     """
@@ -936,6 +940,7 @@ class ElementalUnpublishingTests(DraftPublishedOpBaseTestSetup):
                 self.unpublish(block_list_to_unpublish)
 
 
+@attr(shard=1)
 @ddt.ddt
 class ElementalDeleteItemTests(DraftPublishedOpBaseTestSetup):
     """
@@ -1133,6 +1138,7 @@ class ElementalDeleteItemTests(DraftPublishedOpBaseTestSetup):
             self.assertOLXIsDeleted(block_list_draft_children)
 
 
+@attr(shard=1)
 @ddt.ddt
 class ElementalConvertToDraftTests(DraftPublishedOpBaseTestSetup):
     """
@@ -1190,6 +1196,7 @@ class ElementalConvertToDraftTests(DraftPublishedOpBaseTestSetup):
                 raise Exception("Must test either Old Mongo or Split modulestore!")
 
 
+@attr(shard=1)
 @ddt.ddt
 class ElementalRevertToPublishedTests(DraftPublishedOpBaseTestSetup):
     """

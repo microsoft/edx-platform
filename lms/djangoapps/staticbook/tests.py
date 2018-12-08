@@ -6,13 +6,12 @@ import textwrap
 
 import mock
 import requests
+from django.urls import NoReverseMatch, reverse
+from six import text_type
 
-from django.core.urlresolvers import reverse, NoReverseMatch
-
-from student.tests.factories import UserFactory, CourseEnrollmentFactory
-from xmodule.modulestore.tests.factories import CourseFactory
+from student.tests.factories import CourseEnrollmentFactory, UserFactory
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
-
+from xmodule.modulestore.tests.factories import CourseFactory
 
 IMAGE_BOOK = ("An Image Textbook", "http://example.com/the_book/")
 
@@ -69,7 +68,7 @@ class StaticBookTest(ModuleStoreTestCase):
         Automatically provides the course id.
 
         """
-        kwargs['course_id'] = self.course.id.to_deprecated_string()
+        kwargs['course_id'] = text_type(self.course.id)
         url = reverse(url_name, kwargs=kwargs)
         return url
 
@@ -226,6 +225,17 @@ class StaticPdfBookTest(StaticBookTest):
             PORTABLE_PDF_BOOK['chapters'][0]['url'].replace('/static/', '')))
         self.assertContains(response, 'file=/static/awesomesauce/{}'.format(
             PORTABLE_PDF_BOOK['chapters'][0]['url'].replace('/static/', '')))
+
+    def test_invalid_chapter_id(self):
+        """
+        Test that 1st chapter is displayed to the user when an invalid chapter id is provided
+        """
+        self.make_course(pdf_textbooks=[PDF_BOOK])
+        invalid_chapter = len(PDF_BOOK['chapters']) + 1
+        url = self.make_url('pdf_book', book_index=0, chapter=invalid_chapter)
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Chapter 1 for PDF")
 
 
 class StaticHtmlBookTest(StaticBookTest):

@@ -1,14 +1,17 @@
 """
 Base class for pages specific to a course in Studio.
 """
-
 import os
-from opaque_keys.edx.locator import CourseLocator
+from abc import abstractmethod
+
 from bok_choy.page_object import PageObject
-from . import BASE_URL
+from opaque_keys.edx.locator import CourseLocator
+
+from common.test.acceptance.pages.studio import BASE_URL
+from common.test.acceptance.pages.studio.utils import HelpMixin
 
 
-class CoursePage(PageObject):
+class CoursePage(PageObject, HelpMixin):
     """
     Abstract base class for page objects specific to a course in Studio.
     """
@@ -16,6 +19,15 @@ class CoursePage(PageObject):
     # Overridden by subclasses to provide the relative path within the course
     # Does not need to include the leading forward or trailing slash
     url_path = ""
+
+    @abstractmethod
+    def is_browser_on_page(self):
+        """
+        Verifies browser is on the correct page.
+
+        Should be implemented in child classes.
+        """
+        pass
 
     def __init__(self, browser, course_org, course_num, course_run):
         """

@@ -4,33 +4,53 @@ Tests for instructor.basic
 
 import datetime
 import json
-import pytz
-from mock import MagicMock, Mock, patch
-from django.core.urlresolvers import reverse
-from django.db.models import Q
 
-from course_modes.models import CourseMode
-from courseware.tests.factories import InstructorFactory
-from instructor_analytics.basic import (
-    StudentModule, sale_record_features, sale_order_record_features, enrolled_students_features,
-    course_registration_features, coupon_codes_features, get_proctored_exam_results, list_may_enroll,
-    list_problem_responses, AVAILABLE_FEATURES, STUDENT_FEATURES, PROFILE_FEATURES
-)
-from opaque_keys.edx.locator import UsageKey
-from openedx.core.djangoapps.course_groups.tests.helpers import CohortFactory
-from student.models import CourseEnrollment, CourseEnrollmentAllowed
-from student.roles import CourseSalesAdminRole
-from student.tests.factories import UserFactory, CourseModeFactory
-from shoppingcart.models import (
-    CourseRegistrationCode, RegistrationCodeRedemption, Order,
-    Invoice, Coupon, CourseRegCodeItem, CouponRedemption, CourseRegistrationCodeInvoiceItem
-)
-from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
-from xmodule.modulestore.tests.factories import CourseFactory
+import pytz
+from django.urls import reverse
+from django.db.models import Q
 from edx_proctoring.api import create_exam
 from edx_proctoring.models import ProctoredExamStudentAttempt
+from mock import MagicMock, Mock, patch
+from nose.plugins.attrib import attr
+from opaque_keys.edx.locator import UsageKey
+from six import text_type
+
+from course_modes.models import CourseMode
+from course_modes.tests.factories import CourseModeFactory
+from courseware.tests.factories import InstructorFactory
+from instructor_analytics.basic import (
+    AVAILABLE_FEATURES,
+    PROFILE_FEATURES,
+    STUDENT_FEATURES,
+    StudentModule,
+    coupon_codes_features,
+    course_registration_features,
+    enrolled_students_features,
+    get_proctored_exam_results,
+    list_may_enroll,
+    list_problem_responses,
+    sale_order_record_features,
+    sale_record_features
+)
+from openedx.core.djangoapps.course_groups.tests.helpers import CohortFactory
+from shoppingcart.models import (
+    Coupon,
+    CouponRedemption,
+    CourseRegCodeItem,
+    CourseRegistrationCode,
+    CourseRegistrationCodeInvoiceItem,
+    Invoice,
+    Order,
+    RegistrationCodeRedemption
+)
+from student.models import CourseEnrollment, CourseEnrollmentAllowed
+from student.roles import CourseSalesAdminRole
+from student.tests.factories import UserFactory
+from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
+from xmodule.modulestore.tests.factories import CourseFactory
 
 
+@attr(shard=3)
 class TestAnalyticsBasic(ModuleStoreTestCase):
     """ Test basic analytics functions. """
 
@@ -90,8 +110,8 @@ class TestAnalyticsBasic(ModuleStoreTestCase):
                 # Check if list_problem_responses returned expected results:
                 self.assertEqual(len(problem_responses), len(mock_results))
                 for mock_result in mock_results:
-                    self.assertTrue(
-                        {'username': mock_result.student.username, 'state': mock_result.state} in
+                    self.assertIn(
+                        {'username': mock_result.student.username, 'state': mock_result.state},
                         problem_responses
                     )
 
@@ -104,17 +124,35 @@ class TestAnalyticsBasic(ModuleStoreTestCase):
             self.assertIn(userreport['username'], [user.username for user in self.users])
 
     def test_enrolled_students_features_keys(self):
-        query_features = ('username', 'name', 'email')
+        query_features = ('username', 'name', 'email', 'city', 'country',)
+        for user in self.users:
+            user.profile.city = "Mos Eisley {}".format(user.id)
+            user.profile.country = "Tatooine {}".format(user.id)
+            user.profile.save()
         for feature in query_features:
             self.assertIn(feature, AVAILABLE_FEATURES)
         with self.assertNumQueries(1):
             userreports = enrolled_students_features(self.course_key, query_features)
         self.assertEqual(len(userreports), len(self.users))
-        for userreport in userreports:
+
+        userreports = sorted(userreports, key=lambda u: u["username"])
+        users = sorted(self.users, key=lambda u: u.username)
+        for userreport, user in zip(userreports, users):
             self.assertEqual(set(userreport.keys()), set(query_features))
-            self.assertIn(userreport['username'], [user.username for user in self.users])
-            self.assertIn(userreport['email'], [user.email for user in self.users])
-            self.assertIn(userreport['name'], [user.profile.name for user in self.users])
+            self.assertEqual(userreport['username'], user.username)
+            self.assertEqual(userreport['email'], user.email)
+            self.assertEqual(userreport['name'], user.profile.name)
+            self.assertEqual(userreport['city'], user.profile.city)
+            self.assertEqual(userreport['country'], user.profile.country)
+
+    def test_enrolled_student_with_no_country_city(self):
+        userreports = enrolled_students_features(self.course_key, ('username', 'city', 'country',))
+        for userreport in userreports:
+            # This behaviour is somewhat inconsistent: None string fields
+            # objects are converted to "None", but non-JSON serializable fields
+            # are converted to an empty string.
+            self.assertEqual(userreport['city'], "None")
+            self.assertEqual(userreport['country'], "")
 
     def test_enrolled_students_meta_features_keys(self):
         """
@@ -128,6 +166,34 @@ class TestAnalyticsBasic(ModuleStoreTestCase):
             self.assertEqual(set(userreport.keys()), set(query_features))
             self.assertIn(userreport['meta.position'], ["edX expert {}".format(user.id) for user in self.users])
             self.assertIn(userreport['meta.company'], ["Open edX Inc {}".format(user.id) for user in self.users])
+
+    def test_enrolled_students_enrollment_verification(self):
+        """
+        Assert that we can get enrollment mode and verification status
+        """
+        query_features = ('enrollment_mode', 'verification_status')
+        userreports = enrolled_students_features(self.course_key, query_features)
+        self.assertEqual(len(userreports), len(self.users))
+        # by default all users should have "audit" as their enrollment mode
+        # and "N/A" as their verification status
+        for userreport in userreports:
+            self.assertEqual(set(userreport.keys()), set(query_features))
+            self.assertIn(userreport['enrollment_mode'], ["audit"])
+            self.assertIn(userreport['verification_status'], ["N/A"])
+        # make sure that the user report respects whatever value
+        # is returned by verification and enrollment code
+        with patch("student.models.CourseEnrollment.enrollment_mode_for_user") as enrollment_patch:
+            with patch(
+                "lms.djangoapps.verify_student.services.IDVerificationService.verification_status_for_user"
+            ) as verify_patch:
+                enrollment_patch.return_value = ["verified"]
+                verify_patch.return_value = "dummy verification status"
+                userreports = enrolled_students_features(self.course_key, query_features)
+                self.assertEqual(len(userreports), len(self.users))
+                for userreport in userreports:
+                    self.assertEqual(set(userreport.keys()), set(query_features))
+                    self.assertIn(userreport['enrollment_mode'], ["verified"])
+                    self.assertIn(userreport['verification_status'], ["dummy verification status"])
 
     def test_enrolled_students_features_keys_cohorted(self):
         course = CourseFactory.create(org="test", course="course1", display_name="run1")
@@ -174,26 +240,30 @@ class TestAnalyticsBasic(ModuleStoreTestCase):
 
     def test_get_student_exam_attempt_features(self):
         query_features = [
-            'user_email',
+            'email',
             'exam_name',
             'allowed_time_limit_mins',
             'is_sample_attempt',
             'started_at',
             'completed_at',
             'status',
+            'Suspicious Count',
+            'Suspicious Comments',
+            'Rules Violation Count',
+            'Rules Violation Comments',
         ]
 
         proctored_exam_id = create_exam(self.course_key, 'Test Content', 'Test Exam', 1)
         ProctoredExamStudentAttempt.create_exam_attempt(
-            proctored_exam_id, self.users[0].id, '', 1,
+            proctored_exam_id, self.users[0].id, '',
             'Test Code 1', True, False, 'ad13'
         )
         ProctoredExamStudentAttempt.create_exam_attempt(
-            proctored_exam_id, self.users[1].id, '', 2,
+            proctored_exam_id, self.users[1].id, '',
             'Test Code 2', True, False, 'ad13'
         )
         ProctoredExamStudentAttempt.create_exam_attempt(
-            proctored_exam_id, self.users[2].id, '', 3,
+            proctored_exam_id, self.users[2].id, '',
             'Test Code 3', True, False, 'asd'
         )
 
@@ -243,7 +313,7 @@ class TestCourseSaleRecordsAnalyticsBasic(ModuleStoreTestCase):
         )
         for i in range(5):
             course_code = CourseRegistrationCode(
-                code="test_code{}".format(i), course_id=self.course.id.to_deprecated_string(),
+                code="test_code{}".format(i), course_id=text_type(self.course.id),
                 created_by=self.instructor, invoice=sale_invoice, invoice_item=invoice_item, mode_slug='honor'
             )
             course_code.save()
@@ -466,13 +536,10 @@ class TestCourseRegistrationCodeAnalyticsBasic(ModuleStoreTestCase):
         CourseSalesAdminRole(self.course.id).add_users(self.instructor)
 
         # Create a paid course mode.
-        mode = CourseModeFactory.create()
-        mode.course_id = self.course.id
-        mode.min_price = 1
-        mode.save()
+        mode = CourseModeFactory.create(course_id=self.course.id, min_price=1)
 
         url = reverse('generate_registration_codes',
-                      kwargs={'course_id': self.course.id.to_deprecated_string()})
+                      kwargs={'course_id': text_type(self.course.id)})
 
         data = {
             'total_registration_codes': 12, 'company_name': 'Test Group', 'unit_price': 122.45,
@@ -505,7 +572,7 @@ class TestCourseRegistrationCodeAnalyticsBasic(ModuleStoreTestCase):
             self.assertIn(course_registration['code'], [registration_code.code for registration_code in registration_codes])
             self.assertIn(
                 course_registration['course_id'],
-                [registration_code.course_id.to_deprecated_string() for registration_code in registration_codes]
+                [text_type(registration_code.course_id) for registration_code in registration_codes]
             )
             self.assertIn(
                 course_registration['company_name'],
@@ -561,5 +628,5 @@ class TestCourseRegistrationCodeAnalyticsBasic(ModuleStoreTestCase):
                 self.assertIn(active_coupon['expiration_date'], [coupon.display_expiry_date for coupon in active_coupons])
             self.assertIn(
                 active_coupon['course_id'],
-                [coupon.course_id.to_deprecated_string() for coupon in active_coupons]
+                [text_type(coupon.course_id) for coupon in active_coupons]
             )

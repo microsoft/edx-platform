@@ -3,27 +3,43 @@ Python tests for the Survey workflows
 """
 
 from collections import OrderedDict
-from nose.plugins.attrib import attr
 from copy import deepcopy
 
-from django.core.urlresolvers import reverse
 from django.contrib.auth.models import User
-
-from survey.models import SurveyForm, SurveyAnswer
+from django.urls import reverse
+from nose.plugins.attrib import attr
 
 from common.test.utils import XssTestMixin
-from xmodule.modulestore.tests.factories import CourseFactory
-from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from courseware.tests.helpers import LoginEnrollmentTestCase
+from survey.models import SurveyAnswer, SurveyForm
+from xmodule.modulestore.tests.django_utils import SharedModuleStoreTestCase
+from xmodule.modulestore.tests.factories import CourseFactory
 
 
-@attr('shard_1')
-class SurveyViewsTests(LoginEnrollmentTestCase, ModuleStoreTestCase, XssTestMixin):
+@attr(shard=1)
+class SurveyViewsTests(LoginEnrollmentTestCase, SharedModuleStoreTestCase, XssTestMixin):
     """
     All tests for the views.py file
     """
 
     STUDENT_INFO = [('view@test.com', 'foo')]
+
+    @classmethod
+    def setUpClass(cls):
+        super(SurveyViewsTests, cls).setUpClass()
+        cls.test_survey_name = 'TestSurvey'
+        cls.course = CourseFactory.create(
+            display_name='<script>alert("XSS")</script>',
+            course_survey_required=True,
+            course_survey_name=cls.test_survey_name
+        )
+
+        cls.course_with_bogus_survey = CourseFactory.create(
+            course_survey_required=True,
+            course_survey_name="DoesNotExist"
+        )
+
+        cls.course_without_survey = CourseFactory.create()
 
     def setUp(self):
         """
@@ -31,28 +47,13 @@ class SurveyViewsTests(LoginEnrollmentTestCase, ModuleStoreTestCase, XssTestMixi
         """
         super(SurveyViewsTests, self).setUp()
 
-        self.test_survey_name = 'TestSurvey'
         self.test_form = '<input name="field1"></input>'
-
         self.survey = SurveyForm.create(self.test_survey_name, self.test_form)
 
         self.student_answers = OrderedDict({
             u'field1': u'value1',
             u'field2': u'value2',
         })
-
-        self.course = CourseFactory.create(
-            display_name='<script>alert("XSS")</script>',
-            course_survey_required=True,
-            course_survey_name=self.test_survey_name
-        )
-
-        self.course_with_bogus_survey = CourseFactory.create(
-            course_survey_required=True,
-            course_survey_name="DoesNotExist"
-        )
-
-        self.course_without_survey = CourseFactory.create()
 
         # Create student accounts and activate them.
         for i in range(len(self.STUDENT_INFO)):
@@ -76,7 +77,7 @@ class SurveyViewsTests(LoginEnrollmentTestCase, ModuleStoreTestCase, XssTestMixi
         """
         Helper method to assert that all known redirect points do redirect as expected
         """
-        for view_name in ['courseware', 'info', 'progress']:
+        for view_name in ['courseware', 'openedx.course_experience.course_home', 'progress']:
             resp = self.client.get(
                 reverse(
                     view_name,
@@ -93,7 +94,7 @@ class SurveyViewsTests(LoginEnrollmentTestCase, ModuleStoreTestCase, XssTestMixi
         Helper method to asswer that all known conditionally redirect points do
         not redirect as expected
         """
-        for view_name in ['courseware', 'info', 'progress']:
+        for view_name in ['courseware', 'openedx.course_experience.course_home', 'progress']:
             resp = self.client.get(
                 reverse(
                     view_name,
@@ -117,13 +118,13 @@ class SurveyViewsTests(LoginEnrollmentTestCase, ModuleStoreTestCase, XssTestMixi
 
     def test_anonymous_user_visiting_course_with_survey(self):
         """
-        Verifies that anonymous user going to the courseware info with an unanswered survey is not
-        redirected to survery and info page renders without server error.
+        Verifies that anonymous user going to the courseware home with an unanswered survey is not
+        redirected to survey and home page renders without server error.
         """
         self.logout()
         resp = self.client.get(
             reverse(
-                'info',
+                'openedx.course_experience.course_home',
                 kwargs={'course_id': unicode(self.course.id)}
             )
         )
@@ -204,9 +205,10 @@ class SurveyViewsTests(LoginEnrollmentTestCase, ModuleStoreTestCase, XssTestMixi
                 kwargs={'course_id': unicode(self.course_with_bogus_survey.id)}
             )
         )
+        course_home_path = 'openedx.course_experience.course_home'
         self.assertRedirects(
             resp,
-            reverse('info', kwargs={'course_id': unicode(self.course_with_bogus_survey.id)})
+            reverse(course_home_path, kwargs={'course_id': unicode(self.course_with_bogus_survey.id)})
         )
 
     def test_visiting_survey_with_no_course_survey(self):
@@ -220,9 +222,10 @@ class SurveyViewsTests(LoginEnrollmentTestCase, ModuleStoreTestCase, XssTestMixi
                 kwargs={'course_id': unicode(self.course_without_survey.id)}
             )
         )
+        course_home_path = 'openedx.course_experience.course_home'
         self.assertRedirects(
             resp,
-            reverse('info', kwargs={'course_id': unicode(self.course_without_survey.id)})
+            reverse(course_home_path, kwargs={'course_id': unicode(self.course_without_survey.id)})
         )
 
     def test_survey_xss(self):

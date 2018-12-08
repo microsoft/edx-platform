@@ -2,25 +2,17 @@
 Test utils for CCX
 """
 import datetime
-import pytz
 
+import pytz
 from django.conf import settings
 
 from lms.djangoapps.ccx.overrides import override_field_for_ccx
 from lms.djangoapps.ccx.tests.factories import CcxFactory
-from student.roles import CourseCcxCoachRole
-from student.tests.factories import (
-    AdminFactory,
-)
+from student.roles import CourseCcxCoachRole, CourseInstructorRole, CourseStaffRole
+from student.tests.factories import UserFactory
 from xmodule.modulestore.django import modulestore
-from xmodule.modulestore.tests.django_utils import (
-    SharedModuleStoreTestCase,
-    TEST_DATA_SPLIT_MODULESTORE
-)
-from xmodule.modulestore.tests.factories import (
-    CourseFactory,
-    ItemFactory,
-)
+from xmodule.modulestore.tests.django_utils import TEST_DATA_SPLIT_MODULESTORE, SharedModuleStoreTestCase
+from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
 
 
 class CcxTestCase(SharedModuleStoreTestCase):
@@ -34,7 +26,7 @@ class CcxTestCase(SharedModuleStoreTestCase):
     @classmethod
     def setUpClass(cls):
         super(CcxTestCase, cls).setUpClass()
-        cls.course = course = CourseFactory.create()
+        cls.course = course = CourseFactory.create(enable_ccx=True)
 
         # Create a course outline
         cls.mooc_start = start = datetime.datetime(
@@ -74,11 +66,30 @@ class CcxTestCase(SharedModuleStoreTestCase):
         Set up tests
         """
         super(CcxTestCase, self).setUp()
-
         # Create instructor account
-        self.coach = AdminFactory.create()
+        self.coach = UserFactory.create(password="test")
         # create an instance of modulestore
         self.mstore = modulestore()
+
+    def make_staff(self):
+        """
+        create staff user.
+        """
+        staff = UserFactory.create(password="test")
+        role = CourseStaffRole(self.course.id)
+        role.add_users(staff)
+
+        return staff
+
+    def make_instructor(self):
+        """
+        create instructor user.
+        """
+        instructor = UserFactory.create(password="test")
+        role = CourseInstructorRole(self.course.id)
+        role.add_users(instructor)
+
+        return instructor
 
     def make_coach(self):
         """

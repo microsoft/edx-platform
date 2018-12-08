@@ -12,16 +12,19 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
-from django.template import Context
-from django.http import HttpResponse
 import logging
+from urlparse import urljoin
 
-from microsite_configuration import microsite
-
-from edxmako import lookup_template
-from edxmako.middleware import get_template_request_context
 from django.conf import settings
-from django.core.urlresolvers import reverse
+from django.urls import reverse
+from django.http import HttpResponse
+from django.template import engines
+
+from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
+from openedx.core.djangoapps.theming.helpers import is_request_in_themed_site
+
+from . import Engines
+
 log = logging.getLogger(__name__)
 
 
@@ -33,20 +36,27 @@ def marketing_link(name):
     possible URLs for certain links. This function is to decides
     which URL should be provided.
     """
-
     # link_map maps URLs from the marketing site to the old equivalent on
     # the Django site
     link_map = settings.MKTG_URL_LINK_MAP
-    enable_mktg_site = microsite.get_value(
+    enable_mktg_site = configuration_helpers.get_value(
         'ENABLE_MKTG_SITE',
         settings.FEATURES.get('ENABLE_MKTG_SITE', False)
     )
+    marketing_urls = configuration_helpers.get_value(
+        'MKTG_URLS',
+        settings.MKTG_URLS
+    )
 
-    if enable_mktg_site and name in settings.MKTG_URLS:
+    if enable_mktg_site and name in marketing_urls:
         # special case for when we only want the root marketing URL
         if name == 'ROOT':
-            return settings.MKTG_URLS.get('ROOT')
-        return settings.MKTG_URLS.get('ROOT') + settings.MKTG_URLS.get(name)
+            return marketing_urls.get('ROOT')
+        # Using urljoin here allows us to enable a marketing site and set
+        # a site ROOT, but still specify absolute URLs for other marketing
+        # URLs in the MKTG_URLS setting
+        # e.g. urljoin('http://marketing.com', 'http://open-edx.org/about') >>> 'http://open-edx.org/about'
+        return urljoin(marketing_urls.get('ROOT'), marketing_urls.get(name))
     # only link to the old pages when the marketing site isn't on
     elif not enable_mktg_site and name in link_map:
         # don't try to reverse disabled marketing links
@@ -70,13 +80,17 @@ def is_marketing_link_set(name):
     Returns a boolean if a given named marketing link is configured.
     """
 
-    enable_mktg_site = microsite.get_value(
+    enable_mktg_site = configuration_helpers.get_value(
         'ENABLE_MKTG_SITE',
         settings.FEATURES.get('ENABLE_MKTG_SITE', False)
     )
+    marketing_urls = configuration_helpers.get_value(
+        'MKTG_URLS',
+        settings.MKTG_URLS
+    )
 
     if enable_mktg_site:
-        return name in settings.MKTG_URLS
+        return name in marketing_urls
     else:
         return name in settings.MKTG_URL_LINK_MAP
 
@@ -90,70 +104,66 @@ def marketing_link_context_processor(request):
     'MKTG_URL_' and whose values are the corresponding URLs as computed by the
     marketing_link method.
     """
+    marketing_urls = configuration_helpers.get_value(
+        'MKTG_URLS',
+        settings.MKTG_URLS
+    )
+
     return dict(
         [
             ("MKTG_URL_" + k, marketing_link(k))
             for k in (
                 settings.MKTG_URL_LINK_MAP.viewkeys() |
-                settings.MKTG_URLS.viewkeys()
+                marketing_urls.viewkeys()
             )
         ]
     )
 
 
-def microsite_footer_context_processor(request):
+def footer_context_processor(request):  # pylint: disable=unused-argument
     """
     Checks the site name to determine whether to use the edX.org footer or the Open Source Footer.
     """
     return dict(
         [
-            ("IS_REQUEST_IN_MICROSITE", microsite.is_request_in_microsite())
+            ("IS_REQUEST_IN_MICROSITE", is_request_in_themed_site())
         ]
     )
 
 
-def render_to_string(template_name, dictionary, context=None, namespace='main'):
+def render_to_string(template_name, dictionary, namespace='main', request=None):
+    """
+    Render a Mako template to as a string.
 
-    # see if there is an override template defined in the microsite
-    template_name = microsite.get_template_path(template_name)
+    The following values are available to all templates:
+        settings: the django settings object
+        EDX_ROOT_URL: settings.EDX_ROOT_URL
+        marketing_link: The :func:`marketing_link` function
+        is_any_marketing_link_set: The :func:`is_any_marketing_link_set` function
+        is_marketing_link_set: The :func:`is_marketing_link_set` function
 
-    context_instance = Context(dictionary)
-    # add dictionary to context_instance
-    context_instance.update(dictionary or {})
-    # collapse context_instance to a single dictionary for mako
-    context_dictionary = {}
-    context_instance['settings'] = settings
-    context_instance['EDX_ROOT_URL'] = settings.EDX_ROOT_URL
-    context_instance['marketing_link'] = marketing_link
-    context_instance['is_any_marketing_link_set'] = is_any_marketing_link_set
-    context_instance['is_marketing_link_set'] = is_marketing_link_set
-
-    # In various testing contexts, there might not be a current request context.
-    request_context = get_template_request_context()
-    if request_context:
-        for item in request_context:
-            context_dictionary.update(item)
-    for item in context_instance:
-        context_dictionary.update(item)
-    if context:
-        context_dictionary.update(context)
-
-    # "Fix" CSRF token by evaluating the lazy object
-    KEY_CSRF_TOKENS = ('csrf_token', 'csrf')
-    for key in KEY_CSRF_TOKENS:
-        if key in context_dictionary:
-            context_dictionary[key] = unicode(context_dictionary[key])
-
-    # fetch and render template
-    template = lookup_template(namespace, template_name)
-    return template.render_unicode(**context_dictionary)
+    Arguments:
+        template_name: The name of the template to render. Will be loaded
+            from the template paths specified in configuration.
+        dictionary: A dictionary of variables to insert into the template during
+            rendering.
+        namespace: The Mako namespace to find the named template in.
+        request: The request to use to construct the RequestContext for rendering
+            this template. If not supplied, the current request will be used.
+    """
+    if namespace == 'lms.main':
+        engine = engines[Engines.PREVIEW]
+    else:
+        engine = engines[Engines.MAKO]
+    template = engine.get_template(template_name)
+    return template.render(dictionary, request)
 
 
-def render_to_response(template_name, dictionary=None, context_instance=None, namespace='main', **kwargs):
+def render_to_response(template_name, dictionary=None, namespace='main', request=None, **kwargs):
     """
     Returns a HttpResponse whose content is filled with the result of calling
     lookup.get_template(args[0]).render with the passed arguments.
     """
 
     dictionary = dictionary or {}
-    return HttpResponse(render_to_string(template_name, dictionary, context_instance, namespace), **kwargs)
+    return HttpResponse(render_to_string(template_name, dictionary, namespace, request), **kwargs)

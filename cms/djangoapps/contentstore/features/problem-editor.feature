@@ -82,46 +82,7 @@ Feature: CMS.Problem Editor
     And I can modify the display name
     Then If I press Cancel my changes are not persisted
 
-  Scenario: Edit High Level source is available for LaTeX problem
-    Given I have created a LaTeX Problem
-    When I edit and select Settings
-    Then Edit High Level Source is visible
-
   Scenario: Cheat sheet visible on toggle
     Given I have created a Blank Common Problem
     And I can edit the problem
     Then I can see cheatsheet
-
-  Scenario: Reply on Annotation and Return to Annotation link works for Annotation problem
-    Given I have created a unit with advanced module "annotatable"
-    And I have created an advanced component "Annotation" of type "annotatable"
-    And I have created an advanced problem of type "Blank Advanced Problem"
-    And I edit first blank advanced problem for annotation response
-    When I mouseover on "annotatable-span"
-    Then I can see Reply to Annotation link
-    And I see that page has scrolled "down" when I click on "annotatable-reply" link
-    And I see that page has scrolled "up" when I click on "annotation-return" link
-
-  # Disabled 11/13/2013 after failing in master
-  # The screenshot showed that the LaTeX editor had the text "hi",
-  # but Selenium timed out waiting for the text to appear.
-  # It also caused later tests to fail with "UnexpectedAlertPresent"
-  #
-  # This feature will work in Firefox only when Firefox is the active window
-  # IE will not interact with the high level source in sauce labs
-  #@skip_internetexplorer
-  #Scenario: High Level source is persisted for LaTeX problem (bug STUD-280)
-  #  Given I have created a LaTeX Problem
-  #  When I edit and compile the High Level Source
-  #  Then my change to the High Level Source is persisted
-  #  And when I view the High Level Source I see my changes
-
-    # Disabled 10/28/13 due to flakiness observed in master
-    #  Scenario: Exceptions don't cause problem to be uneditable (bug STUD-786)
-    #Given I have an empty course
-    #And I go to the import page
-    #And I import the file "get_html_exception_test.tar.gz"
-    #When I go to the unit "Probability and BMI"
-    #And I click on "edit a draft"
-    #Then I see a message that says "We're having trouble rendering your component"
-    #And I can edit the problem

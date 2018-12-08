@@ -2,12 +2,14 @@
 API function for retrieving course blocks data
 """
 
-from lms.djangoapps.course_blocks.api import get_course_blocks, COURSE_BLOCK_ACCESS_TRANSFORMERS
-from openedx.core.lib.block_structure.transformers import BlockStructureTransformers
+import lms.djangoapps.course_blocks.api as course_blocks_api
+from lms.djangoapps.course_blocks.transformers.hidden_content import HiddenContentTransformer
+from openedx.core.djangoapps.content.block_structure.transformers import BlockStructureTransformers
 
+from .serializers import BlockDictSerializer, BlockSerializer
 from .transformers.blocks_api import BlocksAPITransformer
-from .transformers.proctored_exam import ProctoredExamTransformer
-from .serializers import BlockSerializer, BlockDictSerializer
+from .transformers.block_completion import BlockCompletionTransformer
+from .transformers.milestones import MilestonesAndSpecialExamsTransformer
 
 
 def get_blocks(
@@ -20,13 +22,14 @@ def get_blocks(
         block_counts=None,
         student_view_data=None,
         return_type='dict',
+        block_types_filter=None,
 ):
     """
     Return a serialized representation of the course blocks.
 
     Arguments:
         request (HTTPRequest): Used for calling django reverse.
-        usage_key (UsageKey): Identifies the root block of interest.
+        usage_key (UsageKey): Identifies the starting block of interest.
         user (User): Optional user object for whom the blocks are being
             retrieved. If None, blocks are returned regardless of access checks.
         depth (integer or None): Identifies the depth of the tree to return
@@ -44,11 +47,23 @@ def get_blocks(
             which blocks to return their student_view_data.
         return_type (string): Possible values are 'dict' or 'list'. Indicates
             the format for returning the blocks.
+        block_types_filter (list): Optional list of block type names used to filter
+            the final result of returned blocks.
     """
     # create ordered list of transformers, adding BlocksAPITransformer at end.
     transformers = BlockStructureTransformers()
+    if requested_fields is None:
+        requested_fields = []
+    include_completion = 'completion' in requested_fields
+    include_special_exams = 'special_exam_info' in requested_fields
+    include_gated_sections = 'show_gated_sections' in requested_fields
+
     if user is not None:
-        transformers += COURSE_BLOCK_ACCESS_TRANSFORMERS + [ProctoredExamTransformer()]
+        transformers += course_blocks_api.get_course_block_access_transformers()
+        transformers += [MilestonesAndSpecialExamsTransformer(
+            include_special_exams=include_special_exams,
+            include_gated_sections=include_gated_sections)]
+        transformers += [HiddenContentTransformer()]
     transformers += [
         BlocksAPITransformer(
             block_counts,
@@ -58,8 +73,21 @@ def get_blocks(
         )
     ]
 
+    if include_completion:
+        transformers += [BlockCompletionTransformer()]
+
     # transform
-    blocks = get_course_blocks(user, usage_key, transformers)
+    blocks = course_blocks_api.get_course_blocks(user, usage_key, transformers)
+
+    # filter blocks by types
+    if block_types_filter:
+        block_keys_to_remove = []
+        for block_key in blocks:
+            block_type = blocks.get_xblock_field(block_key, 'category')
+            if block_type not in block_types_filter:
+                block_keys_to_remove.append(block_key)
+        for block_key in block_keys_to_remove:
+            blocks.remove_block(block_key, keep_descendants=True)
 
     # serialize
     serializer_context = {

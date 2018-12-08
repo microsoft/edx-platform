@@ -1,28 +1,27 @@
 """ Commerce API v1 view tests. """
-from datetime import datetime, timedelta
 import itertools
 import json
+from datetime import datetime, timedelta
 
 import ddt
+import pytz
 from django.conf import settings
 from django.contrib.auth.models import Permission
-from django.core.urlresolvers import reverse
+from django.urls import reverse, reverse_lazy
 from django.test import TestCase
 from django.test.utils import override_settings
 from edx_rest_api_client import exceptions
-from flaky import flaky
 from nose.plugins.attrib import attr
-import pytz
 from rest_framework.utils.encoders import JSONEncoder
+
+from course_modes.models import CourseMode
+from lms.djangoapps.verify_student.models import VerificationDeadline
+from student.tests.factories import UserFactory
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
 
-from commerce.tests import TEST_API_URL, TEST_API_SIGNING_KEY
-from commerce.tests.mocks import mock_order_endpoint
-from commerce.tests.test_views import UserMixin
-from course_modes.models import CourseMode
-from student.tests.factories import UserFactory
-from lms.djangoapps.verify_student.models import VerificationDeadline
+from ....tests.mocks import mock_order_endpoint
+from ....tests.test_views import UserMixin
 
 PASSWORD = 'test'
 JSON_CONTENT_TYPE = 'application/json'
@@ -37,8 +36,14 @@ class CourseApiViewTestMixin(object):
     def setUp(self):
         super(CourseApiViewTestMixin, self).setUp()
         self.course = CourseFactory.create()
-        self.course_mode = CourseMode.objects.create(course_id=self.course.id, mode_slug=u'verified', min_price=100,
-                                                     currency=u'USD', sku=u'ABC123')
+        self.course_mode = CourseMode.objects.create(
+            course_id=self.course.id,
+            mode_slug=u'verified',
+            min_price=100,
+            currency=u'USD',
+            sku=u'ABC123',
+            bulk_sku=u'BULK-ABC123'
+        )
 
     @classmethod
     def _serialize_datetime(cls, dt):  # pylint: disable=invalid-name
@@ -58,6 +63,7 @@ class CourseApiViewTestMixin(object):
             u'currency': course_mode.currency.lower(),
             u'price': course_mode.min_price,
             u'sku': course_mode.sku,
+            u'bulk_sku': course_mode.bulk_sku,
             u'expires': cls._serialize_datetime(course_mode.expiration_datetime),
         }
 
@@ -77,7 +83,7 @@ class CourseApiViewTestMixin(object):
 
 class CourseListViewTests(CourseApiViewTestMixin, ModuleStoreTestCase):
     """ Tests for CourseListView. """
-    path = reverse('commerce_api:v1:courses:list')
+    path = reverse_lazy('commerce_api:v1:courses:list')
 
     def test_authentication_required(self):
         """ Verify only authenticated users can access the view. """
@@ -97,9 +103,15 @@ class CourseListViewTests(CourseApiViewTestMixin, ModuleStoreTestCase):
         self.assertListEqual(actual, expected)
 
 
+@attr(shard=3)
 @ddt.ddt
 class CourseRetrieveUpdateViewTests(CourseApiViewTestMixin, ModuleStoreTestCase):
     """ Tests for CourseRetrieveUpdateView. """
+    NOW = 'now'
+    DATES = {
+        NOW: datetime.now(),
+        None: None,
+    }
 
     def setUp(self):
         super(CourseRetrieveUpdateViewTests, self).setUp()
@@ -146,6 +158,7 @@ class CourseRetrieveUpdateViewTests(CourseApiViewTestMixin, ModuleStoreTestCase)
             min_price=200,
             currency=u'USD',
             sku=u'ABC123',
+            bulk_sku=u'BULK-ABC123',
             expiration_datetime=mode_expiration
         )
         expected = self._serialize_course(self.course, [expected_course_mode], verification_deadline)
@@ -155,7 +168,6 @@ class CourseRetrieveUpdateViewTests(CourseApiViewTestMixin, ModuleStoreTestCase)
 
         return response, expected
 
-    @flaky  # TODO This test will fail if one of the timestamps (in actual or expected) ends in .000
     def test_update(self):
         """ Verify the view supports updating a course. """
         # Sanity check: Ensure no verification deadline is set
@@ -216,6 +228,7 @@ class CourseRetrieveUpdateViewTests(CourseApiViewTestMixin, ModuleStoreTestCase)
             min_price=200,
             currency=u'USD',
             sku=u'ABC123',
+            bulk_sku=u'BULK-ABC123',
             expiration_datetime=None
         )
         updated_data = self._serialize_course(self.course, [verified_mode], None)
@@ -250,7 +263,13 @@ class CourseRetrieveUpdateViewTests(CourseApiViewTestMixin, ModuleStoreTestCase)
         """ Verify that data submitted via PUT overwrites/deletes modes that are
         not included in the body of the request. """
         course_id = unicode(self.course.id)
-        expected_course_mode = CourseMode(mode_slug=u'credit', min_price=500, currency=u'USD', sku=u'ABC123')
+        expected_course_mode = CourseMode(
+            mode_slug=u'credit',
+            min_price=500,
+            currency=u'USD',
+            sku=u'ABC123',
+            bulk_sku=u'BULK-ABC123'
+        )
         expected = self._serialize_course(self.course, [expected_course_mode])
         path = reverse('commerce_api:v1:courses:retrieve_update', args=[course_id])
         response = self.client.put(path, json.dumps(expected), content_type=JSON_CONTENT_TYPE)
@@ -263,18 +282,20 @@ class CourseRetrieveUpdateViewTests(CourseApiViewTestMixin, ModuleStoreTestCase)
 
     @ddt.data(*itertools.product(
         ('honor', 'audit', 'verified', 'professional', 'no-id-professional'),
-        (datetime.now(), None),
+        (NOW, None),
     ))
     @ddt.unpack
-    def test_update_professional_expiration(self, mode_slug, expiration_datetime):
+    def test_update_professional_expiration(self, mode_slug, expiration_datetime_name):
         """ Verify that pushing a mode with a professional certificate and an expiration datetime
         will be rejected (this is not allowed). """
+        expiration_datetime = self.DATES[expiration_datetime_name]
         mode = self._serialize_course_mode(
             CourseMode(
                 mode_slug=mode_slug,
                 min_price=500,
                 currency=u'USD',
                 sku=u'ABC123',
+                bulk_sku=u'BULK-ABC123',
                 expiration_datetime=expiration_datetime
             )
         )
@@ -289,8 +310,22 @@ class CourseRetrieveUpdateViewTests(CourseApiViewTestMixin, ModuleStoreTestCase)
     def assert_can_create_course(self, **request_kwargs):
         """ Verify a course can be created by the view. """
         course = CourseFactory.create()
-        expected_modes = [CourseMode(mode_slug=u'verified', min_price=150, currency=u'USD', sku=u'ABC123'),
-                          CourseMode(mode_slug=u'honor', min_price=0, currency=u'USD', sku=u'DEADBEEF')]
+        expected_modes = [
+            CourseMode(
+                mode_slug=u'verified',
+                min_price=150,
+                currency=u'USD',
+                sku=u'ABC123',
+                bulk_sku=u'BULK-ABC123'
+            ),
+            CourseMode(
+                mode_slug=u'honor',
+                min_price=0,
+                currency=u'USD',
+                sku=u'DEADBEEF',
+                bulk_sku=u'BULK-DEADBEEF'
+            )
+        ]
         expected = self._serialize_course(course, expected_modes)
         path = reverse('commerce_api:v1:courses:retrieve_update', args=[unicode(course.id)])
 
@@ -330,7 +365,8 @@ class CourseRetrieveUpdateViewTests(CourseApiViewTestMixin, ModuleStoreTestCase)
             CourseMode(
                 mode_slug=CourseMode.DEFAULT_MODE_SLUG,
                 min_price=150, currency=u'USD',
-                sku=u'ABC123'
+                sku=u'ABC123',
+                bulk_sku=u'BULK-ABC123'
             )
         ]
 
@@ -358,14 +394,13 @@ class CourseRetrieveUpdateViewTests(CourseApiViewTestMixin, ModuleStoreTestCase)
         self.assertDictEqual(expected_dict, json.loads(response.content))
 
 
-@attr('shard_1')
-@override_settings(ECOMMERCE_API_URL=TEST_API_URL, ECOMMERCE_API_SIGNING_KEY=TEST_API_SIGNING_KEY)
+@attr(shard=1)
 class OrderViewTests(UserMixin, TestCase):
     """ Tests for the basket order view. """
     view_name = 'commerce_api:v1:orders:detail'
     ORDER_NUMBER = 'EDX-100001'
     MOCK_ORDER = {'number': ORDER_NUMBER}
-    path = reverse(view_name, kwargs={'number': ORDER_NUMBER})
+    path = reverse_lazy(view_name, kwargs={'number': ORDER_NUMBER})
 
     def setUp(self):
         super(OrderViewTests, self).setUp()
@@ -382,12 +417,12 @@ class OrderViewTests(UserMixin, TestCase):
 
     def test_order_not_found(self):
         """ If the order is not found, the view should return a 404. """
-        with mock_order_endpoint(order_number=self.ORDER_NUMBER, exception=exceptions.HttpNotFoundError):
+        with mock_order_endpoint(order_number=self.ORDER_NUMBER, status=404):
             response = self.client.get(self.path)
         self.assertEqual(response.status_code, 404)
 
     def test_login_required(self):
-        """ The view should return 403 if the user is not logged in. """
+        """ The view should return 401 if the user is not logged in. """
         self.client.logout()
         response = self.client.get(self.path)
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 401)

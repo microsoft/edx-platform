@@ -8,7 +8,8 @@ from .aws import *  # pylint: disable=wildcard-import, unused-wildcard-import
 
 # Don't use S3 in devstack, fall back to filesystem
 del DEFAULT_FILE_STORAGE
-MEDIA_ROOT = "/edx/var/edxapp/uploads"
+COURSE_IMPORT_EXPORT_STORAGE = 'django.core.files.storage.FileSystemStorage'
+USER_TASKS_ARTIFACT_STORAGE = COURSE_IMPORT_EXPORT_STORAGE
 
 DEBUG = True
 USE_I18N = True
@@ -26,11 +27,13 @@ for pkg_name in ['track.contexts', 'track.middleware', 'dd.dogapi']:
 
 ################################ EMAIL ########################################
 
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+EMAIL_BACKEND = 'django.core.mail.backends.filebased.EmailBackend'
+EMAIL_FILE_PATH = '/edx/src/ace_messages/'
 
 ################################# LMS INTEGRATION #############################
 
 LMS_BASE = "localhost:8000"
+LMS_ROOT_URL = "http://{}".format(LMS_BASE)
 FEATURES['PREVIEW_LMS_BASE'] = "preview." + LMS_BASE
 
 ########################### PIPELINE #################################
@@ -41,9 +44,13 @@ STATICFILES_STORAGE = 'openedx.core.storage.DevelopmentStorage'
 
 # Revert to the default set of finders as we don't want the production pipeline
 STATICFILES_FINDERS = [
+    'openedx.core.djangoapps.theming.finders.ThemeFilesFinder',
     'django.contrib.staticfiles.finders.FileSystemFinder',
     'django.contrib.staticfiles.finders.AppDirectoriesFinder',
 ]
+
+# Load development webpack donfiguration
+WEBPACK_CONFIG_PATH = 'webpack.dev.config.js'
 
 ############################ PYFS XBLOCKS SERVICE #############################
 # Set configuration for Django pyfilesystem
@@ -60,8 +67,10 @@ DJFS = {
 CELERY_ALWAYS_EAGER = True
 
 ################################ DEBUG TOOLBAR ################################
-INSTALLED_APPS += ('debug_toolbar', 'debug_toolbar_mongo')
-MIDDLEWARE_CLASSES += ('debug_toolbar.middleware.DebugToolbarMiddleware',)
+
+INSTALLED_APPS += ['debug_toolbar', 'debug_toolbar_mongo']
+
+MIDDLEWARE_CLASSES.append('debug_toolbar.middleware.DebugToolbarMiddleware')
 INTERNAL_IPS = ('127.0.0.1',)
 
 DEBUG_TOOLBAR_PANELS = (
@@ -77,12 +86,20 @@ DEBUG_TOOLBAR_PANELS = (
 )
 
 DEBUG_TOOLBAR_CONFIG = {
-    'SHOW_TOOLBAR_CALLBACK': 'cms.envs.devstack.should_show_debug_toolbar'
+    # Profile panel is incompatible with wrapped views
+    # See https://github.com/jazzband/django-debug-toolbar/issues/792
+    'DISABLE_PANELS': (
+        'debug_toolbar.panels.profiling.ProfilingPanel',
+    ),
+    'SHOW_TOOLBAR_CALLBACK': 'cms.envs.devstack.should_show_debug_toolbar',
 }
 
 
-def should_show_debug_toolbar(_):
-    return True  # We always want the toolbar on devstack regardless of IP, auth, etc.
+def should_show_debug_toolbar(request):
+    # We always want the toolbar on devstack unless running tests from another Docker container
+    if request.get_host().startswith('edx.devstack.studio:'):
+        return False
+    return True
 
 
 # To see stacktraces for MongoDB queries, set this to True.
@@ -100,11 +117,7 @@ FEATURES['ENTRANCE_EXAMS'] = True
 ################################ COURSE LICENSES ################################
 FEATURES['LICENSING'] = True
 # Needed to enable licensing on video modules
-XBLOCK_SETTINGS = {
-    "VideoDescriptor": {
-        "licensing_enabled": True
-    }
-}
+XBLOCK_SETTINGS.update({'VideoDescriptor': {'licensing_enabled': True}})
 
 ################################ SEARCH INDEX ################################
 FEATURES['ENABLE_COURSEWARE_INDEX'] = True
@@ -114,6 +127,9 @@ SEARCH_ENGINE = "search.elastic.ElasticSearchEngine"
 ########################## Certificates Web/HTML View #######################
 FEATURES['CERTIFICATES_HTML_VIEW'] = True
 
+########################## AUTHOR PERMISSION #######################
+FEATURES['ENABLE_CREATOR_GROUP'] = False
+
 ################################# DJANGO-REQUIRE ###############################
 
 # Whether to run django-require in debug mode.
@@ -121,6 +137,16 @@ REQUIRE_DEBUG = DEBUG
 
 ########################### OAUTH2 #################################
 OAUTH_OIDC_ISSUER = 'http://127.0.0.1:8000/oauth2'
+
+JWT_AUTH.update({
+    'JWT_SECRET_KEY': 'lms-secret',
+    'JWT_ISSUER': 'http://127.0.0.1:8000/oauth2',
+    'JWT_AUDIENCE': 'lms-key',
+})
+
+#####################################################################
+from openedx.core.djangoapps.plugins import plugin_settings, constants as plugin_constants
+plugin_settings.add_plugins(__name__, plugin_constants.ProjectType.CMS, plugin_constants.SettingsType.DEVSTACK)
 
 ###############################################################################
 # See if the developer has any local overrides.

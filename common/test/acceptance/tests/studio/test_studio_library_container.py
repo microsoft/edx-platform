@@ -1,23 +1,23 @@
 """
 Acceptance tests for Library Content in LMS
 """
-import ddt
-from nose.plugins.attrib import attr
 import textwrap
 
-from .base_studio_test import StudioLibraryTest
-from ...fixtures.course import CourseFixture
-from ..helpers import UniqueCourseTest, TestWithSearchIndexMixin
-from ...pages.studio.library import StudioLibraryContentEditor, StudioLibraryContainerXBlockWrapper
-from ...pages.studio.overview import CourseOutlinePage
-from ...fixtures.course import XBlockFixtureDesc
+import ddt
+from nose.plugins.attrib import attr
+
+from common.test.acceptance.fixtures.course import CourseFixture, XBlockFixtureDesc
+from common.test.acceptance.pages.studio.library import StudioLibraryContainerXBlockWrapper, StudioLibraryContentEditor
+from common.test.acceptance.pages.studio.overview import CourseOutlinePage
+from common.test.acceptance.tests.helpers import TestWithSearchIndexMixin, UniqueCourseTest
+from common.test.acceptance.tests.studio.base_studio_test import StudioLibraryTest
 
 SECTION_NAME = 'Test Section'
 SUBSECTION_NAME = 'Test Subsection'
 UNIT_NAME = 'Test Unit'
 
 
-@attr('shard_5')
+@attr(shard=17)
 @ddt.ddt
 class StudioLibraryContainerTest(StudioLibraryTest, UniqueCourseTest, TestWithSearchIndexMixin):
     """
@@ -65,7 +65,6 @@ class StudioLibraryContainerTest(StudioLibraryTest, UniqueCourseTest, TestWithSe
             'source_library_id': unicode(self.library_key),
             'mode': 'random',
             'max_count': 1,
-            'has_score': False
         }
 
         course_fixture.add_children(
@@ -84,13 +83,8 @@ class StudioLibraryContainerTest(StudioLibraryTest, UniqueCourseTest, TestWithSe
         """
         return StudioLibraryContainerXBlockWrapper.from_xblock_wrapper(xblock)
 
-    @ddt.data(
-        (1, True),
-        (2, False),
-        (3, True),
-    )
-    @ddt.unpack
-    def test_can_edit_metadata(self, max_count, scored):
+    @ddt.data(1, 2, 3)
+    def test_can_edit_metadata(self, max_count):
         """
         Scenario: Given I have a library, a course and library content xblock in a course
         When I go to studio unit page for library content block
@@ -103,7 +97,6 @@ class StudioLibraryContainerTest(StudioLibraryTest, UniqueCourseTest, TestWithSe
         edit_modal = StudioLibraryContentEditor(self.browser, library_container.locator)
         edit_modal.library_name = library_name
         edit_modal.count = max_count
-        edit_modal.scored = scored
 
         library_container.save_settings()  # saving settings
 
@@ -112,7 +105,6 @@ class StudioLibraryContainerTest(StudioLibraryTest, UniqueCourseTest, TestWithSe
         edit_modal = StudioLibraryContentEditor(self.browser, library_container.locator)
         self.assertEqual(edit_modal.library_name, library_name)
         self.assertEqual(edit_modal.count, max_count)
-        self.assertEqual(edit_modal.scored, scored)
 
     def test_no_library_shows_library_not_configured(self):
         """

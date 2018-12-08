@@ -22,8 +22,9 @@ from .common import *
 import os
 from path import Path as path
 from uuid import uuid4
-from warnings import filterwarnings, simplefilter
 
+from util.db import NoOpMigrationModules
+from openedx.core.lib.derived import derive_settings
 from openedx.core.lib.tempdir import mkdtemp_clean
 
 # This patch disables the commit_on_success decorator during tests
@@ -31,6 +32,11 @@ from openedx.core.lib.tempdir import mkdtemp_clean
 from util.testing import patch_testcase, patch_sessions
 patch_testcase()
 patch_sessions()
+
+# Allow all hosts during tests, we use a lot of different ones all over the codebase.
+ALLOWED_HOSTS = [
+    '*'
+]
 
 # Silence noisy logs to make troubleshooting easier when tests fail.
 import logging
@@ -61,20 +67,23 @@ FEATURES['ENABLE_DISCUSSION_SERVICE'] = False
 
 FEATURES['ENABLE_SERVICE_STATUS'] = True
 
-FEATURES['ENABLE_HINTER_INSTRUCTOR_VIEW'] = True
-
 FEATURES['ENABLE_SHOPPING_CART'] = True
 
 FEATURES['ENABLE_VERIFIED_CERTIFICATES'] = True
-
-# Enable this feature for course staff grade downloads, to enable acceptance tests
-FEATURES['ENABLE_S3_GRADE_DOWNLOADS'] = True
-FEATURES['ALLOW_COURSE_STAFF_GRADE_DOWNLOADS'] = True
 
 # Toggles embargo on for testing
 FEATURES['EMBARGO'] = True
 
 FEATURES['ENABLE_COMBINED_LOGIN_REGISTRATION'] = True
+
+# Enable the milestones app in tests to be consistent with it being enabled in production
+FEATURES['MILESTONES_APP'] = True
+
+FEATURES['ENABLE_ENROLLMENT_TRACK_USER_PARTITION'] = True
+
+FEATURES['ENABLE_BULK_ENROLLMENT_VIEW'] = True
+
+DEFAULT_MOBILE_AVAILABLE = True
 
 # Need wiki for courseware views to work. TODO (vshnayder): shouldn't need it.
 WIKI_ENABLED = True
@@ -82,28 +91,11 @@ WIKI_ENABLED = True
 # Enable a parental consent age limit for testing
 PARENTAL_CONSENT_AGE_LIMIT = 13
 
-# Makes the tests run much faster...
-SOUTH_TESTS_MIGRATE = False  # To disable migrations and use syncdb instead
-
-# Nose Test Runner
-TEST_RUNNER = 'django_nose.NoseTestSuiteRunner'
-
-_SYSTEM = 'lms'
-
-_REPORT_DIR = REPO_ROOT / 'reports' / _SYSTEM
-_REPORT_DIR.makedirs_p()
-_NOSEID_DIR = REPO_ROOT / '.testids' / _SYSTEM
-_NOSEID_DIR.makedirs_p()
-
-NOSE_ARGS = [
-    '--id-file', _NOSEID_DIR / 'noseids',
-    '--xunit-file', _REPORT_DIR / 'nosetests.xml',
-]
-
 # Local Directories
 TEST_ROOT = path("test_root")
 # Want static files in the same dir for running on jenkins.
 STATIC_ROOT = TEST_ROOT / "staticfiles"
+WEBPACK_LOADER['DEFAULT']['STATS_FILE'] = STATIC_ROOT / "webpack-stats.json"
 
 STATUS_MESSAGE_PATH = TEST_ROOT / "status_message.json"
 
@@ -165,8 +157,8 @@ update_module_store_settings(
     doc_store_settings={
         'host': MONGO_HOST,
         'port': MONGO_PORT_NUM,
-        'db': 'test_xmodule',
-        'collection': 'test_modulestore{0}'.format(THIS_UUID),
+        'db': 'test_xmodule_{}'.format(THIS_UUID),
+        'collection': 'test_modulestore',
     },
 )
 
@@ -174,7 +166,7 @@ CONTENTSTORE = {
     'ENGINE': 'xmodule.contentstore.mongo.MongoContentStore',
     'DOC_STORE_CONFIG': {
         'host': MONGO_HOST,
-        'db': 'xcontent',
+        'db': 'test_xcontent_{}'.format(THIS_UUID),
         'port': MONGO_PORT_NUM,
     }
 }
@@ -182,23 +174,27 @@ CONTENTSTORE = {
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': TEST_ROOT / 'db' / 'edx.db',
         'ATOMIC_REQUESTS': True,
     },
-
+    'student_module_history': {
+        'ENGINE': 'django.db.backends.sqlite3',
+    },
 }
 
-# This hack disables migrations during tests. We want to create tables directly from the models for speed.
-# See https://groups.google.com/d/msg/django-developers/PWPj3etj3-U/kCl6pMsQYYoJ.
-MIGRATION_MODULES = {app: "app.migrations_not_used_in_tests" for app in INSTALLED_APPS}
+if os.environ.get('DISABLE_MIGRATIONS'):
+    # Create tables directly from apps' models. This can be removed once we upgrade
+    # to Django 1.9, which allows setting MIGRATION_MODULES to None in order to skip migrations.
+    MIGRATION_MODULES = NoOpMigrationModules()
+
+# Make sure we test with the extended history table
+FEATURES['ENABLE_CSMH_EXTENDED'] = True
+INSTALLED_APPS.append('coursewarehistoryextended')
 
 CACHES = {
     # This is the cache used for most things.
     # In staging/prod envs, the sessions also live here.
     'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'edx_loc_mem_cache',
-        'KEY_FUNCTION': 'util.memcache.safe_key',
+        'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
     },
 
     # The general cache is what you get if you use our util.cache. It's used for
@@ -208,20 +204,13 @@ CACHES = {
     # push process.
     'general': {
         'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
-        'KEY_PREFIX': 'general',
-        'VERSION': 4,
-        'KEY_FUNCTION': 'util.memcache.safe_key',
     },
 
     'mongo_metadata_inheritance': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': os.path.join(tempfile.gettempdir(), 'mongo_metadata_inheritance'),
-        'TIMEOUT': 300,
-        'KEY_FUNCTION': 'util.memcache.safe_key',
+        'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
     },
     'loc_cache': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'edx_location_mem_cache',
+        'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
     },
     'course_structure_cache': {
         'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
@@ -230,15 +219,6 @@ CACHES = {
 
 # Dummy secret key for dev
 SECRET_KEY = '85920908f28904ed733fe576320db18cabd7b6cd'
-
-# hide ratelimit warnings while running tests
-filterwarnings('ignore', message='No request passed to the backend, unable to rate-limit')
-
-# Ignore deprecation warnings (so we don't clutter Jenkins builds/production)
-# https://docs.python.org/2/library/warnings.html#the-warnings-filter
-# Change to "default" to see the first instance of each hit
-# or "error" to convert all into errors
-simplefilter('ignore')
 
 ############################# SECURITY SETTINGS ################################
 # Default to advanced security in common.py, so tests can reset here to use
@@ -254,15 +234,16 @@ PASSWORD_COMPLEXITY = {}
 ######### Third-party auth ##########
 FEATURES['ENABLE_THIRD_PARTY_AUTH'] = True
 
-AUTHENTICATION_BACKENDS = (
-    'social.backends.google.GoogleOAuth2',
-    'social.backends.linkedin.LinkedinOAuth2',
-    'social.backends.facebook.FacebookOAuth2',
-    'social.backends.twitter.TwitterOAuth',
+AUTHENTICATION_BACKENDS = [
+    'social_core.backends.google.GoogleOAuth2',
+    'social_core.backends.linkedin.LinkedinOAuth2',
+    'social_core.backends.facebook.FacebookOAuth2',
+    'social_core.backends.azuread.AzureADOAuth2',
+    'social_core.backends.twitter.TwitterOAuth',
     'third_party_auth.dummy.DummyBackend',
     'third_party_auth.saml.SAMLAuthBackend',
     'third_party_auth.lti.LTIAuthBackend',
-) + AUTHENTICATION_BACKENDS
+] + AUTHENTICATION_BACKENDS
 
 THIRD_PARTY_AUTH_CUSTOM_AUTH_FORMS = {
     'custom1': {
@@ -291,11 +272,22 @@ FEATURES['ENABLE_OAUTH2_PROVIDER'] = True
 # don't cache courses for testing
 OIDC_COURSE_HANDLER_CACHE_TIMEOUT = 0
 
+########################### Settings for JWTs ##################################
+RESTRICTED_APPLICATION_JWT_ISSUER = {
+    'ISSUER': 'restricted-app',
+    'SECRET_KEY': 'restricted-secret',
+    'AUDIENCE': 'restricted-app',
+}
+JWT_AUTH.update({
+    'JWT_ISSUERS': [
+        DEFAULT_JWT_ISSUER,
+        RESTRICTED_APPLICATION_JWT_ISSUER,
+    ],
+})
+
 ########################### External REST APIs #################################
 FEATURES['ENABLE_MOBILE_REST_API'] = True
-FEATURES['ENABLE_MOBILE_SOCIAL_FACEBOOK_FEATURES'] = True
 FEATURES['ENABLE_VIDEO_ABSTRACTION_LAYER_API'] = True
-FEATURES['ENABLE_COURSE_BLOCKS_NAVIGATION_API'] = True
 
 ###################### Payment ##############################3
 # Enable fake payment processing page
@@ -329,6 +321,8 @@ GIT_REPO_DIR = TEST_ROOT / "course_repos"
 CELERY_ALWAYS_EAGER = True
 CELERY_RESULT_BACKEND = 'djcelery.backends.cache:CacheBackend'
 
+CLEAR_REQUEST_CACHE_ON_TASK_COMPLETION = False
+
 ######################### MARKETING SITE ###############################
 
 MKTG_URL_LINK_MAP = {
@@ -352,6 +346,8 @@ MKTG_URL_LINK_MAP = {
 }
 
 SUPPORT_SITE_LINK = 'https://support.example.com'
+PASSWORD_RESET_SUPPORT_LINK = 'https://support.example.com/password-reset-help.html'
+ACTIVATION_EMAIL_SUPPORT_LINK = 'https://support.example.com/activation-email-help.html'
 
 ############################ STATIC FILES #############################
 DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
@@ -374,10 +370,12 @@ for static_dir in STATICFILES_DIRS:
 STATICFILES_DIRS = _NEW_STATICFILES_DIRS
 
 FILE_UPLOAD_TEMP_DIR = TEST_ROOT / "uploads"
-FILE_UPLOAD_HANDLERS = (
+FILE_UPLOAD_HANDLERS = [
     'django.core.files.uploadhandler.MemoryFileUploadHandler',
     'django.core.files.uploadhandler.TemporaryFileUploadHandler',
-)
+]
+
+BLOCK_STRUCTURES_SETTINGS['PRUNING_ACTIVE'] = True
 
 ########################### Server Ports ###################################
 
@@ -389,17 +387,20 @@ YOUTUBE_PORT = 8031
 LTI_PORT = 8765
 VIDEO_SOURCE_PORT = 8777
 
+FEATURES['PREVIEW_LMS_BASE'] = "preview.localhost"
+############### Module Store Items ##########
+PREVIEW_DOMAIN = FEATURES['PREVIEW_LMS_BASE'].split(':')[0]
+HOSTNAME_MODULESTORE_DEFAULT_MAPPINGS = {
+    PREVIEW_DOMAIN: 'draft-preferred'
+}
+
+
 ################### Make tests faster
 
-#http://slacy.com/blog/2012/04/make-your-tests-faster-in-django-1-4/
-PASSWORD_HASHERS = (
-    # 'django.contrib.auth.hashers.PBKDF2PasswordHasher',
-    # 'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
-    # 'django.contrib.auth.hashers.BCryptPasswordHasher',
+PASSWORD_HASHERS = [
     'django.contrib.auth.hashers.SHA1PasswordHasher',
     'django.contrib.auth.hashers.MD5PasswordHasher',
-    # 'django.contrib.auth.hashers.CryptPasswordHasher',
-)
+]
 
 ### This enables the Metrics tab for the Instructor dashboard ###########
 FEATURES['CLASS_DASHBOARD'] = True
@@ -412,61 +413,64 @@ FEATURES['CLASS_DASHBOARD'] = True
 import openid.oidutil
 openid.oidutil.log = lambda message, level=0: None
 
-PLATFORM_NAME = "edX"
+# Include a non-ascii character in PLATFORM_NAME to uncover possible UnicodeEncodeErrors in tests.
+PLATFORM_NAME = u"édX"
 SITE_NAME = "edx.org"
 
 # set up some testing for microsites
 FEATURES['USE_MICROSITES'] = True
-MICROSITE_ROOT_DIR = COMMON_ROOT / 'test' / 'test_microsites'
+MICROSITE_ROOT_DIR = COMMON_ROOT / 'test' / 'test_sites'
 MICROSITE_CONFIGURATION = {
-    "test_microsite": {
-        "domain_prefix": "testmicrosite",
-        "university": "test_microsite",
-        "platform_name": "Test Microsite",
-        "logo_image_url": "test_microsite/images/header-logo.png",
-        "email_from_address": "test_microsite@edx.org",
-        "payment_support_email": "test_microsite@edx.org",
+    "test_site": {
+        "domain_prefix": "test-site",
+        "university": "test_site",
+        "platform_name": "Test Site",
+        "logo_image_url": "test_site/images/header-logo.png",
+        "email_from_address": "test_site@edx.org",
+        "ACTIVATION_EMAIL_FROM_ADDRESS": "test_activate@edx.org",
+        "payment_support_email": "test_site@edx.org",
         "ENABLE_MKTG_SITE": False,
-        "SITE_NAME": "test_microsite.localhost",
-        "course_org_filter": "TestMicrositeX",
+        "SITE_NAME": "test_site.localhost",
+        "course_org_filter": "TestSiteX",
         "course_about_show_social_links": False,
-        "css_overrides_file": "test_microsite/css/test_microsite.css",
+        "css_overrides_file": "test_site/css/test_site.css",
         "show_partners": False,
         "show_homepage_promo_video": False,
-        "course_index_overlay_text": "This is a Test Microsite Overlay Text.",
-        "course_index_overlay_logo_file": "test_microsite/images/header-logo.png",
-        "homepage_overlay_html": "<h1>This is a Test Microsite Overlay HTML</h1>",
+        "course_index_overlay_text": "This is a Test Site Overlay Text.",
+        "course_index_overlay_logo_file": "test_site/images/header-logo.png",
+        "homepage_overlay_html": "<h1>This is a Test Site Overlay HTML</h1>",
         "ALWAYS_REDIRECT_HOMEPAGE_TO_DASHBOARD_FOR_AUTHENTICATED_USER": False,
         "COURSE_CATALOG_VISIBILITY_PERMISSION": "see_in_catalog",
         "COURSE_ABOUT_VISIBILITY_PERMISSION": "see_about_page",
         "ENABLE_SHOPPING_CART": True,
         "ENABLE_PAID_COURSE_REGISTRATION": True,
-        "SESSION_COOKIE_DOMAIN": "test_microsite.localhost",
+        "SESSION_COOKIE_DOMAIN": "test_site.localhost",
         "LINKEDIN_COMPANY_ID": "test",
         "FACEBOOK_APP_ID": "12345678908",
         "urls": {
-            'ABOUT': 'testmicrosite/about',
-            'PRIVACY': 'testmicrosite/privacy',
-            'TOS_AND_HONOR': 'testmicrosite/tos-and-honor',
+            'ABOUT': 'test-site/about',
+            'PRIVACY': 'test-site/privacy',
+            'TOS_AND_HONOR': 'test-site/tos-and-honor',
         },
     },
-    "microsite_with_logistration": {
+    "site_with_logistration": {
         "domain_prefix": "logistration",
         "university": "logistration",
         "platform_name": "Test logistration",
-        "logo_image_url": "test_microsite/images/header-logo.png",
-        "email_from_address": "test_microsite@edx.org",
-        "payment_support_email": "test_microsite@edx.org",
+        "logo_image_url": "test_site/images/header-logo.png",
+        "email_from_address": "test_site@edx.org",
+        "ACTIVATION_EMAIL_FROM_ADDRESS": "test_activate@edx.org",
+        "payment_support_email": "test_site@edx.org",
         "ENABLE_MKTG_SITE": False,
         "ENABLE_COMBINED_LOGIN_REGISTRATION": True,
-        "SITE_NAME": "test_microsite.localhost",
+        "SITE_NAME": "test_site.localhost",
         "course_org_filter": "LogistrationX",
         "course_about_show_social_links": False,
-        "css_overrides_file": "test_microsite/css/test_microsite.css",
+        "css_overrides_file": "test_site/css/test_site.css",
         "show_partners": False,
         "show_homepage_promo_video": False,
         "course_index_overlay_text": "Logistration.",
-        "course_index_overlay_logo_file": "test_microsite/images/header-logo.png",
+        "course_index_overlay_logo_file": "test_site/images/header-logo.png",
         "homepage_overlay_html": "<h1>This is a Logistration HTML</h1>",
         "ALWAYS_REDIRECT_HOMEPAGE_TO_DASHBOARD_FOR_AUTHENTICATED_USER": False,
         "COURSE_CATALOG_VISIBILITY_PERMISSION": "see_in_catalog",
@@ -481,13 +485,15 @@ MICROSITE_CONFIGURATION = {
     }
 }
 
-MICROSITE_TEST_HOSTNAME = 'testmicrosite.testserver'
+MICROSITE_TEST_HOSTNAME = 'test-site.testserver'
 MICROSITE_LOGISTRATION_HOSTNAME = 'logistration.testserver'
 
+TEST_THEME = COMMON_ROOT / "test" / "test-theme"
+
 # add extra template directory for test-only templates
-MAKO_TEMPLATES['main'].extend([
+MAKO_TEMPLATE_DIRS_BASE.extend([
     COMMON_ROOT / 'test' / 'templates',
-    COMMON_ROOT / 'test' / 'test_microsites',
+    COMMON_ROOT / 'test' / 'test_sites',
     REPO_ROOT / 'openedx' / 'core' / 'djangolib' / 'tests' / 'templates',
 ])
 
@@ -511,11 +517,10 @@ MONGODB_LOG = {
     'db': 'xlog',
 }
 
+NOTES_DISABLED_TABS = []
+
 # Enable EdxNotes for tests.
 FEATURES['ENABLE_EDXNOTES'] = True
-
-# Enable teams feature for tests.
-FEATURES['ENABLE_TEAMS'] = True
 
 # Enable courseware search for tests
 FEATURES['ENABLE_COURSEWARE_SEARCH'] = True
@@ -528,10 +533,10 @@ SEARCH_ENGINE = "search.tests.mock_search_engine.MockSearchEngine"
 
 FACEBOOK_APP_SECRET = "Test"
 FACEBOOK_APP_ID = "Test"
-FACEBOOK_API_VERSION = "v2.2"
+FACEBOOK_API_VERSION = "v2.8"
 
 ######### custom courses #########
-INSTALLED_APPS += ('lms.djangoapps.ccx', 'openedx.core.djangoapps.ccxcon')
+INSTALLED_APPS += ['lms.djangoapps.ccx', 'openedx.core.djangoapps.ccxcon.apps.CCXConnectorConfig']
 FEATURES['CUSTOM_COURSES_EDX'] = True
 
 # Set dummy values for profile image settings.
@@ -550,8 +555,8 @@ PROFILE_IMAGE_MIN_BYTES = 100
 
 # Enable the LTI provider feature for testing
 FEATURES['ENABLE_LTI_PROVIDER'] = True
-INSTALLED_APPS += ('lti_provider',)
-AUTHENTICATION_BACKENDS += ('lti_provider.users.LtiBackend',)
+INSTALLED_APPS.append('lti_provider.apps.LtiProviderConfig')
+AUTHENTICATION_BACKENDS.append('lti_provider.users.LtiBackend')
 
 # ORGANIZATIONS
 FEATURES['ORGANIZATIONS_APP'] = True
@@ -559,13 +564,41 @@ FEATURES['ORGANIZATIONS_APP'] = True
 # Financial assistance page
 FEATURES['ENABLE_FINANCIAL_ASSISTANCE_FORM'] = True
 
-JWT_AUTH.update({
-    'JWT_SECRET_KEY': 'test-secret',
-    'JWT_ISSUER': 'https://test-provider/oauth2',
-    'JWT_AUDIENCE': 'test-key',
-})
+COURSE_CATALOG_API_URL = 'https://catalog.example.com/api/v1'
 
-# Disable the use of the plugin manager in the transformer registry for
-# better performant unit tests.
-from openedx.core.lib.block_structure.transformer_registry import TransformerRegistry
-TransformerRegistry.USE_PLUGIN_MANAGER = False
+COMPREHENSIVE_THEME_DIRS = [REPO_ROOT / "themes", REPO_ROOT / "common/test"]
+COMPREHENSIVE_THEME_LOCALE_PATHS = [REPO_ROOT / "themes/conf/locale", ]
+
+LMS_ROOT_URL = "http://localhost:8000"
+
+ECOMMERCE_API_URL = 'https://ecommerce.example.com/api/v2/'
+ENTERPRISE_API_URL = 'http://enterprise.example.com/enterprise/api/v1/'
+ENTERPRISE_CONSENT_API_URL = 'http://enterprise.example.com/consent/api/v1/'
+
+ACTIVATION_EMAIL_FROM_ADDRESS = 'test_activate@edx.org'
+
+TEMPLATES[0]['OPTIONS']['debug'] = True
+
+########################### DRF default throttle rates ############################
+# Increasing rates to enable test cases hitting registration view succesfully.
+# Lower rate is causing view to get blocked, causing test case failure.
+REST_FRAMEWORK['DEFAULT_THROTTLE_RATES']['registration_validation'] = '100/minute'
+
+########################## VIDEO TRANSCRIPTS STORAGE ############################
+VIDEO_TRANSCRIPTS_SETTINGS = dict(
+    VIDEO_TRANSCRIPTS_MAX_BYTES=3 * 1024 * 1024,    # 3 MB
+    STORAGE_KWARGS=dict(
+        location=MEDIA_ROOT,
+        base_url=MEDIA_URL,
+    ),
+    DIRECTORY_PREFIX='video-transcripts/',
+)
+
+####################### Plugin Settings ##########################
+
+from openedx.core.djangoapps.plugins import plugin_settings, constants as plugin_constants
+plugin_settings.add_plugins(__name__, plugin_constants.ProjectType.LMS, plugin_constants.SettingsType.TEST)
+
+########################## Derive Any Derived Settings  #######################
+
+derive_settings(__name__)

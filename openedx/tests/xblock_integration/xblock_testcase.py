@@ -35,26 +35,24 @@ Our next steps would be to:
   blocks themselves.
 """
 
-import HTMLParser
 import collections
+import HTMLParser
 import json
-import mock
 import sys
 import unittest
+from datetime import datetime, timedelta
 
+import mock
+import pytz
 from bs4 import BeautifulSoup
-
+from django.conf import settings
+from django.urls import reverse
 from xblock.plugin import Plugin
 
-from django.conf import settings
-from django.core.urlresolvers import reverse
-
-from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
-from xmodule.modulestore.tests.django_utils import SharedModuleStoreTestCase
-
-from lms.djangoapps.courseware.tests.helpers import LoginEnrollmentTestCase
-
 import lms.djangoapps.lms_xblock.runtime
+from lms.djangoapps.courseware.tests.helpers import LoginEnrollmentTestCase
+from xmodule.modulestore.tests.django_utils import SharedModuleStoreTestCase
+from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
 
 
 class XBlockEventTestMixin(object):
@@ -202,10 +200,11 @@ class GradePublishTestMixin(object):
                                 'usage': usage_key,
                                 'score': score,
                                 'max_score': max_score})
+            # Shim a return time, defaults to 1 hour before now
+            return datetime.now().replace(tzinfo=pytz.UTC) - timedelta(hours=1)
 
         self.scores = []
-        patcher = mock.patch("courseware.module_render.set_score",
-                             capture_score)
+        patcher = mock.patch("lms.djangoapps.grades.signals.handlers.set_score", capture_score)
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -366,12 +365,6 @@ class XBlockTestCase(XBlockStudentTestCaseMixin,
         if settings.ROOT_URLCONF != 'lms.urls':
             raise unittest.SkipTest('Test only valid in lms')
         super(XBlockTestCase, cls).setUpClass()
-
-    def setUp(self):
-        """
-        Call setups of all parents
-        """
-        super(XBlockTestCase, self).setUp()
 
     def get_handler_url(self, handler, xblock_name=None):
         """

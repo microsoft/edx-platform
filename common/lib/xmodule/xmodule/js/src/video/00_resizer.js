@@ -1,11 +1,9 @@
-(function (requirejs, require, define) {
-
-define(
+(function(requirejs, require, define) {
+    define(
 'video/00_resizer.js',
 [],
-function () {
-
-    var Resizer = function (params) {
+function() {
+    var Resizer = function(params) {
         var defaults = {
                 container: window,
                 element: null,
@@ -21,7 +19,7 @@ function () {
             mode = null,
             config;
 
-        var initialize = function (params) {
+        var initialize = function(params) {
             if (!config) {
                 config = defaults;
             }
@@ -37,51 +35,51 @@ function () {
             return module;
         };
 
-        var getData = function () {
-            var container = $(config.container),
-                containerWidth = container.width() + delta.width,
-                containerHeight = container.height() + delta.height,
+        var getData = function() {
+            var $container = $(config.container),
+                containerWidth = $container.width() + delta.width,
+                containerHeight = $container.height() + delta.height,
                 containerRatio = config.containerRatio,
 
-                element = $(config.element),
+                $element = $(config.element),
                 elementRatio = config.elementRatio;
 
             if (!containerRatio) {
-                containerRatio = containerWidth/containerHeight;
+                containerRatio = containerWidth / containerHeight;
             }
 
             if (!elementRatio) {
-                elementRatio = element.width()/element.height();
+                elementRatio = $element.width() / $element.height();
             }
 
             return {
                 containerWidth: containerWidth,
                 containerHeight: containerHeight,
                 containerRatio: containerRatio,
-                element: element,
+                element: $element,
                 elementRatio: elementRatio
             };
         };
 
-        var align = function () {
+        var align = function() {
             var data = getData();
 
             switch (mode) {
-                case 'height':
+            case 'height':
+                alignByHeightOnly();
+                break;
+
+            case 'width':
+                alignByWidthOnly();
+                break;
+
+            default:
+                if (data.containerRatio >= data.elementRatio) {
                     alignByHeightOnly();
-                    break;
-
-                case 'width':
+                } else {
                     alignByWidthOnly();
-                    break;
-
-                default:
-                    if (data.containerRatio >= data.elementRatio) {
-                        alignByHeightOnly();
-                    } else {
-                        alignByWidthOnly();
-                    }
-                    break;
+                }
+                break;
             }
 
             fireCallbacks();
@@ -89,35 +87,35 @@ function () {
             return module;
         };
 
-        var alignByWidthOnly = function () {
+        var alignByWidthOnly = function() {
             var data = getData(),
-                height = data.containerWidth/data.elementRatio;
+                height = data.containerWidth / data.elementRatio;
 
             data.element.css({
-                'height': height,
-                'width': data.containerWidth,
-                'top': 0.5*(data.containerHeight - height),
-                'left': 0
+                height: height,
+                width: data.containerWidth,
+                top: 0.5 * (data.containerHeight - height),
+                left: 0
             });
 
             return module;
         };
 
-        var alignByHeightOnly = function () {
+        var alignByHeightOnly = function() {
             var data = getData(),
-                width = data.containerHeight*data.elementRatio;
+                width = data.containerHeight * data.elementRatio;
 
             data.element.css({
-                'height': data.containerHeight,
-                'width': data.containerHeight*data.elementRatio,
-                'top': 0,
-                'left': 0.5*(data.containerWidth - width)
+                height: data.containerHeight,
+                width: data.containerHeight * data.elementRatio,
+                top: 0,
+                left: 0.5 * (data.containerWidth - width)
             });
 
             return module;
         };
 
-        var setMode = function (param) {
+        var setMode = function(param) {
             if (_.isString(param)) {
                 mode = param;
                 align();
@@ -126,13 +124,13 @@ function () {
             return module;
         };
 
-        var setElement = function (element) {
+        var setElement = function(element) {
             config.element = element;
 
             return module;
         };
 
-        var addCallback = function (func) {
+        var addCallback = function(func) {
             if ($.isFunction(func)) {
                 callbacksList.push(func);
             } else {
@@ -142,9 +140,9 @@ function () {
             return module;
         };
 
-        var addOnceCallback = function (func) {
+        var addOnceCallback = function(func) {
             if ($.isFunction(func)) {
-                var decorator = function () {
+                var decorator = function() {
                     func();
                     removeCallback(func);
                 };
@@ -157,19 +155,19 @@ function () {
             return module;
         };
 
-        var fireCallbacks = function () {
+        var fireCallbacks = function() {
             $.each(callbacksList, function(index, callback) {
-                 callback();
+                callback();
             });
         };
 
-        var removeCallbacks = function () {
+        var removeCallbacks = function() {
             callbacksList.length = 0;
 
             return module;
         };
 
-        var removeCallback = function (func) {
+        var removeCallback = function(func) {
             var index = $.inArray(func, callbacksList);
 
             if (index !== -1) {
@@ -177,13 +175,13 @@ function () {
             }
         };
 
-        var resetDelta = function () {
-            delta['height'] = delta['width'] = 0;
+        var resetDelta = function() {
+            delta.height = delta.width = 0;
 
             return module;
         };
 
-        var addDelta = function (value, side) {
+        var addDelta = function(value, side) {
             if (_.isNumber(value) && _.isNumber(delta[side])) {
                 delta[side] += value;
             }
@@ -191,7 +189,7 @@ function () {
             return module;
         };
 
-        var substractDelta = function (value, side) {
+        var substractDelta = function(value, side) {
             if (_.isNumber(value) && _.isNumber(delta[side])) {
                 delta[side] -= value;
             }
@@ -199,10 +197,10 @@ function () {
             return module;
         };
 
-        var destroy = function () {
+        var destroy = function() {
             var data = getData();
             data.element.css({
-                'height': '', 'width': '', 'top': '', 'left': ''
+                height: '', width: '', top: '', left: ''
             });
             removeCallbacks();
             resetDelta();
@@ -235,5 +233,4 @@ function () {
 
     return Resizer;
 });
-
 }(RequireJS.requirejs, RequireJS.require, RequireJS.define));

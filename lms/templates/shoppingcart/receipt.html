@@ -4,7 +4,7 @@
 <%!
 from django.utils.translation import ugettext as _
 from django.utils.translation import ungettext
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from markupsafe import escape
 from openedx.core.lib.courses import course_image_url
 %>
@@ -32,7 +32,7 @@ from openedx.core.lib.courses import course_image_url
            ## in case of multiple courses in single self purchase scenario,
            ## we will show the button View Dashboard
           <% dashboard_url = reverse('dashboard') %>
-          <a href="${dashboard_url}" class="blue pull-right">${_("View Dashboard")} <i class="icon fa fa-caret-right"></i></a>
+          <a href="${dashboard_url}" class="blue pull-right">${_("View Dashboard")} <span class="icon fa fa-caret-right" aria-hidden="true"></span></a>
           <span class="mt-7">
             ${_(u"You have successfully been enrolled for {course_names}. "
                 u"The following receipt has been emailed to {receipient_emails}").format(
@@ -99,7 +99,7 @@ from openedx.core.lib.courses import course_image_url
     %endif
     <div class="bordered-bar">
       <h2>${_('Invoice')} #${order.id}<span>${_('Date of purchase')}: ${order_purchase_date} </span><span
-          class="pull-right"><a href="" onclick="window.print();" class="blue-link"><i class="icon fa fa-print"></i> ${_('Print Receipt')}</a></span>
+          class="pull-right"><a href="" onclick="window.print();" class="blue-link"><span class="icon fa fa-print" aria-hidden="true"></span> ${_('Print Receipt')}</a></span>
       </h2>
     </div>
     % if order.total_cost > 0:
@@ -301,26 +301,6 @@ from openedx.core.lib.courses import course_image_url
               <span class="course-registration-title">${_('Registration for:')}</span>
               <span class="course-display-name">${ course.display_name | h }</span>
             </h3>
-            <p class="course-meta-info" aria-describedby="course-title">
-              <span class="course-dates-title">
-                <%
-                    course_start_time = course.start_datetime_text()
-                    course_end_time = course.end_datetime_text()
-                %>
-                % if course_start_time or course_end_time:
-                  ${_("Course Dates")}:
-                %endif
-              </span>
-              <span class="course-display-dates">
-                % if course_start_time:
-                  ${course_start_time}
-                %endif
-                -
-                % if course_end_time:
-                  ${course_end_time}
-                %endif
-              </span>
-            </p>
             <hr>
             <div class="three-col">
               % if item.status == "purchased":

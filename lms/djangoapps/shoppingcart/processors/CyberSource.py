@@ -18,22 +18,25 @@ To enable this implementation, add the following to Django settings:
     }
 
 """
-import time
-import hmac
 import binascii
-import re
+import hmac
 import json
+import re
+import time
 from collections import OrderedDict, defaultdict
 from decimal import Decimal, InvalidOperation
 from hashlib import sha1
 from textwrap import dedent
+
 from django.conf import settings
 from django.utils.translation import ugettext as _
+from six import text_type
+
 from edxmako.shortcuts import render_to_string
+from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 from shoppingcart.models import Order
 from shoppingcart.processors.exceptions import *
 from shoppingcart.processors.helpers import get_processor_config
-from microsite_configuration import microsite
 
 
 def process_postpay_callback(params, **kwargs):
@@ -219,9 +222,9 @@ def record_purchase(params, order):
     Record the purchase and run purchased_callbacks
     """
     ccnum_str = params.get('card_accountNumber', '')
-    m = re.search("\d", ccnum_str)
-    if m:
-        ccnum = ccnum_str[m.start():]
+    first_digit = re.search(r"\d", ccnum_str)
+    if first_digit:
+        ccnum = ccnum_str[first_digit.start():]
     else:
         ccnum = "####"
 
@@ -243,8 +246,8 @@ def record_purchase(params, order):
 def get_processor_decline_html(params):
     """Have to parse through the error codes to return a helpful message"""
 
-    # see if we have an override in the microsites
-    payment_support_email = microsite.get_value('payment_support_email', settings.PAYMENT_SUPPORT_EMAIL)
+    # see if we have an override in the site configuration
+    payment_support_email = configuration_helpers.get_value('payment_support_email', settings.PAYMENT_SUPPORT_EMAIL)
 
     msg = _(
         "Sorry! Our payment processor did not accept your payment. "
@@ -267,8 +270,8 @@ def get_processor_decline_html(params):
 def get_processor_exception_html(exception):
     """Return error HTML associated with exception"""
 
-    # see if we have an override in the microsites
-    payment_support_email = microsite.get_value('payment_support_email', settings.PAYMENT_SUPPORT_EMAIL)
+    # see if we have an override in the site configuration
+    payment_support_email = configuration_helpers.get_value('payment_support_email', settings.PAYMENT_SUPPORT_EMAIL)
     if isinstance(exception, CCProcessorDataException):
         msg = _(
             "Sorry! Our payment processor sent us back a payment confirmation "
@@ -281,7 +284,7 @@ def get_processor_exception_html(exception):
         )
         formatted = msg.format(
             error_message='<span class="exception_msg">{msg}</span>'.format(
-                msg=exception.message,
+                msg=text_type(exception),
             ),
             email=payment_support_email,
         )
@@ -296,7 +299,7 @@ def get_processor_exception_html(exception):
         )
         formatted = msg.format(
             error_message='<span class="exception_msg">{msg}</span>'.format(
-                msg=exception.message,
+                msg=text_type(exception),
             ),
             email=payment_support_email,
         )
@@ -314,7 +317,7 @@ def get_processor_exception_html(exception):
         )
         formatted = msg.format(
             error_message='<span class="exception_msg">{msg}</span>'.format(
-                msg=exception.message,
+                msg=text_type(exception),
             ),
             email=payment_support_email,
         )

@@ -3,37 +3,41 @@ Tests for users API
 """
 # pylint: disable=no-member
 import datetime
+
 import ddt
-from mock import patch
 import pytz
-
 from django.conf import settings
-from django.utils import timezone
 from django.template import defaultfilters
-from django.test import RequestFactory
+from django.test import RequestFactory, override_settings
+from django.utils import timezone
+from milestones.tests.utils import MilestonesTestCaseMixin
+from mock import patch
+from nose.plugins.attrib import attr
 
-from certificates.api import generate_user_certificates
-from certificates.models import CertificateStatuses
-from certificates.tests.factories import GeneratedCertificateFactory
-from courseware.access_response import (
-    MilestoneError,
-    StartDateError,
-    VisibilityError,
-)
+from lms.djangoapps.certificates.api import generate_user_certificates
+from lms.djangoapps.certificates.models import CertificateStatuses
+from lms.djangoapps.certificates.tests.factories import GeneratedCertificateFactory
 from course_modes.models import CourseMode
+from courseware.access_response import MilestoneAccessError, StartDateError, VisibilityError
+from lms.djangoapps.grades.tests.utils import mock_passing_grade
+from mobile_api.testutils import (
+    MobileAPITestCase,
+    MobileAuthTestMixin,
+    MobileAuthUserTestMixin,
+    MobileCourseAccessTestMixin
+)
 from openedx.core.lib.courses import course_image_url
 from student.models import CourseEnrollment
 from util.milestones_helpers import set_prerequisite_courses
-from milestones.tests.utils import MilestonesTestCaseMixin
-from xmodule.course_module import DEFAULT_START_DATE
-from xmodule.modulestore.tests.factories import ItemFactory, CourseFactory
 from util.testing import UrlResetMixin
+from xmodule.course_module import DEFAULT_START_DATE
+from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
 
 from .. import errors
-from ..testutils import MobileAPITestCase, MobileAuthTestMixin, MobileAuthUserTestMixin, MobileCourseAccessTestMixin
 from .serializers import CourseEnrollmentSerializer
 
 
+@attr(shard=9)
 class TestUserDetailApi(MobileAPITestCase, MobileAuthUserTestMixin):
     """
     Tests for /api/mobile/v0.5/users/<user_name>...
@@ -48,6 +52,7 @@ class TestUserDetailApi(MobileAPITestCase, MobileAuthUserTestMixin):
         self.assertEqual(response.data['email'], self.user.email)
 
 
+@attr(shard=9)
 class TestUserInfoApi(MobileAPITestCase, MobileAuthTestMixin):
     """
     Tests for /api/mobile/v0.5/my_user_info
@@ -60,10 +65,12 @@ class TestUserInfoApi(MobileAPITestCase, MobileAuthTestMixin):
         self.login()
 
         response = self.api_response(expected_response_code=302)
-        self.assertTrue(self.username in response['location'])
+        self.assertIn(self.username, response['location'])
 
 
+@attr(shard=9)
 @ddt.ddt
+@override_settings(MKTG_URLS={'ROOT': 'dummy-root'})
 class TestUserEnrollmentApi(UrlResetMixin, MobileAPITestCase, MobileAuthUserTestMixin,
                             MobileCourseAccessTestMixin, MilestonesTestCaseMixin):
     """
@@ -76,8 +83,14 @@ class TestUserEnrollmentApi(UrlResetMixin, MobileAPITestCase, MobileAuthUserTest
     NEXT_WEEK = datetime.datetime.now(pytz.UTC) + datetime.timedelta(days=7)
     LAST_WEEK = datetime.datetime.now(pytz.UTC) - datetime.timedelta(days=7)
     ADVERTISED_START = "Spring 2016"
+    ENABLED_SIGNALS = ['course_published']
+    DATES = {
+        'next_week': NEXT_WEEK,
+        'last_week': LAST_WEEK,
+        'default_start_date': DEFAULT_START_DATE,
+    }
 
-    @patch.dict("django.conf.settings.FEATURES", {"ENABLE_DISCUSSION_SERVICE": True})
+    @patch.dict(settings.FEATURES, {"ENABLE_DISCUSSION_SERVICE": True})
     def setUp(self, *args, **kwargs):
         super(TestUserEnrollmentApi, self).setUp()
 
@@ -108,6 +121,7 @@ class TestUserEnrollmentApi(UrlResetMixin, MobileAPITestCase, MobileAuthUserTest
         courses = response.data
         self.assertEqual(len(courses), 0)
 
+    @patch.dict(settings.FEATURES, {'ENABLE_MKTG_SITE': True})
     def test_sort_order(self):
         self.login()
 
@@ -125,9 +139,11 @@ class TestUserEnrollmentApi(UrlResetMixin, MobileAPITestCase, MobileAuthUserTest
                 unicode(courses[num_courses - course_index - 1].id)
             )
 
-    @patch.dict(
-        settings.FEATURES, {'ENABLE_PREREQUISITE_COURSES': True, 'MILESTONES_APP': True, 'DISABLE_START_DATES': False}
-    )
+    @patch.dict(settings.FEATURES, {
+        'ENABLE_PREREQUISITE_COURSES': True,
+        'DISABLE_START_DATES': False,
+        'ENABLE_MKTG_SITE': True,
+    })
     def test_courseware_access(self):
         self.login()
 
@@ -144,7 +160,7 @@ class TestUserEnrollmentApi(UrlResetMixin, MobileAPITestCase, MobileAuthUserTest
         ]
 
         expected_error_codes = [
-            MilestoneError().error_code,  # 'unfulfilled_milestones'
+            MilestoneAccessError().error_code,  # 'unfulfilled_milestones'
             StartDateError(self.NEXT_WEEK).error_code,  # 'course_not_started'
             VisibilityError().error_code,  # 'not_visible_to_user'
             None,
@@ -164,28 +180,29 @@ class TestUserEnrollmentApi(UrlResetMixin, MobileAPITestCase, MobileAuthUserTest
                 self.assertFalse(result['has_access'])
 
     @ddt.data(
-        (NEXT_WEEK, ADVERTISED_START, ADVERTISED_START, "string"),
-        (NEXT_WEEK, None, defaultfilters.date(NEXT_WEEK, "DATE_FORMAT"), "timestamp"),
-        (NEXT_WEEK, '', defaultfilters.date(NEXT_WEEK, "DATE_FORMAT"), "timestamp"),
-        (DEFAULT_START_DATE, ADVERTISED_START, ADVERTISED_START, "string"),
-        (DEFAULT_START_DATE, '', None, "empty"),
-        (DEFAULT_START_DATE, None, None, "empty"),
+        ('next_week', ADVERTISED_START, ADVERTISED_START, "string"),
+        ('next_week', None, defaultfilters.date(NEXT_WEEK, "DATE_FORMAT"), "timestamp"),
+        ('next_week', '', defaultfilters.date(NEXT_WEEK, "DATE_FORMAT"), "timestamp"),
+        ('default_start_date', ADVERTISED_START, ADVERTISED_START, "string"),
+        ('default_start_date', '', None, "empty"),
+        ('default_start_date', None, None, "empty"),
     )
     @ddt.unpack
-    @patch.dict('django.conf.settings.FEATURES', {'DISABLE_START_DATES': False})
+    @patch.dict(settings.FEATURES, {'DISABLE_START_DATES': False, 'ENABLE_MKTG_SITE': True})
     def test_start_type_and_display(self, start, advertised_start, expected_display, expected_type):
         """
         Tests that the correct start_type and start_display are returned in the
         case the course has not started
         """
         self.login()
-        course = CourseFactory.create(start=start, advertised_start=advertised_start, mobile_available=True)
+        course = CourseFactory.create(start=self.DATES[start], advertised_start=advertised_start, mobile_available=True)
         self.enroll(course.id)
 
         response = self.api_response()
         self.assertEqual(response.data[0]['course']['start_type'], expected_type)
         self.assertEqual(response.data[0]['course']['start_display'], expected_display)
 
+    @patch.dict(settings.FEATURES, {'ENABLE_MKTG_SITE': True})
     def test_no_certificate(self):
         self.login_and_enroll()
 
@@ -213,21 +230,21 @@ class TestUserEnrollmentApi(UrlResetMixin, MobileAPITestCase, MobileAuthUserTest
         certificate_data = response.data[0]['certificate']
         self.assertEquals(certificate_data['url'], certificate_url)
 
-    @patch.dict(settings.FEATURES, {'CERTIFICATES_HTML_VIEW': False})
+    @patch.dict(settings.FEATURES, {'CERTIFICATES_HTML_VIEW': False, 'ENABLE_MKTG_SITE': True})
     def test_pdf_certificate_with_html_cert_disabled(self):
         """
         Tests PDF certificates with CERTIFICATES_HTML_VIEW set to False.
         """
         self.verify_pdf_certificate()
 
-    @patch.dict(settings.FEATURES, {'CERTIFICATES_HTML_VIEW': True})
+    @patch.dict(settings.FEATURES, {'CERTIFICATES_HTML_VIEW': True, 'ENABLE_MKTG_SITE': True})
     def test_pdf_certificate_with_html_cert_enabled(self):
         """
         Tests PDF certificates with CERTIFICATES_HTML_VIEW set to True.
         """
         self.verify_pdf_certificate()
 
-    @patch.dict(settings.FEATURES, {'CERTIFICATES_HTML_VIEW': True})
+    @patch.dict(settings.FEATURES, {'CERTIFICATES_HTML_VIEW': True, 'ENABLE_MKTG_SITE': True})
     def test_web_certificate(self):
         CourseMode.objects.create(
             course_id=self.course.id,
@@ -235,12 +252,22 @@ class TestUserEnrollmentApi(UrlResetMixin, MobileAPITestCase, MobileAuthUserTest
             mode_slug=CourseMode.HONOR,
         )
         self.login_and_enroll()
-
+        certificates = [
+            {
+                'id': 1,
+                'name': 'Test Certificate Name',
+                'description': 'Test Certificate Description',
+                'course_title': 'tes_course_title',
+                'signatories': [],
+                'version': 1,
+                'is_active': True
+            }
+        ]
+        self.course.certificates = {'certificates': certificates}
         self.course.cert_html_view_enabled = True
         self.store.update_item(self.course, self.user.id)
 
-        with patch('courseware.grades.grade') as mock_grade:
-            mock_grade.return_value = {'grade': 'Pass', 'percent': 0.75}
+        with mock_passing_grade():
             generate_user_certificates(self.user, self.course.id)
 
         response = self.api_response()
@@ -253,24 +280,7 @@ class TestUserEnrollmentApi(UrlResetMixin, MobileAPITestCase, MobileAuthUserTest
             )
         )
 
-    def test_no_facebook_url(self):
-        self.login_and_enroll()
-
-        response = self.api_response()
-        course_data = response.data[0]['course']
-        self.assertIsNone(course_data['social_urls']['facebook'])
-
-    def test_facebook_url(self):
-        self.login_and_enroll()
-
-        self.course.facebook_url = "http://facebook.com/test_group_page"
-        self.store.update_item(self.course, self.user.id)
-
-        response = self.api_response()
-        course_data = response.data[0]['course']
-        self.assertEquals(course_data['social_urls']['facebook'], self.course.facebook_url)
-
-    @patch.dict("django.conf.settings.FEATURES", {"ENABLE_DISCUSSION_SERVICE": True})
+    @patch.dict(settings.FEATURES, {"ENABLE_DISCUSSION_SERVICE": True, 'ENABLE_MKTG_SITE': True})
     def test_discussion_url(self):
         self.login_and_enroll()
 
@@ -278,7 +288,34 @@ class TestUserEnrollmentApi(UrlResetMixin, MobileAPITestCase, MobileAuthUserTest
         response_discussion_url = response.data[0]['course']['discussion_url']  # pylint: disable=E1101
         self.assertIn('/api/discussion/v1/courses/{}'.format(self.course.id), response_discussion_url)
 
+    def test_org_query(self):
+        self.login()
 
+        # Create list of courses with various organizations
+        courses = [
+            CourseFactory.create(org='edX', mobile_available=True),
+            CourseFactory.create(org='edX', mobile_available=True),
+            CourseFactory.create(org='edX', mobile_available=True, visible_to_staff_only=True),
+            CourseFactory.create(org='Proversity.org', mobile_available=True),
+            CourseFactory.create(org='MITx', mobile_available=True),
+            CourseFactory.create(org='HarvardX', mobile_available=True),
+        ]
+
+        # Enroll in all the courses
+        for course in courses:
+            self.enroll(course.id)
+
+        response = self.api_response(data={'org': 'edX'})
+
+        # Test for 3 expected courses
+        self.assertEqual(len(response.data), 3)
+
+        # Verify only edX courses are returned
+        for entry in response.data:
+            self.assertEqual(entry['course']['org'], 'edX')
+
+
+@attr(shard=9)
 class CourseStatusAPITestCase(MobileAPITestCase):
     """
     Base test class for /api/mobile/v0.5/users/<user_name>/course_status_info/{course_id}
@@ -313,6 +350,7 @@ class CourseStatusAPITestCase(MobileAPITestCase):
         )
 
 
+@attr(shard=9)
 class TestCourseStatusGET(CourseStatusAPITestCase, MobileAuthUserTestMixin,
                           MobileCourseAccessTestMixin, MilestonesTestCaseMixin):
     """
@@ -332,6 +370,7 @@ class TestCourseStatusGET(CourseStatusAPITestCase, MobileAuthUserTestMixin,
         )
 
 
+@attr(shard=9)
 class TestCourseStatusPATCH(CourseStatusAPITestCase, MobileAuthUserTestMixin,
                             MobileCourseAccessTestMixin, MilestonesTestCaseMixin):
     """
@@ -435,10 +474,15 @@ class TestCourseStatusPATCH(CourseStatusAPITestCase, MobileAuthUserTestMixin,
         )
 
 
-class TestCourseEnrollmentSerializer(MobileAPITestCase):
+@attr(shard=9)
+@patch.dict(settings.FEATURES, {'ENABLE_MKTG_SITE': True})
+@override_settings(MKTG_URLS={'ROOT': 'dummy-root'})
+class TestCourseEnrollmentSerializer(MobileAPITestCase, MilestonesTestCaseMixin):
     """
     Test the course enrollment serializer
     """
+    ENABLED_SIGNALS = ['course_published']
+
     def setUp(self):
         super(TestCourseEnrollmentSerializer, self).setUp()
         self.login_and_enroll()
@@ -453,6 +497,13 @@ class TestCourseEnrollmentSerializer(MobileAPITestCase):
         self.assertEqual(serialized['course']['name'], self.course.display_name)
         self.assertEqual(serialized['course']['number'], self.course.id.course)
         self.assertEqual(serialized['course']['org'], self.course.id.org)
+
+        # Assert utm parameters
+        expected_utm_parameters = {
+            'twitter': 'utm_campaign=social-sharing-db&utm_medium=social&utm_source=twitter',
+            'facebook': 'utm_campaign=social-sharing-db&utm_medium=social&utm_source=facebook'
+        }
+        self.assertEqual(serialized['course']['course_sharing_utm_parameters'], expected_utm_parameters)
 
     def test_with_display_overrides(self):
         self.course.display_coursenumber = "overridden_number"

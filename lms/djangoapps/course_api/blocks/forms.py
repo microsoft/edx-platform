@@ -3,12 +3,12 @@ Course API Forms
 """
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
-from django.forms import Form, CharField, ChoiceField, IntegerField
+from django.forms import CharField, ChoiceField, Form, IntegerField
 from django.http import Http404
-from rest_framework.exceptions import PermissionDenied
-
 from opaque_keys import InvalidKeyError
 from opaque_keys.edx.keys import UsageKey
+from rest_framework.exceptions import PermissionDenied
+
 from openedx.core.djangoapps.util.forms import ExtendedNullBooleanField, MultiValueField
 from xmodule.modulestore.django import modulestore
 
@@ -31,6 +31,7 @@ class BlockListGetForm(Form):
     student_view_data = MultiValueField(required=False)
     usage_key = CharField(required=True)
     username = CharField(required=False)
+    block_types_filter = MultiValueField(required=False)
 
     def clean_depth(self):
         """
@@ -88,6 +89,7 @@ class BlockListGetForm(Form):
             'student_view_data',
             'block_counts',
             'nav_depth',
+            'block_types_filter',
         ]
         for additional_field in additional_requested_fields:
             field_value = cleaned_data.get(additional_field)

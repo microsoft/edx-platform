@@ -6,12 +6,14 @@ import json
 import logging
 
 from django.contrib.auth.models import User
-from django.db import models, transaction, IntegrityError
-from util.db import outer_atomic
 from django.core.exceptions import ValidationError
+from django.db import models, transaction
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
-from xmodule_django.models import CourseKeyField
+from util.db import outer_atomic
+
+from opaque_keys.edx.django.models import CourseKeyField
+from openedx.core.djangolib.model_mixins import DeletableByUserValue
 
 log = logging.getLogger(__name__)
 
@@ -61,12 +63,15 @@ class CourseUserGroup(models.Model):
             name=name
         )
 
+    def __unicode__(self):
+        return self.name
+
 
 class CohortMembership(models.Model):
     """Used internally to enforce our particular definition of uniqueness"""
 
-    course_user_group = models.ForeignKey(CourseUserGroup)
-    user = models.ForeignKey(User)
+    course_user_group = models.ForeignKey(CourseUserGroup, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
     course_id = CourseKeyField(max_length=255)
 
     previous_cohort = None
@@ -90,12 +95,13 @@ class CohortMembership(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean(validate_unique=False)
 
+        log.info("Saving CohortMembership for user '%s' in '%s'", self.user.id, self.course_id)
+
         # Avoid infinite recursion if creating from get_or_create() call below.
         # This block also allows middleware to use CohortMembership.get_or_create without worrying about outer_atomic
         if 'force_insert' in kwargs and kwargs['force_insert'] is True:
             with transaction.atomic():
                 self.course_user_group.users.add(self.user)
-                self.course_user_group.save()
                 super(CohortMembership, self).save(*args, **kwargs)
             return
 
@@ -127,11 +133,9 @@ class CohortMembership(models.Model):
             self.previous_cohort_name = saved_membership.course_user_group.name
             self.previous_cohort_id = saved_membership.course_user_group.id
             self.previous_cohort.users.remove(self.user)
-            self.previous_cohort.save()
 
             saved_membership.course_user_group = self.course_user_group
             self.course_user_group.users.add(self.user)
-            self.course_user_group.save()
 
             super(CohortMembership, saved_membership).save(update_fields=['course_user_group'])
 
@@ -151,7 +155,7 @@ class CourseUserGroupPartitionGroup(models.Model):
     """
     Create User Partition Info.
     """
-    course_user_group = models.OneToOneField(CourseUserGroup)
+    course_user_group = models.OneToOneField(CourseUserGroup, on_delete=models.CASCADE)
     partition_id = models.IntegerField(
         help_text="contains the id of a cohorted partition in this course"
     )
@@ -165,6 +169,7 @@ class CourseUserGroupPartitionGroup(models.Model):
 class CourseCohortsSettings(models.Model):
     """
     This model represents cohort settings for courses.
+    The only non-deprecated fields are `is_cohorted` and `course_id`.
     """
     is_cohorted = models.BooleanField(default=False)
 
@@ -177,17 +182,26 @@ class CourseCohortsSettings(models.Model):
 
     _cohorted_discussions = models.TextField(db_column='cohorted_discussions', null=True, blank=True)  # JSON list
 
-    # pylint: disable=invalid-name
-    always_cohort_inline_discussions = models.BooleanField(default=True)
+    # Note that although a default value is specified here for always_cohort_inline_discussions (False),
+    # in reality the default value at the time that cohorting is enabled for a course comes from
+    # course_module.always_cohort_inline_discussions (via `migrate_cohort_settings`).
+    # DEPRECATED-- DO NOT USE: Instead use `CourseDiscussionSettings.always_divide_inline_discussions`
+    # via `get_course_discussion_settings` or `set_course_discussion_settings`.
+    always_cohort_inline_discussions = models.BooleanField(default=False)
 
     @property
     def cohorted_discussions(self):
-        """Jsonify the cohorted_discussions"""
+        """
+        DEPRECATED-- DO NOT USE. Instead use `CourseDiscussionSettings.divided_discussions`
+        via `get_course_discussion_settings`.
+        """
         return json.loads(self._cohorted_discussions)
 
     @cohorted_discussions.setter
     def cohorted_discussions(self, value):
-        """Un-Jsonify the cohorted_discussions"""
+        """
+        DEPRECATED-- DO NOT USE. Instead use `CourseDiscussionSettings` via `set_course_discussion_settings`.
+        """
         self._cohorted_discussions = json.dumps(value)
 
 
@@ -195,7 +209,8 @@ class CourseCohort(models.Model):
     """
     This model represents cohort related info.
     """
-    course_user_group = models.OneToOneField(CourseUserGroup, unique=True, related_name='cohort')
+    course_user_group = models.OneToOneField(CourseUserGroup, unique=True, related_name='cohort',
+                                             on_delete=models.CASCADE)
 
     RANDOM = 'random'
     MANUAL = 'manual'
@@ -222,3 +237,16 @@ class CourseCohort(models.Model):
         )
 
         return course_cohort
+
+
+class UnregisteredLearnerCohortAssignments(DeletableByUserValue, models.Model):
+    """
+    Tracks the assignment of an unregistered learner to a course's cohort.
+    """
+    #pylint: disable=model-missing-unicode
+    class Meta(object):
+        unique_together = (('course_id', 'email'), )
+
+    course_user_group = models.ForeignKey(CourseUserGroup, on_delete=models.CASCADE)
+    email = models.CharField(blank=True, max_length=255, db_index=True)
+    course_id = CourseKeyField(max_length=255)

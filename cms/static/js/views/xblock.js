@@ -1,12 +1,12 @@
-define(["jquery", "underscore", "common/js/components/utils/view_utils", "js/views/baseview", "xblock/runtime.v1"],
-    function ($, _, ViewUtils, BaseView, XBlock) {
+define(['jquery', 'underscore', 'common/js/components/utils/view_utils', 'js/views/baseview', 'xblock/runtime.v1'],
+    function($, _, ViewUtils, BaseView, XBlock) {
         'use strict';
 
         var XBlockView = BaseView.extend({
             // takes XBlockInfo as a model
 
             events: {
-                "click .notification-action-button": "fireNotificationActionEvent"
+                'click .notification-action-button': 'fireNotificationActionEvent'
             },
 
             initialize: function() {
@@ -20,14 +20,21 @@ define(["jquery", "underscore", "common/js/components/utils/view_utils", "js/vie
                     xblockInfo = this.model,
                     xblockUrl = xblockInfo.url();
                 return $.ajax({
-                    url: decodeURIComponent(xblockUrl) + "/" + view,
+                    url: decodeURIComponent(xblockUrl) + '/' + view,
                     type: 'GET',
                     cache: false,
-                    headers: { Accept: 'application/json' },
+                    headers: {Accept: 'application/json'},
                     success: function(fragment) {
                         self.handleXBlockFragment(fragment, options);
                     }
                 });
+            },
+
+            initRuntimeData: function(xblock, options) {
+                if (options && options.initRuntimeData && xblock && xblock.runtime && !xblock.runtime.page) {
+                    xblock.runtime.page = options.initRuntimeData;
+                }
+                return xblock;
             },
 
             handleXBlockFragment: function(fragment, options) {
@@ -37,20 +44,27 @@ define(["jquery", "underscore", "common/js/components/utils/view_utils", "js/vie
                     successCallback = options ? options.success || options.done : null,
                     errorCallback = options ? options.error || options.done : null,
                     xblock,
-                    fragmentsRendered;
+                    fragmentsRendered,
+                    aside;
 
                 fragmentsRendered = this.renderXBlockFragment(fragment, wrapper);
                 fragmentsRendered.always(function() {
                     xblockElement = self.$('.xblock').first();
                     try {
                         xblock = XBlock.initializeBlock(xblockElement);
-                        self.xblock = xblock;
-                        self.xblockReady(xblock);
+                        self.xblock = self.initRuntimeData(xblock, options);
+                        self.xblockReady(self.xblock);
+                        self.$('.xblock_asides-v1').each(function() {
+                            if (!$(this).hasClass('xblock-initialized')) {
+                                aside = XBlock.initializeBlock($(this));
+                                self.initRuntimeData(aside, options);
+                            }
+                        });
                         if (successCallback) {
                             successCallback(xblock);
                         }
                     } catch (e) {
-                        console.error(e.stack);
+                        console.error(e, e.stack);
                         // Add 'xblock-initialization-failed' class to every xblock
                         self.$('.xblock').addClass('xblock-initialization-failed');
 
@@ -73,9 +87,20 @@ define(["jquery", "underscore", "common/js/components/utils/view_utils", "js/vie
              * @param data The data to be passed to any listener's of the event.
              */
             notifyRuntime: function(eventName, data) {
-                var runtime = this.xblock && this.xblock.runtime;
+                var runtime = this.xblock && this.xblock.runtime,
+                    xblockChildren;
+
                 if (runtime) {
                     runtime.notify(eventName, data);
+                } else if (this.xblock) {
+                    xblockChildren = this.xblock.element && $(this.xblock.element).prop('xblock_children');
+                    if (xblockChildren) {
+                        $(xblockChildren).each(function() {
+                            if (this.runtime) {
+                                this.runtime.notify(eventName, data);
+                            }
+                        });
+                    }
                 }
             },
 
@@ -84,7 +109,7 @@ define(["jquery", "underscore", "common/js/components/utils/view_utils", "js/vie
              * may have thrown JavaScript errors after rendering in which case the xblock parameter
              * will be null.
              */
-            xblockReady: function(xblock) {  // jshint ignore:line
+            xblockReady: function(xblock) {  // eslint-disable-line no-unused-vars
                 // Do nothing
             },
 
@@ -100,7 +125,8 @@ define(["jquery", "underscore", "common/js/components/utils/view_utils", "js/vie
              */
             renderXBlockFragment: function(fragment, element) {
                 var html = fragment.html,
-                    resources = fragment.resources;
+                    resources = fragment.resources,
+                    blockView = this;
                 if (!element) {
                     element = this.$el;
                 }
@@ -110,10 +136,11 @@ define(["jquery", "underscore", "common/js/components/utils/view_utils", "js/vie
                 // by included scripts are logged to the console but are then ignored assuming
                 // that at least the rendered HTML will be in place.
                 try {
-                    this.updateHtml(element, html);
-                    return this.addXBlockFragmentResources(resources);
-                } catch(e) {
-                    console.error(e.stack);
+                    return this.addXBlockFragmentResources(resources).done(function() {
+                        blockView.updateHtml(element, html);
+                    });
+                } catch (e) {
+                    console.error(e, e.stack);
                     return $.Deferred().resolve();
                 }
             },
@@ -175,26 +202,26 @@ define(["jquery", "underscore", "common/js/components/utils/view_utils", "js/vie
              * @returns {Promise} A promise representing the loading of the resource.
              */
             loadResource: function(resource) {
-                var head = $('head'),
+                var $head = $('head'),
                     mimetype = resource.mimetype,
                     kind = resource.kind,
                     placement = resource.placement,
                     data = resource.data;
-                if (mimetype === "text/css") {
-                    if (kind === "text") {
-                        head.append("<style type='text/css'>" + data + "</style>");
-                    } else if (kind === "url") {
-                        head.append("<link rel='stylesheet' href='" + data + "' type='text/css'>");
+                if (mimetype === 'text/css') {
+                    if (kind === 'text') {
+                        $head.append("<style type='text/css'>" + data + '</style>');
+                    } else if (kind === 'url') {
+                        $head.append("<link rel='stylesheet' href='" + data + "' type='text/css'>");
                     }
-                } else if (mimetype === "application/javascript") {
-                    if (kind === "text") {
-                        head.append("<script>" + data + "</script>");
-                    } else if (kind === "url") {
+                } else if (mimetype === 'application/javascript') {
+                    if (kind === 'text') {
+                        $head.append('<script>' + data + '</script>');
+                    } else if (kind === 'url') {
                         return ViewUtils.loadJavaScript(data);
                     }
-                } else if (mimetype === "text/html") {
-                    if (placement === "head") {
-                        head.append(data);
+                } else if (mimetype === 'text/html') {
+                    if (placement === 'head') {
+                        $head.append(data);
                     }
                 }
                 // Return an already resolved promise for synchronous updates
@@ -202,10 +229,10 @@ define(["jquery", "underscore", "common/js/components/utils/view_utils", "js/vie
             },
 
             fireNotificationActionEvent: function(event) {
-                var eventName = $(event.currentTarget).data("notification-action");
+                var eventName = $(event.currentTarget).data('notification-action');
                 if (eventName) {
                     event.preventDefault();
-                    this.notifyRuntime(eventName, this.model.get("id"));
+                    this.notifyRuntime(eventName, this.model.get('id'));
                 }
             }
         });

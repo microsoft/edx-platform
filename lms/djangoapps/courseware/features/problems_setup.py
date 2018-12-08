@@ -9,10 +9,11 @@
 # -A way to answer the problem correctly and incorrectly
 # -A way to check the problem was answered correctly, incorrectly and blank
 
-from lettuce import world
 import random
 import textwrap
-from common import section_location
+
+from lettuce import world
+
 from capa.tests.response_xml_factory import (
     ChoiceResponseXMLFactory,
     ChoiceTextResponseXMLFactory,
@@ -23,9 +24,9 @@ from capa.tests.response_xml_factory import (
     MultipleChoiceResponseXMLFactory,
     NumericalResponseXMLFactory,
     OptionResponseXMLFactory,
-    StringResponseXMLFactory,
+    StringResponseXMLFactory
 )
-
+from common import section_location
 
 # Factories from capa.tests.response_xml_factory that we will use
 # to generate the problem XML, with the keyword args used to configure
@@ -295,27 +296,27 @@ def problem_has_answer(course, problem_type, answer_class):
 
     elif problem_type == "multiple choice":
         if answer_class == 'correct':
-            assert_checked(course, 'multiple choice', ['choice_2'])
+            assert_submitted(course, 'multiple choice', ['choice_2'])
         elif answer_class == 'incorrect':
-            assert_checked(course, 'multiple choice', ['choice_1'])
+            assert_submitted(course, 'multiple choice', ['choice_1'])
         else:
-            assert_checked(course, 'multiple choice', [])
+            assert_submitted(course, 'multiple choice', [])
 
     elif problem_type == "checkbox":
         if answer_class == 'correct':
-            assert_checked(course, 'checkbox', ['choice_0', 'choice_2'])
+            assert_submitted(course, 'checkbox', ['choice_0', 'choice_2'])
         elif answer_class == 'incorrect':
-            assert_checked(course, 'checkbox', ['choice_3'])
+            assert_submitted(course, 'checkbox', ['choice_3'])
         else:
-            assert_checked(course, 'checkbox', [])
+            assert_submitted(course, 'checkbox', [])
 
     elif problem_type == "radio":
         if answer_class == 'correct':
-            assert_checked(course, 'radio', ['choice_2'])
+            assert_submitted(course, 'radio', ['choice_2'])
         elif answer_class == 'incorrect':
-            assert_checked(course, 'radio', ['choice_1'])
+            assert_submitted(course, 'radio', ['choice_1'])
         else:
-            assert_checked(course, 'radio', [])
+            assert_submitted(course, 'radio', [])
 
     elif problem_type == 'string':
         if answer_class == 'blank':
@@ -410,23 +411,23 @@ def inputfield(course, problem_type, choice=None, input_num=1):
     return sel
 
 
-def assert_checked(course, problem_type, choices):
+def assert_submitted(course, problem_type, choices):
     '''
     Assert that choice names given in *choices* are the only
-    ones checked.
+    ones submitted.
 
     Works for both radio and checkbox problems
     '''
 
     all_choices = ['choice_0', 'choice_1', 'choice_2', 'choice_3']
     for this_choice in all_choices:
-        def check_problem():
+        def submit_problem():
             element = world.css_find(inputfield(course, problem_type, choice=this_choice))
             if this_choice in choices:
                 assert element.checked
             else:
                 assert not element.checked
-        world.retry_on_exception(check_problem)
+        world.retry_on_exception(submit_problem)
 
 
 def assert_textfield(course, problem_type, expected_text, input_num=1):

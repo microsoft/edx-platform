@@ -1,10 +1,13 @@
 /**
  * Provides utilities for views to work with xblocks.
  */
-define(["jquery", "underscore", "gettext", "common/js/components/utils/view_utils", "js/utils/module"],
-    function($, _, gettext, ViewUtils, ModuleUtils) {
-        var addXBlock, deleteXBlock, createUpdateRequestData, updateXBlockField, VisibilityState,
-            getXBlockVisibilityClass, getXBlockListTypeClass, updateXBlockFields;
+define(['jquery', 'underscore', 'gettext', 'common/js/components/utils/view_utils', 'js/utils/module',
+    'js/models/xblock_info', 'edx-ui-toolkit/js/utils/string-utils'],
+    function($, _, gettext, ViewUtils, ModuleUtils, XBlockInfo, StringUtils) {
+        'use strict';
+        var addXBlock, duplicateXBlock, deleteXBlock, createUpdateRequestData, updateXBlockField, VisibilityState,
+            getXBlockVisibilityClass, getXBlockListTypeClass, updateXBlockFields, getXBlockType, findXBlockInfo,
+            moveXBlock;
 
         /**
          * Represents the possible visibility states for an xblock:
@@ -49,19 +52,71 @@ define(["jquery", "underscore", "gettext", "common/js/components/utils/view_util
                 function() {
                     var addOperation = $.Deferred();
                     analytics.track('Created a ' + category, {
-                        'course': course_location_analytics,
-                        'display_name': displayName
+                        course: course_location_analytics,
+                        display_name: displayName
                     });
                     $.postJSON(ModuleUtils.getUpdateUrl(),
                         {
-                            'parent_locator': parentLocator,
-                            'category': category,
-                            'display_name': displayName
+                            parent_locator: parentLocator,
+                            category: category,
+                            display_name: displayName
                         }, function(data) {
                             var locator = data.locator;
                             addOperation.resolve(locator);
                         });
                     return addOperation.promise();
+                });
+        };
+
+        /**
+         * Duplicates the specified xblock element in its parent xblock.
+         * @param {jquery Element}  xblockElement  The xblock element to be duplicated.
+         * @param {jquery Element}  parentElement  Parent element of the xblock element to be duplicated,
+         *      new duplicated xblock would be placed under this xblock.
+         * @returns {jQuery promise} A promise representing the duplication of the xblock.
+         */
+        duplicateXBlock = function(xblockElement, parentElement) {
+            return ViewUtils.runOperationShowingMessage(gettext('Duplicating'),
+                function() {
+                    var duplicationOperation = $.Deferred();
+                    $.postJSON(ModuleUtils.getUpdateUrl(), {
+                        duplicate_source_locator: xblockElement.data('locator'),
+                        parent_locator: parentElement.data('locator')
+                    }, function(data) {
+                        duplicationOperation.resolve(data);
+                    })
+                    .fail(function() {
+                        duplicationOperation.reject();
+                    });
+                    return duplicationOperation.promise();
+                });
+        };
+
+        /**
+         * Moves the specified xblock in a new parent xblock.
+         * @param {String}  sourceLocator  Locator of xblock element to be moved.
+         * @param {String}  targetParentLocator  Locator of the target parent xblock, moved xblock would be placed
+         *      under this xblock.
+         * @param {Integer}  targetIndex  Intended index position of the xblock in parent xblock. If provided,
+         *      xblock would be placed at the particular index in the parent xblock.
+         * @returns {jQuery promise} A promise representing the moving of the xblock.
+         */
+        moveXBlock = function(sourceLocator, targetParentLocator, targetIndex) {
+            var moveOperation = $.Deferred(),
+                operationText = targetIndex !== undefined ? gettext('Undo moving') : gettext('Moving');
+            return ViewUtils.runOperationShowingMessage(operationText,
+                function() {
+                    $.patchJSON(ModuleUtils.getUpdateUrl(), {
+                        move_source_locator: sourceLocator,
+                        parent_locator: targetParentLocator,
+                        target_index: targetIndex
+                    }, function(response) {
+                        moveOperation.resolve(response);
+                    })
+                    .fail(function() {
+                        moveOperation.reject();
+                    });
+                    return moveOperation.promise();
                 });
         };
 
@@ -86,39 +141,41 @@ define(["jquery", "underscore", "gettext", "common/js/components/utils/view_util
                         }
                     );
                 },
-                messageBody = interpolate(
-                    gettext('Deleting this %(xblock_type)s is permanent and cannot be undone.'),
-                    { xblock_type: xblockType },
+                messageBody;
+            xblockType = xblockType || 'component'; // eslint-disable-line no-param-reassign
+            messageBody = StringUtils.interpolate(
+                    gettext('Deleting this {xblock_type} is permanent and cannot be undone.'),
+                    {xblock_type: xblockType},
                     true
                 );
-            xblockType = xblockType || 'component';
+
             if (xblockInfo.get('is_prereq')) {
-                messageBody += ' ' + gettext('Any content that has listed this content as a prerequisite will also have access limitations removed.'); // jshint ignore:line
+                messageBody += ' ' + gettext('Any content that has listed this content as a prerequisite will also have access limitations removed.');   // eslint-disable-line max-len
                 ViewUtils.confirmThenRunOperation(
-                    interpolate(
-                        gettext('Delete this %(xblock_type)s (and prerequisite)?'),
-                        { xblock_type: xblockType },
+                    StringUtils.interpolate(
+                        gettext('Delete this {xblock_type} (and prerequisite)?'),
+                        {xblock_type: xblockType},
                         true
                     ),
                     messageBody,
-                    interpolate(
-                        gettext('Yes, delete this %(xblock_type)s'),
-                        { xblock_type: xblockType },
+                    StringUtils.interpolate(
+                        gettext('Yes, delete this {xblock_type}'),
+                        {xblock_type: xblockType},
                         true
                     ),
                     operation
                 );
             } else {
                 ViewUtils.confirmThenRunOperation(
-                    interpolate(
-                        gettext('Delete this %(xblock_type)s?'),
-                        { xblock_type: xblockType },
+                    StringUtils.interpolate(
+                        gettext('Delete this {xblock_type}?'),
+                        {xblock_type: xblockType},
                         true
                     ),
                     messageBody,
-                    interpolate(
-                        gettext('Yes, delete this %(xblock_type)s'),
-                        { xblock_type: xblockType },
+                    StringUtils.interpolate(
+                        gettext('Yes, delete this {xblock_type}'),
+                        {xblock_type: xblockType},
                         true
                     ),
                     operation
@@ -146,7 +203,7 @@ define(["jquery", "underscore", "gettext", "common/js/components/utils/view_util
             var requestData = createUpdateRequestData(fieldName, newValue);
             return ViewUtils.runOperationShowingMessage(gettext('Saving'),
                 function() {
-                    return xblockInfo.save(requestData, { patch: true });
+                    return xblockInfo.save(requestData, {patch: true});
                 });
         };
 
@@ -158,7 +215,7 @@ define(["jquery", "underscore", "gettext", "common/js/components/utils/view_util
          * @returns {jQuery promise} A promise representing the updating of the xblock values.
          */
         updateXBlockFields = function(xblockInfo, xblockData, options) {
-            options = _.extend({}, { patch: true }, options);
+            options = _.extend({}, {patch: true}, options);
             return ViewUtils.runOperationShowingMessage(gettext('Saving'),
                 function() {
                     return xblockInfo.save(xblockData, options);
@@ -188,7 +245,7 @@ define(["jquery", "underscore", "gettext", "common/js/components/utils/view_util
             return '';
         };
 
-        getXBlockListTypeClass = function (xblockType) {
+        getXBlockListTypeClass = function(xblockType) {
             var listType = 'list-unknown';
             if (xblockType === 'course') {
                 listType = 'list-sections';
@@ -212,14 +269,44 @@ define(["jquery", "underscore", "gettext", "common/js/components/utils/view_util
             return xblockType;
         };
 
+        findXBlockInfo = function(xblockWrapperElement, defaultXBlockInfo) {
+            var xblockInfo = defaultXBlockInfo,
+                xblockElement,
+                displayName,
+                hasChildren;
+            if (xblockWrapperElement.length > 0) {
+                xblockElement = xblockWrapperElement.find('.xblock');
+                displayName = xblockWrapperElement.find(
+                    '.xblock-header .header-details .xblock-display-name'
+                ).text().trim();
+                // If not found, try looking for the old unit page style rendering.
+                // Only used now by static pages.
+                if (!displayName) {
+                    displayName = xblockElement.find('.component-header').text().trim();
+                }
+                hasChildren = defaultXBlockInfo ? defaultXBlockInfo.get('has_children') : false;
+                xblockInfo = new XBlockInfo({
+                    id: xblockWrapperElement.data('locator'),
+                    courseKey: xblockWrapperElement.data('course-key'),
+                    category: xblockElement.data('block-type'),
+                    display_name: displayName,
+                    has_children: hasChildren
+                });
+            }
+            return xblockInfo;
+        };
+
         return {
-            'VisibilityState': VisibilityState,
-            'addXBlock': addXBlock,
-            'deleteXBlock': deleteXBlock,
-            'updateXBlockField': updateXBlockField,
-            'getXBlockVisibilityClass': getXBlockVisibilityClass,
-            'getXBlockListTypeClass': getXBlockListTypeClass,
-            'updateXBlockFields': updateXBlockFields,
-            'getXBlockType': getXBlockType
+            VisibilityState: VisibilityState,
+            addXBlock: addXBlock,
+            moveXBlock: moveXBlock,
+            duplicateXBlock: duplicateXBlock,
+            deleteXBlock: deleteXBlock,
+            updateXBlockField: updateXBlockField,
+            getXBlockVisibilityClass: getXBlockVisibilityClass,
+            getXBlockListTypeClass: getXBlockListTypeClass,
+            updateXBlockFields: updateXBlockFields,
+            getXBlockType: getXBlockType,
+            findXBlockInfo: findXBlockInfo
         };
     });

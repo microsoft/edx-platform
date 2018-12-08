@@ -16,8 +16,8 @@ course, section, subsection, unit, etc.
 """
 from nose.plugins.attrib import attr
 
-from xmodule.video_module import VideoDescriptor
 from xmodule.tests import LogicTest
+from xmodule.video_module import VideoDescriptor
 
 
 SOURCE_XML = """
@@ -35,7 +35,7 @@ SOURCE_XML = """
 """
 
 
-@attr('shard_1')
+@attr(shard=1)
 class VideoModuleLogicTest(LogicTest):
     """Tests for logic of Video Xmodule."""
 

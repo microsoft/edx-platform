@@ -1,4 +1,4 @@
-;(function() {
+(function() {
     'use strict';
     var Logger = (function() {
         // listeners[event_type][element] -> list of callbacks
@@ -9,10 +9,10 @@
             var request = $.ajaxWithPrefix ? $.ajaxWithPrefix : $.ajax;
 
             options = $.extend(true, {
-                'url': '/event',
-                'type': 'POST',
-                'data': data,
-                'async': true
+                url: '/event',
+                type: 'POST',
+                data: data,
+                async: true
             }, options);
             return request(options);
         };
@@ -24,6 +24,9 @@
         return {
             /**
              * Emits an event.
+             *
+             * Note that this method is used by external XBlocks, and the API cannot change without
+             * proper deprecation and notification for external authors.
              */
             log: function(eventType, data, element, requestOptions) {
                 var callbacks;
@@ -54,15 +57,18 @@
                 }
                 // Regardless of whether any callbacks were made, log this event.
                 return sendRequest({
-                    'event_type': eventType,
-                    'event': JSON.stringify(data),
-                    'page': window.location.href
+                    event_type: eventType,
+                    event: JSON.stringify(data),
+                    page: window.location.href
                 }, requestOptions);
             },
 
             /**
              * Adds a listener. If you want any element to trigger this listener,
-             * do element = null
+             * do element = null.
+             *
+             * Note that this method is used by external XBlocks, and the API cannot change without
+             * proper deprecation and notification for external authors.
              */
             listen: function(eventType, element, callback) {
                 listeners[eventType] = listeners[eventType] || {};
@@ -72,6 +78,9 @@
 
             /**
              * Binds `page_close` event.
+             *
+             * Note that this method is used by external XBlocks, and the API cannot change without
+             * proper deprecation and notification for external authors.
              */
             bind: function() {
                 window.onunload = function() {

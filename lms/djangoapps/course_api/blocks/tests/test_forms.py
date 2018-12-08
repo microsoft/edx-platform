@@ -1,16 +1,16 @@
 """
 Tests for Course Blocks forms
 """
+from urllib import urlencode
+
 import ddt
 from django.http import Http404, QueryDict
-from urllib import urlencode
+from opaque_keys.edx.locator import CourseLocator
 from rest_framework.exceptions import PermissionDenied
 
-from course_blocks.tests.helpers import EnableTransformerRegistryMixin
-from opaque_keys.edx.locator import CourseLocator
 from openedx.core.djangoapps.util.test_forms import FormTestMixin
 from student.models import CourseEnrollment
-from student.tests.factories import UserFactory, CourseEnrollmentFactory
+from student.tests.factories import CourseEnrollmentFactory, UserFactory
 from xmodule.modulestore.tests.django_utils import SharedModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
 
@@ -18,10 +18,12 @@ from ..forms import BlockListGetForm
 
 
 @ddt.ddt
-class TestBlockListGetForm(EnableTransformerRegistryMixin, FormTestMixin, SharedModuleStoreTestCase):
+class TestBlockListGetForm(FormTestMixin, SharedModuleStoreTestCase):
     """
     Tests for BlockListGetForm
     """
+    shard = 4
+
     FORM_CLASS = BlockListGetForm
 
     @classmethod
@@ -60,6 +62,7 @@ class TestBlockListGetForm(EnableTransformerRegistryMixin, FormTestMixin, Shared
             'usage_key': usage_key,
             'username': self.student.username,
             'user': self.student,
+            'block_types_filter': set(),
         }
 
     def assert_raises_permission_denied(self):

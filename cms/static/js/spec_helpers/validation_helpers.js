@@ -5,7 +5,7 @@ define(['jquery', 'js/spec_helpers/modal_helpers', 'common/js/spec_helpers/templ
     function($, ModalHelpers, TemplateHelpers) {
         var installValidationTemplates, checkErrorContents, undoChanges;
 
-        installValidationTemplates = function () {
+        installValidationTemplates = function() {
             ModalHelpers.installModalTemplates();
             TemplateHelpers.installTemplate('validation-error-modal');
         };
@@ -27,8 +27,8 @@ define(['jquery', 'js/spec_helpers/modal_helpers', 'common/js/spec_helpers/templ
         };
 
         return $.extend(ModalHelpers, {
-            'installValidationTemplates': installValidationTemplates,
-            'checkErrorContents': checkErrorContents,
-            'undoChanges': undoChanges,
+            installValidationTemplates: installValidationTemplates,
+            checkErrorContents: checkErrorContents,
+            undoChanges: undoChanges
         });
     });

@@ -4,28 +4,27 @@ Views for user API
 
 from django.shortcuts import redirect
 from django.utils import dateparse
-
+from opaque_keys import InvalidKeyError
+from opaque_keys.edx.keys import UsageKey
 from rest_framework import generics, views
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-
-from opaque_keys.edx.keys import UsageKey
-from opaque_keys import InvalidKeyError
-
-from courseware.access import is_mobile_available_for_user
-from courseware.model_data import FieldDataCache
-from courseware.module_render import get_module_for_descriptor
-from courseware.views import get_current_child, save_positions_recursively_up
-from student.models import CourseEnrollment, User
-
 from xblock.fields import Scope
 from xblock.runtime import KeyValueStore
+
+from courseware.access import is_mobile_available_for_user
+from courseware.courses import get_current_child
+from courseware.model_data import FieldDataCache
+from courseware.module_render import get_module_for_descriptor
+from courseware.views.index import save_positions_recursively_up
+from experiments.models import ExperimentData
+from student.models import CourseEnrollment, User
 from xmodule.modulestore.django import modulestore
 from xmodule.modulestore.exceptions import ItemNotFoundError
 
-from .serializers import CourseEnrollmentSerializer, UserSerializer
 from .. import errors
-from ..utils import mobile_view, mobile_course_access
+from ..decorators import mobile_course_access, mobile_view
+from .serializers import CourseEnrollmentSerializer, UserSerializer
 
 
 @mobile_view(is_user=True)
@@ -59,8 +58,7 @@ class UserDetail(generics.RetrieveAPIView):
         * username: The username of the currently signed in user.
     """
     queryset = (
-        User.objects.all()
-        .select_related('profile')
+        User.objects.all().select_related('profile')
     )
     serializer_class = UserSerializer
     lookup_field = 'username'
@@ -229,6 +227,7 @@ class UserCourseEnrollmentsList(generics.ListAPIView):
           including any access errors.
 
           * course_about: The URL to the course about page.
+          * course_sharing_utm_parameters: Encoded UTM parameters to be included in course sharing url
           * course_handouts: The URI to get data for course handouts.
           * course_image: The path to the course image.
           * course_updates: The URI to get data for course updates.
@@ -236,7 +235,6 @@ class UserCourseEnrollmentsList(generics.ListAPIView):
             it is enabled, otherwise null.
           * end: The end date of the course.
           * id: The unique ID of the course.
-          * latest_updates: Reserved for future use.
           * name: The name of the course.
           * number: The course number.
           * org: The organization that created the course.
@@ -270,15 +268,47 @@ class UserCourseEnrollmentsList(generics.ListAPIView):
     # the default behavior by setting the pagination_class to None.
     pagination_class = None
 
+    def is_org(self, check_org, course_org):
+        """
+        Check course org matches request org param or no param provided
+        """
+        return check_org is None or (check_org.lower() == course_org.lower())
+
+    def hide_course_for_enrollment_fee_experiment(self, user, course_key, experiment_id=9):
+        """
+        Hide enrolled courses from mobile app as part of REV-73/REV-19
+        """
+        try:
+            ExperimentData.objects.get(
+                user=user,
+                experiment_id=experiment_id,
+                key='enrolled_{0}'.format(course_key),
+            )
+        except ExperimentData.DoesNotExist:
+            return False
+
+        try:
+            ExperimentData.objects.get(
+                user=user,
+                experiment_id=experiment_id,
+                key='paid_{0}'.format(course_key),
+            )
+        except ExperimentData.DoesNotExist:
+            return True
+
+        return False
+
     def get_queryset(self):
         enrollments = self.queryset.filter(
             user__username=self.kwargs['username'],
             is_active=True
         ).order_by('created').reverse()
+        org = self.request.query_params.get('org', None)
         return [
             enrollment for enrollment in enrollments
-            if enrollment.course_overview and
-            is_mobile_available_for_user(self.request.user, enrollment.course_overview)
+            if enrollment.course_overview and self.is_org(org, enrollment.course_overview.org) and
+            is_mobile_available_for_user(self.request.user, enrollment.course_overview) and
+            not self.hide_course_for_enrollment_fee_experiment(self.request.user, enrollment.course_overview.id)
         ]
 
 

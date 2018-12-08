@@ -2,11 +2,13 @@
 Tests for the fake payment page used in acceptance tests.
 """
 
+from collections import OrderedDict
+
 from django.test import TestCase
+
 from shoppingcart.processors.CyberSource2 import sign, verify_signatures
 from shoppingcart.processors.exceptions import CCProcessorSignatureException
 from shoppingcart.tests.payment_fake import PaymentFakeView
-from collections import OrderedDict
 
 
 class PaymentFakeViewTest(TestCase):
@@ -14,22 +16,7 @@ class PaymentFakeViewTest(TestCase):
     Test that the fake payment view interacts
     correctly with the shopping cart.
     """
-
-    CLIENT_POST_PARAMS = OrderedDict([
-        ('amount', '25.00'),
-        ('currency', 'usd'),
-        ('transaction_type', 'sale'),
-        ('orderNumber', '33'),
-        ('access_key', '123456789'),
-        ('merchantID', 'edx'),
-        ('djch', '012345678912'),
-        ('orderPage_version', 2),
-        ('orderPage_serialNumber', '1234567890'),
-        ('profile_id', "00000001"),
-        ('reference_number', 10),
-        ('locale', 'en'),
-        ('signed_date_time', '2014-08-18T13:59:31Z'),
-    ])
+    shard = 4
 
     def setUp(self):
         super(PaymentFakeViewTest, self).setUp()
@@ -37,10 +24,26 @@ class PaymentFakeViewTest(TestCase):
         # Reset the view state
         PaymentFakeView.PAYMENT_STATUS_RESPONSE = "success"
 
+        self.client_post_params = OrderedDict([
+            ('amount', '25.00'),
+            ('currency', 'usd'),
+            ('transaction_type', 'sale'),
+            ('orderNumber', '33'),
+            ('access_key', '123456789'),
+            ('merchantID', 'edx'),
+            ('djch', '012345678912'),
+            ('orderPage_version', 2),
+            ('orderPage_serialNumber', '1234567890'),
+            ('profile_id', "00000001"),
+            ('reference_number', 10),
+            ('locale', 'en'),
+            ('signed_date_time', '2014-08-18T13:59:31Z'),
+        ])
+
     def test_accepts_client_signatures(self):
 
         # Generate shoppingcart signatures
-        post_params = sign(self.CLIENT_POST_PARAMS)
+        post_params = sign(self.client_post_params)
 
         # Simulate a POST request from the payment workflow
         # page to the fake payment page.
@@ -58,7 +61,7 @@ class PaymentFakeViewTest(TestCase):
     def test_rejects_invalid_signature(self):
 
         # Generate shoppingcart signatures
-        post_params = sign(self.CLIENT_POST_PARAMS)
+        post_params = sign(self.client_post_params)
 
         # Tamper with the signature
         post_params['signature'] = "invalid"
@@ -75,7 +78,7 @@ class PaymentFakeViewTest(TestCase):
     def test_sends_valid_signature(self):
 
         # Generate shoppingcart signatures
-        post_params = sign(self.CLIENT_POST_PARAMS)
+        post_params = sign(self.client_post_params)
 
         # Get the POST params that the view would send back to us
         resp_params = PaymentFakeView.response_post_params(post_params)
@@ -90,7 +93,7 @@ class PaymentFakeViewTest(TestCase):
     def test_set_payment_status(self):
 
         # Generate shoppingcart signatures
-        post_params = sign(self.CLIENT_POST_PARAMS)
+        post_params = sign(self.client_post_params)
 
         # Configure the view to declined payments
         resp = self.client.put(

@@ -2,31 +2,26 @@
 Tests for credit requirement display on the progress page.
 """
 
-import datetime
-
 import ddt
-from mock import patch
-from pytz import UTC
-
 from django.conf import settings
-from django.core.urlresolvers import reverse
-
-from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
-from xmodule.modulestore.tests.factories import CourseFactory
-from student.tests.factories import UserFactory, CourseEnrollmentFactory
-from util.date_utils import get_time_display, DEFAULT_SHORT_DATE_FORMAT
+from django.urls import reverse
+from mock import patch
 
 from course_modes.models import CourseMode
 from openedx.core.djangoapps.credit import api as credit_api
 from openedx.core.djangoapps.credit.models import CreditCourse
+from student.tests.factories import CourseEnrollmentFactory, UserFactory
+from xmodule.modulestore.tests.django_utils import SharedModuleStoreTestCase
+from xmodule.modulestore.tests.factories import CourseFactory
 
 
 @patch.dict(settings.FEATURES, {"ENABLE_CREDIT_ELIGIBILITY": True})
 @ddt.ddt
-class ProgressPageCreditRequirementsTest(ModuleStoreTestCase):
+class ProgressPageCreditRequirementsTest(SharedModuleStoreTestCase):
     """
     Tests for credit requirement display on the progress page.
     """
+    shard = 4
 
     USERNAME = "bob"
     PASSWORD = "test"
@@ -35,11 +30,15 @@ class ProgressPageCreditRequirementsTest(ModuleStoreTestCase):
     MIN_GRADE_REQ_DISPLAY = "Final Grade Credit Requirement"
     VERIFICATION_REQ_DISPLAY = "Midterm Exam Credit Requirement"
 
+    @classmethod
+    def setUpClass(cls):
+        super(ProgressPageCreditRequirementsTest, cls).setUpClass()
+        cls.course = CourseFactory.create()
+
     def setUp(self):
         super(ProgressPageCreditRequirementsTest, self).setUp()
 
-        # Create a course and configure it as a credit course
-        self.course = CourseFactory.create()
+        # Configure course as a credit course
         CreditCourse.objects.create(course_key=self.course.id, enabled=True)
 
         # Configure credit requirements (passing grade and in-course reverification)
@@ -93,16 +92,19 @@ class ProgressPageCreditRequirementsTest(ModuleStoreTestCase):
         )
 
     def test_credit_requirements_eligible(self):
-        # Mark the user as eligible for all requirements
+        """
+        Mark the user as eligible for all requirements. Requirements are only displayed
+        for credit and verified enrollments.
+        """
         credit_api.set_credit_requirement_status(
-            self.user.username, self.course.id,
+            self.user, self.course.id,
             "grade", "grade",
             status="satisfied",
             reason={"final_grade": 0.95}
         )
 
         credit_api.set_credit_requirement_status(
-            self.user.username, self.course.id,
+            self.user, self.course.id,
             "reverification", "midterm",
             status="satisfied", reason={}
         )
@@ -115,13 +117,20 @@ class ProgressPageCreditRequirementsTest(ModuleStoreTestCase):
             response,
             "{}, you have met the requirements for credit in this course.".format(self.USER_FULL_NAME)
         )
-        self.assertContains(response, "Completed {date}".format(date=self._now_formatted_date()))
-        self.assertContains(response, "95%")
+        self.assertContains(response, "Completed by {date}")
+
+        credit_requirements = credit_api.get_credit_requirement_status(self.course.id, self.user.username)
+        for requirement in credit_requirements:
+            self.assertContains(response, requirement['status_date'].strftime('%Y-%m-%d %H:%M'))
+        self.assertNotContains(response, "95%")
 
     def test_credit_requirements_not_eligible(self):
-        # Mark the user as having failed both requirements
+        """
+        Mark the user as having failed both requirements. Requirements are only displayed
+        for credit and verified enrollments.
+        """
         credit_api.set_credit_requirement_status(
-            self.user.username, self.course.id,
+            self.user, self.course.id,
             "reverification", "midterm",
             status="failed", reason={}
         )
@@ -162,11 +171,3 @@ class ProgressPageCreditRequirementsTest(ModuleStoreTestCase):
         """Load the progress page for the course the user is enrolled in. """
         url = reverse("progress", kwargs={"course_id": unicode(self.course.id)})
         return self.client.get(url)
-
-    def _now_formatted_date(self):
-        """Retrieve the formatted current date. """
-        return get_time_display(
-            datetime.datetime.now(UTC),
-            DEFAULT_SHORT_DATE_FORMAT,
-            settings.TIME_ZONE
-        )

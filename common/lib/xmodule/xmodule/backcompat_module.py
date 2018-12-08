@@ -1,11 +1,13 @@
 """
 These modules exist to translate old format XML into newer, semantic forms
 """
-from .x_module import XModuleDescriptor
-from lxml import etree
-from functools import wraps
 import logging
 import traceback
+from functools import wraps
+
+from lxml import etree
+
+from .x_module import XModuleDescriptor
 
 log = logging.getLogger(__name__)
 
@@ -22,7 +24,7 @@ def process_includes(fn):
         next_include = xml_object.find('include')
         while next_include is not None:
             system.error_tracker("WARNING: the <include> tag is deprecated, and will go away.")
-            file = next_include.get('file')
+            file = next_include.get('file').decode('utf-8')
             parent = next_include.getparent()
 
             if file is None:
@@ -60,6 +62,8 @@ def process_includes(fn):
 
 
 class SemanticSectionDescriptor(XModuleDescriptor):
+    resources_dir = None
+
     @classmethod
     @process_includes
     def from_xml(cls, xml_data, system, id_generator):
@@ -82,6 +86,8 @@ class SemanticSectionDescriptor(XModuleDescriptor):
 
 
 class TranslateCustomTagDescriptor(XModuleDescriptor):
+    resources_dir = None
+
     @classmethod
     def from_xml(cls, xml_data, system, id_generator):
         """

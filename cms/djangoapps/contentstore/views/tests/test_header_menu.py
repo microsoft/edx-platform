@@ -8,13 +8,14 @@ from django.test.utils import override_settings
 
 from contentstore.tests.utils import CourseTestCase
 from contentstore.utils import reverse_course_url
+from util.testing import UrlResetMixin
 
 FEATURES_WITH_CERTS_ENABLED = settings.FEATURES.copy()
 FEATURES_WITH_CERTS_ENABLED['CERTIFICATES_HTML_VIEW'] = True
 
 
 @override_settings(FEATURES=FEATURES_WITH_CERTS_ENABLED)
-class TestHeaderMenu(CourseTestCase):
+class TestHeaderMenu(CourseTestCase, UrlResetMixin):
     """
     Unit tests for the course header menu.
     """
@@ -23,12 +24,15 @@ class TestHeaderMenu(CourseTestCase):
         Set up the for the course header menu tests.
         """
         super(TestHeaderMenu, self).setUp()
+        self.reset_urls()
 
     def test_header_menu_without_web_certs_enabled(self):
         """
         Tests course header menu should not have `Certificates` menu item
         if course has not web/HTML certificates enabled.
         """
+        self.course.cert_html_view_enabled = False
+        self.save_course()
         outline_url = reverse_course_url('course_handler', self.course.id)
         resp = self.client.get(outline_url, HTTP_ACCEPT='text/html')
         self.assertEqual(resp.status_code, 200)
@@ -39,8 +43,6 @@ class TestHeaderMenu(CourseTestCase):
         Tests course header menu should have `Certificates` menu item
         if course has web/HTML certificates enabled.
         """
-        self.course.cert_html_view_enabled = True
-        self.save_course()
         outline_url = reverse_course_url('course_handler', self.course.id)
         resp = self.client.get(outline_url, HTTP_ACCEPT='text/html')
         self.assertEqual(resp.status_code, 200)

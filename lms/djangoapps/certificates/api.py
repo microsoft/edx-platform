@@ -7,31 +7,31 @@ rather than importing Django models directly.
 import logging
 
 from django.conf import settings
-from django.core.urlresolvers import reverse
-
-from eventtracking import tracker
-from opaque_keys import InvalidKeyError
+from django.urls import reverse
+from django.db.models import Q
+from opaque_keys.edx.django.models import CourseKeyField
 from opaque_keys.edx.keys import CourseKey
 
-from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
-from xmodule.modulestore.django import modulestore
-from xmodule_django.models import CourseKeyField
-from util.organizations_helpers import get_course_organizations
-
-from certificates.models import (
-    CertificateStatuses,
-    certificate_status_for_student,
-    CertificateGenerationCourseSetting,
+from branding import api as branding_api
+from lms.djangoapps.certificates.models import (
     CertificateGenerationConfiguration,
-    ExampleCertificateSet,
-    GeneratedCertificate,
+    CertificateGenerationCourseSetting,
+    CertificateInvalidation,
+    CertificateStatuses,
     CertificateTemplate,
     CertificateTemplateAsset,
+    ExampleCertificateSet,
+    GeneratedCertificate,
+    certificate_status_for_student
 )
-from certificates.queue import XQueueCertInterface
-from branding import api as branding_api
+from lms.djangoapps.certificates.queue import XQueueCertInterface
+from eventtracking import tracker
+from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
+from util.organizations_helpers import get_course_organization_id
+from xmodule.modulestore.django import modulestore
 
 log = logging.getLogger("edx.certificate")
+MODES = GeneratedCertificate.MODES
 
 
 def is_passing_status(cert_status):
@@ -41,6 +41,37 @@ def is_passing_status(cert_status):
     defined in models.py
     """
     return CertificateStatuses.is_passing_status(cert_status)
+
+
+def format_certificate_for_user(username, cert):
+    """
+    Helper function to serialize an user certificate.
+
+    Arguments:
+        username (unicode): The identifier of the user.
+        cert (GeneratedCertificate): a user certificate
+
+    Returns: dict
+    """
+    return {
+        "username": username,
+        "course_key": cert.course_id,
+        "type": cert.mode,
+        "status": cert.status,
+        "grade": cert.grade,
+        "created": cert.created_date,
+        "modified": cert.modified_date,
+        "is_passing": is_passing_status(cert.status),
+
+        # NOTE: the download URL is not currently being set for webview certificates.
+        # In the future, we can update this to construct a URL to the webview certificate
+        # for courses that have this feature enabled.
+        "download_url": (
+            cert.download_url or get_certificate_url(cert.user.id, cert.course_id)
+            if cert.status == CertificateStatuses.downloadable
+            else None
+        ),
+    }
 
 
 def get_certificates_for_user(username):
@@ -57,7 +88,7 @@ def get_certificates_for_user(username):
     [
         {
             "username": "bob",
-            "course_key": "edX/DemoX/Demo_Course",
+            "course_key": CourseLocator('edX', 'DemoX', 'Demo_Course', None, None),
             "type": "verified",
             "status": "downloadable",
             "download_url": "http://www.example.com/cert.pdf",
@@ -69,26 +100,28 @@ def get_certificates_for_user(username):
 
     """
     return [
-        {
-            "username": username,
-            "course_key": cert.course_id,
-            "type": cert.mode,
-            "status": cert.status,
-            "grade": cert.grade,
-            "created": cert.created_date,
-            "modified": cert.modified_date,
-
-            # NOTE: the download URL is not currently being set for webview certificates.
-            # In the future, we can update this to construct a URL to the webview certificate
-            # for courses that have this feature enabled.
-            "download_url": (
-                cert.download_url or get_certificate_url(cert.user.id, cert.course_id)
-                if cert.status == CertificateStatuses.downloadable
-                else None
-            ),
-        }
+        format_certificate_for_user(username, cert)
         for cert in GeneratedCertificate.eligible_certificates.filter(user__username=username).order_by("course_id")
     ]
+
+
+def get_certificate_for_user(username, course_key):
+    """
+    Retrieve certificate information for a particular user for a specific course.
+
+    Arguments:
+        username (unicode): The identifier of the user.
+        course_key (CourseKey): A Course Key.
+    Returns: dict
+    """
+    try:
+        cert = GeneratedCertificate.eligible_certificates.get(
+            user__username=username,
+            course_id=course_key
+        )
+    except GeneratedCertificate.DoesNotExist:
+        return None
+    return format_certificate_for_user(username, cert)
 
 
 def generate_user_certificates(student, course_key, course=None, insecure=False, generation_mode='batch',
@@ -117,7 +150,12 @@ def generate_user_certificates(student, course_key, course=None, insecure=False,
     xqueue = XQueueCertInterface()
     if insecure:
         xqueue.use_https = False
-    generate_pdf = not has_html_certificates_enabled(course_key, course)
+
+    if not course:
+        course = modulestore().get_course(course_key, depth=0)
+
+    generate_pdf = not has_any_active_web_certificate(course)
+
     cert = xqueue.add_cert(
         student,
         course_key,
@@ -125,6 +163,11 @@ def generate_user_certificates(student, course_key, course=None, insecure=False,
         generate_pdf=generate_pdf,
         forced_grade=forced_grade
     )
+    # If cert_status is not present in certificate valid_statuses (for example unverified) then
+    # add_cert returns None and raises AttributeError while accesing cert attributes.
+    if cert is None:
+        return
+
     if CertificateStatuses.is_passing_status(cert.status):
         emit_certificate_event('created', student, course_key, course, {
             'user_id': student.id,
@@ -160,7 +203,15 @@ def regenerate_user_certificates(student, course_key, course=None,
     if insecure:
         xqueue.use_https = False
 
-    generate_pdf = not has_html_certificates_enabled(course_key, course)
+    if not course:
+        course = modulestore().get_course(course_key, depth=0)
+
+    generate_pdf = not has_any_active_web_certificate(course)
+    log.info(
+        "Started regenerating certificates for user %s in course %s with generate_pdf status: %s",
+        student.username, unicode(course_key), generate_pdf
+    )
+
     return xqueue.regen_cert(
         student,
         course_key,
@@ -192,11 +243,13 @@ def certificate_downloadable_status(student, course_key):
         'is_downloadable': False,
         'is_generating': True if current_status['status'] in [CertificateStatuses.generating,
                                                               CertificateStatuses.error] else False,
+        'is_unverified': True if current_status['status'] == CertificateStatuses.unverified else False,
         'download_url': None,
         'uuid': None,
     }
+    may_view_certificate = CourseOverview.get_from_id(course_key).may_certify()
 
-    if current_status['status'] == CertificateStatuses.downloadable:
+    if current_status['status'] == CertificateStatuses.downloadable and may_view_certificate:
         response_data['is_downloadable'] = True
         response_data['download_url'] = current_status['download_url'] or get_certificate_url(student.id, course_key)
         response_data['uuid'] = current_status['uuid']
@@ -227,7 +280,7 @@ def set_cert_generation_enabled(course_key, is_enabled):
             certificates for this course.
 
     """
-    CertificateGenerationCourseSetting.set_enabled_for_course(course_key, is_enabled)
+    CertificateGenerationCourseSetting.set_self_generatation_enabled_for_course(course_key, is_enabled)
     cert_event_type = 'enabled' if is_enabled else 'disabled'
     event_name = '.'.join(['edx', 'certificate', 'generation', cert_event_type])
     tracker.emit(event_name, {
@@ -237,6 +290,26 @@ def set_cert_generation_enabled(course_key, is_enabled):
         log.info(u"Enabled self-generated certificates for course '%s'.", unicode(course_key))
     else:
         log.info(u"Disabled self-generated certificates for course '%s'.", unicode(course_key))
+
+
+def is_certificate_invalid(student, course_key):
+    """Check that whether the student in the course has been invalidated
+    for receiving certificates.
+
+    Arguments:
+        student (user object): logged-in user
+        course_key (CourseKey): The course identifier.
+
+    Returns:
+        Boolean denoting whether the student in the course is invalidated
+        to receive certificates
+    """
+    is_invalid = False
+    certificate = GeneratedCertificate.certificate_for_student(student, course_key)
+    if certificate is not None:
+        is_invalid = CertificateInvalidation.has_certificate_invalidation(student, course_key)
+
+    return is_invalid
 
 
 def cert_generation_enabled(course_key):
@@ -261,7 +334,7 @@ def cert_generation_enabled(course_key):
     """
     return (
         CertificateGenerationConfiguration.current().enabled and
-        CertificateGenerationCourseSetting.is_enabled_for_course(course_key)
+        CertificateGenerationCourseSetting.is_self_generation_enabled_for_course(course_key)
     )
 
 
@@ -293,44 +366,6 @@ def generate_example_certificates(course_key):
         xqueue.add_example_cert(cert)
 
 
-def has_html_certificates_enabled(course_key, course=None):
-    """
-    Determine if a course has html certificates enabled.
-
-    Arguments:
-        course_key (CourseKey|str): A course key or a string representation
-            of one.
-        course (CourseDescriptor|CourseOverview): A course.
-    """
-    # If the feature is disabled, then immediately return a False
-    if not settings.FEATURES.get('CERTIFICATES_HTML_VIEW', False):
-        return False
-
-    # If we don't have a course object, we'll need to assemble one
-    if not course:
-        # Initialize a course key if necessary
-        if not isinstance(course_key, CourseKey):
-            try:
-                course_key = CourseKey.from_string(course_key)
-            except InvalidKeyError:
-                log.warning(
-                    ('Unable to parse course_key "%s"', course_key),
-                    exc_info=True
-                )
-                return False
-        # Pull the course data from the cache
-        try:
-            course = CourseOverview.get_from_id(course_key)
-        except:  # pylint: disable=bare-except
-            log.warning(
-                ('Unable to load CourseOverview object for course_key "%s"', unicode(course_key)),
-                exc_info=True
-            )
-
-    # Return the flag on the course object
-    return course.cert_html_view_enabled if course else False
-
-
 def example_certificates_status(course_key):
     """Check the status of example certificates for a course.
 
@@ -346,7 +381,7 @@ def example_certificates_status(course_key):
 
     Example Usage:
 
-        >>> from certificates import api as certs_api
+        >>> from lms.djangoapps.certificates import api as certs_api
         >>> certs_api.example_certificate_status(course_key)
         [
             {
@@ -365,58 +400,73 @@ def example_certificates_status(course_key):
     return ExampleCertificateSet.latest_status(course_key)
 
 
-def get_certificate_url(user_id=None, course_id=None, uuid=None):
-    """
-    :return certificate url for web or pdf certs. In case of web certs returns either old
-    or new cert url based on given parameters. For web certs if `uuid` is it would return
-    new uuid based cert url url otherwise old url.
-    """
-    url = ""
-    if has_html_certificates_enabled(course_id):
-        if uuid:
-            url = reverse(
-                'certificates:render_cert_by_uuid',
-                kwargs=dict(certificate_uuid=uuid)
-            )
-        elif user_id and course_id:
-            url = reverse(
-                'certificates:html_view',
-                kwargs={
-                    "user_id": str(user_id),
-                    "course_id": unicode(course_id),
-                }
-            )
-    else:
-        if isinstance(course_id, basestring):
-            try:
-                course_id = CourseKey.from_string(course_id)
-            except InvalidKeyError:
-                log.warning(
-                    ('Unable to parse course_id "%s"', course_id),
-                    exc_info=True
-                )
-                return url
-        try:
-            user_certificate = GeneratedCertificate.eligible_certificates.get(
-                user=user_id,
-                course_id=course_id
-            )
-            url = user_certificate.download_url
-        except GeneratedCertificate.DoesNotExist:
-            log.critical(
-                'Unable to lookup certificate\n'
-                'user id: %d\n'
-                'course: %s', user_id, unicode(course_id)
-            )
+def _safe_course_key(course_key):
+    if not isinstance(course_key, CourseKey):
+        return CourseKey.from_string(course_key)
+    return course_key
 
+
+def _course_from_key(course_key):
+    return CourseOverview.get_from_id(_safe_course_key(course_key))
+
+
+def _certificate_html_url(user_id, course_id, uuid):
+    if uuid:
+        return reverse('certificates:render_cert_by_uuid', kwargs={'certificate_uuid': uuid})
+    elif user_id and course_id:
+        kwargs = {"user_id": str(user_id), "course_id": unicode(course_id)}
+        return reverse('certificates:html_view', kwargs=kwargs)
+    return ''
+
+
+def _certificate_download_url(user_id, course_id):
+    try:
+        user_certificate = GeneratedCertificate.eligible_certificates.get(
+            user=user_id,
+            course_id=_safe_course_key(course_id)
+        )
+        return user_certificate.download_url
+    except GeneratedCertificate.DoesNotExist:
+        log.critical(
+            'Unable to lookup certificate\n'
+            'user id: %d\n'
+            'course: %s', user_id, unicode(course_id)
+        )
+    return ''
+
+
+def has_html_certificates_enabled(course):
+    if not settings.FEATURES.get('CERTIFICATES_HTML_VIEW', False):
+        return False
+    return course.cert_html_view_enabled
+
+
+def get_certificate_url(user_id=None, course_id=None, uuid=None):
+    url = ''
+
+    course = _course_from_key(course_id)
+    if not course:
+        return url
+
+    if has_html_certificates_enabled(course) and has_any_active_web_certificate(course):
+        url = _certificate_html_url(user_id, course_id, uuid)
+    else:
+        url = _certificate_download_url(user_id, course_id)
     return url
+
+
+def has_any_active_web_certificate(course):
+    if hasattr(course, 'has_any_active_web_certificate'):
+        return course.has_any_active_web_certificate
+
+    return get_active_web_certificate(course)
 
 
 def get_active_web_certificate(course, is_preview_mode=None):
     """
     Retrieves the active web certificate configuration for the specified course
     """
-    certificates = getattr(course, 'certificates', '{}')
+    certificates = getattr(course, 'certificates', {})
     configurations = certificates.get('certificates', [])
     for config in configurations:
         if config.get('is_active') or is_preview_mode:
@@ -424,49 +474,88 @@ def get_active_web_certificate(course, is_preview_mode=None):
     return None
 
 
-def get_certificate_template(course_key, mode):
+def get_certificate_template(course_key, mode, language):
     """
-    Retrieves the custom certificate template based on course_key and mode.
+    Retrieves the custom certificate template based on course_key, mode, and language.
     """
-    org_id, template = None, None
+    template = None
     # fetch organization of the course
-    course_organization = get_course_organizations(course_key)
-    if course_organization:
-        org_id = course_organization[0]['id']
+    org_id = get_course_organization_id(course_key)
 
-    if org_id and mode:
-        template = CertificateTemplate.objects.filter(
+    # only consider active templates
+    active_templates = CertificateTemplate.objects.filter(is_active=True)
+
+    if org_id and mode:  # get template by org, mode, and key
+        org_mode_and_key_templates = active_templates.filter(
             organization_id=org_id,
-            course_key=course_key,
             mode=mode,
-            is_active=True
+            course_key=course_key
         )
-    # if don't template find by org and mode
-    if not template and org_id and mode:
-        template = CertificateTemplate.objects.filter(
+        template = get_language_specific_template_or_default(language, org_mode_and_key_templates)
+
+    # since no template matched that course_key, only consider templates with empty course_key
+    empty_course_key_templates = active_templates.filter(course_key=CourseKeyField.Empty)
+    if not template and org_id and mode:  # get template by org and mode
+        org_and_mode_templates = empty_course_key_templates.filter(
             organization_id=org_id,
-            course_key=CourseKeyField.Empty,
-            mode=mode,
-            is_active=True
+            mode=mode
         )
-    # if don't template find by only org
-    if not template and org_id:
-        template = CertificateTemplate.objects.filter(
+        template = get_language_specific_template_or_default(language, org_and_mode_templates)
+    if not template and org_id:  # get template by only org
+        org_templates = empty_course_key_templates.filter(
             organization_id=org_id,
-            course_key=CourseKeyField.Empty,
-            mode=None,
-            is_active=True
+            mode=None
         )
-    # if we still don't template find by only course mode
-    if not template and mode:
-        template = CertificateTemplate.objects.filter(
+        template = get_language_specific_template_or_default(language, org_templates)
+    if not template and mode:  # get template by only mode
+        mode_templates = empty_course_key_templates.filter(
             organization_id=None,
-            course_key=CourseKeyField.Empty,
-            mode=mode,
-            is_active=True
+            mode=mode
         )
+        template = get_language_specific_template_or_default(language, mode_templates)
+    return template if template else None
 
-    return template[0].template if template else None
+
+def get_language_specific_template_or_default(language, templates):
+    """
+    Returns templates that match passed in language.
+    Returns default templates If no language matches, or language passed is None
+    """
+    two_letter_language = _get_two_letter_language_code(language)
+    language_or_default_templates = list(templates.filter(Q(language=two_letter_language) | Q(language=None) | Q(language='')))
+    language_specific_template = get_language_specific_template(two_letter_language, language_or_default_templates)
+    if language_specific_template:
+        return language_specific_template
+    else:
+        return get_all_languages_or_default_template(language_or_default_templates)
+
+
+def get_language_specific_template(language, templates):
+    for template in templates:
+        if template.language == language:
+            return template
+    return None
+
+
+def get_all_languages_or_default_template(templates):
+    for template in templates:
+        if template.language == '':
+            return template
+
+    return templates[0] if templates else None
+
+
+def _get_two_letter_language_code(language_code):
+    """
+    Shortens language to only first two characters (e.g. es-419 becomes es)
+    This is needed because Catalog returns locale language which is not always a 2 letter code.
+    """
+    if language_code is None:
+        return None
+    elif language_code == '':
+        return ''
+    else:
+        return language_code[:2]
 
 
 def emit_certificate_event(event_name, user, course_id, course=None, event_data=None):
@@ -508,10 +597,10 @@ def get_asset_url_by_slug(asset_slug):
 def get_certificate_header_context(is_secure=True):
     """
     Return data to be used in Certificate Header,
-    data returned should be customized according to the microsite settings
+    data returned should be customized according to the site configuration.
     """
     data = dict(
-        logo_src=branding_api.get_logo_url(),
+        logo_src=branding_api.get_logo_url(is_secure),
         logo_url=branding_api.get_base_url(is_secure),
     )
 
@@ -521,7 +610,7 @@ def get_certificate_header_context(is_secure=True):
 def get_certificate_footer_context():
     """
     Return data to be used in Certificate Footer,
-    data returned should be customized according to the microsite settings
+    data returned should be customized according to the site configuration.
     """
     data = dict()
 

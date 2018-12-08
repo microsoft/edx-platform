@@ -6,16 +6,17 @@ from unittest import TestCase
 from urllib import urlencode
 
 import ddt
-
 from django.http import QueryDict
-
 from opaque_keys.edx.locator import CourseLocator
-from openedx.core.djangoapps.util.test_forms import FormTestMixin
+
 from discussion_api.forms import CommentListGetForm, ThreadListGetForm
+from openedx.core.djangoapps.util.test_forms import FormTestMixin
 
 
 class PaginationTestMixin(object):
     """A mixin for testing forms with pagination fields"""
+    shard = 8
+
     def test_missing_page(self):
         self.form_data.pop("page")
         self.assert_field_value("page", 1)
@@ -40,6 +41,7 @@ class PaginationTestMixin(object):
 @ddt.ddt
 class ThreadListGetFormTest(FormTestMixin, PaginationTestMixin, TestCase):
     """Tests for ThreadListGetForm"""
+    shard = 8
     FORM_CLASS = ThreadListGetForm
 
     def setUp(self):
@@ -69,6 +71,7 @@ class ThreadListGetFormTest(FormTestMixin, PaginationTestMixin, TestCase):
                 "view": "",
                 "order_by": "last_activity_at",
                 "order_direction": "desc",
+                "requested_fields": set(),
             }
         )
 
@@ -146,7 +149,6 @@ class ThreadListGetFormTest(FormTestMixin, PaginationTestMixin, TestCase):
         ("order_by", "last_activity_at"),
         ("order_by", "comment_count"),
         ("order_by", "vote_count"),
-        ("order_direction", "asc"),
         ("order_direction", "desc"),
     )
     @ddt.unpack
@@ -154,10 +156,19 @@ class ThreadListGetFormTest(FormTestMixin, PaginationTestMixin, TestCase):
         self.form_data[field] = value
         self.assert_field_value(field, value)
 
+    def test_requested_fields(self):
+        self.form_data["requested_fields"] = "profile_image"
+        form = self.get_form(expected_valid=True)
+        self.assertEqual(
+            form.cleaned_data["requested_fields"],
+            {"profile_image"},
+        )
+
 
 @ddt.ddt
 class CommentListGetFormTest(FormTestMixin, PaginationTestMixin, TestCase):
     """Tests for CommentListGetForm"""
+    shard = 8
     FORM_CLASS = CommentListGetForm
 
     def setUp(self):
@@ -177,7 +188,8 @@ class CommentListGetFormTest(FormTestMixin, PaginationTestMixin, TestCase):
                 "thread_id": "deadbeef",
                 "endorsed": False,
                 "page": 2,
-                "page_size": 13
+                "page_size": 13,
+                "requested_fields": set(),
             }
         )
 
@@ -202,3 +214,11 @@ class CommentListGetFormTest(FormTestMixin, PaginationTestMixin, TestCase):
     def test_invalid_endorsed(self):
         self.form_data["endorsed"] = "invalid-boolean"
         self.assert_error("endorsed", "Invalid Boolean Value.")
+
+    def test_requested_fields(self):
+        self.form_data["requested_fields"] = {"profile_image"}
+        form = self.get_form(expected_valid=True)
+        self.assertEqual(
+            form.cleaned_data["requested_fields"],
+            {"profile_image"},
+        )

@@ -1,29 +1,35 @@
 """
 Utilities related to API views
 """
-import functools
-from django.core.exceptions import NON_FIELD_ERRORS, ValidationError, ObjectDoesNotExist
+from django.core.exceptions import NON_FIELD_ERRORS, ObjectDoesNotExist, ValidationError
 from django.http import Http404
 from django.utils.translation import ugettext as _
-
-from rest_framework import status, response
+from edx_rest_framework_extensions.authentication import JwtAuthentication
+from rest_framework import status
 from rest_framework.exceptions import APIException
+from rest_framework.generics import GenericAPIView
+from rest_framework.mixins import RetrieveModelMixin, UpdateModelMixin
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import clone_request
 from rest_framework.response import Response
-from rest_framework.mixins import RetrieveModelMixin, UpdateModelMixin
-from rest_framework.generics import GenericAPIView
-
-from lms.djangoapps.courseware.courses import get_course_with_access
-from lms.djangoapps.courseware.courseware_access_exception import CoursewareAccessException
-from opaque_keys.edx.keys import CourseKey
-from xmodule.modulestore.django import modulestore
+from six import text_type
 
 from openedx.core.lib.api.authentication import (
-    SessionAuthenticationAllowInactiveUser,
     OAuth2AuthenticationAllowInactiveUser,
+    SessionAuthenticationAllowInactiveUser
 )
 from openedx.core.lib.api.permissions import IsUserInUrl
+
+
+class DeveloperErrorResponseException(Exception):
+    """
+    An exception class that wraps a DRF Response object so that
+    it does not need to be recreated when returning a response.
+    Intended to be used with and by DeveloperErrorViewMixin.
+    """
+    def __init__(self, response):
+        super(DeveloperErrorResponseException, self).__init__()
+        self.response = response
 
 
 class DeveloperErrorViewMixin(object):
@@ -32,13 +38,23 @@ class DeveloperErrorViewMixin(object):
     (auth failure, method not allowed, etc.) by generating an error response
     conforming to our API conventions with a developer message.
     """
-    def make_error_response(self, status_code, developer_message):
+    @classmethod
+    def api_error(cls, status_code, developer_message, error_code=None):
+        response = cls._make_error_response(status_code, developer_message, error_code)
+        return DeveloperErrorResponseException(response)
+
+    @classmethod
+    def _make_error_response(cls, status_code, developer_message, error_code=None):
         """
         Build an error response with the given status code and developer_message
         """
-        return Response({"developer_message": developer_message}, status=status_code)
+        error_data = {"developer_message": developer_message}
+        if error_code is not None:
+            error_data['error_code'] = error_code
+        return Response(error_data, status=status_code)
 
-    def make_validation_error_response(self, validation_error):
+    @classmethod
+    def _make_validation_error_response(cls, validation_error):
         """
         Build a 400 error response from the given ValidationError
         """
@@ -59,19 +75,20 @@ class DeveloperErrorViewMixin(object):
                 }
             return Response(response_obj, status=400)
         else:
-            return self.make_error_response(400, validation_error.messages[0])
+            return cls._make_error_response(400, validation_error.messages[0])
 
     def handle_exception(self, exc):
         """
         Generalized helper method for managing specific API exception workflows
         """
-
-        if isinstance(exc, APIException):
-            return self.make_error_response(exc.status_code, exc.detail)
+        if isinstance(exc, DeveloperErrorResponseException):
+            return exc.response
+        elif isinstance(exc, APIException):
+            return self._make_error_response(exc.status_code, exc.detail)
         elif isinstance(exc, Http404) or isinstance(exc, ObjectDoesNotExist):
-            return self.make_error_response(404, exc.message or "Not found.")
+            return self._make_error_response(404, text_type(exc) or "Not found.")
         elif isinstance(exc, ValidationError):
-            return self.make_validation_error_response(exc)
+            return self._make_validation_error_response(exc)
         else:
             raise
 
@@ -86,36 +103,6 @@ class ExpandableFieldViewMixin(object):
         return result
 
 
-def view_course_access(depth=0, access_action='load', check_for_milestones=False):
-    """
-    Method decorator for an API endpoint that verifies the user has access to the course.
-    """
-    def _decorator(func):
-        """Outer method decorator."""
-        @functools.wraps(func)
-        def _wrapper(self, request, *args, **kwargs):
-            """
-            Expects kwargs to contain 'course_id'.
-            Passes the course descriptor to the given decorated function.
-            Raises 404 if access to course is disallowed.
-            """
-            course_id = CourseKey.from_string(kwargs.pop('course_id'))
-            with modulestore().bulk_operations(course_id):
-                try:
-                    course = get_course_with_access(
-                        request.user,
-                        access_action,
-                        course_id,
-                        depth=depth,
-                        check_if_enrolled=True,
-                    )
-                except CoursewareAccessException as error:
-                    return response.Response(data=error.to_json(), status=status.HTTP_404_NOT_FOUND)
-                return func(self, request, course=course, *args, **kwargs)
-        return _wrapper
-    return _decorator
-
-
 def view_auth_classes(is_user=False, is_authenticated=True):
     """
     Function and class decorator that abstracts the authentication and permission checks for api views.
@@ -126,6 +113,7 @@ def view_auth_classes(is_user=False, is_authenticated=True):
         If is_user is True, also requires username in URL matches the request user.
         """
         func_or_class.authentication_classes = (
+            JwtAuthentication,
             OAuth2AuthenticationAllowInactiveUser,
             SessionAuthenticationAllowInactiveUser
         )

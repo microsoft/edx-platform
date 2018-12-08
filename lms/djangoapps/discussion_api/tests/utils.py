@@ -1,10 +1,21 @@
 """
 Discussion API test utilities
 """
+from __future__ import unicode_literals
+
+import hashlib
 import json
 import re
+from contextlib import closing
+from datetime import datetime
 
 import httpretty
+from PIL import Image
+from pytz import UTC
+
+from openedx.core.djangoapps.profile_images.images import create_profile_images
+from openedx.core.djangoapps.profile_images.tests.helpers import make_image_file
+from openedx.core.djangoapps.user_api.accounts.image_helpers import get_profile_image_names, set_has_profile_image
 
 
 def _get_thread_callback(thread_data):
@@ -60,6 +71,8 @@ class CommentsServiceMockMixin(object):
     """Mixin with utility methods for mocking the comments service"""
     def register_get_threads_response(self, threads, page, num_pages):
         """Register a mock response for GET on the CS thread list endpoint"""
+        assert httpretty.is_enabled(), 'httpretty must be enabled to mock calls.'
+
         httpretty.register_uri(
             httpretty.GET,
             "http://localhost:4567/api/v1/threads",
@@ -74,6 +87,7 @@ class CommentsServiceMockMixin(object):
 
     def register_get_threads_search_response(self, threads, rewrite, num_pages=1):
         """Register a mock response for GET on the CS thread search endpoint"""
+        assert httpretty.is_enabled(), 'httpretty must be enabled to mock calls.'
         httpretty.register_uri(
             httpretty.GET,
             "http://localhost:4567/api/v1/search/threads",
@@ -89,6 +103,7 @@ class CommentsServiceMockMixin(object):
 
     def register_post_thread_response(self, thread_data):
         """Register a mock response for POST on the CS commentable endpoint"""
+        assert httpretty.is_enabled(), 'httpretty must be enabled to mock calls.'
         httpretty.register_uri(
             httpretty.POST,
             re.compile(r"http://localhost:4567/api/v1/(\w+)/threads"),
@@ -100,6 +115,7 @@ class CommentsServiceMockMixin(object):
         Register a mock response for PUT on the CS endpoint for the given
         thread_id.
         """
+        assert httpretty.is_enabled(), 'httpretty must be enabled to mock calls.'
         httpretty.register_uri(
             httpretty.PUT,
             "http://localhost:4567/api/v1/threads/{}".format(thread_data["id"]),
@@ -108,6 +124,7 @@ class CommentsServiceMockMixin(object):
 
     def register_get_thread_error_response(self, thread_id, status_code):
         """Register a mock error response for GET on the CS thread endpoint."""
+        assert httpretty.is_enabled(), 'httpretty must be enabled to mock calls.'
         httpretty.register_uri(
             httpretty.GET,
             "http://localhost:4567/api/v1/threads/{id}".format(id=thread_id),
@@ -119,6 +136,7 @@ class CommentsServiceMockMixin(object):
         """
         Register a mock response for GET on the CS thread instance endpoint.
         """
+        assert httpretty.is_enabled(), 'httpretty must be enabled to mock calls.'
         httpretty.register_uri(
             httpretty.GET,
             "http://localhost:4567/api/v1/threads/{id}".format(id=thread["id"]),
@@ -137,6 +155,7 @@ class CommentsServiceMockMixin(object):
         else:
             url = "http://localhost:4567/api/v1/threads/{}/comments".format(thread_id)
 
+        assert httpretty.is_enabled(), 'httpretty must be enabled to mock calls.'
         httpretty.register_uri(
             httpretty.POST,
             url,
@@ -150,6 +169,7 @@ class CommentsServiceMockMixin(object):
         """
         thread_id = comment_data["thread_id"]
         parent_id = comment_data.get("parent_id")
+        assert httpretty.is_enabled(), 'httpretty must be enabled to mock calls.'
         httpretty.register_uri(
             httpretty.PUT,
             "http://localhost:4567/api/v1/comments/{}".format(comment_data["id"]),
@@ -161,6 +181,7 @@ class CommentsServiceMockMixin(object):
         Register a mock error response for GET on the CS comment instance
         endpoint.
         """
+        assert httpretty.is_enabled(), 'httpretty must be enabled to mock calls.'
         httpretty.register_uri(
             httpretty.GET,
             "http://localhost:4567/api/v1/comments/{id}".format(id=comment_id),
@@ -173,6 +194,7 @@ class CommentsServiceMockMixin(object):
         Register a mock response for GET on the CS comment instance endpoint.
         """
         comment = make_minimal_cs_comment(response_overrides)
+        assert httpretty.is_enabled(), 'httpretty must be enabled to mock calls.'
         httpretty.register_uri(
             httpretty.GET,
             "http://localhost:4567/api/v1/comments/{id}".format(id=comment["id"]),
@@ -182,6 +204,7 @@ class CommentsServiceMockMixin(object):
 
     def register_get_user_response(self, user, subscribed_thread_ids=None, upvoted_ids=None):
         """Register a mock response for GET on the CS user instance endpoint"""
+        assert httpretty.is_enabled(), 'httpretty must be enabled to mock calls.'
         httpretty.register_uri(
             httpretty.GET,
             "http://localhost:4567/api/v1/users/{id}".format(id=user.id),
@@ -193,8 +216,19 @@ class CommentsServiceMockMixin(object):
             status=200
         )
 
+    def register_get_user_retire_response(self, user, status=200, body=""):
+        """Register a mock response for GET on the CS user retirement endpoint"""
+        assert httpretty.is_enabled(), 'httpretty must be enabled to mock calls.'
+        httpretty.register_uri(
+            httpretty.POST,
+            "http://localhost:4567/api/v1/users/{id}/retire".format(id=user.id),
+            body=body,
+            status=status
+        )
+
     def register_subscribed_threads_response(self, user, threads, page, num_pages):
         """Register a mock response for GET on the CS user instance endpoint"""
+        assert httpretty.is_enabled(), 'httpretty must be enabled to mock calls.'
         httpretty.register_uri(
             httpretty.GET,
             "http://localhost:4567/api/v1/users/{}/subscribed_threads".format(user.id),
@@ -212,6 +246,7 @@ class CommentsServiceMockMixin(object):
         Register a mock response for POST and DELETE on the CS user subscription
         endpoint
         """
+        assert httpretty.is_enabled(), 'httpretty must be enabled to mock calls.'
         for method in [httpretty.POST, httpretty.DELETE]:
             httpretty.register_uri(
                 method,
@@ -225,6 +260,7 @@ class CommentsServiceMockMixin(object):
         Register a mock response for PUT and DELETE on the CS thread votes
         endpoint
         """
+        assert httpretty.is_enabled(), 'httpretty must be enabled to mock calls.'
         for method in [httpretty.PUT, httpretty.DELETE]:
             httpretty.register_uri(
                 method,
@@ -238,6 +274,7 @@ class CommentsServiceMockMixin(object):
         Register a mock response for PUT and DELETE on the CS comment votes
         endpoint
         """
+        assert httpretty.is_enabled(), 'httpretty must be enabled to mock calls.'
         for method in [httpretty.PUT, httpretty.DELETE]:
             httpretty.register_uri(
                 method,
@@ -248,6 +285,7 @@ class CommentsServiceMockMixin(object):
 
     def register_flag_response(self, content_type, content_id):
         """Register a mock response for PUT on the CS flag endpoints"""
+        assert httpretty.is_enabled(), 'httpretty must be enabled to mock calls.'
         for path in ["abuse_flag", "abuse_unflag"]:
             httpretty.register_uri(
                 "PUT",
@@ -259,6 +297,19 @@ class CommentsServiceMockMixin(object):
                 body=json.dumps({}),  # body is unused
                 status=200
             )
+
+    def register_read_response(self, user, content_type, content_id):
+        """
+        Register a mock response for POST on the CS 'read' endpoint
+        """
+        assert httpretty.is_enabled(), 'httpretty must be enabled to mock calls.'
+        httpretty.register_uri(
+            httpretty.POST,
+            "http://localhost:4567/api/v1/users/{id}/read".format(id=user.id),
+            params={'source_type': content_type, 'source_id': content_id},
+            body=json.dumps({}),  # body is unused
+            status=200
+        )
 
     def register_thread_flag_response(self, thread_id):
         """Register a mock response for PUT on the CS thread flag endpoints"""
@@ -272,6 +323,7 @@ class CommentsServiceMockMixin(object):
         """
         Register a mock response for DELETE on the CS thread instance endpoint
         """
+        assert httpretty.is_enabled(), 'httpretty must be enabled to mock calls.'
         httpretty.register_uri(
             httpretty.DELETE,
             "http://localhost:4567/api/v1/threads/{id}".format(id=thread_id),
@@ -283,6 +335,7 @@ class CommentsServiceMockMixin(object):
         """
         Register a mock response for DELETE on the CS comment instance endpoint
         """
+        assert httpretty.is_enabled(), 'httpretty must be enabled to mock calls.'
         httpretty.register_uri(
             httpretty.DELETE,
             "http://localhost:4567/api/v1/comments/{id}".format(id=comment_id),
@@ -314,6 +367,43 @@ class CommentsServiceMockMixin(object):
             content_type="application/merge-patch+json"
         )
 
+    def expected_thread_data(self, overrides=None):
+        """
+        Returns expected thread data in API response
+        """
+        response_data = {
+            "author": self.user.username,
+            "author_label": None,
+            "created_at": "1970-01-01T00:00:00Z",
+            "updated_at": "1970-01-01T00:00:00Z",
+            "raw_body": "Test body",
+            "rendered_body": "<p>Test body</p>",
+            "abuse_flagged": False,
+            "voted": False,
+            "vote_count": 0,
+            "editable_fields": ["abuse_flagged", "following", "raw_body", "read", "title", "topic_id", "type", "voted"],
+            "course_id": unicode(self.course.id),
+            "topic_id": "test_topic",
+            "group_id": None,
+            "group_name": None,
+            "title": "Test Title",
+            "pinned": False,
+            "closed": False,
+            "following": False,
+            "comment_count": 1,
+            "unread_comment_count": 0,
+            "comment_list_url": "http://testserver/api/discussion/v1/comments/?thread_id=test_thread",
+            "endorsed_comment_list_url": None,
+            "non_endorsed_comment_list_url": None,
+            "read": False,
+            "has_endorsed": False,
+            "id": "test_thread",
+            "type": "discussion",
+            "response_count": 0,
+        }
+        response_data.update(overrides or {})
+        return response_data
+
 
 def make_minimal_cs_thread(overrides=None):
     """
@@ -332,6 +422,7 @@ def make_minimal_cs_thread(overrides=None):
         "anonymous_to_peers": False,
         "created_at": "1970-01-01T00:00:00Z",
         "updated_at": "1970-01-01T00:00:00Z",
+        "last_activity_at": "1970-01-01T00:00:00Z",
         "thread_type": "discussion",
         "title": "dummy",
         "body": "dummy",
@@ -358,6 +449,7 @@ def make_minimal_cs_comment(overrides=None):
     ret = {
         "type": "comment",
         "id": "dummy",
+        "commentable_id": "dummy",
         "thread_id": "dummy",
         "parent_id": None,
         "user_id": "0",
@@ -370,6 +462,7 @@ def make_minimal_cs_comment(overrides=None):
         "abuse_flaggers": [],
         "votes": {"up_count": 0},
         "endorsed": False,
+        "child_count": 0,
         "children": [],
     }
     ret.update(overrides or {})
@@ -389,3 +482,56 @@ def make_paginated_api_response(results=None, count=0, num_pages=0, next_link=No
         },
         "results": results or []
     }
+
+
+class ProfileImageTestMixin(object):
+    """
+    Mixin with utility methods for user profile image
+    """
+
+    TEST_PROFILE_IMAGE_UPLOADED_AT = datetime(2002, 1, 9, 15, 43, 01, tzinfo=UTC)
+
+    def create_profile_image(self, user, storage):
+        """
+        Creates profile image for user and checks that created image exists in storage
+        """
+        with make_image_file() as image_file:
+            create_profile_images(image_file, get_profile_image_names(user.username))
+            self.check_images(user, storage)
+            set_has_profile_image(user.username, True, self.TEST_PROFILE_IMAGE_UPLOADED_AT)
+
+    def check_images(self, user, storage, exist=True):
+        """
+        If exist is True, make sure the images physically exist in storage
+        with correct sizes and formats.
+
+        If exist is False, make sure none of the images exist.
+        """
+        for size, name in get_profile_image_names(user.username).items():
+            if exist:
+                self.assertTrue(storage.exists(name))
+                with closing(Image.open(storage.path(name))) as img:
+                    self.assertEqual(img.size, (size, size))
+                    self.assertEqual(img.format, 'JPEG')
+            else:
+                self.assertFalse(storage.exists(name))
+
+    def get_expected_user_profile(self, username):
+        """
+        Returns the expected user profile data for a given username
+        """
+        url = 'http://example-storage.com/profile-images/{filename}_{{size}}.jpg?v={timestamp}'.format(
+            filename=hashlib.md5('secret' + username).hexdigest(),
+            timestamp=self.TEST_PROFILE_IMAGE_UPLOADED_AT.strftime("%s")
+        )
+        return {
+            'profile': {
+                'image': {
+                    'has_image': True,
+                    'image_url_full': url.format(size=500),
+                    'image_url_large': url.format(size=120),
+                    'image_url_medium': url.format(size=50),
+                    'image_url_small': url.format(size=30),
+                }
+            }
+        }

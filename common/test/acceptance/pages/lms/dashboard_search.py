@@ -3,7 +3,8 @@ Dashboard search
 """
 
 from bok_choy.page_object import PageObject
-from . import BASE_URL
+
+from common.test.acceptance.pages.lms import BASE_URL
 
 
 class DashboardSearchPage(PageObject):
@@ -17,7 +18,7 @@ class DashboardSearchPage(PageObject):
     @property
     def search_results(self):
         """ search results list showing """
-        return self.q(css='#dashboard-search-results')
+        return self.q(css='.search-results')
 
     def is_browser_on_page(self):
         """ did we find the search bar in the UI """

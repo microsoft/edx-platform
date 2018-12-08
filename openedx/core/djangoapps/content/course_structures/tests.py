@@ -2,8 +2,9 @@
 Course Structure Content sub-application test cases
 """
 import json
+from nose.plugins.attrib import attr
+from opaque_keys.edx.django.models import UsageKey
 
-from xmodule_django.models import UsageKey
 from xmodule.modulestore.django import SignalHandler
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
@@ -21,7 +22,12 @@ class SignalDisconnectTestMixin(object):
         super(SignalDisconnectTestMixin, self).setUp()
         SignalHandler.course_published.disconnect(listen_for_course_publish)
 
+    def tearDown(self):
+        SignalHandler.course_published.connect(listen_for_course_publish)
+        super(SignalDisconnectTestMixin, self).tearDown()
 
+
+@attr(shard=2)
 class CourseStructureTaskTests(ModuleStoreTestCase):
     """
     Test cases covering Course Structure task-related workflows
@@ -30,12 +36,12 @@ class CourseStructureTaskTests(ModuleStoreTestCase):
         super(CourseStructureTaskTests, self).setUp()
         self.course = CourseFactory.create(org='TestX', course='TS101', run='T1')
         self.section = ItemFactory.create(parent=self.course, category='chapter', display_name='Test Section')
-        self.discussion_module_1 = ItemFactory.create(
+        self.discussion_xblock_1 = ItemFactory.create(
             parent=self.course,
             category='discussion',
             discussion_id='test_discussion_id_1'
         )
-        self.discussion_module_2 = ItemFactory.create(
+        self.discussion_xblock_2 = ItemFactory.create(
             parent=self.course,
             category='discussion',
             discussion_id='test_discussion_id_2'

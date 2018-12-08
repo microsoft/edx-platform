@@ -2,16 +2,16 @@
 Python tests for the Survey models
 """
 
-import ddt
 from collections import OrderedDict
 
+import ddt
+from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.test.client import Client
-from django.contrib.auth.models import User
 
-from survey.exceptions import SurveyFormNotFound, SurveyFormNameAlreadyExists
-from django.core.exceptions import ValidationError
-from survey.models import SurveyForm, SurveyAnswer
+from survey.exceptions import SurveyFormNameAlreadyExists, SurveyFormNotFound
+from survey.models import SurveyAnswer, SurveyForm
 
 
 @ddt.ddt
@@ -19,6 +19,8 @@ class SurveyModelsTests(TestCase):
     """
     All tests for the Survey models.py file
     """
+    shard = 4
+
     def setUp(self):
         """
         Set up the test data used in the specific tests
@@ -169,12 +171,12 @@ class SurveyModelsTests(TestCase):
 
         all_answers = survey.get_answers()
         self.assertEquals(len(all_answers.keys()), 1)
-        self.assertTrue(self.student.id in all_answers)
+        self.assertIn(self.student.id, all_answers)
         self.assertEquals(all_answers[self.student.id], self.student_answers)
 
         answers = survey.get_answers(self.student)
         self.assertEquals(len(answers.keys()), 1)
-        self.assertTrue(self.student.id in answers)
+        self.assertIn(self.student.id, answers)
         self.assertEquals(all_answers[self.student.id], self.student_answers)
 
         # check that the course_id was set
@@ -205,19 +207,19 @@ class SurveyModelsTests(TestCase):
 
         all_answers = survey.get_answers()
         self.assertEquals(len(all_answers.keys()), 2)
-        self.assertTrue(self.student.id in all_answers)
-        self.assertTrue(self.student2.id in all_answers)
+        self.assertIn(self.student.id, all_answers)
+        self.assertIn(self.student2.id, all_answers)
         self.assertEquals(all_answers[self.student.id], self.student_answers)
         self.assertEquals(all_answers[self.student2.id], self.student2_answers)
 
         answers = survey.get_answers(self.student)
         self.assertEquals(len(answers.keys()), 1)
-        self.assertTrue(self.student.id in answers)
+        self.assertIn(self.student.id, answers)
         self.assertEquals(answers[self.student.id], self.student_answers)
 
         answers = survey.get_answers(self.student2)
         self.assertEquals(len(answers.keys()), 1)
-        self.assertTrue(self.student2.id in answers)
+        self.assertIn(self.student2.id, answers)
         self.assertEquals(answers[self.student2.id], self.student2_answers)
 
     def test_update_answers(self):
@@ -232,7 +234,7 @@ class SurveyModelsTests(TestCase):
 
         answers = survey.get_answers(self.student)
         self.assertEquals(len(answers.keys()), 1)
-        self.assertTrue(self.student.id in answers)
+        self.assertIn(self.student.id, answers)
         self.assertEquals(answers[self.student.id], self.student_answers)
 
         # update
@@ -240,7 +242,7 @@ class SurveyModelsTests(TestCase):
 
         answers = survey.get_answers(self.student)
         self.assertEquals(len(answers.keys()), 1)
-        self.assertTrue(self.student.id in answers)
+        self.assertIn(self.student.id, answers)
         self.assertEquals(answers[self.student.id], self.student_answers_update)
 
         # update with just a subset of the origin dataset
@@ -248,7 +250,7 @@ class SurveyModelsTests(TestCase):
 
         answers = survey.get_answers(self.student)
         self.assertEquals(len(answers.keys()), 1)
-        self.assertTrue(self.student.id in answers)
+        self.assertIn(self.student.id, answers)
         self.assertEquals(answers[self.student.id], self.student_answers_update2)
 
     def test_limit_num_users(self):
@@ -280,3 +282,28 @@ class SurveyModelsTests(TestCase):
         names = survey.get_field_names()
 
         self.assertEqual(sorted(names), ['ddl', 'field1', 'field2'])
+
+    def test_retire_user_successful(self):
+        survey = self._create_test_survey()
+        self.assertIsNotNone(survey)
+
+        survey.save_user_answers(self.student, self.student_answers, self.course_id)
+        survey.save_user_answers(self.student2, self.student2_answers, self.course_id)
+
+        retire_result = SurveyAnswer.retire_user(self.student.id)
+        self.assertTrue(retire_result)
+        answers = survey.get_answers(self.student)
+        blanked_out_student_answser = {key: '' for key in self.student_answers}
+        self.assertEquals(answers[self.student.id], blanked_out_student_answser)
+        self.assertEquals(survey.get_answers(self.student2)[self.student2.id], self.student2_answers)
+
+    def test_retire_user_not_exist(self):
+        survey = self._create_test_survey()
+        self.assertIsNotNone(survey)
+
+        survey.save_user_answers(self.student, self.student_answers, self.course_id)
+
+        retire_result = SurveyAnswer.retire_user(self.student2.id)
+        self.assertFalse(retire_result)
+        answers = survey.get_answers(self.student)
+        self.assertEquals(answers[self.student.id], self.student_answers)

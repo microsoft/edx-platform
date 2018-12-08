@@ -2,17 +2,18 @@
 """
 Tests for BlockNavigationTransformer.
 """
-import ddt
 from unittest import TestCase
+
+import ddt
 
 from lms.djangoapps.course_api.blocks.transformers.block_depth import BlockDepthTransformer
 from lms.djangoapps.course_api.blocks.transformers.navigation import BlockNavigationTransformer
-from openedx.core.lib.block_structure.tests.helpers import ChildrenMapTestMixin
-from openedx.core.lib.block_structure.block_structure import BlockStructureModulestoreData
-from openedx.core.lib.block_structure.factory import BlockStructureFactory
+from openedx.core.djangoapps.content.block_structure.block_structure import BlockStructureModulestoreData
+from openedx.core.djangoapps.content.block_structure.factory import BlockStructureFactory
+from openedx.core.djangoapps.content.block_structure.tests.helpers import ChildrenMapTestMixin
+from xmodule.modulestore import ModuleStoreEnum
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import SampleCourseFactory
-from xmodule.modulestore import ModuleStoreEnum
 
 
 @ddt.ddt
@@ -20,6 +21,7 @@ class BlockNavigationTransformerTestCase(TestCase, ChildrenMapTestMixin):
     """
     Course-agnostic test class for testing the Navigation transformer.
     """
+    shard = 4
 
     @ddt.data(
         (0, 0, [], []),
@@ -70,6 +72,7 @@ class BlockNavigationTransformerCourseTestCase(ModuleStoreTestCase):
     Uses SampleCourseFactory and Modulestore to test the Navigation transformer,
     specifically to test enforcement of the hide_from_toc field
     """
+    shard = 4
 
     def test_hide_from_toc(self):
         course_key = SampleCourseFactory.create().id
@@ -88,14 +91,14 @@ class BlockNavigationTransformerCourseTestCase(ModuleStoreTestCase):
         BlockNavigationTransformer.collect(block_structure)
         block_structure._collect_requested_xblock_fields()
 
-        self.assertTrue(block_structure.has_block(chapter_x_key))
+        self.assertIn(chapter_x_key, block_structure)
 
         # transform phase
         BlockDepthTransformer().transform(usage_info=None, block_structure=block_structure)
         BlockNavigationTransformer(0).transform(usage_info=None, block_structure=block_structure)
         block_structure._prune_unreachable()
 
-        self.assertTrue(block_structure.has_block(chapter_x_key))
+        self.assertIn(chapter_x_key, block_structure)
 
         course_descendants = block_structure.get_transformer_block_field(
             course_usage_key,

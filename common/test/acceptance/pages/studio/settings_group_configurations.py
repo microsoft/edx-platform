@@ -1,9 +1,8 @@
 """
 Course Group Configurations page.
 """
-from bok_choy.promise import EmptyPromise
-from ..common.utils import confirm_prompt
-from .course_page import CoursePage
+from common.test.acceptance.pages.common.utils import confirm_prompt
+from common.test.acceptance.pages.studio.course_page import CoursePage
 
 
 class GroupConfigurationsPage(CoursePage):
@@ -91,6 +90,17 @@ class GroupConfigurationsPage(CoursePage):
         Returns whether or not anything related to content experiments is present.
         """
         return self.q(css=self.experiment_groups_css).present or self.q(css=".experiment-groups-doc").present
+
+    @property
+    def enrollment_track_section_present(self):
+        return self.q(css='.wrapper-groups.content-groups.enrollment_track').present
+
+    @property
+    def enrollment_track_edit_present(self):
+        return self.q(css='.wrapper-groups.content-groups.enrollment_track .action.action-edit').present
+
+    def get_enrollment_groups(self):
+        return self.q(css='.wrapper-groups.content-groups.enrollment_track .collection-details .title').text
 
 
 class GroupConfiguration(object):
@@ -230,7 +240,7 @@ class GroupConfiguration(object):
         """
         Set group configuration name.
         """
-        self.find_css('.collection-name-input').first.fill(value)
+        return self.find_css('.collection-name-input').first.fill(value)
 
     @property
     def description(self):

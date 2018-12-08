@@ -3,11 +3,12 @@ Course API forms
 """
 
 from collections import namedtuple
-from django.core.exceptions import ValidationError
-from django.forms import Form, CharField
 
+from django.core.exceptions import ValidationError
+from django.forms import CharField, Form
 from opaque_keys import InvalidKeyError
 from opaque_keys.edx.keys import CourseKey
+
 from openedx.core.djangoapps.util.forms import ExtendedNullBooleanField
 
 
@@ -22,9 +23,6 @@ class UsernameValidatorMixin(object):
         as an anonymous user.
         """
         username = self.cleaned_data.get('username')
-        if not username:
-            if not self.initial['requesting_user'].is_anonymous():
-                raise ValidationError("A username is required for non-anonymous access.")
         return username or ''
 
 
@@ -50,6 +48,7 @@ class CourseListGetForm(UsernameValidatorMixin, Form):
     """
     A form to validate query parameters in the course list retrieval endpoint
     """
+    search_term = CharField(required=False)
     username = CharField(required=False)
     org = CharField(required=False)
 

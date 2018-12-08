@@ -8,20 +8,14 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.core.files.storage import get_storage_class
 from django.contrib.staticfiles.storage import staticfiles_storage
 
-from microsite_configuration import microsite
-
 from student.models import UserProfile
 from ..errors import UserNotFound
+from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 
 
 PROFILE_IMAGE_FILE_EXTENSION = 'jpg'   # All processed profile images are converted to JPEGs
-PROFILE_IMAGE_SIZES_MAP = {
-    'full': 500,
-    'large': 120,
-    'medium': 50,
-    'small': 30
-}
-_PROFILE_IMAGE_SIZES = PROFILE_IMAGE_SIZES_MAP.values()
+
+_PROFILE_IMAGE_SIZES = settings.PROFILE_IMAGE_SIZES_MAP.values()
 
 
 def get_profile_image_storage():
@@ -39,7 +33,8 @@ def _make_profile_image_name(username):
     Returns the user-specific part of the image filename, based on a hash of
     the username.
     """
-    return hashlib.md5(settings.PROFILE_IMAGE_SECRET_KEY + username).hexdigest()
+    hash_input = settings.PROFILE_IMAGE_SECRET_KEY + username
+    return hashlib.md5(hash_input.encode('utf-8')).hexdigest()
 
 
 def _get_profile_image_filename(name, size, file_extension=PROFILE_IMAGE_FILE_EXTENSION):
@@ -60,7 +55,7 @@ def _get_profile_image_urls(name, storage, file_extension=PROFILE_IMAGE_FILE_EXT
         )
         return '{}?v={}'.format(url, version) if version is not None else url
 
-    return {size_display_name: _make_url(size) for size_display_name, size in PROFILE_IMAGE_SIZES_MAP.items()}
+    return {size_display_name: _make_url(size) for size_display_name, size in settings.PROFILE_IMAGE_SIZES_MAP.items()}
 
 
 def get_profile_image_names(username):
@@ -121,7 +116,7 @@ def _get_default_profile_image_urls():
     TODO The result of this function should be memoized, but not in tests.
     """
     return _get_profile_image_urls(
-        microsite.get_value('PROFILE_IMAGE_DEFAULT_FILENAME', settings.PROFILE_IMAGE_DEFAULT_FILENAME),
+        configuration_helpers.get_value('PROFILE_IMAGE_DEFAULT_FILENAME', settings.PROFILE_IMAGE_DEFAULT_FILENAME),
         staticfiles_storage,
         file_extension=settings.PROFILE_IMAGE_DEFAULT_FILE_EXTENSION,
     )

@@ -2,7 +2,7 @@
 XBlock runtime implementations for edX Studio
 """
 
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 
 
 def handler_url(block, handler_name, suffix='', query='', thirdparty=False):
@@ -23,13 +23,3 @@ def handler_url(block, handler_name, suffix='', query='', thirdparty=False):
         url += '?' + query
 
     return url
-
-
-def local_resource_url(block, uri):
-    """
-    local_resource_url for Studio
-    """
-    return reverse('xblock_resource_url', kwargs={
-        'block_type': block.scope_ids.block_type,
-        'uri': uri,
-    })

@@ -15,9 +15,10 @@ import zipfile
 
 import mock
 from pytz import UTC
+from six import text_type
 import requests
 
-from . import new_loncapa_problem, test_capa_system, load_fixture
+from capa.tests.helpers import new_loncapa_problem, test_capa_system, load_fixture
 import calc
 
 from capa.responsetypes import LoncapaProblemError, \
@@ -31,7 +32,6 @@ from capa.tests.response_xml_factory import (
     CustomResponseXMLFactory,
     FormulaResponseXMLFactory,
     ImageResponseXMLFactory,
-    JavascriptResponseXMLFactory,
     MultipleChoiceResponseXMLFactory,
     NumericalResponseXMLFactory,
     OptionResponseXMLFactory,
@@ -71,7 +71,7 @@ class ResponseTest(unittest.TestCase):
 
     def assert_answer_format(self, problem):  # pylint: disable=missing-docstring
         answers = problem.get_question_answers()
-        self.assertTrue(answers['1_2_1'] is not None)
+        self.assertIsNotNone(answers['1_2_1'])
 
     def assert_multiple_grade(self, problem, correct_answers, incorrect_answers):  # pylint: disable=missing-docstring
         for input_str in correct_answers:
@@ -168,6 +168,35 @@ class MultiChoiceResponseTest(ResponseTest):  # pylint: disable=missing-docstrin
 
         correct_map = problem.grade_answers({'1_2_1': 'choice_2'})
         self.assertAlmostEqual(correct_map.get_npoints('1_2_1'), 0)
+
+    def test_contextualized_choices(self):
+        script = textwrap.dedent("""
+            a = 2
+            b = 9
+            c = a + b
+
+            ok0 = c % 2 == 0 # check remainder modulo 2
+            text0 = "$a + $b is even"
+
+            ok1 = c % 2 == 1 # check remainder modulo 2
+            text1 = "$a + $b is odd"
+
+            ok2 = "partial"
+            text2 = "infinity may be both"
+        """)
+        choices = ["$ok0", "$ok1", "$ok2"]
+        choice_names = ["$text0 ... (should be $ok0)",
+                        "$text1 ... (should be $ok1)",
+                        "$text2 ... (should be $ok2)"]
+        problem = self.build_problem(script=script,
+                                     choices=choices,
+                                     choice_names=choice_names,
+                                     credit_type='points')
+
+        # Ensure the expected correctness and choice names
+        self.assert_grade(problem, 'choice_2 + 9 is even ... (should be False)', 'incorrect')
+        self.assert_grade(problem, 'choice_2 + 9 is odd ... (should be True)', 'correct')
+        self.assert_grade(problem, 'choice_infinity may be both ... (should be partial)', 'partially-correct')
 
 
 class TrueFalseResponseTest(ResponseTest):  # pylint: disable=missing-docstring
@@ -280,34 +309,6 @@ class ImageResponseTest(ResponseTest):  # pylint: disable=missing-docstring
 class SymbolicResponseTest(ResponseTest):  # pylint: disable=missing-docstring
     xml_factory_class = SymbolicResponseXMLFactory
 
-    def test_grade_single_input_correct(self):
-        problem = self.build_problem(math_display=True, expect="2*x+3*y")
-
-        # Correct answers
-        correct_inputs = [
-            ('2x+3y', textwrap.dedent("""
-                <math xmlns="http://www.w3.org/1998/Math/MathML">
-                    <mstyle displaystyle="true">
-                    <mn>2</mn><mo>*</mo><mi>x</mi><mo>+</mo><mn>3</mn><mo>*</mo><mi>y</mi>
-                    </mstyle></math>"""),
-             'snuggletex_2x+3y.xml'),
-
-            ('x+x+3y', textwrap.dedent("""
-                <math xmlns="http://www.w3.org/1998/Math/MathML">
-                    <mstyle displaystyle="true">
-                    <mi>x</mi><mo>+</mo><mi>x</mi><mo>+</mo><mn>3</mn><mo>*</mo><mi>y</mi>
-                    </mstyle></math>"""),
-             'snuggletex_x+x+3y.xml'),
-        ]
-
-        for (input_str, input_mathml, server_fixture) in correct_inputs:
-            print "Testing input: {0}".format(input_str)
-            server_resp = load_fixture(server_fixture)
-            self._assert_symbolic_grade(
-                problem, input_str, input_mathml,
-                'correct', snuggletex_resp=server_resp
-            )
-
     def test_grade_single_input_incorrect(self):
         problem = self.build_problem(math_display=True, expect="2*x+3*y")
 
@@ -323,23 +324,6 @@ class SymbolicResponseTest(ResponseTest):  # pylint: disable=missing-docstring
 
         for (input_str, input_mathml) in incorrect_inputs:
             self._assert_symbolic_grade(problem, input_str, input_mathml, 'incorrect')
-
-    def test_complex_number_grade_correct(self):
-        problem = self.build_problem(
-            math_display=True,
-            expect="[[cos(theta),i*sin(theta)],[i*sin(theta),cos(theta)]]",
-            options=["matrix", "imaginary"]
-        )
-
-        correct_snuggletex = load_fixture('snuggletex_correct.html')
-        dynamath_input = load_fixture('dynamath_input.txt')
-        student_response = "cos(theta)*[[1,0],[0,1]] + i*sin(theta)*[[0,1],[1,0]]"
-
-        self._assert_symbolic_grade(
-            problem, student_response, dynamath_input,
-            'correct',
-            snuggletex_resp=correct_snuggletex
-        )
 
     def test_complex_number_grade_incorrect(self):
 
@@ -658,7 +642,7 @@ class StringResponseTest(ResponseTest):  # pylint: disable=missing-docstring
             "Martin Luther King"
         ]
 
-        problem = self.build_problem(answer="\w*\.?.*Luther King\s*.*", case_sensitive=True, regexp=True)
+        problem = self.build_problem(answer=r"\w*\.?.*Luther King\s*.*", case_sensitive=True, regexp=True)
 
         for answer in answers:
             self.assert_grade(problem, answer, "correct")
@@ -699,7 +683,7 @@ class StringResponseTest(ResponseTest):  # pylint: disable=missing-docstring
         self.assert_grade(problem, u"o", "incorrect")
 
     def test_backslash_and_unicode_regexps(self):
-        """
+        r"""
         Test some special cases of [unicode] regexps.
 
         One needs to use either r'' strings or write real `repr` of unicode strings, because of the following
@@ -715,14 +699,14 @@ class StringResponseTest(ResponseTest):  # pylint: disable=missing-docstring
             So  a\d in front-end editor will become a\\\\d in xml,  so it will match a1 as student answer.
         """
         problem = self.build_problem(answer=ur"5\\æ", case_sensitive=False, regexp=True)
-        self.assert_grade(problem, u"5\æ", "correct")
+        self.assert_grade(problem, ur"5\æ", "correct")
 
         problem = self.build_problem(answer=u"5\\\\æ", case_sensitive=False, regexp=True)
-        self.assert_grade(problem, u"5\æ", "correct")
+        self.assert_grade(problem, ur"5\æ", "correct")
 
     def test_backslash(self):
         problem = self.build_problem(answer=u"a\\\\c1", case_sensitive=False, regexp=True)
-        self.assert_grade(problem, u"a\c1", "correct")
+        self.assert_grade(problem, ur"a\c1", "correct")
 
     def test_special_chars(self):
         problem = self.build_problem(answer=ur"a \s1", case_sensitive=False, regexp=True)
@@ -815,7 +799,7 @@ class StringResponseTest(ResponseTest):  # pylint: disable=missing-docstring
         problem = self.build_problem(answer="a2", case_sensitive=False, regexp=True, additional_answers=['?\\d?'])
         with self.assertRaises(Exception) as cm:
             self.assert_grade(problem, "a3", "correct")
-        exception_message = cm.exception.message
+        exception_message = text_type(cm.exception)
         self.assertIn("nothing to repeat", exception_message)
 
     def test_hints(self):
@@ -945,6 +929,13 @@ class StringResponseTest(ResponseTest):  # pylint: disable=missing-docstring
         correct_map = problem.grade_answers({'1_2_1': '2'})
         hint = correct_map.get_hint('1_2_1')
         self.assertEqual(hint, self._get_random_number_result(problem.seed))
+
+    def test_empty_answer_graded_as_incorrect(self):
+        """
+        Tests that problem should be graded incorrect if blank space is chosen as answer
+        """
+        problem = self.build_problem(answer=" ", case_sensitive=False, regexp=True)
+        self.assert_grade(problem, u" ", "incorrect")
 
 
 class CodeResponseTest(ResponseTest):  # pylint: disable=missing-docstring
@@ -1285,45 +1276,25 @@ class ChoiceResponseTest(ResponseTest):  # pylint: disable=missing-docstring
         correct_map = problem.grade_answers({})
         self.assertEqual(correct_map.get_correctness('1_2_1'), 'incorrect')
 
+    def test_contextualized_choices(self):
+        script = textwrap.dedent("""
+            a = 6
+            b = 4
+            c = a + b
 
-class JavascriptResponseTest(ResponseTest):  # pylint: disable=missing-docstring
-    xml_factory_class = JavascriptResponseXMLFactory
+            ok0 = c % 2 == 0 # check remainder modulo 2
+            ok1 = c % 3 == 0 # check remainder modulo 3
+            ok2 = c % 5 == 0 # check remainder modulo 5
+            ok3 = not any([ok0, ok1, ok2])
+        """)
+        choices = ["$ok0", "$ok1", "$ok2", "$ok3"]
+        problem = self.build_problem(script=script,
+                                     choice_type='checkbox',
+                                     choices=choices)
 
-    def test_grade(self):
-        # Compile coffee files into javascript used by the response
-        coffee_file_path = os.path.dirname(__file__) + "/test_files/js/*.coffee"
-        os.system("node_modules/.bin/coffee -c %s" % (coffee_file_path))
-
-        capa_system = test_capa_system()
-        capa_system.can_execute_unsafe_code = lambda: True
-        problem = self.build_problem(
-            capa_system=capa_system,
-            generator_src="test_problem_generator.js",
-            grader_src="test_problem_grader.js",
-            display_class="TestProblemDisplay",
-            display_src="test_problem_display.js",
-            param_dict={'value': '4'},
-        )
-
-        # Test that we get graded correctly
-        self.assert_grade(problem, json.dumps({0: 4}), "correct")
-        self.assert_grade(problem, json.dumps({0: 5}), "incorrect")
-
-    def test_cant_execute_javascript(self):
-        # If the system says to disallow unsafe code execution, then making
-        # this problem will raise an exception.
-        capa_system = test_capa_system()
-        capa_system.can_execute_unsafe_code = lambda: False
-
-        with self.assertRaises(LoncapaProblemError):
-            self.build_problem(
-                capa_system=capa_system,
-                generator_src="test_problem_generator.js",
-                grader_src="test_problem_grader.js",
-                display_class="TestProblemDisplay",
-                display_src="test_problem_display.js",
-                param_dict={'value': '4'},
-            )
+        # Ensure the expected correctness
+        self.assert_grade(problem, ['choice_0', 'choice_2'], 'correct')
+        self.assert_grade(problem, ['choice_1', 'choice_3'], 'incorrect')
 
 
 class NumericalResponseTest(ResponseTest):  # pylint: disable=missing-docstring
@@ -1334,7 +1305,7 @@ class NumericalResponseTest(ResponseTest):  # pylint: disable=missing-docstring
     # For simple things its not worth the effort.
     def test_grade_range_tolerance(self):
         problem_setup = [
-            # [given_asnwer, [list of correct responses], [list of incorrect responses]]
+            # [given_answer, [list of correct responses], [list of incorrect responses]]
             ['[5, 7)', ['5', '6', '6.999'], ['4.999', '7']],
             ['[1.6e-5, 1.9e24)', ['0.000016', '1.6*10^-5', '1.59e24'], ['1.59e-5', '1.9e24', '1.9*10^24']],
             ['[0, 1.6e-5]', ['1.6*10^-5'], ["2"]],
@@ -1343,6 +1314,54 @@ class NumericalResponseTest(ResponseTest):  # pylint: disable=missing-docstring
         for given_answer, correct_responses, incorrect_responses in problem_setup:
             problem = self.build_problem(answer=given_answer)
             self.assert_multiple_grade(problem, correct_responses, incorrect_responses)
+
+    def test_additional_answer_grading(self):
+        """
+        Test additional answers are graded correct with their associated correcthint.
+        """
+        primary_answer = '100'
+        primary_correcthint = 'primary feedback'
+        additional_answers = {
+            '1': '1. additional feedback',
+            '2': '2. additional feedback',
+            '4': '4. additional feedback',
+            '5': ''
+        }
+        problem = self.build_problem(
+            answer=primary_answer,
+            additional_answers=additional_answers,
+            correcthint=primary_correcthint
+        )
+
+        # Assert primary answer is graded correctly.
+        correct_map = problem.grade_answers({'1_2_1': primary_answer})
+        self.assertEqual(correct_map.get_correctness('1_2_1'), 'correct')
+        self.assertIn(primary_correcthint, correct_map.get_msg('1_2_1'))
+
+        # Assert additional answers are graded correct
+        for answer, correcthint in additional_answers.items():
+            correct_map = problem.grade_answers({'1_2_1': answer})
+            self.assertEqual(correct_map.get_correctness('1_2_1'), 'correct')
+            self.assertIn(correcthint, correct_map.get_msg('1_2_1'))
+
+    def test_additional_answer_get_score(self):
+        """
+        Test `get_score` is working for additional answers.
+        """
+        problem = self.build_problem(answer='100', additional_answers={'1': ''})
+        responder = problem.responders.values()[0]
+
+        # Check primary answer.
+        new_cmap = responder.get_score({'1_2_1': '100'})
+        self.assertEqual(new_cmap.get_correctness('1_2_1'), 'correct')
+
+        # Check additional answer.
+        new_cmap = responder.get_score({'1_2_1': '1'})
+        self.assertEqual(new_cmap.get_correctness('1_2_1'), 'correct')
+
+        # Check any wrong answer.
+        new_cmap = responder.get_score({'1_2_1': '2'})
+        self.assertEqual(new_cmap.get_correctness('1_2_1'), 'incorrect')
 
     def test_grade_range_tolerance_partial_credit(self):
         problem_setup = [
@@ -1607,7 +1626,7 @@ class NumericalResponseTest(ResponseTest):  # pylint: disable=missing-docstring
 
         errors = [  # (exception raised, message to student)
             (calc.UndefinedVariable("x"), r"You may not use variables \(x\) in numerical problems"),
-            (ValueError("factorial() mess-up"), "factorial function evaluated outside its domain"),
+            (ValueError("factorial() mess-up"), "Factorial function evaluated outside its domain"),
             (ValueError(), "Could not interpret '.*' as a number"),
             (pyparsing.ParseException("oopsie"), "Invalid math syntax"),
             (ZeroDivisionError(), "Could not interpret '.*' as a number")

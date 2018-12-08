@@ -1,39 +1,33 @@
-<div class="status already-authenticated-msg hidden">
-    <% if (context.currentProvider) { %>
-        <p class="message-copy">
-            <%- _.sprintf( gettext("You have successfully signed into %(currentProvider)s, but your %(currentProvider)s account does not have a linked %(platformName)s account. To link your accounts, sign in now using your %(platformName)s password."), context ) %>
-        </p>
-    <% } %>
+<div class="js-form-feedback" aria-live="assertive" tabindex="-1">
 </div>
 
-<div class="js-reset-success status submission-success hidden">
-    <h4 class="message-title"><%- gettext("Password Reset Email Sent") %></h4>
-    <div class="message-copy">
-        <p>
-            <%- gettext("We've sent instructions for resetting your password to the email address you provided.") %>
-        </p>
-    </div>
+<% if ( context.createAccountOption !== false && !context.syncLearnerProfileData && !(context.enterpriseName && context.currentProvider) ) { %>
+<div class="toggle-form">
+    <span class="text"><%- gettext("First time here?") %></span>
+    <a href="#login" class="form-toggle" data-type="register"><%- gettext("Create an Account.") %></a>
 </div>
-
-<div class="status submission-error hidden" aria-live="polite">
-    <h4 class="message-title"><%- gettext("We couldn't sign you in.") %></h4>
-    <ul class="message-copy"></ul>
-</div>
-
-<% if (context.errorMessage) { %>
-    <div class="status submission-error">
-        <h4 class="message-title"><%- _.sprintf( gettext("An error occurred when signing you in to %(platformName)s."), context ) %></h4>
-        <ul class="message-copy"><%- context.errorMessage %></ul>
-    </div>
 <% } %>
 
-<form id="login" class="login-form" tabindex="-1">
+<% // Hide SSO related messages if we are not in the SSO pipeline.  %>
+<% if (context.enterpriseName && context.currentProvider) { %>
+    <% if (context.pipelineUserDetails && context.pipelineUserDetails.email) { %>
+        <h2><%- gettext("Sign in to continue learning as {email}").replace("{email}", context.pipelineUserDetails.email) %></h2>
+    <% } else { %>
+        <h2><%- gettext("Sign in to continue learning") %></h2>
+    <% } %>
+    <p>
+        <%- gettext("You already have an edX account with your {enterprise_name} email address.").replace(/{enterprise_name}/g, context.enterpriseName) %>
+        <% if (context.syncLearnerProfileData) {
+            %><%- gettext("Going forward, your account information will be updated and maintained by {enterprise_name}.").replace(/{enterprise_name}/g, context.enterpriseName) %>
+        <% } %>
+        <%- gettext("You can view your information or unlink from {enterprise_name} anytime in your Account Settings.").replace(/{enterprise_name}/g, context.enterpriseName) %>
+    </p>
+    <p><%- gettext("To continue learning with this account, sign in below.") %></p>
+<% } else { %>
+    <h2><%- gettext("Sign In") %></h2>
+<% } %>
 
-    <div class="section-title lines">
-        <h2>
-            <span class="text"><%- gettext("Sign in") %></span>
-        </h2>
-    </div>
+<form id="login" class="login-form" tabindex="-1" method="POST">
 
     <p class="sr">
         <% if ( context.providers.length > 0 && !context.currentProvider || context.hasSecondaryProviders ) { %>
@@ -51,15 +45,19 @@
     <% if ( context.providers.length > 0 && !context.currentProvider || context.hasSecondaryProviders ) { %>
     <div class="login-providers">
         <div class="section-title lines">
-            <h2>
+            <h3>
                 <span class="text"><%- gettext("or sign in with") %></span>
-            </h2>
+            </h3>
         </div>
 
         <% _.each( context.providers, function( provider ) {
             if ( provider.loginUrl ) { %>
                 <button type="button" class="button button-primary button-<%- provider.id %> login-provider login-<%- provider.id %>" data-provider-url="<%- provider.loginUrl %>">
-                    <div class="icon fa <%- provider.iconClass %>" aria-hidden="true"></div>
+                    <div class="icon <% if ( provider.iconClass ) { %>fa <%- provider.iconClass %><% } %>" aria-hidden="true">
+                        <% if ( provider.iconImage ) { %>
+                            <img class="icon-image" src="<%- provider.iconImage %>" alt="<%- provider.name %> icon" />
+                        <% } %>
+                    </div>
                     <span aria-hidden="true"><%- provider.name %></span>
                     <span class="sr"><%- _.sprintf( gettext("Sign in with %(providerName)s"), {providerName: provider.name} ) %></span>
                 </button>
@@ -75,11 +73,3 @@
     <% } %>
 </form>
 
-<div class="toggle-form">
-    <div class="section-title">
-        <h2>
-            <span class="text"><%- _.sprintf( gettext("New to %(platformName)s?"), context ) %></span>
-        </h2>
-    </div>
-    <button class="nav-btn form-toggle" data-type="register"><%- gettext("Create an account") %></button>
-</div>

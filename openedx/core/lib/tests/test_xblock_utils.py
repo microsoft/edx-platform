@@ -1,32 +1,32 @@
 """
 Tests for xblock_utils.py
 """
-from __future__ import unicode_literals, absolute_import
+from __future__ import absolute_import, unicode_literals
 
-import ddt
 import uuid
 
+import ddt
 from django.test.client import RequestFactory
+from nose.plugins.attrib import attr
+from web_fragments.fragment import Fragment
 
-from courseware.models import StudentModule  # pylint: disable=import-error
-from lms.djangoapps.lms_xblock.runtime import quote_slashes
-from xblock.fragment import Fragment
+from openedx.core.lib.url_utils import quote_slashes
+from openedx.core.lib.xblock_builtin import get_css_dependencies, get_js_dependencies
+from openedx.core.lib.xblock_utils import (
+    replace_course_urls,
+    replace_jump_to_id_urls,
+    replace_static_urls,
+    request_token,
+    sanitize_html_id,
+    wrap_fragment,
+    wrap_xblock
+)
 from xmodule.modulestore import ModuleStoreEnum
 from xmodule.modulestore.tests.django_utils import SharedModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
 
-from openedx.core.lib.xblock_utils import (
-    wrap_fragment,
-    request_token,
-    wrap_xblock,
-    replace_jump_to_id_urls,
-    replace_course_urls,
-    replace_static_urls,
-    grade_histogram,
-    sanitize_html_id
-)
 
-
+@attr(shard=2)
 @ddt.ddt
 class TestXblockUtils(SharedModuleStoreTestCase):
     """
@@ -48,9 +48,6 @@ class TestXblockUtils(SharedModuleStoreTestCase):
             number='TS02',
             run='2015'
         )
-
-    def setUp(self):
-        super(TestXblockUtils, self).setUp()
 
     def create_fragment(self, content=None):
         """
@@ -103,7 +100,7 @@ class TestXblockUtils(SharedModuleStoreTestCase):
             block=course,
             view='baseview',
             frag=fragment,
-            context=None,
+            context={"wrap_xblock_data": {"custom-attribute": "custom-value"}},
             usage_id_serializer=lambda usage_id: quote_slashes(unicode(usage_id)),
             request_token=uuid.uuid1().get_hex()
         )
@@ -112,6 +109,7 @@ class TestXblockUtils(SharedModuleStoreTestCase):
         self.assertIn('data-runtime-class="TestRuntime"', test_wrap_output.content)
         self.assertIn(data_usage_id, test_wrap_output.content)
         self.assertIn('<h1>Test!</h1>', test_wrap_output.content)
+        self.assertIn('data-custom-attribute="custom-value"', test_wrap_output.content)
         self.assertEqual(test_wrap_output.resources[0].data, u'body {background-color:red;}')
         self.assertEqual(test_wrap_output.resources[1].data, 'alert("Hi!");')
 
@@ -181,3 +179,41 @@ class TestXblockUtils(SharedModuleStoreTestCase):
         clean_string = sanitize_html_id(dirty_string)
 
         self.assertEqual(clean_string, 'I_have_un_allowed_characters')
+
+    @ddt.data(
+        (True, ["combined.css"]),
+        (False, ["a.css", "b.css", "c.css"]),
+    )
+    @ddt.unpack
+    def test_get_css_dependencies(self, pipeline_enabled, expected_css_dependencies):
+        """
+        Verify that `get_css_dependencies` returns correct list of files.
+        """
+        pipeline_css = {
+            'style-group': {
+                'source_filenames': ["a.css", "b.css", "c.css"],
+                'output_filename': "combined.css"
+            }
+        }
+        with self.settings(PIPELINE_ENABLED=pipeline_enabled, PIPELINE_CSS=pipeline_css):
+            css_dependencies = get_css_dependencies("style-group")
+            self.assertEqual(css_dependencies, expected_css_dependencies)
+
+    @ddt.data(
+        (True, ["combined.js"]),
+        (False, ["a.js", "b.js", "c.js"]),
+    )
+    @ddt.unpack
+    def test_get_js_dependencies(self, pipeline_enabled, expected_js_dependencies):
+        """
+        Verify that `get_js_dependencies` returns correct list of files.
+        """
+        pipeline_js = {
+            'js-group': {
+                'source_filenames': ["a.js", "b.js", "c.js"],
+                'output_filename': "combined.js"
+            }
+        }
+        with self.settings(PIPELINE_ENABLED=pipeline_enabled, PIPELINE_JS=pipeline_js):
+            js_dependencies = get_js_dependencies("js-group")
+            self.assertEqual(js_dependencies, expected_js_dependencies)

@@ -5,18 +5,18 @@ Browser set up for acceptance tests.
 # pylint: disable=no-member
 # pylint: disable=unused-argument
 
-from lettuce import before, after, world
-from splinter.browser import Browser
-from logging import getLogger
-from django.core.management import call_command
-from django.conf import settings
-from selenium.common.exceptions import WebDriverException
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
-import requests
 from base64 import encodestring
 from json import dumps
+from logging import getLogger
 
-import xmodule.modulestore.django
+import requests
+from django.conf import settings
+from django.core.management import call_command
+from lettuce import after, before, world
+from selenium.common.exceptions import WebDriverException
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
+from splinter.browser import Browser
+
 from xmodule.contentstore.django import _CONTENTSTORE
 
 LOGGER = getLogger(__name__)
@@ -81,8 +81,6 @@ def initial_setup(server):
             desired_capabilities['loggingPrefs'] = {
                 'browser': 'ALL',
             }
-        elif browser_driver == 'firefox':
-            desired_capabilities = DesiredCapabilities.FIREFOX
         else:
             desired_capabilities = {}
 
@@ -98,7 +96,13 @@ def initial_setup(server):
             # the browser session is invalid, this will
             # raise a WebDriverException
             try:
-                world.browser = Browser(browser_driver, desired_capabilities=desired_capabilities)
+                if browser_driver == 'firefox':
+                    # Lettuce initializes differently for firefox, and sending
+                    # desired_capabilities will not work. So initialize without
+                    # sending desired_capabilities.
+                    world.browser = Browser(browser_driver)
+                else:
+                    world.browser = Browser(browser_driver, desired_capabilities=desired_capabilities)
                 world.browser.driver.set_script_timeout(GLOBAL_SCRIPT_TIMEOUT)
                 world.visit('/')
 
@@ -173,11 +177,12 @@ def clear_data(scenario):
 
 @after.each_scenario
 def reset_databases(scenario):
-    '''
+    """
     After each scenario, all databases are cleared/dropped.  Contentstore data are stored in unique databases
     whereas modulestore data is in unique collection names.  This data is created implicitly during the scenarios.
     If no data is created during the test, these lines equivilently do nothing.
-    '''
+    """
+    import xmodule.modulestore.django
     xmodule.modulestore.django.modulestore()._drop_database()  # pylint: disable=protected-access
     xmodule.modulestore.django.clear_existing_modulestores()
     _CONTENTSTORE.clear()
@@ -275,10 +280,9 @@ def after_each_step(step):
 
 
 @after.harvest
-def teardown_browser(total):
+def saucelabs_status(total):
     """
-    Quit the browser after executing the tests.
+    Collect data for saucelabs.
     """
     if world.LETTUCE_SELENIUM_CLIENT == 'saucelabs':
         set_saucelabs_job_status(world.jobid, total.scenarios_ran == total.scenarios_passed)
-    world.browser.quit()

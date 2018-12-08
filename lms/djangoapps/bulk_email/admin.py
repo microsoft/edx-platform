@@ -1,10 +1,11 @@
 """
 Django admin page for bulk email models
 """
+from config_models.admin import ConfigurationModelAdmin
 from django.contrib import admin
 
-from bulk_email.models import CourseEmail, Optout, CourseEmailTemplate, CourseAuthorization
-from bulk_email.forms import CourseEmailTemplateForm, CourseAuthorizationAdminForm
+from bulk_email.forms import CourseAuthorizationAdminForm, CourseEmailTemplateForm
+from bulk_email.models import BulkEmailFlag, CourseAuthorization, CourseEmail, CourseEmailTemplate, Optout
 
 
 class CourseEmailAdmin(admin.ModelAdmin):
@@ -34,6 +35,8 @@ two curly braces on each side), to indicate where the email text is to be insert
 Other tags that may be used (surrounded by one curly brace on each side):
 {platform_name}        : the name of the platform
 {course_title}         : the name of the course
+{course_root}          : the URL path to the root of the course
+{course_language}      : the course language. The default is None.
 {course_url}           : the course's full URL
 {email}                : the user's email address
 {account_settings_url} : URL at which users can change account preferences
@@ -67,7 +70,7 @@ class CourseAuthorizationAdmin(admin.ModelAdmin):
         (None, {
             'fields': ('course_id', 'email_enabled'),
             'description': '''
-Enter a course id in the following form: Org/Course/CourseRun, eg MITx/6.002x/2012_Fall
+Enter a course id in the following form: course-v1:Org+CourseNumber+CourseRun, eg course-v1:edX+DemoX+Demo_Course
 Do not enter leading or trailing slashes. There is no need to surround the course ID with quotes.
 Validation will be performed on the course name, and if it is invalid, an error message will display.
 
@@ -80,3 +83,4 @@ admin.site.register(CourseEmail, CourseEmailAdmin)
 admin.site.register(Optout, OptoutAdmin)
 admin.site.register(CourseEmailTemplate, CourseEmailTemplateAdmin)
 admin.site.register(CourseAuthorization, CourseAuthorizationAdmin)
+admin.site.register(BulkEmailFlag, ConfigurationModelAdmin)

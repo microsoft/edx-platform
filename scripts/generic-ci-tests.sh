@@ -13,7 +13,7 @@ set -e
 #   `TEST_SUITE` defines which kind of test to run.
 #   Possible values are:
 #
-#       - "quality": Run the quality (pep8/pylint) checks
+#       - "quality": Run the quality (pycodestyle/pylint) checks
 #       - "lms-unit": Run the LMS Python unit tests
 #       - "cms-unit": Run the CMS Python unit tests
 #       - "js-unit": Run the JavaScript tests
@@ -29,10 +29,9 @@ set -e
 #   `SHARD` is a number indicating which subset of the tests to build.
 #
 #       For "bok-choy" and "lms-unit", the tests are put into shard groups
-#       using the nose'attr' decorator (e.g. "@attr('shard_1')"). Anything with
-#       the 'shard_n' attribute will run in the nth shard. If there isn't a
-#       shard explicitly assigned, the test will run in the last shard (the one
-#       with the highest number).
+#       using the 'attr' decorator (e.g. "@attr(shard=1)"). Anything with
+#       the 'shard=n' attribute will run in the nth shard. If there isn't a
+#       shard explicitly assigned, the test will run in the last shard.
 #
 #   Jenkins-specific configuration details:
 #
@@ -59,65 +58,107 @@ NUMBER_OF_BOKCHOY_THREADS=${NUMBER_OF_BOKCHOY_THREADS:=1}
 # Clean up previous builds
 git clean -qxfd
 
+function emptyxunit {
+
+    cat > reports/$1.xml <<END
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="$1" tests="1" errors="0" failures="0" skip="0">
+<testcase classname="pavelib.quality" name="$1" time="0.604"></testcase>
+</testsuite>
+END
+
+}
+
+# if specified tox environment is supported, prepend paver commands
+# with tox env invocation
+if [ -z ${TOX_ENV+x} ] || [[ ${TOX_ENV} == 'null' ]]; then
+    TOX=""
+elif tox -l |grep -q "${TOX_ENV}"; then
+    TOX="tox -r -e ${TOX_ENV} --"
+else
+    echo "${TOX_ENV} is not currently supported. Please review the"
+    echo "tox.ini file to see which environments are supported"
+    exit 1
+fi
+
+PAVER_ARGS="-v"
+PARALLEL="--processes=-1"
+export SUBSET_JOB=$JOB_NAME
+
+function run_paver_quality {
+    QUALITY_TASK=$1
+    shift
+    mkdir -p test_root/log/
+    LOG_PREFIX=test_root/log/$QUALITY_TASK
+    $TOX paver $QUALITY_TASK $* 2> $LOG_PREFIX.err.log > $LOG_PREFIX.out.log || {
+        echo "STDOUT (last 100 lines of $LOG_PREFIX.out.log):";
+        tail -n 100 $LOG_PREFIX.out.log;
+        echo "STDERR (last 100 lines of $LOG_PREFIX.err.log):";
+        tail -n 100 $LOG_PREFIX.err.log;
+        return 1;
+    }
+    return 0;
+}
+
 case "$TEST_SUITE" in
 
     "quality")
-        echo "Finding fixme's and storing report..."
-        paver find_fixme > fixme.log || { cat fixme.log; EXIT=1; }
-        echo "Finding pep8 violations and storing report..."
-        paver run_pep8 > pep8.log || { cat pep8.log; EXIT=1; }
-        echo "Finding pylint violations and storing in report..."
-        paver run_pylint -l $PYLINT_THRESHOLD > pylint.log || { cat pylint.log; EXIT=1; }
 
         mkdir -p reports
-        echo "Finding jshint violations and storing report..."
-        paver run_jshint -l $JSHINT_THRESHOLD > jshint.log || { cat jshint.log; EXIT=1; }
-        echo "Running code complexity report (python)."
-        paver run_complexity > reports/code_complexity.log || echo "Unable to calculate code complexity. Ignoring error."
-        # Run quality task. Pass in the 'fail-under' percentage to diff-quality
-        paver run_quality -p 100 || EXIT=1
+
+        case "$SHARD" in
+            1)
+                echo "Finding pylint violations and storing in report..."
+                run_paver_quality run_pylint --system=common  || { EXIT=1; }
+                ;;
+
+            2)
+                echo "Finding pylint violations and storing in report..."
+                run_paver_quality run_pylint --system=lms || { EXIT=1; }
+                ;;
+
+            3)
+                echo "Finding pylint violations and storing in report..."
+                run_paver_quality run_pylint --system="cms,openedx,pavelib" || { EXIT=1; }
+                ;;
+
+            4)
+                echo "Finding fixme's and storing report..."
+                run_paver_quality find_fixme || { EXIT=1; }
+                echo "Finding pycodestyle violations and storing report..."
+                run_paver_quality run_pep8 || { EXIT=1; }
+                echo "Finding ESLint violations and storing report..."
+                run_paver_quality run_eslint -l $ESLINT_THRESHOLD || { EXIT=1; }
+                echo "Finding Stylelint violations and storing report..."
+                run_paver_quality run_stylelint -l $STYLELINT_THRESHOLD || { EXIT=1; }
+                echo "Running code complexity report (python)."
+                run_paver_quality run_complexity || echo "Unable to calculate code complexity. Ignoring error."
+                echo "Running xss linter report."
+                run_paver_quality run_xsslint -t $XSSLINT_THRESHOLDS || { EXIT=1; }
+                echo "Running safe commit linter report."
+                run_paver_quality run_xsscommitlint || { EXIT=1; }
+                ;;
+
+        esac
 
         # Need to create an empty test result so the post-build
         # action doesn't fail the build.
-        cat > reports/quality.xml <<END
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="quality" tests="1" errors="0" failures="0" skip="0">
-<testcase classname="quality" name="quality" time="0.604"></testcase>
-</testsuite>
-END
+        emptyxunit "stub"
         exit $EXIT
         ;;
 
-    "lms-unit")
-        case "$SHARD" in
-            "1")
-                paver test_system -s lms --extra_args="--attr='shard_1' --with-flaky" --cov_args="-p"
-                ;;
-            "2")
-                paver test_system -s lms --extra_args="--attr='shard_1=False' --with-flaky" --cov_args="-p"
-                ;;
-            *)
-                paver test_system -s lms --extra_args="--with-flaky" --cov_args="-p"
-                ;;
-        esac
-        ;;
-
-    "cms-unit")
-        paver test_system -s cms --extra_args="--with-flaky" --cov_args="-p"
-        ;;
-
-    "commonlib-unit")
-        paver test_lib --extra_args="--with-flaky" --cov_args="-p"
+    "lms-unit"|"cms-unit"|"commonlib-unit")
+        $TOX bash scripts/unit-tests.sh
         ;;
 
     "js-unit")
-        paver test_js --coverage
-        paver diff_coverage
+        $TOX paver test_js --coverage
+        $TOX paver diff_coverage
         ;;
 
     "commonlib-js-unit")
-        paver test_js --coverage --skip_clean || { EXIT=1; }
-        paver test_lib --skip_clean --extra_args="--with-flaky" --cov_args="-p" || { EXIT=1; }
+        $TOX paver test_js --coverage --skip-clean || { EXIT=1; }
+        paver test_lib --skip-clean $PAVER_ARGS || { EXIT=1; }
 
         # This is to ensure that the build status of the shard is properly set.
         # Because we are running two paver commands in a row, we need to capture
@@ -134,58 +175,33 @@ END
         ;;
 
     "lms-acceptance")
-        paver test_acceptance -s lms --extra_args="-v 3"
+        $TOX paver test_acceptance -s lms -vvv --with-xunit
         ;;
 
     "cms-acceptance")
-        paver test_acceptance -s cms --extra_args="-v 3"
+        $TOX paver test_acceptance -s cms -vvv --with-xunit
         ;;
 
     "bok-choy")
+
+        PAVER_ARGS="-n $NUMBER_OF_BOKCHOY_THREADS"
+
         case "$SHARD" in
 
             "all")
-                paver test_bokchoy
+                $TOX paver test_bokchoy $PAVER_ARGS
                 ;;
 
-            "1")
-                paver test_bokchoy -n $NUMBER_OF_BOKCHOY_THREADS --extra_args="-a shard_1 --with-flaky"
+            [1-9]|1[0-9]|2[0-1])
+                $TOX paver test_bokchoy --eval-attr="shard==$SHARD" $PAVER_ARGS
                 ;;
 
-            "2")
-                paver test_bokchoy -n $NUMBER_OF_BOKCHOY_THREADS --extra_args="-a 'shard_2' --with-flaky"
-                ;;
-
-            "3")
-                paver test_bokchoy -n $NUMBER_OF_BOKCHOY_THREADS --extra_args="-a 'shard_3' --with-flaky"
-                ;;
-
-            "4")
-                paver test_bokchoy -n $NUMBER_OF_BOKCHOY_THREADS --extra_args="-a 'shard_4' --with-flaky"
-                ;;
-
-            "5")
-                paver test_bokchoy -n $NUMBER_OF_BOKCHOY_THREADS --extra_args="-a 'shard_5' --with-flaky"
-                ;;
-
-            "6")
-                paver test_bokchoy -n $NUMBER_OF_BOKCHOY_THREADS --extra_args="-a 'shard_6' --with-flaky"
-                ;;
-
-            "7")
-                paver test_bokchoy -n $NUMBER_OF_BOKCHOY_THREADS --extra_args="-a 'shard_7' --with-flaky"
-                ;;
-
-            "8")
-                paver test_bokchoy -n $NUMBER_OF_BOKCHOY_THREADS --extra_args="-a 'shard_8' --with-flaky"
-                ;;
-
-            "9")
-                paver test_bokchoy -n $NUMBER_OF_BOKCHOY_THREADS --extra_args="-a shard_1=False,shard_2=False,shard_3=False,shard_4=False,shard_5=False,shard_6=False,shard_7=False,shard_8=False,a11y=False --with-flaky"
+            22|"noshard")
+                $TOX paver test_bokchoy --eval-attr='not shard and not a11y' $PAVER_ARGS
                 ;;
 
             # Default case because if we later define another bok-choy shard on Jenkins
-            # (e.g. Shard 5) in the multi-config project and expand this file
+            # (e.g. Shard 10) in the multi-config project and expand this file
             # with an additional case condition, old branches without that commit
             # would not execute any tests on the worker assigned to that shard
             # and thus their build would fail.
@@ -196,12 +212,7 @@ END
                 # May be unnecessary if we changed the "Skip if there are no test files"
                 # option to True in the jenkins job definitions.
                 mkdir -p reports/bok_choy
-                cat > reports/bok_choy/xunit.xml <<END
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="nosetests" tests="1" errors="0" failures="0" skip="0">
-<testcase classname="acceptance.tests" name="shard_placeholder" time="0.001"></testcase>
-</testsuite>
-END
+                emptyxunit "bok_choy/xunit"
                 ;;
         esac
         ;;

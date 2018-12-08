@@ -12,6 +12,7 @@ from the same directory.
 
 # Start with the common settings
 from .common import *  # pylint: disable=wildcard-import, unused-wildcard-import
+from openedx.core.lib.derived import derive_settings
 
 # Use an in-memory database since this settings file is only used for updating assets
 DATABASES = {
@@ -19,7 +20,9 @@ DATABASES = {
         'ENGINE': 'django.db.backends.sqlite3',
         'ATOMIC_REQUESTS': True,
     },
-
+    'student_module_history': {
+        'ENGINE': 'django.db.backends.sqlite3',
+    },
 }
 
 # Provide a dummy XQUEUE_INTERFACE setting as LMS expects it to exist on start up
@@ -42,6 +45,7 @@ STATICFILES_STORAGE = 'openedx.core.lib.django_require.staticstorage.OptimizedCa
 STATICFILES_FINDERS = [
     'django.contrib.staticfiles.finders.FileSystemFinder',
     'django.contrib.staticfiles.finders.AppDirectoriesFinder',
+    'openedx.core.lib.xblock_pipeline.finder.XBlockPipelineFinder',
 ]
 
 # Redirect to the test_root folder within the repo
@@ -50,8 +54,13 @@ LOG_DIR = (TEST_ROOT / "log").abspath()
 
 # Store the static files under test root so that they don't overwrite existing static assets
 STATIC_ROOT = (TEST_ROOT / "staticfiles" / "lms").abspath()
+WEBPACK_LOADER['DEFAULT']['STATS_FILE'] = STATIC_ROOT / "webpack-stats.json"
 
 # Disable uglify when tests are running (used by build.js).
 # 1. Uglify is by far the slowest part of the build process
 # 2. Having full source code makes debugging tests easier for developers
 os.environ['REQUIRE_BUILD_PROFILE_OPTIMIZE'] = 'none'
+
+########################## Derive Any Derived Settings  #######################
+
+derive_settings(__name__)

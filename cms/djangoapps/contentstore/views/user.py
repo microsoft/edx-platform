@@ -1,25 +1,21 @@
-from django.core.exceptions import PermissionDenied
-from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
-from django.views.decorators.http import require_http_methods
+from django.contrib.auth.models import User
+from django.core.exceptions import PermissionDenied
+from django.http import HttpResponseNotFound
 from django.utils.translation import ugettext as _
-from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import ensure_csrf_cookie
-from edxmako.shortcuts import render_to_response
-
-from xmodule.modulestore.django import modulestore
+from django.views.decorators.http import require_http_methods, require_POST
 from opaque_keys.edx.keys import CourseKey
 from opaque_keys.edx.locator import LibraryLocator
-from util.json_request import JsonResponse, expect_json
-from student.roles import CourseInstructorRole, CourseStaffRole, LibraryUserRole
+
 from course_creators.views import user_requested_access
-
-from student.auth import STUDIO_EDIT_ROLES, STUDIO_VIEW_USERS, get_user_permissions
-
-from student.models import CourseEnrollment
-from django.http import HttpResponseNotFound
+from edxmako.shortcuts import render_to_response
 from student import auth
-
+from student.auth import STUDIO_EDIT_ROLES, STUDIO_VIEW_USERS, get_user_permissions
+from student.models import CourseEnrollment
+from student.roles import CourseInstructorRole, CourseStaffRole, LibraryUserRole
+from util.json_request import JsonResponse, expect_json
+from xmodule.modulestore.django import modulestore
 
 __all__ = ['request_course_creator', 'course_team_handler']
 
@@ -147,13 +143,6 @@ def _course_team_user(request, course_key, email):
     if not ((requester_perms & STUDIO_EDIT_ROLES) or (user.id == request.user.id)):
         return permissions_error_response
 
-    # can't modify an inactive user
-    if not user.is_active:
-        msg = {
-            "error": _('User {email} has registered but has not yet activated his/her account.').format(email=email),
-        }
-        return JsonResponse(msg, 400)
-
     if request.method == "DELETE":
         new_role = None
     else:
@@ -164,6 +153,13 @@ def _course_team_user(request, course_key, email):
             new_role = request.json.get("role", request.POST.get("role"))
         else:
             return JsonResponse({"error": _("No `role` specified.")}, 400)
+
+    # can't modify an inactive user but can remove it
+    if not (user.is_active or new_role is None):
+        msg = {
+            "error": _('User {email} has registered but has not yet activated his/her account.').format(email=email),
+        }
+        return JsonResponse(msg, 400)
 
     old_roles = set()
     role_added = False
@@ -177,7 +173,7 @@ def _course_team_user(request, course_key, email):
                 role_added = True
             else:
                 return permissions_error_response
-        elif role.has_user(user):
+        elif role.has_user(user, check_user_activation=False):
             # Remove the user from this old role:
             old_roles.add(role)
 

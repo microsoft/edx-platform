@@ -13,18 +13,19 @@ from contextlib import contextmanager
 from uuid import uuid4
 
 from factory import Factory, Sequence, lazy_attribute_sequence, lazy_attribute
-from factory.containers import CyclicDefinitionError
+from factory.errors import CyclicDefinitionError
 from mock import patch
 from nose.tools import assert_less_equal, assert_greater_equal
 import dogstats_wrapper as dog_stats_api
 
-from opaque_keys.edx.locations import Location
+from opaque_keys.edx.locator import BlockUsageLocator
 from opaque_keys.edx.keys import UsageKey
 from xblock.core import XBlock
 from xmodule.modulestore import prefer_xmodules, ModuleStoreEnum
 from xmodule.modulestore.tests.sample_courses import default_block_info_tree, TOY_BLOCK_INFO_TREE
 from xmodule.tabs import CourseTab
 from xmodule.x_module import DEPRECATION_VSCOMPAT_EVENT
+from xmodule.course_module import Textbook
 
 
 class Dummy(object):
@@ -115,7 +116,7 @@ class CourseFactory(XModuleFactory):
         # because the factory provides a default 'number' arg, prefer the non-defaulted 'course' arg if any
         number = kwargs.pop('course', kwargs.pop('number', None))
         store = kwargs.pop('modulestore')
-        name = kwargs.get('name', kwargs.get('run', Location.clean(kwargs.get('display_name'))))
+        name = kwargs.get('name', kwargs.get('run', BlockUsageLocator.clean(kwargs.get('display_name'))))
         run = kwargs.pop('run', name)
         user_id = kwargs.pop('user_id', ModuleStoreEnum.UserID.test)
         emit_signals = kwargs.pop('emit_signals', False)
@@ -190,7 +191,7 @@ class ToyCourseFactory(SampleCourseFactory):
 
         fields = {
             'block_info_tree': TOY_BLOCK_INFO_TREE,
-            'textbooks': [["Textbook", "path/to/a/text_book"]],
+            'textbooks': [Textbook("Textbook", "path/to/a/text_book")],
             'wiki_slug': "toy",
             'graded': True,
             'discussion_topics': {"General": {"id": "i4x-edX-toy-course-2012_Fall"}},
@@ -401,7 +402,7 @@ class ItemFactory(XModuleFactory):
 
                 course = store.get_course(location.course_key)
                 course.tabs.append(
-                    CourseTab.load('static_tab', name='Static Tab', url_slug=location.name)
+                    CourseTab.load('static_tab', name='Static Tab', url_slug=location.block_id)
                 )
                 store.update_item(course, user_id)
 

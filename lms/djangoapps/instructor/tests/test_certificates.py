@@ -1,29 +1,45 @@
 """Tests for the certificates panel of the instructor dash. """
 import contextlib
+import io
+import json
+from datetime import datetime, timedelta
+
 import ddt
 import mock
-import json
-
-from nose.plugins.attrib import attr
-from django.core.urlresolvers import reverse
-from django.core.exceptions import ObjectDoesNotExist
-from django.test.utils import override_settings
+import pytz
+from config_models.models import cache
 from django.conf import settings
+from django.core.exceptions import ObjectDoesNotExist
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.urls import reverse
+from django.test.utils import override_settings
+from nose.plugins.attrib import attr
+
+from capa.xqueue_interface import XQueueInterface
+from lms.djangoapps.certificates import api as certs_api
+from lms.djangoapps.certificates.models import (
+    CertificateGenerationConfiguration,
+    CertificateInvalidation,
+    CertificateStatuses,
+    CertificateWhitelist,
+    GeneratedCertificate
+)
+from lms.djangoapps.certificates.tests.factories import (
+    CertificateInvalidationFactory,
+    CertificateWhitelistFactory,
+    GeneratedCertificateFactory
+)
+from course_modes.models import CourseMode
+from courseware.tests.factories import GlobalStaffFactory, InstructorFactory, UserFactory
+from lms.djangoapps.grades.tests.utils import mock_passing_grade
+from lms.djangoapps.verify_student.services import IDVerificationService
+from lms.djangoapps.verify_student.tests.factories import SoftwareSecurePhotoVerificationFactory
+from student.models import CourseEnrollment
 from xmodule.modulestore.tests.django_utils import SharedModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
-from config_models.models import cache
-from courseware.tests.factories import GlobalStaffFactory, InstructorFactory, UserFactory
-from certificates.tests.factories import GeneratedCertificateFactory, CertificateWhitelistFactory, \
-    CertificateInvalidationFactory
-from certificates.models import CertificateGenerationConfiguration, CertificateStatuses, CertificateWhitelist, \
-    GeneratedCertificate, CertificateInvalidation
-from certificates import api as certs_api
-from student.models import CourseEnrollment
-from django.core.files.uploadedfile import SimpleUploadedFile
-import io
 
 
-@attr('shard_1')
+@attr(shard=1)
 @ddt.ddt
 class CertificatesInstructorDashTest(SharedModuleStoreTestCase):
     """Tests for the certificate panel of the instructor dash. """
@@ -150,7 +166,7 @@ class CertificatesInstructorDashTest(SharedModuleStoreTestCase):
     @contextlib.contextmanager
     def _certificate_status(self, description, status):
         """Configure the certificate status by mocking the certificates API. """
-        patched = 'instructor.views.instructor_dashboard.certs_api.example_certificates_status'
+        patched = 'lms.djangoapps.instructor.views.instructor_dashboard.certs_api.example_certificates_status'
         with mock.patch(patched) as certs_api_status:
             cert_status = [{
                 'description': description,
@@ -197,7 +213,7 @@ class CertificatesInstructorDashTest(SharedModuleStoreTestCase):
         self.assertContains(response, expected_html)
 
 
-@attr('shard_1')
+@attr(shard=1)
 @override_settings(CERT_QUEUE='certificates')
 @ddt.ddt
 class CertificatesInstructorApiTest(SharedModuleStoreTestCase):
@@ -344,6 +360,84 @@ class CertificatesInstructorApiTest(SharedModuleStoreTestCase):
             u'the "Pending Tasks" section.'
         )
 
+    @override_settings(AUDIT_CERT_CUTOFF_DATE=datetime.now(pytz.UTC) - timedelta(days=1))
+    @ddt.data(
+        (CertificateStatuses.generating, 'ID Verified', 'approved'),
+        (CertificateStatuses.unverified, 'Not ID Verified', 'denied'),
+    )
+    @ddt.unpack
+    def test_verified_users_with_audit_certs(self, expected_cert_status, verification_output, id_verification_status):
+        """
+        Test certificate regeneration for verified users with audit certificates.
+
+        Scenario:
+            Enroll user in a course in audit mode,
+            User passed the course and now he has `audit_passing` certificate status,
+            User switched to verified mode and is ID verified,
+            Regenerate certificate for it,
+            Modified certificate status is `generating` if user is ID verified otherwise `unverified`.
+        """
+        # Check that user is enrolled in audit mode.
+        enrollment = CourseEnrollment.get_enrollment(self.user, self.course.id)
+        self.assertEquals(enrollment.mode, CourseMode.AUDIT)
+
+        with mock_passing_grade():
+            # Generate certificate for user and check that user has a audit passing certificate.
+            cert_status = certs_api.generate_user_certificates(
+                student=self.user,
+                course_key=self.course.id,
+                course=self.course,
+            )
+
+            # Check that certificate status is 'audit_passing'.
+            self.assertEquals(cert_status, CertificateStatuses.audit_passing)
+
+            # Update user enrollment mode to verified mode.
+            enrollment.update_enrollment(mode=CourseMode.VERIFIED)
+            self.assertEquals(enrollment.mode, CourseMode.VERIFIED)
+
+            # Create and assert user's ID verification record.
+            SoftwareSecurePhotoVerificationFactory.create(user=self.user, status=id_verification_status)
+            actual_verification_status = IDVerificationService.verification_status_for_user(
+                self.user,
+                enrollment.mode
+            )
+            self.assertEquals(actual_verification_status, verification_output)
+
+            # Login the client and access the url with 'audit_passing' status.
+            self.client.login(username=self.global_staff.username, password='test')
+            url = reverse(
+                'start_certificate_regeneration',
+                kwargs={'course_id': unicode(self.course.id)}
+            )
+
+            with mock.patch.object(XQueueInterface, 'send_to_queue') as mock_send:
+                mock_send.return_value = (0, None)
+                response = self.client.post(
+                    url,
+                    {'certificate_statuses': [CertificateStatuses.audit_passing]}
+                )
+
+                # Assert 200 status code in response
+                self.assertEquals(response.status_code, 200)
+                res_json = json.loads(response.content)
+
+                # Assert request is successful
+                self.assertTrue(res_json['success'])
+
+                # Assert success message
+                self.assertEquals(
+                    res_json['message'],
+                    u'Certificate regeneration task has been started. '
+                    u'You can view the status of the generation task in '
+                    u'the "Pending Tasks" section.'
+                )
+
+            # Now, check whether user has audit certificate.
+            cert = certs_api.get_certificate_for_user(self.user.username, self.course.id)
+            self.assertNotEquals(cert['status'], CertificateStatuses.audit_passing)
+            self.assertEquals(cert['status'], expected_cert_status)
+
     def test_certificate_regeneration_error(self):
         """
         Test certificate regeneration errors out when accessed with either empty list of 'certificate_statuses' or
@@ -387,7 +481,7 @@ class CertificatesInstructorApiTest(SharedModuleStoreTestCase):
         self.assertEqual(res_json['message'], u'Please select certificate statuses from the list only.')
 
 
-@attr('shard_1')
+@attr(shard=1)
 @override_settings(CERT_QUEUE='certificates')
 @ddt.ddt
 class CertificateExceptionViewInstructorApiTest(SharedModuleStoreTestCase):
@@ -674,7 +768,7 @@ class CertificateExceptionViewInstructorApiTest(SharedModuleStoreTestCase):
         )
 
 
-@attr('shard_1')
+@attr(shard=1)
 @override_settings(CERT_QUEUE='certificates')
 @ddt.ddt
 class GenerateCertificatesInstructorApiTest(SharedModuleStoreTestCase):
@@ -720,7 +814,6 @@ class GenerateCertificatesInstructorApiTest(SharedModuleStoreTestCase):
 
         response = self.client.post(
             url,
-            data=json.dumps([self.certificate_exception]),
             content_type='application/json'
         )
         # Assert Success
@@ -736,24 +829,49 @@ class GenerateCertificatesInstructorApiTest(SharedModuleStoreTestCase):
             u"Certificate generation started for white listed students."
         )
 
-    def test_generate_certificate_exceptions_invalid_user_list_error(self):
+    def test_generate_certificate_exceptions_whitelist_not_generated(self):
         """
-        Test generate certificates exceptions api endpoint returns error
-        when called with certificate exceptions with empty 'user_id' field
+        Test generate certificates exceptions api endpoint returns success
+        when calling with new certificate exception.
         """
         url = reverse(
             'generate_certificate_exceptions',
             kwargs={'course_id': unicode(self.course.id), 'generate_for': 'new'}
         )
 
-        # assign empty user_id
-        self.certificate_exception.update({'user_id': ''})
+        response = self.client.post(
+            url,
+            content_type='application/json'
+        )
+
+        # Assert Success
+        self.assertEqual(response.status_code, 200)
+
+        res_json = json.loads(response.content)
+
+        # Assert Request is successful
+        self.assertTrue(res_json['success'])
+        # Assert Message
+        self.assertEqual(
+            res_json['message'],
+            u"Certificate generation started for white listed students."
+        )
+
+    def test_generate_certificate_exceptions_generate_for_incorrect_value(self):
+        """
+        Test generate certificates exceptions api endpoint returns error
+        when calling with generate_for without 'new' or 'all' value.
+        """
+        url = reverse(
+            'generate_certificate_exceptions',
+            kwargs={'course_id': unicode(self.course.id), 'generate_for': ''}
+        )
 
         response = self.client.post(
             url,
-            data=json.dumps([self.certificate_exception]),
             content_type='application/json'
         )
+
         # Assert Failure
         self.assertEqual(response.status_code, 400)
 
@@ -764,11 +882,11 @@ class GenerateCertificatesInstructorApiTest(SharedModuleStoreTestCase):
         # Assert Message
         self.assertEqual(
             res_json['message'],
-            u"Invalid data, user_id must be present for all certificate exceptions."
+            u'Invalid data, generate_for must be "new" or "all".'
         )
 
 
-@attr('shard_1')
+@attr(shard=1)
 @ddt.ddt
 class TestCertificatesInstructorApiBulkWhiteListExceptions(SharedModuleStoreTestCase):
     """
@@ -926,7 +1044,7 @@ class TestCertificatesInstructorApiBulkWhiteListExceptions(SharedModuleStoreTest
         return data
 
 
-@attr('shard_1')
+@attr(shard=1)
 @ddt.ddt
 class CertificateInvalidationViewTests(SharedModuleStoreTestCase):
     """

@@ -5,17 +5,16 @@ which is currently use by ccx and instructor apps.
 import math
 
 from django.contrib.auth.models import User
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.db import transaction
 from django.views.decorators.cache import cache_control
-
 from opaque_keys.edx.keys import CourseKey
 
-from edxmako.shortcuts import render_to_response
 from courseware.courses import get_course_with_access
-from instructor.offline_gradecalc import student_grades
-from instructor.views.api import require_level
-
+from edxmako.shortcuts import render_to_response
+from lms.djangoapps.grades.course_grade_factory import CourseGradeFactory
+from lms.djangoapps.instructor.views.api import require_level
+from xmodule.modulestore.django import modulestore
 
 # Grade book: max students per page
 MAX_STUDENTS_PER_PAGE_GRADE_BOOK = 20
@@ -84,16 +83,16 @@ def get_grade_book_page(request, course, course_key):
         # Apply limit on queryset only if total number of students are greater then MAX_STUDENTS_PER_PAGE_GRADE_BOOK.
         enrolled_students = enrolled_students[offset: offset + MAX_STUDENTS_PER_PAGE_GRADE_BOOK]
 
-    student_info = [
-        {
-            'username': student.username,
-            'id': student.id,
-            'email': student.email,
-            'grade_summary': student_grades(student, request, course),
-            'realname': student.profile.name,
-        }
-        for student in enrolled_students
-    ]
+    with modulestore().bulk_operations(course.location.course_key):
+        student_info = [
+            {
+                'username': student.username,
+                'id': student.id,
+                'email': student.email,
+                'grade_summary': CourseGradeFactory().read(student, course).summary
+            }
+            for student in enrolled_students
+        ]
     return student_info, page
 
 

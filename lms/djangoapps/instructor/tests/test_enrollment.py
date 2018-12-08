@@ -4,48 +4,48 @@ Unit tests for instructor.enrollment methods.
 """
 
 import json
-import mock
-from mock import patch
 from abc import ABCMeta
-from courseware.models import StudentModule
-from django.conf import settings
-from django.test import TestCase
-from django.utils.translation import get_language
-from django.utils.translation import override as override_language
-from nose.plugins.attrib import attr
-from ccx_keys.locator import CCXLocator
-from student.tests.factories import UserFactory
-from xmodule.modulestore.django import modulestore
-from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
 
+import mock
+from ccx_keys.locator import CCXLocator
+from django.conf import settings
+from django.utils.translation import override as override_language
+from django.utils.translation import get_language
+from mock import patch
+from nose.plugins.attrib import attr
+from opaque_keys.edx.locator import CourseLocator
+from six import text_type
+
+from capa.tests.response_xml_factory import MultipleChoiceResponseXMLFactory
+from courseware.models import StudentModule
+from grades.subsection_grade_factory import SubsectionGradeFactory
+from grades.tests.utils import answer_problem
 from lms.djangoapps.ccx.tests.factories import CcxFactory
-from student.models import CourseEnrollment, CourseEnrollmentAllowed
-from student.roles import CourseCcxCoachRole
-from student.tests.factories import (
-    AdminFactory
-)
-from instructor.enrollment import (
+from lms.djangoapps.course_blocks.api import get_course_blocks
+from lms.djangoapps.instructor.enrollment import (
     EmailEnrollmentState,
     enroll_email,
     get_email_params,
+    render_message_to_string,
     reset_student_attempts,
     send_beta_role_email,
-    unenroll_email,
-    render_message_to_string,
+    unenroll_email
 )
-from opaque_keys.edx.locations import SlashSeparatedCourseKey
-
+from openedx.core.djangolib.testing.utils import CacheIsolationTestCase, get_mock_request
+from student.models import CourseEnrollment, CourseEnrollmentAllowed, anonymous_id_for_user
+from student.roles import CourseCcxCoachRole
+from student.tests.factories import AdminFactory, UserFactory
 from submissions import api as sub_api
-from student.models import anonymous_id_for_user
-from xmodule.modulestore.tests.django_utils import SharedModuleStoreTestCase, TEST_DATA_SPLIT_MODULESTORE
+from xmodule.modulestore.tests.django_utils import TEST_DATA_SPLIT_MODULESTORE, SharedModuleStoreTestCase
+from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
 
 
-@attr('shard_1')
-class TestSettableEnrollmentState(TestCase):
+@attr(shard=1)
+class TestSettableEnrollmentState(CacheIsolationTestCase):
     """ Test the basis class for enrollment tests. """
     def setUp(self):
         super(TestSettableEnrollmentState, self).setUp()
-        self.course_key = SlashSeparatedCourseKey('Robot', 'fAKE', 'C-%-se-%-ID')
+        self.course_key = CourseLocator('Robot', 'fAKE', 'C--se--ID')
 
     def test_mes_create(self):
         """
@@ -63,7 +63,7 @@ class TestSettableEnrollmentState(TestCase):
         self.assertEqual(mes, ees)
 
 
-class TestEnrollmentChangeBase(TestCase):
+class TestEnrollmentChangeBase(CacheIsolationTestCase):
     """
     Test instructor enrollment administration against database effects.
 
@@ -76,7 +76,7 @@ class TestEnrollmentChangeBase(TestCase):
 
     def setUp(self):
         super(TestEnrollmentChangeBase, self).setUp()
-        self.course_key = SlashSeparatedCourseKey('Robot', 'fAKE', 'C-%-se-%-ID')
+        self.course_key = CourseLocator('Robot', 'fAKE', 'C--se--ID')
 
     def _run_state_change_test(self, before_ideal, after_ideal, action):
         """
@@ -104,7 +104,7 @@ class TestEnrollmentChangeBase(TestCase):
         self.assertEqual(after, after_ideal)
 
 
-@attr('shard_1')
+@attr(shard=1)
 class TestInstructorEnrollDB(TestEnrollmentChangeBase):
     """ Test instructor.enrollment.enroll_email """
     def test_enroll(self):
@@ -222,7 +222,7 @@ class TestInstructorEnrollDB(TestEnrollmentChangeBase):
         return self._run_state_change_test(before_ideal, after_ideal, action)
 
 
-@attr('shard_1')
+@attr(shard=1)
 class TestInstructorUnenrollDB(TestEnrollmentChangeBase):
     """ Test instructor.enrollment.unenroll_email """
     def test_unenroll(self):
@@ -302,7 +302,7 @@ class TestInstructorUnenrollDB(TestEnrollmentChangeBase):
         return self._run_state_change_test(before_ideal, after_ideal, action)
 
 
-@attr('shard_1')
+@attr(shard=1)
 class TestInstructorEnrollmentStudentModule(SharedModuleStoreTestCase):
     """ Test student module manipulations. """
     @classmethod
@@ -371,10 +371,11 @@ class TestInstructorEnrollmentStudentModule(SharedModuleStoreTestCase):
         # lambda to reload the module state from the database
         module = lambda: StudentModule.objects.get(student=self.user, course_id=self.course_key, module_state_key=msk)
         self.assertEqual(json.loads(module().state)['attempts'], 32)
-        reset_student_attempts(self.course_key, self.user, msk)
+        reset_student_attempts(self.course_key, self.user, msk, requesting_user=self.user)
         self.assertEqual(json.loads(module().state)['attempts'], 0)
 
-    def test_delete_student_attempts(self):
+    @mock.patch('lms.djangoapps.grades.signals.handlers.PROBLEM_WEIGHTED_SCORE_CHANGED.send')
+    def test_delete_student_attempts(self, _mock_signal):
         msk = self.course_key.make_usage_key('dummy', 'module')
         original_state = json.dumps({'attempts': 32, 'otherstuff': 'alsorobots'})
         StudentModule.objects.create(
@@ -389,7 +390,7 @@ class TestInstructorEnrollmentStudentModule(SharedModuleStoreTestCase):
                 course_id=self.course_key,
                 module_state_key=msk
             ).count(), 1)
-        reset_student_attempts(self.course_key, self.user, msk, delete_module=True)
+        reset_student_attempts(self.course_key, self.user, msk, requesting_user=self.user, delete_module=True)
         self.assertEqual(
             StudentModule.objects.filter(
                 student=self.user,
@@ -399,8 +400,10 @@ class TestInstructorEnrollmentStudentModule(SharedModuleStoreTestCase):
 
     # Disable the score change signal to prevent other components from being
     # pulled into tests.
-    @mock.patch('courseware.module_render.SCORE_CHANGED.send')
-    def test_delete_submission_scores(self, _lti_mock):
+    @mock.patch('lms.djangoapps.grades.signals.handlers.PROBLEM_WEIGHTED_SCORE_CHANGED.send')
+    @mock.patch('lms.djangoapps.grades.signals.handlers.submissions_score_set_handler')
+    @mock.patch('lms.djangoapps.grades.signals.handlers.submissions_score_reset_handler')
+    def test_delete_submission_scores(self, _mock_send_signal, mock_set_receiver, mock_reset_receiver):
         user = UserFactory()
         problem_location = self.course_key.make_usage_key('dummy', 'module')
 
@@ -415,8 +418,8 @@ class TestInstructorEnrollmentStudentModule(SharedModuleStoreTestCase):
         # Create a submission and score for the student using the submissions API
         student_item = {
             'student_id': anonymous_id_for_user(user, self.course_key),
-            'course_id': self.course_key.to_deprecated_string(),
-            'item_id': problem_location.to_deprecated_string(),
+            'course_id': text_type(self.course_key),
+            'item_id': text_type(problem_location),
             'item_type': 'openassessment'
         }
         submission = sub_api.create_submission(student_item, 'test answer')
@@ -425,8 +428,13 @@ class TestInstructorEnrollmentStudentModule(SharedModuleStoreTestCase):
         # Delete student state using the instructor dash
         reset_student_attempts(
             self.course_key, user, problem_location,
-            delete_module=True
+            requesting_user=user,
+            delete_module=True,
         )
+
+        # Make sure our grades signal receivers handled the reset properly
+        mock_set_receiver.assert_not_called()
+        mock_reset_receiver.assert_called_once()
 
         # Verify that the student's scores have been reset in the submissions API
         score = sub_api.get_score(student_item)
@@ -451,7 +459,7 @@ class TestInstructorEnrollmentStudentModule(SharedModuleStoreTestCase):
         self.assertEqual(unrelated_state['attempts'], 12)
         self.assertEqual(unrelated_state['brains'], 'zombie')
 
-        reset_student_attempts(self.course_key, self.user, self.parent.location)
+        reset_student_attempts(self.course_key, self.user, self.parent.location, requesting_user=self.user)
 
         parent_state = json.loads(self.get_state(self.parent.location))
         self.assertEqual(json.loads(self.get_state(self.parent.location))['attempts'], 0)
@@ -478,7 +486,13 @@ class TestInstructorEnrollmentStudentModule(SharedModuleStoreTestCase):
         self.assertEqual(unrelated_state['attempts'], 12)
         self.assertEqual(unrelated_state['brains'], 'zombie')
 
-        reset_student_attempts(self.course_key, self.user, self.parent.location, delete_module=True)
+        reset_student_attempts(
+            self.course_key,
+            self.user,
+            self.parent.location,
+            requesting_user=self.user,
+            delete_module=True,
+        )
 
         self.assertRaises(StudentModule.DoesNotExist, self.get_state, self.parent.location)
         self.assertRaises(StudentModule.DoesNotExist, self.get_state, self.child.location)
@@ -486,6 +500,80 @@ class TestInstructorEnrollmentStudentModule(SharedModuleStoreTestCase):
         unrelated_state = json.loads(self.get_state(self.unrelated.location))
         self.assertEqual(unrelated_state['attempts'], 12)
         self.assertEqual(unrelated_state['brains'], 'zombie')
+
+
+class TestStudentModuleGrading(SharedModuleStoreTestCase):
+    """
+    Tests the effects of student module manipulations
+    on student grades.
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(TestStudentModuleGrading, cls).setUpClass()
+        cls.course = CourseFactory.create()
+        cls.chapter = ItemFactory.create(
+            parent=cls.course,
+            category="chapter",
+            display_name="Test Chapter"
+        )
+        cls.sequence = ItemFactory.create(
+            parent=cls.chapter,
+            category='sequential',
+            display_name="Test Sequential 1",
+            graded=True
+        )
+        cls.vertical = ItemFactory.create(
+            parent=cls.sequence,
+            category='vertical',
+            display_name='Test Vertical 1'
+        )
+        problem_xml = MultipleChoiceResponseXMLFactory().build_xml(
+            question_text='The correct answer is Choice 3',
+            choices=[False, False, True, False],
+            choice_names=['choice_0', 'choice_1', 'choice_2', 'choice_3']
+        )
+        cls.problem = ItemFactory.create(
+            parent=cls.vertical,
+            category="problem",
+            display_name="Test Problem",
+            data=problem_xml
+        )
+        cls.request = get_mock_request(UserFactory())
+        cls.user = cls.request.user
+        cls.instructor = UserFactory(username='staff', is_staff=True)
+
+    def _get_subsection_grade_and_verify(self, all_earned, all_possible, graded_earned, graded_possible):
+        """
+        Retrieves the subsection grade and verifies that
+        its scores match those expected.
+        """
+        subsection_grade_factory = SubsectionGradeFactory(
+            self.user,
+            self.course,
+            get_course_blocks(self.user, self.course.location)
+        )
+        grade = subsection_grade_factory.create(self.sequence)
+        self.assertEqual(grade.all_total.earned, all_earned)
+        self.assertEqual(grade.graded_total.earned, graded_earned)
+        self.assertEqual(grade.all_total.possible, all_possible)
+        self.assertEqual(grade.graded_total.possible, graded_possible)
+
+    @patch('crum.get_current_request')
+    def test_delete_student_state(self, _crum_mock):
+        problem_location = self.problem.location
+        self._get_subsection_grade_and_verify(0, 1, 0, 1)
+        answer_problem(course=self.course, request=self.request, problem=self.problem, score=1, max_value=1)
+        self._get_subsection_grade_and_verify(1, 1, 1, 1)
+        # Delete student state using the instructor dash
+        reset_student_attempts(
+            self.course.id,
+            self.user,
+            problem_location,
+            requesting_user=self.instructor,
+            delete_module=True,
+        )
+        # Verify that the student's grades are reset
+        self._get_subsection_grade_and_verify(0, 1, 0, 1)
 
 
 class EnrollmentObjects(object):
@@ -558,8 +646,8 @@ class SettableEnrollmentState(EmailEnrollmentState):
             return EnrollmentObjects(email, None, None, None)
 
 
-@attr('shard_1')
-class TestSendBetaRoleEmail(TestCase):
+@attr(shard=1)
+class TestSendBetaRoleEmail(CacheIsolationTestCase):
     """
     Test edge cases for `send_beta_role_email`
     """
@@ -576,7 +664,7 @@ class TestSendBetaRoleEmail(TestCase):
             send_beta_role_email(bad_action, self.user, self.email_params)
 
 
-@attr('shard_1')
+@attr(shard=1)
 class TestGetEmailParamsCCX(SharedModuleStoreTestCase):
     """
     Test what URLs the function get_email_params for CCX student enrollment.
@@ -625,7 +713,7 @@ class TestGetEmailParamsCCX(SharedModuleStoreTestCase):
         self.assertEqual(result['course_url'], self.course_url)
 
 
-@attr('shard_1')
+@attr(shard=1)
 class TestGetEmailParams(SharedModuleStoreTestCase):
     """
     Test what URLs the function get_email_params returns under different
@@ -640,13 +728,10 @@ class TestGetEmailParams(SharedModuleStoreTestCase):
         site = settings.SITE_NAME
         cls.course_url = u'https://{}/courses/{}/'.format(
             site,
-            cls.course.id.to_deprecated_string()
+            text_type(cls.course.id)
         )
         cls.course_about_url = cls.course_url + 'about'
         cls.registration_url = u'https://{}/register'.format(site)
-
-    def setUp(self):
-        super(TestGetEmailParams, self).setUp()
 
     def test_normal_params(self):
         # For a normal site, what do we expect to get for the URLs?
@@ -671,7 +756,7 @@ class TestGetEmailParams(SharedModuleStoreTestCase):
         self.assertEqual(result['course_url'], self.course_url)
 
 
-@attr('shard_1')
+@attr(shard=1)
 class TestRenderMessageToString(SharedModuleStoreTestCase):
     """
     Test that email templates can be rendered in a language chosen manually.

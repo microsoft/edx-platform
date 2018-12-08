@@ -2,13 +2,11 @@ import logging
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
-from django.template.base import TemplateDoesNotExist
-from django.template.loaders.filesystem import Loader as FilesystemLoader
+from django.template import Engine, engines, TemplateDoesNotExist
 from django.template.loaders.app_directories import Loader as AppDirectoriesLoader
-from django.template import Engine
+from django.template.loaders.filesystem import Loader as FilesystemLoader
 
 from edxmako.template import Template
-
 from openedx.core.lib.tempdir import mkdtemp_clean
 
 log = logging.getLogger(__name__)
@@ -17,11 +15,13 @@ log = logging.getLogger(__name__)
 class MakoLoader(object):
     """
     This is a Django loader object which will load the template as a
-    Mako template if the first line is "## mako". It is based off BaseLoader
-    in django.template.loader.
+    Mako template if the first line is "## mako". It is based off Loader
+    in django.template.loaders.base.
+    We need this in order to be able to include mako templates inside main_django.html.
     """
 
     is_usable = False
+    supports_recursion = False
 
     def __init__(self, base_loader):
         # base_loader is an instance of a BaseLoader subclass
@@ -41,13 +41,20 @@ class MakoLoader(object):
     def load_template(self, template_name, template_dirs=None):
         source, file_path = self.load_template_source(template_name, template_dirs)
 
+        # In order to allow dynamic template overrides, we need to cache templates based on their absolute paths
+        # rather than relative paths, overriding templates would have same relative paths.
+        module_directory = self.module_directory.rstrip("/") + "/{dir_hash}/".format(dir_hash=hash(file_path))
+
         if source.startswith("## mako\n"):
             # This is a mako template
             template = Template(filename=file_path,
-                                module_directory=self.module_directory,
+                                module_directory=module_directory,
                                 input_encoding='utf-8',
                                 output_encoding='utf-8',
-                                uri=template_name)
+                                default_filters=['decode.utf8'],
+                                encoding_errors='replace',
+                                uri=template_name,
+                                engine=engines['mako'])
             return template, None
         else:
             # This is a regular template

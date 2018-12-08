@@ -1,8 +1,10 @@
 """
 Certificate tool in the student support app.
 """
-from django.views.generic import View
+import urllib
+
 from django.utils.decorators import method_decorator
+from django.views.generic import View
 
 from edxmako.shortcuts import render_to_response
 from support.decorators import require_support_permission
@@ -30,7 +32,7 @@ class CertificatesSupportView(View):
     def get(self, request):
         """Render the certificates support view. """
         context = {
-            "user_filter": request.GET.get("user", ""),
+            "user_filter": urllib.unquote(urllib.quote_plus(request.GET.get("user", ""))),
             "course_filter": request.GET.get("course_id", "")
         }
         return render_to_response("support/certificates.html", context)

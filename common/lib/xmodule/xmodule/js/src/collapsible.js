@@ -1,4 +1,4 @@
-(function (undefined) {
+(function(undefined) {
     'use strict';
 
     // [module Collapsible]
@@ -35,14 +35,14 @@
         short_custom = el.find('.shortform-custom');
 
         // Set up each one individually.
-        short_custom.each(function (index, elt) {
+        short_custom.each(function(index, elt) {
             var close_text, open_text;
 
             open_text = $(elt).data('open-text');
             close_text = $(elt).data('close-text');
-            $(elt).append("<a href='#' class='full-custom'>" + open_text + "</a>");
+            $(elt).append("<a href='#' class='full-custom'>" + open_text + '</a>');
 
-            $(elt).find('.full-custom').click(function (event) {
+            $(elt).find('.full-custom').click(function(event) {
                 Collapsible.toggleFull(event, open_text, close_text);
             });
         });
@@ -51,8 +51,8 @@
         el.find('.collapsible header + section').hide();
 
         // Set up triggers.
-        el.find('.full').click(function (event) {
-            Collapsible.toggleFull(event, "See full output", "Hide output");
+        el.find('.full').click(function(event) {
+            Collapsible.toggleFull(event, 'See full output', 'Hide output');
         });
         el.find('.collapsible header a').click(Collapsible.toggleHint);
     }
@@ -70,7 +70,7 @@
     //     close_text: text that should be displayed when the collapsible
     //         is closed.
     function toggleFull(event, open_text, close_text) {
-        var el, new_text, parent;
+        var $el, new_text, parent;
 
         event.preventDefault();
 
@@ -85,12 +85,12 @@
         }
 
         if ($(event.target).hasClass('full')) {
-            el = parent.find('.full');
+            $el = parent.find('.full');
         } else {
-            el = $(event.target);
+            $el = $(event.target);
         }
 
-        el.text(new_text);
+        $el.text(new_text);
     }
 
     // [function toggleHint]

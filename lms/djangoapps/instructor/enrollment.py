@@ -6,26 +6,42 @@ Does not include any access control, be sure to check access before calling.
 
 import json
 import logging
-from django.contrib.auth.models import User
+from datetime import datetime
+
+import pytz
 from django.conf import settings
-from django.core.urlresolvers import reverse
+from django.contrib.auth.models import User
 from django.core.mail import send_mail
+from django.urls import reverse
 from django.utils.translation import override as override_language
+from six import text_type
 
 from course_modes.models import CourseMode
-from student.models import CourseEnrollment, CourseEnrollmentAllowed
 from courseware.models import StudentModule
 from edxmako.shortcuts import render_to_string
-from lang_pref import LANGUAGE_KEY
-
-from submissions import api as sub_api  # installed from the edx-submissions repository
-from student.models import anonymous_id_for_user
+from eventtracking import tracker
+from lms.djangoapps.grades.constants import ScoreDatabaseTableEnum
+from lms.djangoapps.grades.events import STATE_DELETED_EVENT_TYPE
+from lms.djangoapps.grades.signals.handlers import disconnect_submissions_signal_receiver
+from lms.djangoapps.grades.signals.signals import PROBLEM_RAW_SCORE_CHANGED
+from openedx.core.djangoapps.lang_pref import LANGUAGE_KEY
+from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 from openedx.core.djangoapps.user_api.models import UserPreference
-
-from microsite_configuration import microsite
+from student.models import (
+    CourseEnrollment,
+    CourseEnrollmentAllowed,
+    anonymous_id_for_user,
+    is_email_retired,
+)
+from submissions import api as sub_api  # installed from the edx-submissions repository
+from submissions.models import score_set
+from track.event_transaction_utils import (
+    create_new_event_transaction_id,
+    get_event_transaction_id,
+    set_event_transaction_type
+)
 from xmodule.modulestore.django import modulestore
 from xmodule.modulestore.exceptions import ItemNotFoundError
-
 
 log = logging.getLogger(__name__)
 
@@ -33,6 +49,9 @@ log = logging.getLogger(__name__)
 class EmailEnrollmentState(object):
     """ Store the complete enrollment state of an email in a class """
     def __init__(self, course_id, email):
+        # N.B. retired users are not a concern here because they should be
+        # handled at a higher level (i.e. in enroll_email).  Besides, this
+        # class creates readonly objects.
         exists_user = User.objects.filter(email=email).exists()
         if exists_user:
             user = User.objects.get(email=email)
@@ -40,11 +59,12 @@ class EmailEnrollmentState(object):
             # is_active is `None` if the user is not enrolled in the course
             exists_ce = is_active is not None and is_active
             full_name = user.profile.name
+            ceas = CourseEnrollmentAllowed.for_user(user).filter(course_id=course_id).all()
         else:
             mode = None
             exists_ce = False
             full_name = None
-        ceas = CourseEnrollmentAllowed.objects.filter(course_id=course_id, email=email).all()
+            ceas = CourseEnrollmentAllowed.objects.filter(email=email, course_id=course_id).all()
         exists_allowed = ceas.exists()
         state_auto_enroll = exists_allowed and ceas[0].auto_enroll
 
@@ -130,7 +150,7 @@ def enroll_email(course_id, student_email, auto_enroll=False, email_students=Fal
             email_params['email_address'] = student_email
             email_params['full_name'] = previous_state.full_name
             send_mail_to_student(student_email, email_params, language=language)
-    else:
+    elif not is_email_retired(student_email):
         cea, _ = CourseEnrollmentAllowed.objects.get_or_create(course_id=course_id, email=student_email)
         cea.auto_enroll = auto_enroll
         cea.save()
@@ -186,23 +206,18 @@ def send_beta_role_email(action, user, email_params):
     `user` is the User affected
     `email_params` parameters used while parsing email templates (a `dict`).
     """
-    if action == 'add':
-        email_params['message'] = 'add_beta_tester'
+    if action in ('add', 'remove'):
+        email_params['message'] = '%s_beta_tester' % action
         email_params['email_address'] = user.email
         email_params['full_name'] = user.profile.name
-
-    elif action == 'remove':
-        email_params['message'] = 'remove_beta_tester'
-        email_params['email_address'] = user.email
-        email_params['full_name'] = user.profile.name
-
     else:
         raise ValueError("Unexpected action received '{}' - expected 'add' or 'remove'".format(action))
+    trying_to_add_inactive_user = not user.is_active and action == 'add'
+    if not trying_to_add_inactive_user:
+        send_mail_to_student(user.email, email_params, language=get_user_email_language(user))
 
-    send_mail_to_student(user.email, email_params, language=get_user_email_language(user))
 
-
-def reset_student_attempts(course_id, student, module_state_key, delete_module=False):
+def reset_student_attempts(course_id, student, module_state_key, requesting_user, delete_module=False):
     """
     Reset student attempts for a problem. Optionally deletes all student state for the specified problem.
 
@@ -219,28 +234,46 @@ def reset_student_attempts(course_id, student, module_state_key, delete_module=F
         submissions.SubmissionError: unexpected error occurred while resetting the score in the submissions API.
 
     """
+    user_id = anonymous_id_for_user(student, course_id)
+    requesting_user_id = anonymous_id_for_user(requesting_user, course_id)
+    submission_cleared = False
     try:
         # A block may have children. Clear state on children first.
         block = modulestore().get_item(module_state_key)
         if block.has_children:
             for child in block.children:
                 try:
-                    reset_student_attempts(course_id, student, child, delete_module=delete_module)
+                    reset_student_attempts(course_id, student, child, requesting_user, delete_module=delete_module)
                 except StudentModule.DoesNotExist:
                     # If a particular child doesn't have any state, no big deal, as long as the parent does.
                     pass
+        if delete_module:
+            # Some blocks (openassessment) use StudentModule data as a key for internal submission data.
+            # Inform these blocks of the reset and allow them to handle their data.
+            clear_student_state = getattr(block, "clear_student_state", None)
+            if callable(clear_student_state):
+                with disconnect_submissions_signal_receiver(score_set):
+                    clear_student_state(
+                        user_id=user_id,
+                        course_id=unicode(course_id),
+                        item_id=unicode(module_state_key),
+                        requesting_user_id=requesting_user_id
+                    )
+                submission_cleared = True
     except ItemNotFoundError:
+        block = None
         log.warning("Could not find %s in modulestore when attempting to reset attempts.", module_state_key)
 
-    # Reset the student's score in the submissions API
-    # Currently this is used only by open assessment (ORA 2)
-    # We need to do this *before* retrieving the `StudentModule` model,
-    # because it's possible for a score to exist even if no student module exists.
-    if delete_module:
+    # Reset the student's score in the submissions API, if xblock.clear_student_state has not done so already.
+    # We need to do this before retrieving the `StudentModule` model, because a score may exist with no student module.
+
+    # TODO: Should the LMS know about sub_api and call this reset, or should it generically call it on all of its
+    # xblock services as well?  See JIRA ARCH-26.
+    if delete_module and not submission_cleared:
         sub_api.reset_score(
-            anonymous_id_for_user(student, course_id),
-            course_id.to_deprecated_string(),
-            module_state_key.to_deprecated_string(),
+            user_id,
+            text_type(course_id),
+            text_type(module_state_key),
         )
 
     module_to_reset = StudentModule.objects.get(
@@ -251,6 +284,26 @@ def reset_student_attempts(course_id, student, module_state_key, delete_module=F
 
     if delete_module:
         module_to_reset.delete()
+        create_new_event_transaction_id()
+        set_event_transaction_type(STATE_DELETED_EVENT_TYPE)
+        tracker.emit(
+            unicode(STATE_DELETED_EVENT_TYPE),
+            {
+                'user_id': unicode(student.id),
+                'course_id': unicode(course_id),
+                'problem_id': unicode(module_state_key),
+                'instructor_id': unicode(requesting_user.id),
+                'event_transaction_id': unicode(get_event_transaction_id()),
+                'event_transaction_type': unicode(STATE_DELETED_EVENT_TYPE),
+            }
+        )
+        if not submission_cleared:
+            _fire_score_changed_for_block(
+                course_id,
+                student,
+                block,
+                module_state_key,
+            )
     else:
         _reset_module_attempts(module_to_reset)
 
@@ -271,6 +324,35 @@ def _reset_module_attempts(studentmodule):
     studentmodule.save()
 
 
+def _fire_score_changed_for_block(
+        course_id,
+        student,
+        block,
+        module_state_key,
+):
+    """
+    Fires a PROBLEM_RAW_SCORE_CHANGED event for the given module.
+    The earned points are always zero. We must retrieve the possible points
+    from the XModule, as noted below. The effective time is now().
+    """
+    if block and block.has_score:
+        max_score = block.max_score()
+        if max_score is not None:
+            PROBLEM_RAW_SCORE_CHANGED.send(
+                sender=None,
+                raw_earned=0,
+                raw_possible=max_score,
+                weight=getattr(block, 'weight', None),
+                user_id=student.id,
+                course_id=unicode(course_id),
+                usage_id=unicode(module_state_key),
+                score_deleted=True,
+                only_if_higher=False,
+                modified=datetime.now().replace(tzinfo=pytz.UTC),
+                score_db_table=ScoreDatabaseTableEnum.courseware_student_module,
+            )
+
+
 def get_email_params(course, auto_enroll, secure=True, course_key=None, display_name=None):
     """
     Generate parameters used when parsing email templates.
@@ -280,10 +362,10 @@ def get_email_params(course, auto_enroll, secure=True, course_key=None, display_
     """
 
     protocol = 'https' if secure else 'http'
-    course_key = course_key or course.id.to_deprecated_string()
+    course_key = course_key or text_type(course.id)
     display_name = display_name or course.display_name_with_default_escaped
 
-    stripped_site_name = microsite.get_value(
+    stripped_site_name = configuration_helpers.get_value(
         'SITE_NAME',
         settings.SITE_NAME
     )
@@ -355,7 +437,7 @@ def send_mail_to_student(student, param_dict, language=None):
     if 'display_name' in param_dict:
         param_dict['course_name'] = param_dict['display_name']
 
-    param_dict['site_name'] = microsite.get_value(
+    param_dict['site_name'] = configuration_helpers.get_value(
         'SITE_NAME',
         param_dict['site_name']
     )
@@ -363,8 +445,8 @@ def send_mail_to_student(student, param_dict, language=None):
     subject = None
     message = None
 
-    # see if we are running in a microsite and that there is an
-    # activation email template definition available as configuration, if so, then render that
+    # see if there is an activation email template definition available as configuration,
+    # if so, then render that
     message_type = param_dict['message']
 
     email_template_dict = {
@@ -410,7 +492,7 @@ def send_mail_to_student(student, param_dict, language=None):
 
         # Email subject *must not* contain newlines
         subject = ''.join(subject.splitlines())
-        from_address = microsite.get_value(
+        from_address = configuration_helpers.get_value(
             'email_from_address',
             settings.DEFAULT_FROM_EMAIL
         )

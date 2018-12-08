@@ -10,24 +10,25 @@ function($, Backbone, _, AbstractEditor, Utils, MessageManager) {
         // Time that we wait since the last time user typed.
         inputDelay: 300,
 
-        events : {
-            'click .setting-clear' : 'clear',
-            'keypress .setting-input' : 'showClearButton',
-            'click .collapse-setting' : 'toggleExtraVideosBar'
+        events: {
+            'click .setting-clear': 'clear',
+            'keypress .setting-input': 'showClearButton',
+            'click .collapse-setting': 'toggleExtraVideosBar'
         },
 
         templateName: 'metadata-videolist-entry',
 
         // Pre-defined dict of placeholders: "videoType - placeholder" pairs.
         placeholders: {
-            'webm': '.webm',
-            'mp4': 'http://somesite.com/video.mp4',
-            'youtube': 'http://youtube.com/'
+            webm: '.webm',
+            mp4: 'http://somesite.com/video.mp4',
+            youtube: 'http://youtube.com/'
         },
 
-        initialize: function () {
+        initialize: function(options) {
             // Initialize MessageManager that is responsible for
             // status messages and errors.
+            this.options = _.extend({}, options);
             var Messenger = this.options.MessageManager || MessageManager;
 
             this.messenger = new Messenger({
@@ -42,7 +43,7 @@ function($, Backbone, _, AbstractEditor, Utils, MessageManager) {
                 .apply(this, arguments);
 
             this.$el.on(
-                'input', 'input',
+                'input', '.videolist-settings-item input',
                 _.debounce(_.bind(this.inputHandler, this), this.inputDelay)
             );
 
@@ -50,72 +51,60 @@ function($, Backbone, _, AbstractEditor, Utils, MessageManager) {
                                                             .data('locator');
         },
 
-        render: function () {
+        render: function() {
             // Call inherited `render` method.
             AbstractEditor.prototype.render
                 .apply(this, arguments);
 
-            var self = this,
-                component_locator =  this.$el.closest('[data-locator]')
-                                                            .data('locator'),
-                videoList = this.getVideoObjectsList(),
-
-                showServerError = function (response) {
-                    var errorMessage = response.status ||
-                        gettext('Error: Connection with server failed.');
-
-                    self.messenger
-                        .render('not_found')
-                        .showError(
-                            errorMessage,
-                            true // hide buttons
-                        );
-                };
-
             this.$extraVideosBar = this.$el.find('.videolist-extra-videos');
 
-            if (videoList.length === 0) {
-                this.messenger
-                    .render('not_found')
-                    .showError(
-                        gettext('No sources'),
-                        true // hide buttons
-                    );
+            // Check current state of Timed Transcripts.
+            Backbone.trigger('transcripts:basicTabFieldChanged');
+        },
 
-                return void(0);
+        updateOnCheckTranscriptSuccess: function(videoList, response) {
+            var params = response,
+                len = videoList.length,
+                mode = (len === 1) ? videoList[0].mode : false;
+
+            // If there are more than 1 video or just html5 source is
+            // passed, video sources box should expand
+            if (len > 1 || mode === 'html5') {
+                this.openExtraVideosBar();
+            } else {
+                this.closeExtraVideosBar();
             }
 
-            // Check current state of Timed Transcripts.
-            Utils.command('check', component_locator, videoList)
-                .done(function (resp) {
-                    var params = resp,
-                        len = videoList.length,
-                        mode = (len === 1) ? videoList[0].mode : false;
+            this.messenger.render(response.command, params);
+            this.checkIsUniqVideoTypes();
+        },
 
-                    // If there are more than 1 video or just html5 source is
-                    // passed, video sources box should expand
-                    if (len > 1 || mode === 'html5') {
-                        self.openExtraVideosBar();
-                    } else {
-                        self.closeExtraVideosBar();
-                    }
+        /**
+         * Updates the message with error.
+         */
+        showServerError: function(response) {
+            var errorMessage = gettext('Error: Connection with server failed.');
 
-                    self.messenger.render(resp.command, params);
-                    self.checkIsUniqVideoTypes();
-                    // Synchronize transcripts field in the `Advanced` tab.
-                    Utils.Storage.set('sub', resp.subs);
-                })
-                .fail(showServerError);
+            if (response.responseJSON !== undefined) {
+                errorMessage = response.responseJSON.status;
+            }
+
+            this.messenger
+                .render('not_found')
+                .showError(
+                    errorMessage,
+                    true // hide buttons
+                );
         },
 
         /**
          * Returns the values currently displayed in the editor/view.
          * @return {Array} List of non-empty values.
          */
-        getValueFromEditor: function () {
+        getValueFromEditor: function() {
             return _.map(
                 this.$el.find('.input'),
-                function (ele) {
+                function(ele) {
                     return ele.value.trim();
                 }
             ).filter(_.identity);
@@ -141,7 +130,7 @@ function($, Backbone, _, AbstractEditor, Utils, MessageManager) {
          *     ]
          *
          */
-        getVideoObjectsList: function () {
+        getVideoObjectsList: function() {
             var links = this.getValueFromEditor();
 
             return Utils.getVideoList(links);
@@ -151,12 +140,12 @@ function($, Backbone, _, AbstractEditor, Utils, MessageManager) {
          * Sets the values currently displayed in the editor/view.
          * @param {Array} value List of values.
          */
-        setValueInEditor: function (value) {
+        setValueInEditor: function(value) {
             var list = this.$el.find('.input'),
                 val = value.filter(_.identity),
                 placeholders = this.getPlaceholders(val);
 
-            list.each(function (index) {
+            list.each(function(index) {
                 $(this)
                     .val(val[index] || null)
                     .attr('placeholder', placeholders[index]);
@@ -169,14 +158,14 @@ function($, Backbone, _, AbstractEditor, Utils, MessageManager) {
          * editor/view.
          * @return {Array} List of placeholders.
          */
-        getPlaceholders: function (value) {
+        getPlaceholders: function(value) {
             var parseLink = Utils.parseLink,
                 placeholders = _.clone(this.placeholders);
 
             // Returned list should have the same size as a count of editors.
             return _.map(
                 this.$el.find('.input'),
-                function (element, index) {
+                function(element, index) {
                     var linkInfo = parseLink(value[index]),
                         type = (linkInfo) ? linkInfo.type : null,
                         label;
@@ -188,7 +177,7 @@ function($, Backbone, _, AbstractEditor, Utils, MessageManager) {
                         label = placeholders[type];
                         delete placeholders[type];
                     } else {
-                        if ( !($.isArray(placeholders)) ) {
+                        if (!($.isArray(placeholders))) {
                             placeholders = _.values(placeholders);
                         }
 
@@ -204,7 +193,7 @@ function($, Backbone, _, AbstractEditor, Utils, MessageManager) {
          * Opens video sources box.
          * @param {Object} event Event object.
          */
-        openExtraVideosBar: function (event) {
+        openExtraVideosBar: function(event) {
             if (event && event.preventDefault) {
                 event.preventDefault();
             }
@@ -216,7 +205,7 @@ function($, Backbone, _, AbstractEditor, Utils, MessageManager) {
          * Closes video sources box.
          * @param {Object} event Event object.
          */
-        closeExtraVideosBar: function (event) {
+        closeExtraVideosBar: function(event) {
             if (event && event.preventDefault) {
                 event.preventDefault();
             }
@@ -228,7 +217,7 @@ function($, Backbone, _, AbstractEditor, Utils, MessageManager) {
          * Toggles video sources box.
          * @param {Object} event Event object.
          */
-        toggleExtraVideosBar: function (event) {
+        toggleExtraVideosBar: function(event) {
             if (event && event.preventDefault) {
                 event.preventDefault();
             }
@@ -244,7 +233,7 @@ function($, Backbone, _, AbstractEditor, Utils, MessageManager) {
          * Handle `input` event.
          * @param {Object} event Event object.
          */
-        inputHandler: function (event) {
+        inputHandler: function(event) {
             if (event && event.preventDefault) {
                 event.preventDefault();
             }
@@ -281,7 +270,6 @@ function($, Backbone, _, AbstractEditor, Utils, MessageManager) {
                 $inputs
                     .prop('disabled', false).attr('aria-disabled', false)
                     .removeClass('is-disabled');
-
             } else {
                 // If any error occurs, disable all inputs except the current.
                 // User cannot change other inputs before putting valid value in
@@ -306,10 +294,10 @@ function($, Backbone, _, AbstractEditor, Utils, MessageManager) {
          * @return {Boolean} Boolean value that indicate if video types are
          * unique.
          */
-        isUniqVideoTypes: function (videoList) {
+        isUniqVideoTypes: function(videoList) {
             // Extract a list of "type" property values.
             // => ex: ['webm', 'mp4', 'mp4']
-            var arr = _.pluck(videoList, 'type').filter(function (item) {
+            var arr = _.pluck(videoList, 'type').filter(function(item) {
                     return item !== 'other';
                 }),
                 // Produces a duplicate-free version of the array.
@@ -324,10 +312,10 @@ function($, Backbone, _, AbstractEditor, Utils, MessageManager) {
          * @return {Boolean} Boolean value that indicate if video types are
          * unique.
          */
-        isUniqOtherVideos: function (videoList) {
+        isUniqOtherVideos: function(videoList) {
             // Returns list of video objects with "type" equal "other" or
             // "youtube".
-            var otherLinksList = videoList.filter(function (item) {
+            var otherLinksList = videoList.filter(function(item) {
                     return item.type === 'other';
                 }),
                 // Extract a list of "video" property values.
@@ -346,7 +334,7 @@ function($, Backbone, _, AbstractEditor, Utils, MessageManager) {
          * @param {String} message Error message.
          * @return {Boolean}
          */
-        checkIsValid: function (validator, list, message) {
+        checkIsValid: function(validator, list, message) {
             var videoList = list || this.getVideoObjectsList(),
                 isValid = true;
 
@@ -364,7 +352,7 @@ function($, Backbone, _, AbstractEditor, Utils, MessageManager) {
          * values currently displayed in the editor.
          * @return {Boolean}
          */
-        checkIsUniqVideoTypes: function (list) {
+        checkIsUniqVideoTypes: function(list) {
             return this.checkIsValid(
                 this.isUniqVideoTypes, list, gettext('Link types should be unique.')
             );
@@ -377,7 +365,7 @@ function($, Backbone, _, AbstractEditor, Utils, MessageManager) {
          * values currently displayed in the editor.
          * @return {Boolean}
          */
-        checkIsUniqOtherVideos: function (list) {
+        checkIsUniqOtherVideos: function(list) {
             return this.checkIsValid(
                 this.isUniqOtherVideos, list, gettext('Links should be unique.')
             );
@@ -391,7 +379,7 @@ function($, Backbone, _, AbstractEditor, Utils, MessageManager) {
          * @param {Boolean} showErrorModeMessage Disable mode validation
          * @return {Boolean} Boolean value that indicate if value is valid.
          */
-        checkValidity: function (data, showErrorModeMessage) {
+        checkValidity: function(data, showErrorModeMessage) {
             var videoList = this.getVideoObjectsList(),
                 isUniqTypes = this.checkIsUniqVideoTypes.bind(this),
                 isUniqOtherVideos = this.checkIsUniqOtherVideos.bind(this);

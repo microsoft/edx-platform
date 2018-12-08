@@ -11,16 +11,19 @@ from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
 from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
-from xmodule.modulestore.tests.django_utils import SharedModuleStoreTestCase, ModuleStoreTestCase
+from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase, SharedModuleStoreTestCase
 from xmodule.modulestore.tests.factories import check_mongo_calls
-from .mixins import CourseApiFactoryMixin
+
 from ..api import course_detail, list_courses
+from .mixins import CourseApiFactoryMixin
 
 
 class CourseApiTestMixin(CourseApiFactoryMixin):
     """
     Establish basic functionality for Course API tests
     """
+    shard = 4
+
     @classmethod
     def setUpClass(cls):
         super(CourseApiTestMixin, cls).setUpClass()
@@ -38,6 +41,8 @@ class CourseDetailTestMixin(CourseApiTestMixin):
     """
     Common functionality for course_detail tests
     """
+    ENABLED_SIGNALS = ['course_published']
+
     def _make_api_call(self, requesting_user, target_user, course_key):
         """
         Call the `course_detail` api endpoint to get information on the course
@@ -53,6 +58,8 @@ class TestGetCourseDetail(CourseDetailTestMixin, SharedModuleStoreTestCase):
     """
     Test course_detail api function
     """
+    shard = 4
+
     @classmethod
     def setUpClass(cls):
         super(TestGetCourseDetail, cls).setUpClass()
@@ -87,6 +94,8 @@ class CourseListTestMixin(CourseApiTestMixin):
     """
     Common behavior for list_courses tests
     """
+    shard = 4
+
     def _make_api_call(self, requesting_user, specified_user, org=None, filter_=None):
         """
         Call the list_courses api endpoint to get information about
@@ -109,6 +118,8 @@ class TestGetCourseList(CourseListTestMixin, SharedModuleStoreTestCase):
     """
     Test the behavior of the `list_courses` api function.
     """
+    shard = 4
+    ENABLED_SIGNALS = ['course_published']
 
     @classmethod
     def setUpClass(cls):
@@ -144,13 +155,26 @@ class TestGetCourseList(CourseListTestMixin, SharedModuleStoreTestCase):
         with self.assertRaises(PermissionDenied):
             self._make_api_call(anonuser, self.staff_user)
 
-    @SharedModuleStoreTestCase.modifies_courseware
+
+class TestGetCourseListMultipleCourses(CourseListTestMixin, ModuleStoreTestCase):
+    """
+    Test the behavior of the `list_courses` api function (with tests that
+    modify the courseware).
+    """
+    shard = 4
+    ENABLED_SIGNALS = ['course_published']
+
+    def setUp(self):
+        super(TestGetCourseListMultipleCourses, self).setUp()
+        self.course = self.create_course(mobile_available=False)
+        self.staff_user = self.create_user("staff", is_staff=True)
+        self.honor_user = self.create_user("honor", is_staff=False)
+
     def test_multiple_courses(self):
         self.create_course(course='second')
         courses = self._make_api_call(self.honor_user, self.honor_user)
         self.assertEqual(len(courses), 2)
 
-    @SharedModuleStoreTestCase.modifies_courseware
     def test_filter_by_org(self):
         """Verify that courses are filtered by the provided org key."""
         # Create a second course to be filtered out of queries.
@@ -173,10 +197,9 @@ class TestGetCourseList(CourseListTestMixin, SharedModuleStoreTestCase):
             all(course.org == self.course.org for course in filtered_courses)
         )
 
-    @SharedModuleStoreTestCase.modifies_courseware
     def test_filter(self):
         # Create a second course to be filtered out of queries.
-        alternate_course = self.create_course(course='mobile', mobile_available=True)
+        alternate_course = self.create_course(course='mobile')
 
         test_cases = [
             (None, [alternate_course, self.course]),
@@ -197,6 +220,9 @@ class TestGetCourseListExtras(CourseListTestMixin, ModuleStoreTestCase):
     Tests of course_list api function that require alternative configurations
     of created courses.
     """
+    shard = 4
+    ENABLED_SIGNALS = ['course_published']
+
     @classmethod
     def setUpClass(cls):
         super(TestGetCourseListExtras, cls).setUpClass()

@@ -1,9 +1,9 @@
 """
 Code to handle mako templating for XModules and XBlocks.
 """
-from xblock.fragment import Fragment
+from web_fragments.fragment import Fragment
 
-from .x_module import XModuleDescriptor, DescriptorSystem, shim_xmodule_js
+from .x_module import DescriptorSystem, XModuleDescriptor, shim_xmodule_js
 
 
 class MakoDescriptorSystem(DescriptorSystem):
@@ -59,5 +59,7 @@ class MakoModuleDescriptor(MakoTemplateBlockBase, XModuleDescriptor):  # pylint:
     """
     Mixin to use for XModule descriptors.
     """
+    resources_dir = None
+
     def get_html(self):
         return self.studio_view(None).content

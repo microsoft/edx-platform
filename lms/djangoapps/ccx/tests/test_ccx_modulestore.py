@@ -1,40 +1,34 @@
 """
 Test the CCXModulestoreWrapper
 """
-from collections import deque
-from ccx_keys.locator import CCXLocator
 import datetime
-from itertools import izip_longest, chain
+from collections import deque
+from itertools import chain, izip_longest
+
 import pytz
-from student.tests.factories import AdminFactory
-from xmodule.modulestore.tests.django_utils import (
-    SharedModuleStoreTestCase,
-    TEST_DATA_SPLIT_MODULESTORE
-)
-from student.tests.factories import UserFactory
-from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
+from ccx_keys.locator import CCXLocator
 
 from lms.djangoapps.ccx.models import CustomCourseForEdX
+from student.tests.factories import AdminFactory, UserFactory
+from xmodule.modulestore.tests.django_utils import TEST_DATA_SPLIT_MODULESTORE, SharedModuleStoreTestCase
+from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
 
 
 class TestCCXModulestoreWrapper(SharedModuleStoreTestCase):
     """tests for a modulestore wrapped by CCXModulestoreWrapper
     """
+    shard = 7
     MODULESTORE = TEST_DATA_SPLIT_MODULESTORE
 
     @classmethod
     def setUpClass(cls):
         super(TestCCXModulestoreWrapper, cls).setUpClass()
-        cls.course = course = CourseFactory.create()
-        cls.mooc_start = start = datetime.datetime(
-            2010, 5, 12, 2, 42, tzinfo=pytz.UTC
-        )
-        cls.mooc_due = due = datetime.datetime(
-            2010, 7, 7, 0, 0, tzinfo=pytz.UTC
-        )
+        cls.course = CourseFactory.create()
+        start = datetime.datetime(2010, 5, 12, 2, 42, tzinfo=pytz.UTC)
+        due = datetime.datetime(2010, 7, 7, 0, 0, tzinfo=pytz.UTC)
         # Create a course outline
         cls.chapters = chapters = [
-            ItemFactory.create(start=start, parent=course) for _ in xrange(2)
+            ItemFactory.create(start=start, parent=cls.course) for _ in xrange(2)
         ]
         cls.sequentials = sequentials = [
             ItemFactory.create(parent=c) for _ in xrange(2) for c in chapters
@@ -48,20 +42,24 @@ class TestCCXModulestoreWrapper(SharedModuleStoreTestCase):
             ItemFactory.create(parent=v, category='html') for _ in xrange(2) for v in verticals
         ]
 
+    @classmethod
+    def setUpTestData(cls):
+        """
+        Set up models for the whole TestCase.
+        """
+        cls.user = UserFactory.create()
+        # Create instructor account
+        cls.coach = AdminFactory.create()
+
     def setUp(self):
         """
         Set up tests
         """
         super(TestCCXModulestoreWrapper, self).setUp()
-        self.user = UserFactory.create()
-
-        # Create instructor account
-        coach = AdminFactory.create()
-
         self.ccx = ccx = CustomCourseForEdX(
             course_id=self.course.id,
             display_name='Test CCX',
-            coach=coach
+            coach=self.coach
         )
         ccx.save()
 
@@ -132,12 +130,13 @@ class TestCCXModulestoreWrapper(SharedModuleStoreTestCase):
 
     def test_publication_api(self):
         """verify that we can correctly discern a published item by ccx key"""
-        for expected in self.blocks:
-            block_key = self.ccx_locator.make_usage_key(
-                expected.location.block_type, expected.location.block_id
-            )
-            self.assertTrue(self.store.has_published_version(expected))
-            self.store.unpublish(block_key, self.user.id)
-            self.assertFalse(self.store.has_published_version(expected))
-            self.store.publish(block_key, self.user.id)
-            self.assertTrue(self.store.has_published_version(expected))
+        with self.store.bulk_operations(self.ccx_locator):
+            for expected in self.blocks:
+                block_key = self.ccx_locator.make_usage_key(
+                    expected.location.block_type, expected.location.block_id
+                )
+                self.assertTrue(self.store.has_published_version(expected))
+                self.store.unpublish(block_key, self.user.id)
+                self.assertFalse(self.store.has_published_version(expected))
+                self.store.publish(block_key, self.user.id)
+                self.assertTrue(self.store.has_published_version(expected))

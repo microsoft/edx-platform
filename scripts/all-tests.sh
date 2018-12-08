@@ -11,8 +11,10 @@ set -e
 ###############################################################################
 
 # Violations thresholds for failing the build
-export PYLINT_THRESHOLD=4500
-export JSHINT_THRESHOLD=9080
+source scripts/thresholds.sh
+
+XSSLINT_THRESHOLDS=`cat scripts/xsslint_thresholds.json`
+export XSSLINT_THRESHOLDS=${XSSLINT_THRESHOLDS//[[:space:]]/}
 
 doCheckVars() {
     if [ -n "$CIRCLECI" ] ; then

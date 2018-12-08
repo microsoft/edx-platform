@@ -2,14 +2,16 @@
 Test helpers for testing course block transformers.
 """
 from mock import patch
+
 from course_modes.models import CourseMode
-from openedx.core.lib.block_structure.transformers import BlockStructureTransformers
+from lms.djangoapps.courseware.access import has_access
+from openedx.core.djangoapps.content.block_structure.tests.helpers import clear_registered_transformers_cache
+from openedx.core.djangoapps.content.block_structure.transformers import BlockStructureTransformers
 from student.tests.factories import CourseEnrollmentFactory, UserFactory
 from xmodule.modulestore import ModuleStoreEnum
 from xmodule.modulestore.django import modulestore
-from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
-from lms.djangoapps.courseware.access import has_access
+from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
 
 from ...api import get_course_blocks
 
@@ -22,7 +24,8 @@ class TransformerRegistryTestMixin(object):
     def setUp(self):
         super(TransformerRegistryTestMixin, self).setUp()
         self.patcher = patch(
-            'openedx.core.lib.block_structure.transformer_registry.TransformerRegistry.get_registered_transformers'
+            'openedx.core.djangoapps.content.block_structure.transformer_registry.'
+            'TransformerRegistry.get_registered_transformers'
         )
         mock_registry = self.patcher.start()
         mock_registry.return_value = {self.TRANSFORMER_CLASS_TO_TEST}
@@ -30,6 +33,7 @@ class TransformerRegistryTestMixin(object):
 
     def tearDown(self):
         self.patcher.stop()
+        clear_registered_transformers_cache()
 
 
 class CourseStructureTestCase(TransformerRegistryTestMixin, ModuleStoreTestCase):
@@ -73,12 +77,12 @@ class CourseStructureTestCase(TransformerRegistryTestMixin, ModuleStoreTestCase)
 
         if block_type != 'course':
             kwargs['category'] = block_type
+            kwargs['publish_item'] = True,
         if parent:
             kwargs['parent'] = parent
 
         xblock = factory.create(
             display_name=self.create_block_id(block_type, block_ref),
-            publish_item=True,
             **kwargs
         )
         block_map[block_ref] = xblock
@@ -115,8 +119,9 @@ class CourseStructureTestCase(TransformerRegistryTestMixin, ModuleStoreTestCase)
             # It would be re-added to the course if the course was
             # explicitly listed in parents.
             course = modulestore().get_item(block_map['course'].location)
-            course.children.remove(block_key)
-            block_map['course'] = update_block(course)
+            if block_key in course.children:
+                course.children.remove(block_key)
+                block_map['course'] = update_block(course)
 
             # Add this to block to each listed parent.
             for parent_ref in parents:
@@ -255,7 +260,7 @@ class BlockParentsMapTestCase(TransformerRegistryTestMixin, ModuleStoreTestCase)
             self,
             test_user,
             expected_user_accessible_blocks,
-            blocks_with_differing_access,
+            blocks_with_differing_access=None,
             transformers=None,
     ):
         """
@@ -272,7 +277,8 @@ class BlockParentsMapTestCase(TransformerRegistryTestMixin, ModuleStoreTestCase)
             blocks_with_differing_access (set(int)): Set of
                 blocks (indices) whose access will differ from the
                 transformers result and the current implementation of
-                has_access.
+                has_access.  If not provided, does not compare with
+                has_access results.
 
             transformers (BlockStructureTransformers): An optional collection
                 of transformers that are to be executed.  If not
@@ -311,8 +317,7 @@ class BlockParentsMapTestCase(TransformerRegistryTestMixin, ModuleStoreTestCase)
         for i, xblock_key in enumerate(self.xblock_keys):
 
             # compute access results of the block
-            block_structure_result = block_structure.has_block(xblock_key)
-            has_access_result = bool(has_access(user, 'load', self.get_block(i), course_key=self.course.id))
+            block_structure_result = xblock_key in block_structure
 
             # compare with expected value
             self.assertEquals(
@@ -323,23 +328,25 @@ class BlockParentsMapTestCase(TransformerRegistryTestMixin, ModuleStoreTestCase)
                 )
             )
 
-            # compare with has_access_result
-            if i in blocks_with_differing_access:
-                self.assertNotEqual(
-                    block_structure_result,
-                    has_access_result,
-                    "block structure ({0}) & has_access ({1}) results are equal for block {2} for user {3}".format(
-                        block_structure_result, has_access_result, i, user.username
+            if blocks_with_differing_access:
+                # compare with has_access_result
+                has_access_result = bool(has_access(user, 'load', self.get_block(i), course_key=self.course.id))
+                if i in blocks_with_differing_access:
+                    self.assertNotEqual(
+                        block_structure_result,
+                        has_access_result,
+                        "block structure ({0}) & has_access ({1}) results are equal for block {2} for user {3}".format(
+                            block_structure_result, has_access_result, i, user.username
+                        )
                     )
-                )
-            else:
-                self.assertEquals(
-                    block_structure_result,
-                    has_access_result,
-                    "block structure ({0}) & has_access ({1}) results not equal for block {2} for user {3}".format(
-                        block_structure_result, has_access_result, i, user.username
+                else:
+                    self.assertEquals(
+                        block_structure_result,
+                        has_access_result,
+                        "block structure ({0}) & has_access ({1}) results not equal for block {2} for user {3}".format(
+                            block_structure_result, has_access_result, i, user.username
+                        )
                     )
-                )
 
         self.client.logout()
 

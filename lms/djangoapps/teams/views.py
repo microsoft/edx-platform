@@ -2,53 +2,53 @@
 
 import logging
 
-from django.shortcuts import get_object_or_404, render_to_response
-from django.http import Http404
 from django.conf import settings
+from django.contrib.auth.models import User
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.http import Http404
+from django.shortcuts import get_object_or_404, render_to_response
+from django.utils.translation import ugettext as _
+from django.utils.translation import ugettext_noop
+from django_countries import countries
+from opaque_keys import InvalidKeyError
+from opaque_keys.edx.keys import CourseKey
+from rest_framework import permissions, status
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework.reverse import reverse
 from rest_framework.views import APIView
-from rest_framework.authentication import SessionAuthentication
 from rest_framework_oauth.authentication import OAuth2Authentication
-from rest_framework import status
-from rest_framework import permissions
-from django.db.models.signals import post_save
-from django.dispatch import receiver
-from django.contrib.auth.models import User
-from django_countries import countries
-from django.utils.translation import ugettext as _
-from django.utils.translation import ugettext_noop
+
+from courseware.courses import get_course_with_access, has_access
+from django_comment_client.utils import has_discussion_privileges
+from lms.djangoapps.teams.models import CourseTeam, CourseTeamMembership
+from edx_rest_framework_extensions.paginators import DefaultPagination, paginate_search_results
 from openedx.core.lib.api.parsers import MergePatchParser
 from openedx.core.lib.api.permissions import IsStaffOrReadOnly
 from openedx.core.lib.api.view_utils import (
+    ExpandableFieldViewMixin,
     RetrievePatchAPIView,
     add_serializer_errors,
-    build_api_error,
-    ExpandableFieldViewMixin
+    build_api_error
 )
-from openedx.core.lib.api.paginators import paginate_search_results, DefaultPagination
-from xmodule.modulestore.django import modulestore
-from opaque_keys import InvalidKeyError
-from opaque_keys.edx.keys import CourseKey
-
-from courseware.courses import get_course_with_access, has_access
-from student.models import CourseEnrollment, CourseAccessRole
+from student.models import CourseAccessRole, CourseEnrollment
 from student.roles import CourseStaffRole
-from django_comment_client.utils import has_discussion_privileges
 from util.model_utils import truncate_fields
+from xmodule.modulestore.django import modulestore
+
 from . import is_feature_enabled
-from lms.djangoapps.teams.models import CourseTeam, CourseTeamMembership
+from .errors import AlreadyOnTeamInCourse, ElasticSearchConnectionError, NotEnrolledInCourseForTeam
+from .search_indexes import CourseTeamIndexer
 from .serializers import (
-    CourseTeamSerializer,
-    CourseTeamCreationSerializer,
-    TopicSerializer,
     BulkTeamCountTopicSerializer,
+    CourseTeamCreationSerializer,
+    CourseTeamSerializer,
     MembershipSerializer,
+    TopicSerializer,
     add_team_count
 )
-from .search_indexes import CourseTeamIndexer
-from .errors import AlreadyOnTeamInCourse, ElasticSearchConnectionError, NotEnrolledInCourseForTeam
 from .utils import emit_team_event
 
 TEAM_MEMBERSHIPS_PER_PAGE = 2
@@ -77,37 +77,12 @@ def team_post_save_callback(sender, instance, **kwargs):  # pylint: disable=unus
                 )
 
 
-class TeamAPIPagination(DefaultPagination):
-    """
-    Pagination format used by the teams API.
-    """
-    page_size_query_param = "page_size"
-
-    def get_paginated_response(self, data):
-        """
-        Annotate the response with pagination information.
-        """
-        response = super(TeamAPIPagination, self).get_paginated_response(data)
-
-        # Add the current page to the response.
-        # It may make sense to eventually move this field into the default
-        # implementation, but for now, teams is the only API that uses this.
-        response.data["current_page"] = self.page.number
-
-        # This field can be derived from other fields in the response,
-        # so it may make sense to have the JavaScript client calculate it
-        # instead of including it in the response.
-        response.data["start"] = (self.page.number - 1) * self.get_page_size(self.request)
-
-        return response
-
-
-class TopicsPagination(TeamAPIPagination):
+class TopicsPagination(DefaultPagination):
     """Paginate topics. """
     page_size = TOPICS_PER_PAGE
 
 
-class MyTeamsPagination(TeamAPIPagination):
+class MyTeamsPagination(DefaultPagination):
     """Paginate the user's teams. """
     page_size = TEAM_MEMBERSHIPS_PER_PAGE
 
@@ -381,7 +356,6 @@ class TeamsListView(ExpandableFieldViewMixin, GenericAPIView):
     authentication_classes = (OAuth2Authentication, SessionAuthentication)
     permission_classes = (permissions.IsAuthenticated,)
     serializer_class = CourseTeamSerializer
-    pagination_class = TeamAPIPagination
 
     def get(self, request):
         """GET /api/team/v0/teams/"""
@@ -525,7 +499,7 @@ class TeamsListView(ExpandableFieldViewMixin, GenericAPIView):
             return Response(status=status.HTTP_403_FORBIDDEN)
 
         data = request.data.copy()
-        data['course_id'] = course_key
+        data['course_id'] = unicode(course_key)
 
         serializer = CourseTeamCreationSerializer(data=data)
         add_serializer_errors(serializer, data, field_errors)
@@ -1081,7 +1055,7 @@ class MembershipListView(ExpandableFieldViewMixin, GenericAPIView):
                     CourseAccessRole.objects.filter(user=request.user, role='staff').values_list('course_id', flat=True)
                 )
                 accessible_course_ids = [item for sublist in (enrolled_courses, staff_courses) for item in sublist]
-                if requested_course_id is not None and requested_course_id not in accessible_course_ids:
+                if requested_course_id is not None and requested_course_key not in accessible_course_ids:
                     return Response(status=status.HTTP_400_BAD_REQUEST)
 
         if not specified_username_or_team:
@@ -1094,7 +1068,7 @@ class MembershipListView(ExpandableFieldViewMixin, GenericAPIView):
         if requested_course_key is not None:
             course_keys = [requested_course_key]
         elif accessible_course_ids is not None:
-            course_keys = [CourseKey.from_string(course_string) for course_string in accessible_course_ids]
+            course_keys = accessible_course_ids
 
         queryset = CourseTeamMembership.get_memberships(username, course_keys, team_id)
         page = self.paginate_queryset(queryset)

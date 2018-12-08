@@ -16,6 +16,10 @@ class CourseStructureApiTests(ModuleStoreTestCase):
     """
     MOCK_CACHE = "openedx.core.djangoapps.content.course_structures.api.v0.api.cache"
 
+    ENABLED_CACHES = ['default', 'mongo_metadata_inheritance', 'loc_cache']
+
+    ENABLED_SIGNALS = ['course_published']
+
     def setUp(self):
         """
         Test setup

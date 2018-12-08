@@ -2,22 +2,22 @@
 Unit tests for the notes app.
 """
 
-from mock import patch, Mock
-
-from opaque_keys.edx.locations import SlashSeparatedCourseKey
-from django.test import TestCase, RequestFactory
-from django.test.client import Client
-from django.core.urlresolvers import reverse
-from django.contrib.auth.models import User
-from django.core.exceptions import ValidationError
-
 import json
 
+from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+from django.urls import reverse
+from django.test import RequestFactory, TestCase
+from django.test.client import Client
+from mock import Mock, patch
+from opaque_keys.edx.locator import CourseLocator
+from six import text_type
+
+from courseware.tabs import CourseTab, get_course_tab_list
+from notes import api, models, utils
+from student.tests.factories import CourseEnrollmentFactory, UserFactory
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
-from courseware.tabs import get_course_tab_list, CourseTab
-from student.tests.factories import UserFactory, CourseEnrollmentFactory
-from notes import utils, api, models
 
 
 class UtilsTest(ModuleStoreTestCase):
@@ -108,7 +108,7 @@ class ApiTest(TestCase):
         self.student = User.objects.create_user('student', 'student@test.com', self.password)
         self.student2 = User.objects.create_user('student2', 'student2@test.com', self.password)
         self.instructor = User.objects.create_user('instructor', 'instructor@test.com', self.password)
-        self.course_key = SlashSeparatedCourseKey('HarvardX', 'CB22x', 'The_Ancient_Greek_Hero')
+        self.course_key = CourseLocator('HarvardX', 'CB22x', 'The_Ancient_Greek_Hero')
         self.note = {
             'user': self.student,
             'course_id': self.course_key,
@@ -137,12 +137,12 @@ class ApiTest(TestCase):
         self.client.login(username=username, password=password)
 
     def url(self, name, args={}):
-        args.update({'course_id': self.course_key.to_deprecated_string()})
+        args.update({'course_id': text_type(self.course_key)})
         return reverse(name, kwargs=args)
 
     def create_notes(self, num_notes, create=True):
         notes = []
-        for n in range(num_notes):
+        for __ in range(num_notes):
             note = models.Note(**self.note)
             if create:
                 note.save()
@@ -376,7 +376,7 @@ class ApiTest(TestCase):
             content = json.loads(resp.content)
 
             for expected_key in ('total', 'rows'):
-                self.assertTrue(expected_key in content)
+                self.assertIn(expected_key, content)
 
             if 'expected_total' in test:
                 self.assertEqual(content['total'], test['expected_total'])
@@ -386,7 +386,7 @@ class ApiTest(TestCase):
             self.assertEqual(len(content['rows']), test['expected_rows'])
 
             for row in content['rows']:
-                self.assertTrue('id' in row)
+                self.assertIn('id', row)
 
 
 class NoteTest(TestCase):
@@ -395,7 +395,7 @@ class NoteTest(TestCase):
 
         self.password = 'abc'
         self.student = User.objects.create_user('student', 'student@test.com', self.password)
-        self.course_key = SlashSeparatedCourseKey('HarvardX', 'CB22x', 'The_Ancient_Greek_Hero')
+        self.course_key = CourseLocator('HarvardX', 'CB22x', 'The_Ancient_Greek_Hero')
         self.note = {
             'user': self.student,
             'course_id': self.course_key,
@@ -437,7 +437,7 @@ class NoteTest(TestCase):
             note.clean(json.dumps({
                 'text': 'foo',
                 'quote': 'bar',
-                'ranges': [{} for i in range(10)]  # too many ranges
+                'ranges': [{} for __ in range(10)]  # too many ranges
             }))
 
     def test_as_dict(self):
@@ -445,4 +445,4 @@ class NoteTest(TestCase):
         d = note.as_dict()
         self.assertNotIsInstance(d, basestring)
         self.assertEqual(d['user_id'], self.student.id)
-        self.assertTrue('course_id' not in d)
+        self.assertNotIn('course_id', d)

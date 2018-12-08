@@ -2,20 +2,22 @@
 Tests for tasks.
 """
 import ddt
+from nose.plugins.attrib import attr
 
 from xmodule.modulestore import ModuleStoreEnum
-from xmodule.modulestore.tests.factories import check_mongo_calls
-
+from xmodule.modulestore.tests.factories import check_mongo_calls, ItemFactory
 from ..models import XBlockCache
 from ..tasks import _calculate_course_xblocks_data, _update_xblocks_cache
 from .test_models import BookmarksTestsBase
 
 
+@attr(shard=9)
 @ddt.ddt
 class XBlockCacheTaskTests(BookmarksTestsBase):
     """
     Test the XBlockCache model.
     """
+
     def setUp(self):
         super(XBlockCacheTaskTests, self).setUp()
 
@@ -99,11 +101,11 @@ class XBlockCacheTaskTests(BookmarksTestsBase):
         }
 
     @ddt.data(
-        (ModuleStoreEnum.Type.mongo, 2, 2, 3),
-        (ModuleStoreEnum.Type.mongo, 4, 2, 3),
-        (ModuleStoreEnum.Type.mongo, 2, 3, 4),
-        (ModuleStoreEnum.Type.mongo, 4, 3, 4),
-        (ModuleStoreEnum.Type.mongo, 2, 4, 5),
+        (ModuleStoreEnum.Type.mongo, 2, 2, 4),
+        (ModuleStoreEnum.Type.mongo, 4, 2, 4),
+        (ModuleStoreEnum.Type.mongo, 2, 3, 5),
+        (ModuleStoreEnum.Type.mongo, 4, 3, 5),
+        (ModuleStoreEnum.Type.mongo, 2, 4, 6),
         # (ModuleStoreEnum.Type.mongo, 4, 4, 6), Too slow.
         (ModuleStoreEnum.Type.split, 2, 2, 3),
         (ModuleStoreEnum.Type.split, 4, 2, 3),
@@ -114,6 +116,9 @@ class XBlockCacheTaskTests(BookmarksTestsBase):
     def test_calculate_course_xblocks_data_queries(self, store_type, children_per_block, depth, expected_mongo_calls):
 
         course = self.create_course_with_blocks(children_per_block, depth, store_type)
+
+        # clear cache to get consistent query counts
+        self.clear_caches()
 
         with check_mongo_calls(expected_mongo_calls):
             blocks_data = _calculate_course_xblocks_data(course.id)
@@ -164,3 +169,35 @@ class XBlockCacheTaskTests(BookmarksTestsBase):
 
         with self.assertNumQueries(3):
             _update_xblocks_cache(course.id)
+
+    def test_update_xblocks_cache_with_display_name_none(self):
+        """
+        Test that the xblocks data is persisted correctly with display_name=None.
+        """
+        block_with_display_name_none = ItemFactory.create(
+            parent_location=self.sequential_2.location,
+            category='vertical', display_name=None
+        )
+
+        _update_xblocks_cache(self.course.id)
+
+        self.course_expected_cache_data.update(
+            {
+                block_with_display_name_none.location: [
+                    [
+                        self.course.location,
+                        self.chapter_1.location,
+                        self.sequential_2.location,
+                    ]
+                ]
+            }
+        )
+
+        for usage_key, __ in self.course_expected_cache_data.items():
+            xblock_cache = XBlockCache.objects.get(usage_key=usage_key)
+            for path_index, path in enumerate(xblock_cache.paths):
+                for path_item_index, path_item in enumerate(path):
+                    self.assertEqual(
+                        path_item.usage_key,
+                        self.course_expected_cache_data[usage_key][path_index][path_item_index + 1]
+                    )

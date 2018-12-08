@@ -5,16 +5,13 @@ import random
 
 from contextlib import contextmanager, nested
 from importlib import import_module
-from opaque_keys.edx.keys import UsageKey
 from path import Path as path
 from shutil import rmtree
 from tempfile import mkdtemp
 from unittest import TestCase
 
-from xblock.fields import XBlockMixin
 from xmodule.x_module import XModuleMixin
 from xmodule.contentstore.mongo import MongoContentStore
-from xmodule.modulestore import ModuleStoreEnum
 from xmodule.modulestore.draft_and_published import ModuleStoreDraftAndPublished
 from xmodule.modulestore.edit_info import EditInfoMixin
 from xmodule.modulestore.inheritance import InheritanceMixin
@@ -25,6 +22,7 @@ from xmodule.modulestore.split_mongo.split_draft import DraftVersioningModuleSto
 from xmodule.modulestore.tests.factories import ItemFactory
 from xmodule.modulestore.tests.mongo_connection import MONGO_PORT_NUM, MONGO_HOST
 from xmodule.modulestore.xml import XMLModuleStore
+from xmodule.modulestore.xml_importer import LocationMixin
 from xmodule.tests import DATA_DIR
 
 
@@ -72,27 +70,6 @@ def mock_tab_from_json(tab_dict):
     with plugin errors.
     """
     return tab_dict
-
-
-class LocationMixin(XBlockMixin):
-    """
-    Adds a `location` property to an :class:`XBlock` so it is more compatible
-    with old-style :class:`XModule` API. This is a simplified version of
-    :class:`XModuleMixin`.
-    """
-    @property
-    def location(self):
-        """ Get the UsageKey of this block. """
-        return self.scope_ids.usage_id
-
-    @location.setter
-    def location(self, value):
-        """ Set the UsageKey of this block. """
-        assert isinstance(value, UsageKey)
-        self.scope_ids = self.scope_ids._replace(
-            def_id=value,
-            usage_id=value,
-        )
 
 
 class MixedSplitTestCase(TestCase):
@@ -194,7 +171,7 @@ class MemoryCache(object):
     the modulestore, and stores the data in a dictionary in memory.
     """
     def __init__(self):
-        self._data = {}
+        self.data = {}
 
     def get(self, key, default=None):
         """
@@ -204,7 +181,7 @@ class MemoryCache(object):
             key: The key to update.
             default: The value to return if the key hasn't been set previously.
         """
-        return self._data.get(key, default)
+        return self.data.get(key, default)
 
     def set(self, key, value):
         """
@@ -214,7 +191,7 @@ class MemoryCache(object):
             key: The key to update.
             value: The value change the key to.
         """
-        self._data[key] = value
+        self.data[key] = value
 
 
 class MongoContentstoreBuilder(object):
@@ -255,19 +232,19 @@ class StoreBuilderBase(object):
         """
         contentstore = kwargs.pop('contentstore', None)
         if not contentstore:
-            with self.build_without_contentstore() as (contentstore, modulestore):
+            with self.build_without_contentstore(**kwargs) as (contentstore, modulestore):
                 yield contentstore, modulestore
         else:
-            with self.build_with_contentstore(contentstore) as modulestore:
+            with self.build_with_contentstore(contentstore, **kwargs) as modulestore:
                 yield modulestore
 
     @contextmanager
-    def build_without_contentstore(self):
+    def build_without_contentstore(self, **kwargs):
         """
         Build both the contentstore and the modulestore.
         """
         with MongoContentstoreBuilder().build() as contentstore:
-            with self.build_with_contentstore(contentstore) as modulestore:
+            with self.build_with_contentstore(contentstore, **kwargs) as modulestore:
                 yield contentstore, modulestore
 
 
@@ -276,7 +253,7 @@ class MongoModulestoreBuilder(StoreBuilderBase):
     A builder class for a DraftModuleStore.
     """
     @contextmanager
-    def build_with_contentstore(self, contentstore):
+    def build_with_contentstore(self, contentstore, **kwargs):
         """
         A contextmanager that returns an isolated mongo modulestore, and then deletes
         all of its data at the end of the context.
@@ -324,7 +301,7 @@ class VersioningModulestoreBuilder(StoreBuilderBase):
     A builder class for a VersioningModuleStore.
     """
     @contextmanager
-    def build_with_contentstore(self, contentstore):
+    def build_with_contentstore(self, contentstore, **kwargs):
         """
         A contextmanager that returns an isolated versioning modulestore, and then deletes
         all of its data at the end of the context.
@@ -347,6 +324,7 @@ class VersioningModulestoreBuilder(StoreBuilderBase):
             fs_root,
             render_template=repr,
             xblock_mixins=XBLOCK_MIXINS,
+            **kwargs
         )
         modulestore.ensure_indexes()
 
@@ -369,7 +347,7 @@ class XmlModulestoreBuilder(StoreBuilderBase):
     """
     # pylint: disable=unused-argument
     @contextmanager
-    def build_with_contentstore(self, contentstore=None, course_ids=None):
+    def build_with_contentstore(self, contentstore=None, course_ids=None, **kwargs):
         """
         A contextmanager that returns an isolated xml modulestore
 
@@ -403,7 +381,7 @@ class MixedModulestoreBuilder(StoreBuilderBase):
         self.mixed_modulestore = None
 
     @contextmanager
-    def build_with_contentstore(self, contentstore):
+    def build_with_contentstore(self, contentstore, **kwargs):
         """
         A contextmanager that returns a mixed modulestore built on top of modulestores
         generated by other builder classes.
@@ -414,7 +392,7 @@ class MixedModulestoreBuilder(StoreBuilderBase):
         """
         names, generators = zip(*self.store_builders)
 
-        with nested(*(gen.build_with_contentstore(contentstore) for gen in generators)) as modulestores:
+        with nested(*(gen.build_with_contentstore(contentstore, **kwargs) for gen in generators)) as modulestores:
             # Make the modulestore creation function just return the already-created modulestores
             store_iterator = iter(modulestores)
             next_modulestore = lambda *args, **kwargs: store_iterator.next()

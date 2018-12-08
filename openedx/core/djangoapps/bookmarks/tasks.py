@@ -2,10 +2,11 @@
 Tasks for bookmarks.
 """
 import logging
-from django.db import transaction
 
 from celery.task import task  # pylint: disable=import-error,no-name-in-module
+from django.db import transaction
 from opaque_keys.edx.keys import CourseKey
+
 from xmodule.modulestore.django import modulestore
 
 from . import PathItem
@@ -32,7 +33,7 @@ def _calculate_course_xblocks_data(course_key):
             usage_id = unicode(current_block.scope_ids.usage_id)
             block_info = {
                 'usage_key': current_block.scope_ids.usage_id,
-                'display_name': current_block.display_name,
+                'display_name': current_block.display_name_with_default,
                 'children_ids': [unicode(child.scope_ids.usage_id) for child in children]
             }
             blocks_info_dict[usage_id] = block_info

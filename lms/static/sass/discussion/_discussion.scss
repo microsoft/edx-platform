@@ -2,309 +2,33 @@
 // ====================
 // NOTE: this file is deprecated, and we should not continue to add to this file. Use other partials as appropriate.
 
-body.discussion {
-
-  .course-tabs .right {
-    @include float(right);
-
-    .new-post-btn {
-      @include blue-button;
-      @include margin-right(4px);
-    }
-
-    .new-post-icon {
-      @include margin-right(7px);
-      font-size: 16px;
-      vertical-align: middle;
-      color: $white;
-    }
-  }
-
-  .edit-post-form {
-    @include clearfix();
-    @include box-sizing(border-box);
-    width: 100%;
-
-    h1 {
-      font-size: 20px;
-    }
-
-    .form-row {
-      margin-top: $baseline;
-    }
-
-    .post-cancel {
-      @include white-button;
-      float: left;
-      margin: ($baseline/2) 0 0 ($baseline*0.75);
-    }
-
-    .post-update {
-      @include blue-button;
-      float: left;
-      margin-top: ($baseline/2);
-      padding-bottom: ($baseline/10);
-      height: 37px;
-
-      &:hover, &:focus {
-        border-color: #222;
-      }
-    }
-
-    .edit-post-title {
-      @include box-sizing(border-box);
-      border: 1px solid #aaa;
-      border-radius: 3px;
-      padding: 0 ($baseline/2);
-      width: 100%;
-      height: 40px;
-      box-shadow: 0 1px 3px $shadow-l1 inset;
-      color: $dark-gray;
-      font-size: 16px;
-      font-family: $sans-serif;
-    }
-  }
-
-  .comments .edit-post-form h1 {
-    @extend %t-title6;
-  }
-
-  .thread-title {
-    display: block;
-    margin-bottom: $baseline;
-    color: $gray-d3;
-    font-weight: 700;
-    font-size: 21px;
-  }
-
-  section.user-profile {
-    display: table-cell;
-    border-right: 1px solid #ddd;
-    border-radius: 3px 0 0 3px;
-    background-color: $sidebar-color;
-    box-shadow: none;
-
-    .user-profile {
-      padding: 32px 36px;
-    }
-
-    .sidebar-username {
-      font-weight: 700;
-      font-size: 18px;
-    }
-
-    .sidebar-user-roles {
-      margin-top: 6px;
-      font-style: italic;
-      font-size: 13px;
-    }
-
-    .sidebar-threads-count {
-      margin-top: 14px;
-    }
-
-    .sidebar-threads-count span,
-    .sidebar-comments-count span {
-      font-weight: 700;
-    }
-  }
-
-  .wmd-panel {
-    width: 100%;
-  }
-
-  .wmd-button-bar  {
-    width: 100%;
-    background-color: Silver;
-  }
-
-  .wmd-input {
-    @include border-radius(3px, 3px, 0, 0);
-    border: 1px solid $gray-l3;
-    width: 100%;
-    height: 150px;
-    background-color: $gray-l4;
-    font-style: normal;
-    font-size: 0.8em;
-    font-family: $f-sans-serif;
-    line-height: 1.6em;
-
-    &::-webkit-input-placeholder {
-      color: #888;
-    }
-  }
-
-  .wmd-button-row {
-    @include transition(all .2s ease-out 0s);
-    @include margin(($baseline/2), ($baseline/4), ($baseline/4), ($baseline/4));
-    position: relative;
-    overflow: hidden;
-    padding: 0;
-    height: 20px;
-  }
-
-  .wmd-spacer {
-    @include margin-left(14px);
-    position: absolute;
-    display: inline-block;
-    width: 1px;
-    height: 20px;
-    background-color: Silver;
-    list-style: none;
-  }
-
-  .wmd-button {
-    @include padding-right(3px);
-    @include padding-left(3px);
-    position: absolute;
-    display: inline-block;
-    width: 20px;
-    height: 20px;
-    background: none;
-    list-style: none;
-    cursor: pointer;
-  }
-
-  .wmd-button > span {
-    display: inline-block;
-    width: 20px;
-    height: 20px;
-    background-image: url('/static/images/wmd-buttons-transparent.png');
-    background-position: 0px 0px;
-    background-repeat: no-repeat;
-  }
-
-  .wmd-spacer1 {
-    @include left(50px);
-  }
-  .wmd-spacer2 {
-    @include left(175px);
-  }
-
-  .wmd-spacer3 {
-    @include left(300px);
-  }
-
-  .wmd-prompt-background {
-    background-color: Black;
-  }
-
-  .wmd-prompt-dialog {
-    @extend .modal;
-    background: $white;
-  }
-
-  .wmd-prompt-dialog {
-    padding: $baseline;
-
-    > div {
-      font-size: 0.8em;
-      font-family: $sans-serif;
-    }
-
-    b {
-      font-size: 16px;
-    }
-
-    > form > input[type="text"] {
-      border-radius: 3px;
-      color: $gray-d3;
-    }
-
-    > form > input[type="button"] {
-      border: 1px solid #888;
-      font-size: 14px;
-      font-family: $sans-serif;
-    }
-
-    > form > input[type="file"] {
-      margin-bottom: 18px;
-    }
-  }
-}
-
-.container .discussion-body {
+.discussion-body {
   @include clearfix();
-  display: block;
+
+  width: 100%;
   border: none;
   background: transparent;
   box-shadow: none;
-  line-height: 1.4;
+
+  @include media-breakpoint-up(md) {
+    display: flex;
+    flex-direction: row-reverse;
+  }
 
   .bottom-post-status {
     padding: 30px;
-    font-size: 20px;
+    font-size: $forum-x-large-font-size;
     font-weight: 700;
-    color: $gray-l3;
+    color: $forum-color-copy-light;
     text-align: center;
-  }
-
-  .discussion-column {
-    @include float(right);
-    @include box-sizing(border-box);
-    width: 68%;
-    max-width: 800px;
-    min-height: 500px;
-    border: 1px solid #aaa;
-    border-radius: 3px;
-    background: $white;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, .05);
   }
 
   .discussion-article {
     position: relative;
-    min-height: 500px;
-    background-image: url('#{$static-path}/images/bg-texture.png');
 
-    a {
+    a,
+    p {
       word-wrap: break-word;
-    }
-
-    p + p {
-      margin-top: $baseline;
-    }
-  }
-
-  .discussion-post header,
-  .responses li header {
-    margin-bottom: $baseline;
-  }
-
-  blockquote {
-    background: $gray-l5;
-    border-radius: 3px;
-    padding: ($baseline/4) ($baseline/2);
-    font-size: 14px;
-  }
-
-  .comment-form {
-    padding: ($baseline/2) 0;
-
-    .wmd-input {
-      @include transition(all .2s linear 0s);
-    }
-
-    .wmd-button {
-      background: transparent;
-
-      span {
-        background-image: url('#{$static-path}/images/wmd-buttons-transparent.png');
-      }
-    }
-  }
-
-  .comment-form-input {
-    width: 100%;
-    height: 31px;
-    padding: 0 ($baseline/2);
-    @include box-sizing(border-box);
-    border: 1px solid $gray-l2;
-    border-radius: 3px;
-    box-shadow: 0 1px 3px $shadow-l1 inset;
-    @include transition(border-color .1s linear 0s);
-
-    &:focus {
-      border-color: #4697c1;
     }
   }
 
@@ -314,409 +38,131 @@ body.discussion {
   }
 
   .discussion-reply-new {
-    padding: $baseline ($baseline*1.5);
     @include clearfix();
-    @include transition(opacity .2s linear 0s);
+    @include transition(opacity 0.2s linear 0s);
 
     h4 {
-      font-size: 16px;
+      font-size: $forum-large-font-size;
       font-weight: 700;
     }
-  }
-
-  .wmd-button-bar {
-    border: none;
-  }
-
-  .wmd-input {
-    @include discussion-wmd-input;
-  }
-
-  .wmd-preview-container {
-    @include discussion-wmd-preview-container;
-  }
-
-  .wmd-preview-label {
-    @include discussion-wmd-preview-label;
-  }
-
-  .wmd-preview {
-    @include discussion-wmd-preview;
   }
 
   .reply-post-control {
     margin-top: $baseline;
   }
-
-  .discussion-submit-post {
-    @include blue-button;
-    @include float(left);
-  }
-
-  .wmd-button {
-    width: 15px;
-  }
 }
 
 // ====================
 
-// inline discussion module and profile thread styling
+// inline discussion module
 .discussion-module {
   @extend .discussion-body;
 
+  display: block;
   position: relative;
-  margin: $baseline 0;
-  padding: $baseline;
-  background: #f6f6f6 !important;
-  border-radius: 3px;
+  border-radius: $forum-border-radius;
 
   header {
-    .anonymous{
-      font-size: 15px;
+    .anonymous {
+      font-size: $forum-base-font-size;
     }
+  }
+
+  .inline-discussion-topic {
+    width: flex-grid(12);
+    font-size: $forum-small-font-size;
+
+    .inline-discussion-topic-title {
+      font-weight: bold;
+    }
+  }
+
+  .discussion-module-header {
+    @include float(left);
+
+    width: flex-grid(7);
+    margin-bottom: ($baseline * 0.75);
+  }
+
+  .add_post_btn_container {
+    @include text-align(right);
+
+    width: flex-grid(12);
+    height: (2 * $baseline);
   }
 
   div.add-response.post-extended-content {
     margin-top: $baseline;
     margin-bottom: $baseline;
-
-    button.add-response-btn {
-      @include white-button;
-      @include linear-gradient(top, $white 35%, $gray-l4);
-      position: relative;
-      padding-left: ($baseline*1.5);
-      width: 100%;
-      box-shadow: 0 1px 1px $shadow-l1;
-      @include text-align(left);
-
-      .fa-reply:before {
-        @include ltr {
-          content: "\f112"; // FA icon arrow to the left
-        }
-
-        @include rtl {
-          content: "\f064"; // FA icon arrow to the right
-        }
-      }
-
-      &:hover, &:focus {
-        @include linear-gradient(top, $white 35%, #ddd);
-      }
-
-      span.add-response-btn-text {
-        padding-left: 4px;
-      }
-    }
-  }
-
-  .loading-animation {
-    background-image: url('#{$static-path}/images/spinner.gif');
-  }
-
-  .discussion-show {
-    position: relative;
-    top: 3px;
-    font-size: 14px;
-    text-align: center;
-
-    &.shown {
-      .show-hide-discussion-icon {
-        background-position: 0 0;
-      }
-    }
-
-    .show-hide-discussion-icon {
-      display: inline-block;
-      position: relative;
-      top: 5px;
-      @include margin-right(6px);
-      width: 21px;
-      height: 19px;
-      background: url('#{$static-path}/images/show-hide-discussion-icon.png') no-repeat;
-      background-position: -21px 0;
-    }
-  }
-
-  .new-post-btn {
-    display: inline-block;
-    @include float(right);
-  }
-
-  section.discussion {
-    clear: both;
-    padding-top: $baseline;
-
-    .threads {
-    }
-
-    .discussion-thread {
-      padding: 0;
-      margin-bottom: $baseline;
-      @include transition(all .25s linear 0s);
-
-      p {
-        margin-bottom: 0;
-      }
-
-      .discussion-article {
-        @include transition(all .2s linear 0s);
-        border: 1px solid #ddd;
-        border-radius: 3px;
-        min-height: 0;
-        background: $white;
-        padding: 0;
-        box-shadow: 0 1px 0 $shadow;
-        @include transition(all .2s linear 0s);
-
-        .thread-wrapper {
-          position: relative;
-          overflow-x: hidden;
-          overflow-y: auto;
-          max-height: 600px;
-
-          .discussion-post {
-
-            .inline-comment-count {
-              @extend %ui-depth2;
-              position: relative;
-              float: right;
-              display: block;
-              height: 27px;
-              margin-top: 6px;
-              margin-right: 8px;
-              padding: 0 8px;
-              border-radius: ($baseline/4);
-              font-size: 12px;
-              font-weight: 400;
-              line-height: 25px;
-              color: #888;
-            }
-          }
-
-          .responses {
-            header {
-              padding-bottom: 0;
-              margin-bottom: ($baseline*0.75);
-
-              .posted-by {
-                float: left;
-                margin-right: ($baseline/4);
-                font-size: 16px;
-              }
-            }
-
-            .response-body {
-              margin-bottom: 0.2em;
-              font-size: 14px;
-            }
-          }
-
-          .discussion-reply-new {
-            .wmd-input {
-              height: 120px;
-            }
-          }
-
-          // Content that is hidden by default in the inline view
-          .post-extended-content{
-            display: none;
-          }
-        }
-
-        .post-tools {
-          box-shadow: 0 1px 1px $shadow inset;
-          background: $gray-l6;
-
-          &:hover {
-            background: #fcfcfc;
-
-            .icon {
-              color: $link-hover;
-            }
-          }
-
-          a {
-            display: block;
-            padding: ($baseline*0.25) $baseline;
-            font-size: 12px;
-            line-height: 30px;
-
-            .icon {
-              color: $link-color;
-              margin-right: ($baseline*0.25);
-            }
-          }
-        }
-      }
-    }
-  }
-
-  .new-post-article {
-    display: none;
-    margin-top: $baseline;
-
-    .inner-wrapper {
-      max-width: 1180px;
-      min-width: 760px;
-      margin: auto;
-    }
-
-    .thread-title {
-      display: block;
-      margin-bottom: $baseline;
-      font-size: 21px;
-      color: $gray-d3;
-      font-weight: 700;
-    }
-  }
-
-  .new-post-btn {
-    @include blue-button;
-    display: inline-block;
-    font-size: 13px;
-    margin-right: 4px;
-  }
-
-  .new-post-icon {
-    display: block;
-    float: left;
-    width: 16px;
-    height: 17px;
-    margin-top: 8px;
-    @include margin-right(7px);
-    font-size: 16px;
-    @include padding-right($baseline/2);
-    vertical-align: middle;
-    color: $white;
-  }
-
-  section.discussion-pagination {
-    margin-top: ($baseline*1.5);
-
-    nav.discussion-paginator {
-      float: right;
-
-      ol {
-        li {
-          list-style: none;
-          display: inline-block;
-          padding-right: 0.5em;
-          a {
-            @include white-button;
-          }
-          &.current-page span {
-            display: inline-block;
-            height: 35px;
-            padding: 0 ($baseline*0.75);
-            border: 1px solid $gray-l3;
-            border-radius: 3px;
-            font-size: 13px;
-            font-weight: 700;
-            line-height: 32px;
-            color: $gray-d3;
-            text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
-          }
-        }
-      }
-    }
-  }
-
-  .edit-post-form {
-    width: 100%;
-    margin-bottom: $baseline;
-    @include clearfix();
-    @include box-sizing(border-box);
-
-    .form-row {
-      margin-top: $baseline;
-    }
-
-    .post-cancel {
-      @include white-button;
-      float: left;
-      margin: ($baseline/2) 0 0 ($baseline*0.75);
-    }
-
-    .post-update {
-      @include blue-button;
-      float: left;
-      height: 37px;
-      margin-top: ($baseline/2);
-      padding-bottom: 2px;
-
-      &:hover, &:focus {
-        border-color: #222;
-      }
-    }
-
-    .edit-post-title {
-      width: 100%;
-      height: 40px;
-      padding: 0 ($baseline/2);
-      @include box-sizing(border-box);
-      border-radius: 3px;
-      border: 1px solid #aaa;
-      font-size: 16px;
-      font-family: $sans-serif;
-      color: $gray-d3;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15) inset;
-    }
   }
 }
 
-.discussion-user-threads {
-  @extend .discussion-module;
+.discussion-show {
+  @include float(right);
 
-  .discussion-post {
-    padding-bottom: $baseline !important;
+  position: relative;
+  top: 3px;
+  font-size: $forum-base-font-size;
+  text-align: center;
+
+  &.shown {
+    background-color: theme-color("inverse");
+    color: theme-color("primary");
+  }
+}
+
+section.discussion {
+  @include clearfix();
+}
+
+.new-post-article {
+  .forum-new-post-form {
+    padding: $baseline;
+  }
+
+  .inner-wrapper {
+    max-width: map-get($container-max-widths, xl);
+    min-width: 760px;
+    margin: auto;
   }
 }
 
 .xblock-student_view-discussion {
   @extend %ui-print-excluded;
+  // Overrides overspecific courseware CSS from:
+  // https://github.com/edx/edx-platform/blob/master/lms/static/sass/course/courseware/_courseware.scss#L499
+  padding-top: 15px !important;
 }
 
 // ====================
 
 // post pagination
-.response-count {
-  margin-top: $baseline;
-  padding: 0 ($baseline*1.5);
-  color: $gray;
-  font-size: 14px;
-}
+section.discussion-pagination {
+  margin-top: ($baseline*1.5);
 
-.response-pagination {
-  visibility: visible;
-  padding: ($baseline/2) ($baseline*1.5);
-  background-color: $gray-l6;
-  box-shadow: 0 1px 1px $gray-l4 inset, 0 -1px 1px $gray-l4 inset;
+  nav.discussion-paginator {
+    @include float(right);
 
-  &:empty {
-    visibility: hidden;
-  }
+    ol {
+      li {
+        @include padding-right($baseline/2);
 
-  .response-display-count {
-    display: block;
-    padding: ($baseline/2) 0;
-    color: $gray;
-    font-size: 14px;
-  }
+        list-style: none;
+        display: inline-block;
 
-  .load-response-button {
-    @include white-button;
-    @include linear-gradient(top, $white 35%, $gray-l4);
-    position: relative;
-    margin: ($baseline/2) 0;
-    border: 1px solid $gray-l2;
-    width: 100%;
-    box-shadow: 0 1px 1px $shadow-l1;
-    text-align: left;
-    font-weight: normal;
-
-    span.add-response-btn-text {
-      padding-left: ($baseline/5);
+        &.current-page span {
+          display: inline-block;
+          height: 35px;
+          padding: 0 ($baseline*0.75);
+          border: 1px solid $forum-color-border;
+          border-radius: $forum-border-radius;
+          font-size: $forum-base-font-size;
+          font-weight: 700;
+          line-height: 32px;
+          color: theme-color("gray-dark");
+          text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+        }
+      }
     }
   }
 }
-

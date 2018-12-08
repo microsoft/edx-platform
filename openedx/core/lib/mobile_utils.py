@@ -3,6 +3,7 @@ Common utilities related to the mobile apps.
 """
 
 import re
+
 from django.conf import settings
 
 
@@ -29,7 +30,7 @@ def is_request_from_mobile_app(request):
         user_agent = request.META.get('HTTP_USER_AGENT')
         if user_agent:
             for user_agent_regex in settings.MOBILE_APP_USER_AGENT_REGEXES:
-                if re.match(user_agent_regex, user_agent):
+                if re.search(user_agent_regex, user_agent):
                     return True
 
     return False

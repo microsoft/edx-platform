@@ -2,6 +2,7 @@
 Serializers for Bookmarks.
 """
 from rest_framework import serializers
+
 from openedx.core.lib.api.serializers import CourseKeyField, UsageKeyField
 
 from . import DEFAULT_FIELDS
@@ -51,7 +52,7 @@ class BookmarkSerializer(serializers.ModelSerializer):
         """
         Return the REST resource id: {username,usage_id}.
         """
-        return "{0},{1}".format(bookmark.user.username, bookmark.usage_key)
+        return u"{0},{1}".format(bookmark.user.username, bookmark.usage_key)
 
     def get_path(self, bookmark):
         """

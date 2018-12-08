@@ -2,24 +2,26 @@
 Support tool for changing course enrollments.
 """
 from django.contrib.auth.models import User
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.db import transaction
 from django.db.models import Q
 from django.http import HttpResponseBadRequest
 from django.utils.decorators import method_decorator
 from django.views.generic import View
-from rest_framework.generics import GenericAPIView
 from opaque_keys import InvalidKeyError
 from opaque_keys.edx.keys import CourseKey
+from rest_framework.generics import GenericAPIView
+from six import text_type
 
 from course_modes.models import CourseMode
 from edxmako.shortcuts import render_to_response
 from enrollment.api import get_enrollments, update_enrollment
 from enrollment.errors import CourseModeNotFoundError
+from enrollment.serializers import ModeSerializer
 from lms.djangoapps.support.decorators import require_support_permission
 from lms.djangoapps.support.serializers import ManualEnrollmentSerializer
 from lms.djangoapps.verify_student.models import VerificationDeadline
-from student.models import CourseEnrollment, ManualEnrollmentAudit, ENROLLED_TO_ENROLLED
+from student.models import ENROLLED_TO_ENROLLED, CourseEnrollment, ManualEnrollmentAudit
 from util.json_request import JsonResponse
 
 
@@ -44,6 +46,10 @@ class EnrollmentSupportListView(GenericAPIView):
     Allows viewing and changing learner enrollments by support
     staff.
     """
+    # TODO: ARCH-91
+    # This view is excluded from Swagger doc generation because it
+    # does not specify a serializer class.
+    exclude_from_schema = True
 
     @method_decorator(require_support_permission)
     def get(self, request, username_or_email):
@@ -61,6 +67,8 @@ class EnrollmentSupportListView(GenericAPIView):
             # Folds the course_details field up into the main JSON object.
             enrollment.update(**enrollment.pop('course_details'))
             course_key = CourseKey.from_string(enrollment['course_id'])
+            # get the all courses modes and replace with existing modes.
+            enrollment['course_modes'] = self.get_course_modes(course_key)
             # Add the price of the course's verified mode.
             self.include_verified_mode_info(enrollment, course_key)
             # Add manual enrollment history, if it exists
@@ -83,8 +91,10 @@ class EnrollmentSupportListView(GenericAPIView):
                     username=user.username,
                     old_mode=old_mode
                 ))
+            if new_mode == CourseMode.CREDIT_MODE:
+                return HttpResponseBadRequest(u'Enrollment cannot be changed to credit mode.')
         except KeyError as err:
-            return HttpResponseBadRequest(u'The field {} is required.'.format(err.message))
+            return HttpResponseBadRequest(u'The field {} is required.'.format(text_type(err)))
         except InvalidKeyError:
             return HttpResponseBadRequest(u'Could not parse course key.')
         except (CourseEnrollment.DoesNotExist, User.DoesNotExist):
@@ -98,7 +108,7 @@ class EnrollmentSupportListView(GenericAPIView):
             # Wrapped in a transaction so that we can be sure the
             # ManualEnrollmentAudit record is always created correctly.
             with transaction.atomic():
-                update_enrollment(user.username, course_id, mode=new_mode)
+                update_enrollment(user.username, course_id, mode=new_mode, include_expired=True)
                 manual_enrollment = ManualEnrollmentAudit.create_manual_enrollment_audit(
                     request.user,
                     enrollment.user.email,
@@ -108,7 +118,7 @@ class EnrollmentSupportListView(GenericAPIView):
                 )
                 return JsonResponse(ManualEnrollmentSerializer(instance=manual_enrollment).data)
         except CourseModeNotFoundError as err:
-            return HttpResponseBadRequest(err.message)
+            return HttpResponseBadRequest(text_type(err))
 
     @staticmethod
     def include_verified_mode_info(enrollment_data, course_key):
@@ -150,3 +160,24 @@ class EnrollmentSupportListView(GenericAPIView):
         if manual_enrollment_audit is None:
             return {}
         return ManualEnrollmentSerializer(instance=manual_enrollment_audit).data
+
+    @staticmethod
+    def get_course_modes(course_key):
+        """
+        Returns a list of all modes including expired modes for a given course id
+
+        Arguments:
+            course_id (CourseKey): Search for course modes for this course.
+
+        Returns:
+            list of `Mode`
+
+        """
+        course_modes = CourseMode.modes_for_course(
+            course_key,
+            include_expired=True
+        )
+        return [
+            ModeSerializer(mode).data
+            for mode in course_modes
+        ]

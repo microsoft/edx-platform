@@ -4,28 +4,33 @@ End-to-end tests for the gating feature.
 """
 from textwrap import dedent
 
-from ..helpers import UniqueCourseTest
-from ...pages.studio.auto_auth import AutoAuthPage
-from ...pages.studio.overview import CourseOutlinePage
-from ...pages.lms.courseware import CoursewarePage
-from ...pages.lms.problem import ProblemPage
-from ...pages.common.logout import LogoutPage
-from ...fixtures.course import CourseFixture, XBlockFixtureDesc
+from common.test.acceptance.fixtures.course import CourseFixture, XBlockFixtureDesc
+from common.test.acceptance.pages.common.auto_auth import AutoAuthPage
+from common.test.acceptance.pages.common.logout import LogoutPage
+from common.test.acceptance.pages.lms.course_home import CourseHomePage
+from common.test.acceptance.pages.lms.courseware import CoursewarePage
+from common.test.acceptance.pages.lms.problem import ProblemPage
+from common.test.acceptance.pages.studio.overview import CourseOutlinePage as StudioCourseOutlinePage
+from common.test.acceptance.tests.helpers import UniqueCourseTest
 
 
 class GatingTest(UniqueCourseTest):
     """
     Test gating feature in LMS.
     """
-    USERNAME = "STUDENT_TESTER"
-    EMAIL = "student101@example.com"
+    STAFF_USERNAME = "STAFF_TESTER"
+    STAFF_EMAIL = "staff101@example.com"
+
+    STUDENT_USERNAME = "STUDENT_TESTER"
+    STUDENT_EMAIL = "student101@example.com"
 
     def setUp(self):
         super(GatingTest, self).setUp()
 
         self.logout_page = LogoutPage(self.browser)
+        self.course_home_page = CourseHomePage(self.browser, self.course_id)
         self.courseware_page = CoursewarePage(self.browser, self.course_id)
-        self.course_outline = CourseOutlinePage(
+        self.studio_course_outline = StudioCourseOutlinePage(
             self.browser,
             self.course_info['org'],
             self.course_info['number'],
@@ -82,26 +87,35 @@ class GatingTest(UniqueCourseTest):
         Make the first subsection a prerequisite
         """
         # Login as staff
-        self._auto_auth("STAFF_TESTER", "staff101@example.com", True)
+        self._auto_auth(self.STAFF_USERNAME, self.STAFF_EMAIL, True)
 
         # Make the first subsection a prerequisite
-        self.course_outline.visit()
-        self.course_outline.open_subsection_settings_dialog(0)
-        self.course_outline.select_access_tab()
-        self.course_outline.make_gating_prerequisite()
+        self.studio_course_outline.visit()
+        self.studio_course_outline.open_subsection_settings_dialog(0)
+        self.studio_course_outline.select_advanced_tab(desired_item='gated_content')
+        self.studio_course_outline.make_gating_prerequisite()
 
     def _setup_gated_subsection(self):
         """
         Gate the second subsection on the first subsection
         """
         # Login as staff
-        self._auto_auth("STAFF_TESTER", "staff101@example.com", True)
+        self._auto_auth(self.STAFF_USERNAME, self.STAFF_EMAIL, True)
 
         # Gate the second subsection based on the score achieved in the first subsection
-        self.course_outline.visit()
-        self.course_outline.open_subsection_settings_dialog(1)
-        self.course_outline.select_access_tab()
-        self.course_outline.add_prerequisite_to_subsection("80")
+        self.studio_course_outline.visit()
+        self.studio_course_outline.open_subsection_settings_dialog(1)
+        self.studio_course_outline.select_advanced_tab(desired_item='gated_content')
+        self.studio_course_outline.add_prerequisite_to_subsection("80", "")
+
+    def _fulfill_prerequisite(self):
+        """
+        Fulfill the prerequisite needed to see gated content
+        """
+        problem_page = ProblemPage(self.browser)
+        self.assertEqual(problem_page.wait_for_page().problem_name, 'HEIGHT OF EIFFEL TOWER')
+        problem_page.click_choice('choice_1')
+        problem_page.click_submit()
 
     def test_subsection_gating_in_studio(self):
         """
@@ -114,44 +128,84 @@ class GatingTest(UniqueCourseTest):
         self._setup_prereq()
 
         # Assert settings are displayed correctly for a prerequisite subsection
-        self.course_outline.visit()
-        self.course_outline.open_subsection_settings_dialog(0)
-        self.course_outline.select_access_tab()
-        self.assertTrue(self.course_outline.gating_prerequisite_checkbox_is_visible())
-        self.assertTrue(self.course_outline.gating_prerequisite_checkbox_is_checked())
-        self.assertFalse(self.course_outline.gating_prerequisites_dropdown_is_visible())
-        self.assertFalse(self.course_outline.gating_prerequisite_min_score_is_visible())
+        self.studio_course_outline.visit()
+        self.studio_course_outline.open_subsection_settings_dialog(0)
+        self.studio_course_outline.select_advanced_tab(desired_item='gated_content')
+        self.assertTrue(self.studio_course_outline.gating_prerequisite_checkbox_is_visible())
+        self.assertTrue(self.studio_course_outline.gating_prerequisite_checkbox_is_checked())
+        self.assertFalse(self.studio_course_outline.gating_prerequisites_dropdown_is_visible())
+        self.assertFalse(self.studio_course_outline.gating_prerequisite_min_score_is_visible())
 
         self._setup_gated_subsection()
 
         # Assert settings are displayed correctly for a gated subsection
-        self.course_outline.visit()
-        self.course_outline.open_subsection_settings_dialog(1)
-        self.course_outline.select_access_tab()
-        self.assertTrue(self.course_outline.gating_prerequisite_checkbox_is_visible())
-        self.assertTrue(self.course_outline.gating_prerequisites_dropdown_is_visible())
-        self.assertTrue(self.course_outline.gating_prerequisite_min_score_is_visible())
+        self.studio_course_outline.visit()
+        self.studio_course_outline.open_subsection_settings_dialog(1)
+        self.studio_course_outline.select_advanced_tab(desired_item='gated_content')
+        self.assertTrue(self.studio_course_outline.gating_prerequisite_checkbox_is_visible())
+        self.assertTrue(self.studio_course_outline.gating_prerequisites_dropdown_is_visible())
+        self.assertTrue(self.studio_course_outline.gating_prerequisite_min_score_is_visible())
 
-    def test_gated_subsection_in_lms(self):
+    def test_gated_subsection_in_lms_for_student(self):
         """
         Given that I am a student
         When I visit the LMS Courseware
-        Then I cannot see a gated subsection
+        Then I can see a gated subsection
+            The gated subsection should have a lock icon
+            and be in the format: "<Subsection Title> (Prerequisite Required)"
         When I fulfill the gating Prerequisite
         Then I can see the gated subsection
+            Now the gated subsection should have an unlock icon
+            and screen readers should read the section as: "<Subsection Title> Unlocked"
         """
         self._setup_prereq()
         self._setup_gated_subsection()
 
-        self._auto_auth(self.USERNAME, self.EMAIL, False)
+        self._auto_auth(self.STUDENT_USERNAME, self.STUDENT_EMAIL, False)
 
-        self.courseware_page.visit()
-        self.assertEqual(self.courseware_page.num_subsections, 1)
+        self.course_home_page.visit()
+        self.assertEqual(self.course_home_page.outline.num_subsections, 2)
 
         # Fulfill prerequisite and verify that gated subsection is shown
-        problem_page = ProblemPage(self.browser)
-        self.assertEqual(problem_page.wait_for_page().problem_name, 'HEIGHT OF EIFFEL TOWER')
-        problem_page.click_choice('choice_1')
-        problem_page.click_check()
         self.courseware_page.visit()
-        self.assertEqual(self.courseware_page.num_subsections, 2)
+        self._fulfill_prerequisite()
+        self.course_home_page.visit()
+        self.assertEqual(self.course_home_page.outline.num_subsections, 2)
+
+    def test_gated_subsection_in_lms_for_staff(self):
+        """
+        Given that I am a staff member
+        When I visit the LMS Courseware
+        Then I can see all gated subsections
+        Displayed along with notification banners
+        Then if I masquerade as a student
+        Then I can see a gated subsection
+            The gated subsection should have a lock icon
+            and be in the format: "<Subsection Title> (Prerequisite Required)"
+        """
+        self._setup_prereq()
+        self._setup_gated_subsection()
+
+        self._auto_auth(self.STAFF_USERNAME, self.STAFF_EMAIL, True)
+
+        self.course_home_page.visit()
+        self.assertEqual(self.course_home_page.preview.staff_view_mode, 'Staff')
+        self.assertEqual(self.course_home_page.outline.num_subsections, 2)
+
+        # Click on gated section and check for banner
+        self.course_home_page.outline.go_to_section('Test Section 1', 'Test Subsection 2')
+        self.courseware_page.wait_for_page()
+        self.assertTrue(self.courseware_page.has_banner())
+
+        self.course_home_page.visit()
+        self.course_home_page.outline.go_to_section('Test Section 1', 'Test Subsection 1')
+        self.courseware_page.wait_for_page()
+
+        self.course_home_page.visit()
+        self.course_home_page.preview.set_staff_view_mode('Learner')
+        self.course_home_page.wait_for_page()
+        self.assertEqual(self.course_home_page.outline.num_subsections, 2)
+        self.course_home_page.outline.go_to_section('Test Section 1', 'Test Subsection 1')
+        self.courseware_page.wait_for_page()
+        # banner displayed informing section is a prereq
+        self.assertTrue(self.courseware_page.has_banner())

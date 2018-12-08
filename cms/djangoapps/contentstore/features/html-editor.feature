@@ -15,11 +15,6 @@ Feature: CMS.HTML Editor
     Then I can modify the display name
     And my display name change is persisted on save
 
-  Scenario: Edit High Level source is available for LaTeX html
-    Given I have created an E-text Written in LaTeX
-    When I edit and select Settings
-    Then Edit High Level Source is visible
-
   Scenario: TinyMCE image plugin sets urls correctly
     Given I have created a Blank HTML Page
     When I edit the page
@@ -110,7 +105,7 @@ Feature: CMS.HTML Editor
     When I edit the page
     And I click font selection dropdown
     Then I should see a list of available fonts
-    And "Default" option sets "'Open Sans', Verdana, Arial, Helvetica, sans-serif" font family
+    And "Default" option sets the expected font family
     And all standard tinyMCE fonts should be available
 
 # Skipping in master due to brittleness JZ 05/22/2014

@@ -1,11 +1,12 @@
 /**
  * Subviews (usually small side panels) for XBlockContainerPage.
  */
-define(["jquery", "underscore", "gettext", "js/views/baseview", "common/js/components/utils/view_utils",
-    "js/views/utils/xblock_utils"],
-    function ($, _, gettext, BaseView, ViewUtils, XBlockViewUtils) {
-        var VisibilityState = XBlockViewUtils.VisibilityState,
-            disabledCss = "is-disabled";
+define(['jquery', 'underscore', 'gettext', 'js/views/baseview', 'common/js/components/utils/view_utils',
+    'js/views/utils/xblock_utils', 'js/views/utils/move_xblock_utils', 'edx-ui-toolkit/js/utils/html-utils'],
+    function($, _, gettext, BaseView, ViewUtils, XBlockViewUtils, MoveXBlockUtils, HtmlUtils) {
+        'use strict';
+
+        var disabledCss = 'is-disabled';
 
         /**
          * A view that refreshes the view when certain values in the XBlockInfo have changed
@@ -20,7 +21,7 @@ define(["jquery", "underscore", "gettext", "js/views/baseview", "common/js/compo
 
             onSync: function(model) {
                 if (this.shouldRefresh(model)) {
-                   this.render();
+                    this.render();
                 }
             },
 
@@ -31,8 +32,32 @@ define(["jquery", "underscore", "gettext", "js/views/baseview", "common/js/compo
             render: function() {}
         });
 
+        var ContainerAccess = ContainerStateListenerView.extend({
+            initialize: function() {
+                ContainerStateListenerView.prototype.initialize.call(this);
+                this.template = this.loadTemplate('container-access');
+            },
+
+            shouldRefresh: function(model) {
+                return ViewUtils.hasChangedAttributes(model, ['has_partition_group_components', 'user_partitions']);
+            },
+
+            render: function() {
+                HtmlUtils.setHtml(
+                    this.$el,
+                    HtmlUtils.HTML(
+                        this.template({
+                            hasPartitionGroupComponents: this.model.get('has_partition_group_components'),
+                            userPartitionInfo: this.model.get('user_partition_info')
+                        })
+                    )
+                );
+                return this;
+            }
+        });
+
         var MessageView = ContainerStateListenerView.extend({
-            initialize: function () {
+            initialize: function() {
                 ContainerStateListenerView.prototype.initialize.call(this);
                 this.template = this.loadTemplate('container-message');
             },
@@ -42,9 +67,12 @@ define(["jquery", "underscore", "gettext", "js/views/baseview", "common/js/compo
             },
 
             render: function() {
-                this.$el.html(this.template({
-                    currentlyVisibleToStudents: this.model.get('currently_visible_to_students')
-                }));
+                HtmlUtils.setHtml(
+                    this.$el,
+                    HtmlUtils.HTML(
+                        this.template({currentlyVisibleToStudents: this.model.get('currently_visible_to_students')})
+                    )
+                );
                 return this;
             }
         });
@@ -61,8 +89,7 @@ define(["jquery", "underscore", "gettext", "js/views/baseview", "common/js/compo
                 var viewLiveAction = this.$el.find('.button-view');
                 if (this.model.get('published')) {
                     viewLiveAction.removeClass(disabledCss).attr('aria-disabled', false);
-                }
-                else {
+                } else {
                     viewLiveAction.addClass(disabledCss).attr('aria-disabled', true);
                 }
             }
@@ -84,7 +111,7 @@ define(["jquery", "underscore", "gettext", "js/views/baseview", "common/js/compo
 
             // takes XBlockInfo as a model
 
-            initialize: function () {
+            initialize: function() {
                 BaseView.prototype.initialize.call(this);
                 this.template = this.loadTemplate('publish-xblock');
                 this.model.on('sync', this.onSync, this);
@@ -94,72 +121,86 @@ define(["jquery", "underscore", "gettext", "js/views/baseview", "common/js/compo
             onSync: function(model) {
                 if (ViewUtils.hasChangedAttributes(model, [
                     'has_changes', 'published', 'edited_on', 'edited_by', 'visibility_state',
-                    'has_explicit_staff_lock', 'has_content_group_components'
+                    'has_explicit_staff_lock'
                 ])) {
-                   this.render();
+                    this.render();
                 }
             },
 
-            render: function () {
-                this.$el.html(this.template({
-                    visibilityState: this.model.get('visibility_state'),
-                    visibilityClass: XBlockViewUtils.getXBlockVisibilityClass(this.model.get('visibility_state')),
-                    hasChanges: this.model.get('has_changes'),
-                    editedOn: this.model.get('edited_on'),
-                    editedBy: this.model.get('edited_by'),
-                    published: this.model.get('published'),
-                    publishedOn: this.model.get('published_on'),
-                    publishedBy: this.model.get('published_by'),
-                    released: this.model.get('released_to_students'),
-                    releaseDate: this.model.get('release_date'),
-                    releaseDateFrom: this.model.get('release_date_from'),
-                    hasExplicitStaffLock: this.model.get('has_explicit_staff_lock'),
-                    staffLockFrom: this.model.get('staff_lock_from'),
-                    hasContentGroupComponents: this.model.get('has_content_group_components'),
-                    course: window.course,
-                }));
+            render: function() {
+                HtmlUtils.setHtml(
+                    this.$el,
+                    HtmlUtils.HTML(
+                        this.template({
+                            visibilityState: this.model.get('visibility_state'),
+                            visibilityClass: XBlockViewUtils.getXBlockVisibilityClass(
+                                this.model.get('visibility_state')
+                            ),
+                            hasChanges: this.model.get('has_changes'),
+                            editedOn: this.model.get('edited_on'),
+                            editedBy: this.model.get('edited_by'),
+                            published: this.model.get('published'),
+                            publishedOn: this.model.get('published_on'),
+                            publishedBy: this.model.get('published_by'),
+                            released: this.model.get('released_to_students'),
+                            releaseDate: this.model.get('release_date'),
+                            releaseDateFrom: this.model.get('release_date_from'),
+                            hasExplicitStaffLock: this.model.get('has_explicit_staff_lock'),
+                            staffLockFrom: this.model.get('staff_lock_from'),
+                            course: window.course,
+                            HtmlUtils: HtmlUtils
+                        })
+                    )
+                );
 
                 return this;
             },
 
-            publish: function (e) {
+            publish: function(e) {
                 var xblockInfo = this.model;
                 if (e && e.preventDefault) {
                     e.preventDefault();
                 }
                 ViewUtils.runOperationShowingMessage(gettext('Publishing'),
-                    function () {
+                    function() {
                         return xblockInfo.save({publish: 'make_public'}, {patch: true});
                     }).always(function() {
-                        xblockInfo.set("publish", null);
-                    }).done(function () {
+                        xblockInfo.set('publish', null);
+                        // Hide any move notification if present.
+                        MoveXBlockUtils.hideMovedNotification();
+                    }).done(function() {
                         xblockInfo.fetch();
                     });
             },
 
-            discardChanges: function (e) {
-                var xblockInfo = this.model, renderPage = this.renderPage;
+            discardChanges: function(e) {
+                var xblockInfo = this.model,
+                    renderPage = this.renderPage;
                 if (e && e.preventDefault) {
                     e.preventDefault();
                 }
-                ViewUtils.confirmThenRunOperation(gettext("Discard Changes"),
-                    gettext("Are you sure you want to revert to the last published version of the unit? You cannot undo this action."),
-                    gettext("Discard Changes"),
-                    function () {
+                ViewUtils.confirmThenRunOperation(gettext('Discard Changes'),
+                    gettext('Are you sure you want to revert to the last published version of the unit? You cannot undo this action.'),
+                    gettext('Discard Changes'),
+                    function() {
                         ViewUtils.runOperationShowingMessage(gettext('Discarding Changes'),
-                            function () {
+                            function() {
                                 return xblockInfo.save({publish: 'discard_changes'}, {patch: true});
                             }).always(function() {
-                                xblockInfo.set("publish", null);
-                            }).done(function () {
+                                xblockInfo.set('publish', null);
+                                // Hide any move notification if present.
+                                MoveXBlockUtils.hideMovedNotification();
+                            }).done(function() {
                                 renderPage();
                             });
                     }
                 );
             },
 
-            toggleStaffLock: function (e) {
-                var xblockInfo = this.model, self=this, enableStaffLock, hasInheritedStaffLock,
+            toggleStaffLock: function(e) {
+                var xblockInfo = this.model,
+                    self = this,
+                    enableStaffLock, hasInheritedStaffLock,
                     saveAndPublishStaffLock, revertCheckBox;
                 if (e && e.preventDefault) {
                     e.preventDefault();
@@ -179,8 +220,8 @@ define(["jquery", "underscore", "gettext", "js/views/baseview", "common/js/compo
                         metadata: {visible_to_staff_only: enableStaffLock ? true : null}},
                         {patch: true}
                     ).always(function() {
-                        xblockInfo.set("publish", null);
-                    }).done(function () {
+                        xblockInfo.set('publish', null);
+                    }).done(function() {
                         xblockInfo.fetch();
                     }).fail(function() {
                         revertCheckBox();
@@ -198,9 +239,9 @@ define(["jquery", "underscore", "gettext", "js/views/baseview", "common/js/compo
                     ViewUtils.runOperationShowingMessage(gettext('Inheriting Student Visibility'),
                         _.bind(saveAndPublishStaffLock, self));
                 } else {
-                    ViewUtils.confirmThenRunOperation(gettext("Make Visible to Students"),
-                        gettext("If the unit was previously published and released to students, any changes you made to the unit when it was hidden will now be visible to students. Do you want to proceed?"),
-                        gettext("Make Visible to Students"),
+                    ViewUtils.confirmThenRunOperation(gettext('Make Visible to Students'),
+                        gettext('If the unit was previously published and released to students, any changes you made to the unit when it was hidden will now be visible to students. Do you want to proceed?'),
+                        gettext('Make Visible to Students'),
                         function() {
                             ViewUtils.runOperationShowingMessage(gettext('Making Visible to Students'),
                                 _.bind(saveAndPublishStaffLock, self));
@@ -225,7 +266,7 @@ define(["jquery", "underscore", "gettext", "js/views/baseview", "common/js/compo
         var PublishHistory = BaseView.extend({
             // takes XBlockInfo as a model
 
-            initialize: function () {
+            initialize: function() {
                 BaseView.prototype.initialize.call(this);
                 this.template = this.loadTemplate('publish-history');
                 this.model.on('sync', this.onSync, this);
@@ -233,25 +274,31 @@ define(["jquery", "underscore", "gettext", "js/views/baseview", "common/js/compo
 
             onSync: function(model) {
                 if (ViewUtils.hasChangedAttributes(model, ['published', 'published_on', 'published_by'])) {
-                   this.render();
+                    this.render();
                 }
             },
 
-            render: function () {
-                this.$el.html(this.template({
-                    published: this.model.get('published'),
-                    published_on: this.model.get('published_on'),
-                    published_by: this.model.get('published_by')
-                }));
+            render: function() {
+                HtmlUtils.setHtml(
+                    this.$el,
+                    HtmlUtils.HTML(
+                        this.template({
+                            published: this.model.get('published'),
+                            published_on: this.model.get('published_on'),
+                            published_by: this.model.get('published_by')
+                        })
+                    )
+                );
 
                 return this;
             }
         });
 
         return {
-            'MessageView': MessageView,
-            'ViewLiveButtonController': ViewLiveButtonController,
-            'Publisher': Publisher,
-            'PublishHistory': PublishHistory
+            MessageView: MessageView,
+            ViewLiveButtonController: ViewLiveButtonController,
+            Publisher: Publisher,
+            PublishHistory: PublishHistory,
+            ContainerAccess: ContainerAccess
         };
     }); // end define();

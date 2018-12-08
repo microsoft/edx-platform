@@ -1,6 +1,7 @@
-from functools import wraps
-import json
 import decimal
+import json
+from functools import wraps
+
 from django.core.serializers import serialize
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db.models.query import QuerySet
@@ -66,7 +67,7 @@ class JsonResponse(HttpResponse):
         elif isinstance(resp_obj, QuerySet):
             content = serialize('json', resp_obj)
         else:
-            content = json.dumps(resp_obj, cls=encoder, indent=2, ensure_ascii=False)
+            content = json.dumps(resp_obj, cls=encoder, indent=2, ensure_ascii=True)
         kwargs.setdefault("content_type", "application/json")
         if status:
             kwargs["status"] = status

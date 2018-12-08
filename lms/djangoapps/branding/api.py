@@ -16,13 +16,14 @@ import logging
 import urlparse
 
 from django.conf import settings
-from django.utils.translation import ugettext as _
 from django.contrib.staticfiles.storage import staticfiles_storage
+from django.urls import reverse
+from django.utils.translation import ugettext as _
 
-from microsite_configuration import microsite
-from edxmako.shortcuts import marketing_link
 from branding.models import BrandingApiConfig
+from edxmako.shortcuts import marketing_link
 
+from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 
 log = logging.getLogger("edx.footer")
 EMPTY_URL = '#'
@@ -36,7 +37,7 @@ def is_enabled():
 def get_footer(is_secure=True):
     """Retrieve information used to render the footer.
 
-    This will handle both the OpenEdX and EdX.org versions
+    This will handle both the Open edX and edX.org versions
     of the footer.  All user-facing text is internationalized.
 
     Currently, this does NOT support theming.
@@ -98,10 +99,17 @@ def get_footer(is_secure=True):
         "copyright": _footer_copyright(),
         "logo_image": _footer_logo_img(is_secure),
         "social_links": _footer_social_links(),
-        "navigation_links": _footer_navigation_links(),
+        "business_links": _footer_business_links(),
         "mobile_links": _footer_mobile_links(is_secure),
-        "legal_links": _footer_legal_links(),
+        "more_info_links": _footer_more_info_links(),
+        "connect_links": _footer_connect_links(),
         "openedx_link": _footer_openedx_link(),
+        "navigation_links": _footer_navigation_links(),
+        "legal_links": _footer_legal_links(),
+        "edx_org_link": {
+            "url": "https://www.edx.org/?utm_medium=affiliate_partner&utm_source=opensource-partner&utm_content=open-edx-partner-footer-link&utm_campaign=open-edx-footer",
+            "text": _("Take free online courses at edX.org"),
+        },
     }
 
 
@@ -115,13 +123,13 @@ def _footer_copyright():
         # Translators: 'EdX', 'edX', and 'Open edX' are trademarks of 'edX Inc.'.
         # Please do not translate any of these trademarks and company names.
         u"\u00A9 {org_name}.  All rights reserved except where noted.  "
-        u"EdX, Open edX and the edX and Open EdX logos are registered trademarks "
-        u"or trademarks of edX Inc."
-    ).format(org_name=microsite.get_value('PLATFORM_NAME', settings.PLATFORM_NAME))
+        u"EdX, Open edX and their respective logos are trademarks "
+        u"or registered trademarks of edX Inc."
+    ).format(org_name=configuration_helpers.get_value('PLATFORM_NAME', settings.PLATFORM_NAME))
 
 
 def _footer_openedx_link():
-    """Return the image link for "powered by OpenEdX".
+    """Return the image link for "Powered by Open edX".
 
     Args:
         is_secure (bool): Whether the request is using TLS.
@@ -145,7 +153,7 @@ def _footer_social_links():
     Returns: list
 
     """
-    platform_name = microsite.get_value('platform_name', settings.PLATFORM_NAME)
+    platform_name = configuration_helpers.get_value('platform_name', settings.PLATFORM_NAME)
     links = []
 
     for social_name in settings.SOCIAL_MEDIA_FOOTER_NAMES:
@@ -162,8 +170,33 @@ def _footer_social_links():
     return links
 
 
+def _footer_connect_links():
+    """Return the connect links to display in the footer. """
+
+    return [
+        {
+            "name": link_name,
+            "title": link_title,
+            "url": link_url,
+        }
+        for link_name, link_url, link_title in [
+            ("blog", marketing_link("BLOG"), _("Blog")),
+            ("contact", _build_support_form_url(), _("Contact Us")),
+            ("help-center", settings.SUPPORT_SITE_LINK, _("Help Center")),
+            ("media_kit", marketing_link("MEDIA_KIT"), _("Media Kit")),
+            ("donate", marketing_link("DONATE"), _("Donate")),
+        ]
+        if link_url and link_url != "#"
+    ]
+
+
+def _build_support_form_url():
+    return '{base_url}/support/contact_us'.format(base_url=settings.LMS_ROOT_URL)
+
+
 def _footer_navigation_links():
     """Return the navigation links to display in the footer. """
+    platform_name = configuration_helpers.get_value('platform_name', settings.PLATFORM_NAME)
     return [
         {
             "name": link_name,
@@ -172,13 +205,14 @@ def _footer_navigation_links():
         }
         for link_name, link_url, link_title in [
             ("about", marketing_link("ABOUT"), _("About")),
+            ("enterprise", marketing_link("ENTERPRISE"),
+             _("{platform_name} for Business").format(platform_name=platform_name)),
             ("blog", marketing_link("BLOG"), _("Blog")),
             ("news", marketing_link("NEWS"), _("News")),
             ("help-center", settings.SUPPORT_SITE_LINK, _("Help Center")),
-            ("contact", marketing_link("CONTACT"), _("Contact")),
+            ("contact", reverse("support:contact_us"), _("Contact")),
             ("careers", marketing_link("CAREERS"), _("Careers")),
             ("donate", marketing_link("DONATE"), _("Donate")),
-            ("sitemap", marketing_link("SITE_MAP"), _("Sitemap")),
         ]
         if link_url and link_url != "#"
     ]
@@ -191,6 +225,62 @@ def _footer_legal_links():
         ("terms_of_service_and_honor_code", marketing_link("TOS_AND_HONOR"), _("Terms of Service & Honor Code")),
         ("privacy_policy", marketing_link("PRIVACY"), _("Privacy Policy")),
         ("accessibility_policy", marketing_link("ACCESSIBILITY"), _("Accessibility Policy")),
+        ("sitemap", marketing_link("SITE_MAP"), _("Sitemap")),
+        ("media_kit", marketing_link("MEDIA_KIT"), _("Media Kit")),
+    ]
+
+    # Backwards compatibility: If a combined "terms of service and honor code"
+    # link isn't provided, add separate TOS and honor code links.
+    tos_and_honor_link = marketing_link("TOS_AND_HONOR")
+    if not (tos_and_honor_link and tos_and_honor_link != "#"):
+        links.extend([
+            ("terms_of_service", marketing_link("TOS"), _("Terms of Service")),
+            ("honor_code", marketing_link("HONOR"), _("Honor Code")),
+        ])
+
+    return [
+        {
+            "name": link_name,
+            "title": link_title,
+            "url": link_url,
+        }
+        for link_name, link_url, link_title in links
+        if link_url and link_url != "#"
+    ]
+
+
+def _footer_business_links():
+    """Return the business links to display in the footer. """
+    platform_name = configuration_helpers.get_value('platform_name', settings.PLATFORM_NAME)
+
+    return [
+        {
+            "name": link_name,
+            "title": link_title,
+            "url": link_url,
+        }
+        for link_name, link_url, link_title in [
+            ("about", marketing_link("ABOUT"), _("About")),
+            ("enterprise", marketing_link("ENTERPRISE"),
+             _("{platform_name} for Business").format(platform_name=platform_name)),
+            ("affiliates", marketing_link("AFFILIATES"), _("Affiliates")),
+            ("openedx", _footer_openedx_link()["url"], _("Open edX")),
+            ("careers", marketing_link("CAREERS"), _("Careers")),
+            ("news", marketing_link("NEWS"), _("News")),
+        ]
+        if link_url and link_url != "#"
+    ]
+
+
+def _footer_more_info_links():
+    """Return the More Information footer links (e.g. terms of service). """
+
+    links = [
+        ("terms_of_service_and_honor_code", marketing_link("TOS_AND_HONOR"), _("Terms of Service & Honor Code")),
+        ("privacy_policy", marketing_link("PRIVACY"), _("Privacy Policy")),
+        ("accessibility_policy", marketing_link("ACCESSIBILITY"), _("Accessibility Policy")),
+        ("trademarks", marketing_link("TRADEMARKS"), _("Trademark Policy")),
+        ("sitemap", marketing_link("SITE_MAP"), _("Sitemap")),
     ]
 
     # Backwards compatibility: If a combined "terms of service and honor code"
@@ -222,7 +312,7 @@ def _footer_mobile_links(is_secure):
     Returns: list
 
     """
-    platform_name = microsite.get_value('platform_name', settings.PLATFORM_NAME)
+    platform_name = configuration_helpers.get_value('platform_name', settings.PLATFORM_NAME)
 
     mobile_links = []
     if settings.FEATURES.get('ENABLE_FOOTER_MOBILE_APP_LINKS'):
@@ -256,8 +346,8 @@ def _footer_logo_img(is_secure):
     Returns:
         Absolute url to logo
     """
-    logo_name = microsite.get_value('FOOTER_ORGANIZATION_IMAGE', settings.FOOTER_ORGANIZATION_IMAGE)
-    # `logo_name` is looked up from the microsite configuration,
+    logo_name = configuration_helpers.get_value('FOOTER_ORGANIZATION_IMAGE', settings.FOOTER_ORGANIZATION_IMAGE)
+    # `logo_name` is looked up from the configuration,
     # which falls back on the Django settings, which loads it from
     # `lms.env.json`, which is created and managed by Ansible. Because of
     # this runaround, we lose a lot of the flexibility that Django's
@@ -298,7 +388,7 @@ def _absolute_url(is_secure, url_path):
         unicode
 
     """
-    site_name = microsite.get_value('SITE_NAME', settings.SITE_NAME)
+    site_name = configuration_helpers.get_value('SITE_NAME', settings.SITE_NAME)
     parts = ("https" if is_secure else "http", site_name, url_path, '', '', '')
     return urlparse.urlunparse(parts)
 
@@ -327,14 +417,14 @@ def _absolute_url_staticfile(is_secure, name):
     return _absolute_url(is_secure, url_path)
 
 
-def get_microsite_url(name):
+def get_configuration_url(name):
     """
-    Look up and return the value for given url name in microsite configuration.
-    URLs are saved in "urls" dictionary inside Microsite Configuration.
+    Look up and return the value for given url name in configuration.
+    URLs are saved in "urls" dictionary inside configuration.
 
-    Return 'EMPTY_URL' if given url name is not defined in microsite configuration urls.
+    Return 'EMPTY_URL' if given url name is not defined in configuration urls.
     """
-    urls = microsite.get_value("urls", default={})
+    urls = configuration_helpers.get_value("urls", default={})
     return urls.get(name) or EMPTY_URL
 
 
@@ -342,15 +432,15 @@ def get_url(name):
     """
     Lookup and return page url, lookup is performed in the following order
 
-    1. get microsite url, If microsite URL override exists, return it
+    1. get url, If configuration URL override exists, return it
     2. Otherwise return the marketing URL.
 
     :return: string containing page url.
     """
-    # If a microsite URL override exists, return it.  Otherwise return the marketing URL.
-    microsite_url = get_microsite_url(name)
-    if microsite_url != EMPTY_URL:
-        return microsite_url
+    # If a configuration URL override exists, return it.  Otherwise return the marketing URL.
+    configuration_url = get_configuration_url(name)
+    if configuration_url != EMPTY_URL:
+        return configuration_url
 
     # get marketing link, if marketing is disabled then platform url will be used instead.
     url = marketing_link(name)
@@ -360,29 +450,31 @@ def get_url(name):
 
 def get_base_url(is_secure):
     """
-    Return Base URL for site/microsite.
+    Return Base URL for site.
     Arguments:
         is_secure (bool): If true, use HTTPS as the protocol.
     """
     return _absolute_url(is_secure=is_secure, url_path="")
 
 
-def get_logo_url():
+def get_logo_url(is_secure=True):
     """
     Return the url for the branded logo image to be used
+    Arguments:
+        is_secure (bool): If true, use HTTPS as the protocol.
     """
 
-    # if the MicrositeConfiguration has a value for the logo_image_url
+    # if the configuration has an overide value for the logo_image_url
     # let's use that
-    image_url = microsite.get_value('logo_image_url')
+    image_url = configuration_helpers.get_value('logo_image_url')
     if image_url:
-        return '{static_url}{image_url}'.format(
-            static_url=settings.STATIC_URL,
-            image_url=image_url
+        return _absolute_url_staticfile(
+            is_secure=is_secure,
+            name=image_url,
         )
 
     # otherwise, use the legacy means to configure this
-    university = microsite.get_value('university')
+    university = configuration_helpers.get_value('university')
 
     if university:
         return staticfiles_storage.url('images/{uni}-on-edx-logo.png'.format(uni=university))
@@ -409,3 +501,16 @@ def get_about_url():
     Lookup and return About page url
     """
     return get_url("ABOUT")
+
+
+def get_home_url():
+    """
+    Lookup and return home page url, lookup is performed in the following order
+
+    1. return marketing root URL, If marketing is enabled
+    2. Otherwise return dashboard URL.
+    """
+    if settings.FEATURES.get('ENABLE_MKTG_SITE', False):
+        return marketing_link('ROOT')
+
+    return reverse('dashboard')

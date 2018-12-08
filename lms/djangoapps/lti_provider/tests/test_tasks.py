@@ -4,12 +4,12 @@ Tests for the LTI outcome service handlers, both in outcomes.py and in tasks.py
 
 import ddt
 from django.test import TestCase
-from mock import patch, MagicMock
-from student.tests.factories import UserFactory
+from mock import MagicMock, patch
+from opaque_keys.edx.locator import BlockUsageLocator, CourseLocator
 
-from lti_provider.models import GradedAssignment, LtiConsumer, OutcomeService
 import lti_provider.tasks as tasks
-from opaque_keys.edx.locator import CourseLocator, BlockUsageLocator
+from lti_provider.models import GradedAssignment, LtiConsumer, OutcomeService
+from student.tests.factories import UserFactory
 
 
 class BaseOutcomeTest(TestCase):
@@ -71,6 +71,8 @@ class SendLeafOutcomeTest(BaseOutcomeTest):
     """
     Tests for the send_leaf_outcome method in tasks.py
     """
+    shard = 4
+
     @ddt.data(
         (2.0, 2.0, 1.0),
         (2.0, 0.0, 0.0),
@@ -91,6 +93,8 @@ class SendCompositeOutcomeTest(BaseOutcomeTest):
     """
     Tests for the send_composite_outcome method in tasks.py
     """
+    shard = 4
+
     def setUp(self):
         super(SendCompositeOutcomeTest, self).setUp()
         self.descriptor = MagicMock()
@@ -99,9 +103,9 @@ class SendCompositeOutcomeTest(BaseOutcomeTest):
             block_type='problem',
             block_id='problem',
         )
-        self.weighted_scores = MagicMock()
-        self.weighted_scores_mock = self.setup_patch(
-            'lti_provider.tasks.get_weighted_scores', self.weighted_scores
+        self.course_grade = MagicMock()
+        self.course_grade_mock = self.setup_patch(
+            'lti_provider.tasks.CourseGradeFactory.read', self.course_grade
         )
         self.module_store = MagicMock()
         self.module_store.get_item = MagicMock(return_value=self.descriptor)
@@ -117,7 +121,7 @@ class SendCompositeOutcomeTest(BaseOutcomeTest):
     )
     @ddt.unpack
     def test_outcome_with_score_score(self, earned, possible, expected):
-        self.weighted_scores.score_for_module = MagicMock(return_value=(earned, possible))
+        self.course_grade.score_for_module = MagicMock(return_value=(earned, possible))
         tasks.send_composite_outcome(
             self.user.id, unicode(self.course_key), self.assignment.id, 1
         )
@@ -129,4 +133,4 @@ class SendCompositeOutcomeTest(BaseOutcomeTest):
         tasks.send_composite_outcome(
             self.user.id, unicode(self.course_key), self.assignment.id, 1
         )
-        self.assertEqual(self.weighted_scores_mock.call_count, 0)
+        self.assertEqual(self.course_grade_mock.call_count, 0)

@@ -14,6 +14,8 @@ from pkg_resources import (
     resource_string,
     resource_isdir,
 )
+from six import text_type
+from web_fragments.fragment import Fragment
 from webob import Response
 from webob.multidict import MultiDict
 from lazy import lazy
@@ -24,15 +26,15 @@ from xblock.fields import (
     String, Dict, ScopeIds, Reference, ReferenceList,
     ReferenceValueDict, UserScope
 )
-from xblock.fragment import Fragment
+
 from xblock.runtime import Runtime, IdReader, IdGenerator
-from xmodule import course_metadata_utils
+from xmodule import block_metadata_utils
 from xmodule.fields import RelativeTime
 from xmodule.errortracker import exc_info_to_str
 from xmodule.modulestore.exceptions import ItemNotFoundError
 
 from opaque_keys.edx.keys import UsageKey
-from opaque_keys.edx.asides import AsideUsageKeyV1, AsideDefinitionKeyV1
+from opaque_keys.edx.asides import AsideUsageKeyV2, AsideDefinitionKeyV2
 from xmodule.exceptions import UndefinedContext
 import dogstats_wrapper as dog_stats_api
 
@@ -63,6 +65,11 @@ STUDIO_VIEW = 'studio_view'
 
 # Views that present a "preview" view of an xblock (as opposed to an editing view).
 PREVIEW_VIEWS = [STUDENT_VIEW, AUTHOR_VIEW]
+
+
+# Make '_' a no-op so we can scrape strings. Using lambda instead of
+#  `django.utils.translation.ugettext_noop` because Django cannot be imported in this file
+_ = lambda text: text
 
 
 class OpaqueKeyReader(IdReader):
@@ -154,8 +161,8 @@ class AsideKeyGenerator(IdGenerator):
         Returns:
             (aside_definition_id, aside_usage_id)
         """
-        def_key = AsideDefinitionKeyV1(definition_id, aside_type)
-        usage_key = AsideUsageKeyV1(usage_id, aside_type)
+        def_key = AsideDefinitionKeyV2(definition_id, aside_type)
+        usage_key = AsideUsageKeyV2(usage_id, aside_type)
         return (def_key, usage_key)
 
     def create_usage(self, def_id):
@@ -243,11 +250,18 @@ class HTMLSnippet(object):
 
 def shim_xmodule_js(block, fragment):
     """
-    Set up the XBlock -> XModule shim on the supplied :class:`xblock.fragment.Fragment`
+    Set up the XBlock -> XModule shim on the supplied :class:`web_fragments.fragment.Fragment`
     """
+    # Delay this import so that it is only used (and django settings are parsed) when
+    # they are required (rather than at startup)
+    import webpack_loader.utils
+
     if not fragment.js_init_fn:
         fragment.initialize_js('XBlockToXModuleShim')
         fragment.json_init_args = {'xmodule-type': block.js_module_name}
+
+        for tag in webpack_loader.utils.get_as_tags('XModuleShim'):
+            fragment.add_resource(tag, mimetype='text/html', placement='head')
 
 
 class XModuleFields(object):
@@ -255,8 +269,8 @@ class XModuleFields(object):
     Common fields for XModules.
     """
     display_name = String(
-        display_name="Display Name",
-        help="This name appears in the horizontal navigation at the top of the page.",
+        display_name=_("Display Name"),
+        help=_("The display name for this component."),
         scope=Scope.settings,
         # it'd be nice to have a useful default but it screws up other things; so,
         # use display_name_with_default for those
@@ -298,6 +312,7 @@ class XModuleMixin(XModuleFields, XBlock):
 
     def __init__(self, *args, **kwargs):
         self.xmodule_runtime = None
+        self._asides = []
 
         super(XModuleMixin, self).__init__(*args, **kwargs)
 
@@ -338,7 +353,7 @@ class XModuleMixin(XModuleFields, XBlock):
 
     @property
     def url_name(self):
-        return course_metadata_utils.url_name_for_course_location(self.location)
+        return block_metadata_utils.url_name_for_block(self)
 
     @property
     def display_name_with_default(self):
@@ -346,7 +361,7 @@ class XModuleMixin(XModuleFields, XBlock):
         Return a display name for the module: use display_name if defined in
         metadata, otherwise convert the url name.
         """
-        return course_metadata_utils.display_name_with_default(self)
+        return block_metadata_utils.display_name_with_default(self)
 
     @property
     def display_name_with_default_escaped(self):
@@ -361,7 +376,14 @@ class XModuleMixin(XModuleFields, XBlock):
         migrate and test switching to display_name_with_default, which is no
         longer escaped.
         """
-        return course_metadata_utils.display_name_with_default_escaped(self)
+        return block_metadata_utils.display_name_with_default_escaped(self)
+
+    @property
+    def tooltip_title(self):
+        """
+        Return the title for the sequence item containing this xmodule as its top level item.
+        """
+        return self.display_name_with_default
 
     @property
     def xblock_kvs(self):
@@ -382,6 +404,18 @@ class XModuleMixin(XModuleFields, XBlock):
         """
         return self._field_data
 
+    def add_aside(self, aside):
+        """
+        save connected asides
+        """
+        self._asides.append(aside)
+
+    def get_asides(self):
+        """
+        get the list of connected asides
+        """
+        return self._asides
+
     def get_explicitly_set_fields_by_scope(self, scope=Scope.content):
         """
         Get a dictionary of the fields for the given scope which are set explicitly on this xblock. (Including
@@ -390,7 +424,15 @@ class XModuleMixin(XModuleFields, XBlock):
         result = {}
         for field in self.fields.values():
             if field.scope == scope and field.is_set_on(self):
-                result[field.name] = field.read_json(self)
+                try:
+                    result[field.name] = field.read_json(self)
+                except TypeError as exception:
+                    exception_message = "{message}, Block-location:{location}, Field-name:{field_name}".format(
+                        message=text_type(exception),
+                        location=text_type(self.location),
+                        field_name=field.name
+                    )
+                    raise TypeError(exception_message)
         return result
 
     def has_children_at_depth(self, depth):
@@ -777,6 +819,7 @@ class XModule(HTMLSnippet, XModuleMixin):
     entry_point = "xmodule.v1"
 
     has_score = descriptor_attr('has_score')
+    max_score = descriptor_attr('max_score')
     show_in_read_only_mode = descriptor_attr('show_in_read_only_mode')
     _field_data_cache = descriptor_attr('_field_data_cache')
     _field_data = descriptor_attr('_field_data')
@@ -846,7 +889,7 @@ class XModule(HTMLSnippet, XModuleMixin):
                 request_post[key] = map(FileObjForWebobFiles, request.POST.getall(key))
 
         response_data = self.handle_ajax(suffix, request_post)
-        return Response(response_data, content_type='application/json')
+        return Response(response_data, content_type='application/json', charset='UTF-8')
 
     def get_child(self, usage_id):
         if usage_id in self._child_cache:
@@ -901,7 +944,7 @@ def policy_key(location):
     Get the key for a location in a policy file.  (Since the policy file is
     specific to a course, it doesn't need the full location url).
     """
-    return u'{cat}/{name}'.format(cat=location.category, name=location.name)
+    return u'{cat}/{name}'.format(cat=location.block_type, name=location.block_id)
 
 
 Template = namedtuple("Template", "metadata data children")
@@ -1172,7 +1215,6 @@ class XModuleDescriptor(HTMLSnippet, ResourceTemplates, XModuleMixin):
     get_progress = module_attr('get_progress')
     get_score = module_attr('get_score')
     handle_ajax = module_attr('handle_ajax')
-    max_score = module_attr('max_score')
     student_view = module_attr(STUDENT_VIEW)
     get_child_descriptors = module_attr('get_child_descriptors')
     xmodule_handler = module_attr('xmodule_handler')
@@ -1194,7 +1236,7 @@ class ConfigurableFragmentWrapper(object):
     """
     Runtime mixin that allows for composition of many `wrap_xblock` wrappers
     """
-    def __init__(self, wrappers=None, **kwargs):
+    def __init__(self, wrappers=None, wrappers_asides=None, **kwargs):
         """
         :param wrappers: A list of wrappers, where each wrapper is:
 
@@ -1207,6 +1249,10 @@ class ConfigurableFragmentWrapper(object):
             self.wrappers = wrappers
         else:
             self.wrappers = []
+        if wrappers_asides is not None:
+            self.wrappers_asides = wrappers_asides
+        else:
+            self.wrappers_asides = []
 
     def wrap_xblock(self, block, view, frag, context):
         """
@@ -1217,13 +1263,22 @@ class ConfigurableFragmentWrapper(object):
 
         return frag
 
+    def wrap_aside(self, block, aside, view, frag, context):    # pylint: disable=unused-argument
+        """
+        See :func:`Runtime.wrap_child`
+        """
+        for wrapper in self.wrappers_asides:
+            frag = wrapper(aside, view, frag, context)
+
+        return frag
+
 
 # This function exists to give applications (LMS/CMS) a place to monkey-patch until
 # we can refactor modulestore to split out the FieldData half of its interface from
 # the Runtime part of its interface. This function mostly matches the
 # Runtime.handler_url interface.
 #
-# The monkey-patching happens in (lms|cms)/startup.py
+# The monkey-patching happens in cms/djangoapps/xblock_config/apps.py and lms/djangoapps/lms_xblock/apps.py
 def descriptor_global_handler_url(block, handler_name, suffix='', query='', thirdparty=False):  # pylint: disable=unused-argument
     """
     See :meth:`xblock.runtime.Runtime.handler_url`.
@@ -1235,7 +1290,7 @@ def descriptor_global_handler_url(block, handler_name, suffix='', query='', thir
 # we can refactor modulestore to split out the FieldData half of its interface from
 # the Runtime part of its interface. This function matches the Runtime.local_resource_url interface
 #
-# The monkey-patching happens in (lms|cms)/startup.py
+# The monkey-patching happens in cms/djangoapps/xblock_config/apps.py and lms/djangoapps/lms_xblock/apps.py
 def descriptor_global_local_resource_url(block, uri):  # pylint: disable=invalid-name, unused-argument
     """
     See :meth:`xblock.runtime.Runtime.local_resource_url`.
@@ -1329,7 +1384,7 @@ class DescriptorSystem(MetricsMixin, ConfigurableFragmentWrapper, Runtime):
     """
     # pylint: disable=bad-continuation
     def __init__(
-        self, load_item, resources_fs, error_tracker, get_policy=None, disabled_xblock_types=(), **kwargs
+        self, load_item, resources_fs, error_tracker, get_policy=None, disabled_xblock_types=lambda: [], **kwargs
     ):
         """
         load_item: Takes a Location and returns an XModuleDescriptor
@@ -1397,7 +1452,7 @@ class DescriptorSystem(MetricsMixin, ConfigurableFragmentWrapper, Runtime):
         """
         Returns a subclass of :class:`.XBlock` that corresponds to the specified `block_type`.
         """
-        if block_type in self.disabled_xblock_types:
+        if block_type in self.disabled_xblock_types():
             return self.default_class
         return super(DescriptorSystem, self).load_block_type(block_type)
 
@@ -1448,8 +1503,9 @@ class DescriptorSystem(MetricsMixin, ConfigurableFragmentWrapper, Runtime):
         """
         potential_set = set(super(DescriptorSystem, self).applicable_aside_types(block))
         if getattr(block, 'xmodule_runtime', None) is not None:
-            application_set = set(block.xmodule_runtime.applicable_aside_types(block))
-            return list(potential_set.intersection(application_set))
+            if hasattr(block.xmodule_runtime, 'applicable_aside_types'):
+                application_set = set(block.xmodule_runtime.applicable_aside_types(block))
+                return list(potential_set.intersection(application_set))
         return list(potential_set)
 
     def resource_url(self, resource):
@@ -1466,6 +1522,28 @@ class DescriptorSystem(MetricsMixin, ConfigurableFragmentWrapper, Runtime):
     def publish(self, block, event_type, event):
         # A stub publish method that doesn't emit any events from XModuleDescriptors.
         pass
+
+    def service(self, block, service_name):
+        """
+        Runtime-specific override for the XBlock service manager.  If a service is not currently
+        instantiated and is declared as a critical requirement, an attempt is made to load the
+        module.
+
+        Arguments:
+            block (an XBlock): this block's class will be examined for service
+                decorators.
+            service_name (string): the name of the service requested.
+
+        Returns:
+            An object implementing the requested service, or None.
+        """
+        # getting the service from parent module. making sure of block service declarations.
+        service = super(DescriptorSystem, self).service(block=block, service_name=service_name)
+        # Passing the block to service if it is callable e.g. ModuleI18nService. It is the responsibility of calling
+        # service to handle the passing argument.
+        if callable(service):
+            return service(block)
+        return service
 
 
 new_contract('DescriptorSystem', DescriptorSystem)
@@ -1524,12 +1602,18 @@ class XMLParsingSystem(DescriptorSystem):
         keys = ScopeIds(None, block_type, def_id, usage_id)
         block_class = self.mixologist.mix(self.load_block_type(block_type))
 
-        self.parse_asides(node, def_id, usage_id, id_generator)
+        aside_children = self.parse_asides(node, def_id, usage_id, id_generator)
+        asides_tags = [x.tag for x in aside_children]
 
         block = block_class.parse_xml(node, self, keys, id_generator)
         self._convert_reference_fields_to_keys(block)  # difference from XBlock.runtime
         block.parent = parent_id
         block.save()
+
+        asides = self.get_asides(block)
+        for asd in asides:
+            if asd.scope_ids.block_type in asides_tags:
+                block.add_aside(asd)
 
         return block
 
@@ -1547,6 +1631,7 @@ class XMLParsingSystem(DescriptorSystem):
         for child in aside_children:
             self._aside_from_xml(child, def_id, usage_id, id_generator)
             node.remove(child)
+        return aside_children
 
     def _make_usage_key(self, course_key, value):
         """
@@ -1555,7 +1640,8 @@ class XMLParsingSystem(DescriptorSystem):
         """
         if isinstance(value, UsageKey):
             return value
-        return course_key.make_usage_key_from_deprecated_string(value)
+        usage_key = UsageKey.from_string(value)
+        return usage_key.map_into_course(course_key)
 
     def _convert_reference_fields_to_keys(self, xblock):
         """
@@ -1742,6 +1828,28 @@ class ModuleSystem(MetricsMixin, ConfigurableFragmentWrapper, Runtime):
 
     def publish(self, block, event_type, event):
         pass
+
+    def service(self, block, service_name):
+        """
+        Runtime-specific override for the XBlock service manager.  If a service is not currently
+        instantiated and is declared as a critical requirement, an attempt is made to load the
+        module.
+
+        Arguments:
+            block (an XBlock): this block's class will be examined for service
+                decorators.
+            service_name (string): the name of the service requested.
+
+        Returns:
+            An object implementing the requested service, or None.
+        """
+        # getting the service from parent module. making sure of block service declarations.
+        service = super(ModuleSystem, self).service(block=block, service_name=service_name)
+        # Passing the block to service if it is callable e.g. ModuleI18nService. It is the responsibility of calling
+        # service to handle the passing argument.
+        if callable(service):
+            return service(block)
+        return service
 
 
 class CombinedSystem(object):

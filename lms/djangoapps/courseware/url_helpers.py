@@ -2,9 +2,11 @@
 Module to define url helpers functions
 """
 from urllib import urlencode
-from xmodule.modulestore.search import path_to_location, navigation_index
+
+from django.urls import reverse
+
 from xmodule.modulestore.django import modulestore
-from django.core.urlresolvers import reverse
+from xmodule.modulestore.search import navigation_index, path_to_location
 
 
 def get_redirect_url(course_key, usage_key):
@@ -42,12 +44,9 @@ def get_redirect_url(course_key, usage_key):
         # Here we use the navigation_index from the position returned from
         # path_to_location - we can only navigate to the topmost vertical at the
         # moment
-
         redirect_url = reverse(
             'courseware_position',
             args=(unicode(course_key), chapter, section, navigation_index(position))
         )
-
     redirect_url += "?{}".format(urlencode({'activate_block_id': unicode(final_target_id)}))
-
     return redirect_url

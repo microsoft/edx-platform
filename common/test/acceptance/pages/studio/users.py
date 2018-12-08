@@ -1,11 +1,16 @@
 """
 Page classes to test either the Course Team page or the Library Team page.
 """
-from bok_choy.promise import EmptyPromise
+import os
+
 from bok_choy.page_object import PageObject
-from ...tests.helpers import disable_animations
-from .course_page import CoursePage
-from . import BASE_URL
+from bok_choy.promise import EmptyPromise
+from opaque_keys.edx.locator import CourseLocator
+
+from common.test.acceptance.pages.studio import BASE_URL
+from common.test.acceptance.pages.studio.course_page import CoursePage
+from common.test.acceptance.pages.studio.utils import HelpMixin
+from common.test.acceptance.tests.helpers import disable_animations
 
 
 def wait_for_ajax_or_reload(browser):
@@ -94,6 +99,7 @@ class UsersPageMixin(PageObject):
         self.click_add_button()
         self.set_new_user_email(email)
         self.click_submit_new_user_form()
+        self.wait_for_page()
 
     def delete_user_from_course(self, email):
         """ Deletes user from course/library """
@@ -146,7 +152,7 @@ class UsersPageMixin(PageObject):
         disable_animations(self)
 
 
-class LibraryUsersPage(UsersPageMixin):
+class LibraryUsersPage(UsersPageMixin, HelpMixin):
     """
     Library Team page in Studio
     """
@@ -162,12 +168,26 @@ class LibraryUsersPage(UsersPageMixin):
         return "{}/library/{}/team/".format(BASE_URL, unicode(self.locator))
 
 
-class CourseTeamPage(CoursePage, UsersPageMixin):
+class CourseTeamPage(UsersPageMixin, CoursePage):
     """
     Course Team page in Studio.
     """
-
     url_path = "course_team"
+
+    @property
+    def url(self):
+        """
+        Construct a URL to the page within the course.
+        """
+        # TODO - is there a better way to make this agnostic to the underlying default module store?
+        default_store = os.environ.get('DEFAULT_STORE', 'draft')
+        course_key = CourseLocator(
+            self.course_info['course_org'],
+            self.course_info['course_num'],
+            self.course_info['course_run'],
+            deprecated=(default_store == 'draft')
+        )
+        return "/".join([BASE_URL, self.url_path, unicode(course_key)])
 
 
 class UserWrapper(PageObject):

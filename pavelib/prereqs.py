@@ -2,31 +2,29 @@
 Install Python and Node prerequisites.
 """
 
-from distutils import sysconfig
 import hashlib
 import os
+import re
+import sys
+from distutils import sysconfig
 
-from paver.easy import sh, task
+from paver.easy import BuildFailure, sh, task
 
 from .utils.envs import Env
-import sys
-
+from .utils.timer import timed
 
 PREREQS_STATE_DIR = os.getenv('PREREQ_CACHE_DIR', Env.REPO_ROOT / '.prereqs_cache')
-NPM_REGISTRY = "http://registry.npmjs.org/"
 NO_PREREQ_MESSAGE = "NO_PREREQ_INSTALL is set, not installing prereqs"
+NO_PYTHON_UNINSTALL_MESSAGE = 'NO_PYTHON_UNINSTALL is set. No attempts will be made to uninstall old Python libs.'
+COVERAGE_REQ_FILE = 'requirements/edx/coverage.txt'
 
 # If you make any changes to this list you also need to make
 # a corresponding change to circle.yml, which is how the python
 # prerequisites are installed for builds on circleci.com
-PYTHON_REQ_FILES = [
-    'requirements/edx/pre.txt',
-    'requirements/edx/github.txt',
-    'requirements/edx/local.txt',
-    'requirements/edx/base.txt',
-    'requirements/edx/paver.txt',
-    'requirements/edx/post.txt',
-]
+if 'TOXENV' in os.environ:
+    PYTHON_REQ_FILES = ['requirements/edx/testing.txt']
+else:
+    PYTHON_REQ_FILES = ['requirements/edx/development.txt']
 
 # Developers can have private requirements, for local copies of github repos,
 # or favorite debugging tools, etc.
@@ -35,23 +33,30 @@ if os.path.exists(PRIVATE_REQS):
     PYTHON_REQ_FILES.append(PRIVATE_REQS)
 
 
+def str2bool(s):
+    s = str(s)
+    return s.lower() in ('yes', 'true', 't', '1')
+
+
 def no_prereq_install():
     """
     Determine if NO_PREREQ_INSTALL should be truthy or falsy.
     """
-    vals = {
-        '0': False,
-        '1': True,
-        'true': True,
-        'false': False,
-    }
+    return str2bool(os.environ.get('NO_PREREQ_INSTALL', 'False'))
 
-    val = os.environ.get("NO_PREREQ_INSTALL", 'False').lower()
 
+def no_python_uninstall():
+    """ Determine if we should run the uninstall_python_packages task. """
+    return str2bool(os.environ.get('NO_PYTHON_UNINSTALL', 'False'))
+
+
+def create_prereqs_cache_dir():
+    """Create the directory for storing the hashes, if it doesn't exist already."""
     try:
-        return vals[val]
-    except KeyError:
-        return False
+        os.makedirs(PREREQS_STATE_DIR)
+    except OSError:
+        if not os.path.isdir(PREREQS_STATE_DIR):
+            raise
 
 
 def compute_fingerprint(path_list):
@@ -106,12 +111,7 @@ def prereq_cache(cache_name, paths, install_func):
         # Update the cache with the new hash
         # If the code executed within the context fails (throws an exception),
         # then this step won't get executed.
-        try:
-            os.makedirs(PREREQS_STATE_DIR)
-        except OSError:
-            if not os.path.isdir(PREREQS_STATE_DIR):
-                raise
-
+        create_prereqs_cache_dir()
         with open(cache_file_path, "w") as cache_file:
             # Since the pip requirement files are modified during the install
             # process, we need to store the hash generated AFTER the installation
@@ -125,10 +125,19 @@ def node_prereqs_installation():
     """
     Configures npm and installs Node prerequisites
     """
-    sh("test `npm config get registry` = \"{reg}\" || "
-       "(echo setting registry; npm config set registry"
-       " {reg})".format(reg=NPM_REGISTRY))
-    sh('npm install')
+    cb_error_text = "Subprocess return code: 1"
+
+    # Error handling around a race condition that produces "cb() never called" error. This
+    # evinces itself as `cb_error_text` and it ought to disappear when we upgrade
+    # npm to 3 or higher. TODO: clean this up when we do that.
+    try:
+        sh('npm install')
+    except BuildFailure, error_text:
+        if cb_error_text in error_text:
+            print "npm install error detected. Retrying..."
+            sh('npm install')
+        else:
+            raise BuildFailure(error_text)
 
 
 def python_prereqs_installation():
@@ -136,10 +145,17 @@ def python_prereqs_installation():
     Installs Python prerequisites
     """
     for req_file in PYTHON_REQ_FILES:
-        sh("pip install -q --disable-pip-version-check --exists-action w -r {req_file}".format(req_file=req_file))
+        pip_install_req_file(req_file)
+
+
+def pip_install_req_file(req_file):
+    """Pip install the requirements file."""
+    pip_cmd = 'pip install -q --disable-pip-version-check --exists-action w'
+    sh("{pip_cmd} -r {req_file}".format(pip_cmd=pip_cmd, req_file=req_file))
 
 
 @task
+@timed
 def install_node_prereqs():
     """
     Installs Node prerequisites
@@ -151,7 +167,20 @@ def install_node_prereqs():
     prereq_cache("Node prereqs", ["package.json"], node_prereqs_installation)
 
 
+# To add a package to the uninstall list, just add it to this list! No need
+# to touch any other part of this file.
+PACKAGES_TO_UNINSTALL = [
+    "South",                        # Because it interferes with Django 1.8 migrations.
+    "edxval",                       # Because it was bork-installed somehow.
+    "django-storages",
+    "django-oauth2-provider",       # Because now it's called edx-django-oauth2-provider.
+    "edx-oauth2-provider",          # Because it moved from github to pypi
+    "i18n-tools",                   # Because now it's called edx-i18n-tools
+]
+
+
 @task
+@timed
 def uninstall_python_packages():
     """
     Uninstall Python packages that need explicit uninstallation.
@@ -160,16 +189,25 @@ def uninstall_python_packages():
     uninstalled, notably, South.  Some other packages were once installed in
     ways that were resistant to being upgraded, like edxval.  Also uninstall
     them.
-
     """
-    # So that we don't constantly uninstall things, use a version number of the
-    # uninstallation needs.  Check it, and skip this if we're up to date.
-    expected_version = 3
-    state_file_path = os.path.join(PREREQS_STATE_DIR, "python_uninstall_version.txt")
+
+    if no_python_uninstall():
+        print(NO_PYTHON_UNINSTALL_MESSAGE)
+        return
+
+    # So that we don't constantly uninstall things, use a hash of the packages
+    # to be uninstalled.  Check it, and skip this if we're up to date.
+    hasher = hashlib.sha1()
+    hasher.update(repr(PACKAGES_TO_UNINSTALL))
+    expected_version = hasher.hexdigest()
+    state_file_path = os.path.join(PREREQS_STATE_DIR, "Python_uninstall.sha1")
+    create_prereqs_cache_dir()
+
     if os.path.isfile(state_file_path):
         with open(state_file_path) as state_file:
-            version = int(state_file.read())
+            version = state_file.read()
         if version == expected_version:
+            print 'Python uninstalls unchanged, skipping...'
             return
 
     # Run pip to find the packages we need to get rid of.  Believe it or not,
@@ -177,28 +215,13 @@ def uninstall_python_packages():
     # to really really get rid of it.
     for _ in range(3):
         uninstalled = False
-        frozen = sh("pip freeze", capture=True).splitlines()
+        frozen = sh("pip freeze", capture=True)
 
-        # Uninstall South
-        if any(line.startswith("South") for line in frozen):
-            sh("pip uninstall --disable-pip-version-check -y South")
-            uninstalled = True
-
-        # Uninstall edx-val
-        if any("edxval" in line for line in frozen):
-            sh("pip uninstall --disable-pip-version-check -y edxval")
-            uninstalled = True
-
-        # Uninstall django-storages
-        if any("django-storages==" in line for line in frozen):
-            sh("pip uninstall --disable-pip-version-check -y django-storages")
-            uninstalled = True
-
-        # Uninstall django-oauth2-provider
-        if any(line.startswith("django-oauth2-provider==") for line in frozen):
-            sh("pip uninstall --disable-pip-version-check -y django-oauth2-provider")
-            uninstalled = True
-
+        for package_name in PACKAGES_TO_UNINSTALL:
+            if package_in_frozen(package_name, frozen):
+                # Uninstall the pacakge
+                sh("pip uninstall --disable-pip-version-check -y {}".format(package_name))
+                uninstalled = True
         if not uninstalled:
             break
     else:
@@ -208,10 +231,38 @@ def uninstall_python_packages():
 
     # Write our version.
     with open(state_file_path, "w") as state_file:
-        state_file.write(str(expected_version))
+        state_file.write(expected_version)
+
+
+def package_in_frozen(package_name, frozen_output):
+    """Is this package in the output of 'pip freeze'?"""
+    # Look for either:
+    #
+    #   PACKAGE-NAME==
+    #
+    # or:
+    #
+    #   blah_blah#egg=package_name-version
+    #
+    pattern = r"(?mi)^{pkg}==|#egg={pkg_under}-".format(
+        pkg=re.escape(package_name),
+        pkg_under=re.escape(package_name.replace("-", "_")),
+    )
+    return bool(re.search(pattern, frozen_output))
 
 
 @task
+@timed
+def install_coverage_prereqs():
+    """ Install python prereqs for measuring coverage. """
+    if no_prereq_install():
+        print NO_PREREQ_MESSAGE
+        return
+    pip_install_req_file(COVERAGE_REQ_FILE)
+
+
+@task
+@timed
 def install_python_prereqs():
     """
     Installs Python prerequisites.
@@ -219,6 +270,8 @@ def install_python_prereqs():
     if no_prereq_install():
         print NO_PREREQ_MESSAGE
         return
+
+    uninstall_python_packages()
 
     # Include all of the requirements files in the fingerprint.
     files_to_fingerprint = list(PYTHON_REQ_FILES)
@@ -243,6 +296,7 @@ def install_python_prereqs():
 
 
 @task
+@timed
 def install_prereqs():
     """
     Installs Node and Python prerequisites
@@ -251,6 +305,13 @@ def install_prereqs():
         print NO_PREREQ_MESSAGE
         return
 
-    install_node_prereqs()
-    uninstall_python_packages()
+    if not str2bool(os.environ.get('SKIP_NPM_INSTALL', 'False')):
+        install_node_prereqs()
     install_python_prereqs()
+    log_installed_python_prereqs()
+
+
+def log_installed_python_prereqs():
+    """  Logs output of pip freeze for debugging. """
+    sh("pip freeze > {}".format(Env.GEN_LOG_DIR + "/pip_freeze.log"))
+    return

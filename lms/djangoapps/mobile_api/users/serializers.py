@@ -1,12 +1,14 @@
 """
 Serializer for user API
 """
+
 from rest_framework import serializers
 from rest_framework.reverse import reverse
 
+from lms.djangoapps.certificates.api import certificate_downloadable_status
 from courseware.access import has_access
 from student.models import CourseEnrollment, User
-from certificates.api import certificate_downloadable_status
+from util.course import get_encoded_course_sharing_utm_params, get_link_for_about_page
 
 
 class CourseOverviewField(serializers.RelatedField):
@@ -50,11 +52,8 @@ class CourseOverviewField(serializers.RelatedField):
                 }
             },
             'course_image': course_overview.course_image_url,
-            'course_about': reverse(
-                'about_course',
-                kwargs={'course_id': course_id},
-                request=request,
-            ),
+            'course_about': get_link_for_about_page(course_overview),
+            'course_sharing_utm_parameters': get_encoded_course_sharing_utm_params(),
             'course_updates': reverse(
                 'course-updates-list',
                 kwargs={'course_id': course_id},
@@ -76,14 +75,6 @@ class CourseOverviewField(serializers.RelatedField):
                 kwargs={'course_id': course_id},
                 request=request,
             ),
-
-            # Note: The following 2 should be deprecated.
-            'social_urls': {
-                'facebook': course_overview.facebook_url,
-            },
-            'latest_updates': {
-                'video': None
-            },
         }
 
 

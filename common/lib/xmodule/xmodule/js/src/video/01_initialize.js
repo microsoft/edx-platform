@@ -1,3 +1,4 @@
+/* eslint-disable no-console, no-param-reassign */
 /**
  * @file Initialize module works with the JSON config, and sets up various
  * settings, parameters, variables. After all setup actions are performed, it
@@ -10,12 +11,11 @@
  * @module Initialize
  */
 
-(function (requirejs, require, define) {
-
-define(
+(function(requirejs, require, define) {
+    define(
 'video/01_initialize.js',
-['video/03_video_player.js', 'video/00_i18n.js', 'moment'],
-function (VideoPlayer, i18n, moment) {
+['video/03_video_player.js', 'video/00_i18n.js', 'moment', 'underscore'],
+function(VideoPlayer, i18n, moment, _) {
     var moment = moment || window.moment;
     /**
      * @function
@@ -27,11 +27,11 @@ function (VideoPlayer, i18n, moment) {
      *     available via this object.
      * @param {DOM element} element Container of the entire Video DOM element.
      */
-    var Initialize = function (state, element) {
-        _makeFunctionsPublic(state);
+    var Initialize = function(state, element) {
+            _makeFunctionsPublic(state);
 
-        state.initialize(element)
-            .done(function () {
+            state.initialize(element)
+            .done(function() {
                 if (state.isYoutubeType()) {
                     state.parseSpeed();
                 }
@@ -44,7 +44,7 @@ function (VideoPlayer, i18n, moment) {
                 }
 
                 _initializeModules(state, i18n)
-                    .done(function () {
+                    .done(function() {
                         // On iPad ready state occurs just after start playing.
                         // We hide controls before video starts playing.
                         if (/iPad|Android/i.test(state.isTouch[0])) {
@@ -60,30 +60,33 @@ function (VideoPlayer, i18n, moment) {
                         state.el.trigger('initialize', arguments);
                     });
             });
-    },
+        },
 
-    methodsDict = {
-        bindTo: bindTo,
-        fetchMetadata: fetchMetadata,
-        getCurrentLanguage: getCurrentLanguage,
-        getDuration: getDuration,
-        getPlayerMode: getPlayerMode,
-        getVideoMetadata: getVideoMetadata,
-        initialize: initialize,
-        isHtml5Mode: isHtml5Mode,
-        isFlashMode: isFlashMode,
-        isYoutubeType: isYoutubeType,
-        parseSpeed: parseSpeed,
-        parseYoutubeStreams: parseYoutubeStreams,
-        setPlayerMode: setPlayerMode,
-        setSpeed: setSpeed,
-        speedToString: speedToString,
-        trigger: trigger,
-        youtubeId: youtubeId,
-        loadHtmlPlayer: loadHtmlPlayer,
-        loadYoutubePlayer: loadYoutubePlayer,
-        loadYouTubeIFrameAPI: loadYouTubeIFrameAPI
-    },
+        /* eslint-disable no-use-before-define */
+        methodsDict = {
+            bindTo: bindTo,
+            fetchMetadata: fetchMetadata,
+            getCurrentLanguage: getCurrentLanguage,
+            getDuration: getDuration,
+            getPlayerMode: getPlayerMode,
+            getVideoMetadata: getVideoMetadata,
+            initialize: initialize,
+            isHtml5Mode: isHtml5Mode,
+            isFlashMode: isFlashMode,
+            isYoutubeType: isYoutubeType,
+            parseSpeed: parseSpeed,
+            parseYoutubeStreams: parseYoutubeStreams,
+            setPlayerMode: setPlayerMode,
+            setSpeed: setSpeed,
+            setAutoAdvance: setAutoAdvance,
+            speedToString: speedToString,
+            trigger: trigger,
+            youtubeId: youtubeId,
+            loadHtmlPlayer: loadHtmlPlayer,
+            loadYoutubePlayer: loadYoutubePlayer,
+            loadYouTubeIFrameAPI: loadYouTubeIFrameAPI
+        },
+        /* eslint-enable no-use-before-define */
 
         _youtubeApiDeferred = null,
         _oldOnYouTubeIframeAPIReady;
@@ -130,9 +133,8 @@ function (VideoPlayer, i18n, moment) {
         if (state.videoType === 'youtube') {
             state.youtubeApiAvailable = false;
 
-            onYTApiReady = function () {
+            onYTApiReady = function() {
                 console.log('[Video info]: YouTube API is available and is loaded.');
-
                 if (state.htmlPlayerLoaded) { return; }
 
                 console.log('[Video info]: Starting YouTube player.');
@@ -140,7 +142,6 @@ function (VideoPlayer, i18n, moment) {
 
                 state.modules.push(video);
                 state.__dfd__.resolve();
-
                 state.youtubeApiAvailable = true;
             };
 
@@ -164,10 +165,10 @@ function (VideoPlayer, i18n, moment) {
                 //
                 // If this global function is already defined, we store it first, and make
                 // sure that it gets executed when our Deferred object is resolved.
-                setupOnYouTubeIframeAPIReady = function () {
+                setupOnYouTubeIframeAPIReady = function() {
                     _oldOnYouTubeIframeAPIReady = window.onYouTubeIframeAPIReady || undefined;
 
-                    window.onYouTubeIframeAPIReady = function () {
+                    window.onYouTubeIframeAPIReady = function() {
                         window.onYouTubeIframeAPIReady.resolve();
                     };
 
@@ -196,7 +197,7 @@ function (VideoPlayer, i18n, moment) {
 
                 // Attach a callback to our Deferred object to be called once the
                 // YouTube API loads.
-                window.onYouTubeIframeAPIReady.done(function () {
+                window.onYouTubeIframeAPIReady.done(function() {
                     window.YT.ready(onYTApiReady);
                 });
             }
@@ -211,8 +212,7 @@ function (VideoPlayer, i18n, moment) {
 
     function _waitForYoutubeApi(state) {
         console.log('[Video info]: Starting to wait for YouTube API to load.');
-
-        window.setTimeout(function () {
+        window.setTimeout(function() {
             // If YouTube API will load OK, it will run `onYouTubeIframeAPIReady`
             // callback, which will set `state.youtubeApiAvailable` to `true`.
             // If something goes wrong at this stage, `state.youtubeApiAvailable` is
@@ -225,7 +225,6 @@ function (VideoPlayer, i18n, moment) {
             }
             state.el.trigger('youtube_availability', [state.youtubeApiAvailable]);
         }, state.config.ytTestTimeout);
-
     }
 
     function loadYouTubeIFrameAPI(scriptTag) {
@@ -242,17 +241,17 @@ function (VideoPlayer, i18n, moment) {
     //     Defines whether or not captions are shown on first viewing.
     //
     //     Option
-    //          this.hide_captions = true | false
+    //          this.hideCaptions = true | false
     //
     //     represents the user's choice of having the subtitles shown or
     //     hidden. This choice is stored in cookies.
     function _configureCaptions(state) {
         if (state.config.showCaptions) {
-            state.hide_captions = ($.cookie('hide_captions') === 'true');
+            state.hideCaptions = ($.cookie('hide_captions') === 'true');
         } else {
-            state.hide_captions = true;
+            state.hideCaptions = true;
 
-            $.cookie('hide_captions', state.hide_captions, {
+            $.cookie('hide_captions', state.hideCaptions, {
                 expires: 3650,
                 path: '/'
             });
@@ -282,6 +281,18 @@ function (VideoPlayer, i18n, moment) {
         return false;
     }
 
+    /**
+     * Extract HLS video URLs from available video URLs.
+     *
+     * @param {object} state The object contaning the state (properties, methods, modules) of the Video player.
+     * @returns Array of available HLS video source urls.
+     */
+    function extractHLSVideoSources(state) {
+        return _.filter(state.config.sources, function(source) {
+            return /\.m3u8(\?.*)?$/.test(source);
+        });
+    }
+
     // function _prepareHTML5Video(state)
     // The function prepare HTML5 video, parse HTML5
     // video sources etc.
@@ -296,7 +307,7 @@ function (VideoPlayer, i18n, moment) {
                     .addClass('hidden');
             state.el
                 .find('.video-player .video-error')
-                    .removeClass('hidden');
+                    .removeClass('is-hidden');
 
             return false;
         }
@@ -317,7 +328,7 @@ function (VideoPlayer, i18n, moment) {
             .find('.spinner')
             .attr({
                 'aria-hidden': 'true',
-                'tabindex': -1
+                tabindex: -1
             });
     }
 
@@ -329,6 +340,7 @@ function (VideoPlayer, i18n, moment) {
         state.controlHideTimeout = null;
         state.captionState = 'invisible';
         state.captionHideTimeout = null;
+        state.HLSVideoSources = extractHLSVideoSources(state);
     }
 
     function _initializeModules(state, i18n) {
@@ -340,7 +352,7 @@ function (VideoPlayer, i18n, moment) {
                 } else if ($.isPlainObject(module)) {
                     return module;
                 }
-        });
+            });
 
         $.when.apply(null, modulesList)
             .done(dfd.resolve);
@@ -349,101 +361,109 @@ function (VideoPlayer, i18n, moment) {
     }
 
     function _getConfiguration(data, storage) {
-            var isBoolean = function (value) {
-                    var regExp = /^true$/i;
-                    return regExp.test(value.toString());
-                },
+        var isBoolean = function(value) {
+                var regExp = /^true$/i;
+                return regExp.test(value.toString());
+            },
                 // List of keys that will be extracted form the configuration.
-                extractKeys = [],
+            extractKeys = [],
                 // Compatibility keys used to change names of some parameters in
                 // the final configuration.
-                compatKeys = {
-                    'start': 'startTime',
-                    'end': 'endTime'
-                },
+            compatKeys = {
+                start: 'startTime',
+                end: 'endTime'
+            },
                 // Conversions used to pre-process some configuration data.
-                conversions = {
-                    'showCaptions': isBoolean,
-                    'autoplay': isBoolean,
-                    'autohideHtml5': isBoolean,
-                    'savedVideoPosition': function (value) {
-                        return storage.getItem('savedVideoPosition', true) ||
+            conversions = {
+                showCaptions: isBoolean,
+                autoplay: isBoolean,
+                autohideHtml5: isBoolean,
+                autoAdvance: function(value) {
+                    var shouldAutoAdvance = storage.getItem('auto_advance');
+                    if (_.isUndefined(shouldAutoAdvance)) {
+                        return isBoolean(value) || false;
+                    } else {
+                        return shouldAutoAdvance;
+                    }
+                },
+                savedVideoPosition: function(value) {
+                    return storage.getItem('savedVideoPosition', true) ||
                             Number(value) ||
                             0;
-                    },
-                    'speed': function (value) {
-                        return storage.getItem('speed', true) || value;
-                     },
-                    'generalSpeed': function (value) {
-                        return storage.getItem('general_speed') ||
+                },
+                speed: function(value) {
+                    return storage.getItem('speed', true) || value;
+                },
+                generalSpeed: function(value) {
+                    return storage.getItem('general_speed') ||
                             value ||
                             '1.0';
-                     },
-                    'transcriptLanguage': function (value) {
-                        return storage.getItem('language') ||
+                },
+                transcriptLanguage: function(value) {
+                    return storage.getItem('language') ||
                             value ||
                             'en';
-                     },
-                    'ytTestTimeout': function (value) {
-                        value = parseInt(value, 10);
-
-                        if (!isFinite(value)) {
-                            value = 1500;
-                        }
-
-                        return value;
-                    },
-                    'startTime': function (value) {
-                        value = parseInt(value, 10);
-                        if (!isFinite(value) || value < 0) {
-                            return 0;
-                        }
-
-                        return value;
-                    },
-                    'endTime': function (value) {
-                        value = parseInt(value, 10);
-
-                        if (!isFinite(value) || value === 0) {
-                            return null;
-                        }
-
-                        return value;
-                     }
                 },
-                config = {};
+                ytTestTimeout: function(value) {
+                    value = parseInt(value, 10);
 
-            data = _.extend({
-                startTime: 0,
-                endTime: null,
-                sub: '',
-                streams: ''
-            }, data);
+                    if (!isFinite(value)) {
+                        value = 1500;
+                    }
 
-            $.each(data, function(option, value) {
-                // Extract option that is in `extractKeys`.
-                if ($.inArray(option, extractKeys) !== -1) {
-                    return;
+                    return value;
+                },
+                startTime: function(value) {
+                    value = parseInt(value, 10);
+                    if (!isFinite(value) || value < 0) {
+                        return 0;
+                    }
+
+                    return value;
+                },
+                endTime: function(value) {
+                    value = parseInt(value, 10);
+
+                    if (!isFinite(value) || value === 0) {
+                        return null;
+                    }
+
+                    return value;
                 }
+            },
+            config = {};
+
+        data = _.extend({
+            startTime: 0,
+            endTime: null,
+            sub: '',
+            streams: ''
+        }, data);
+
+        $.each(data, function(option, value) {
+                // Extract option that is in `extractKeys`.
+            if ($.inArray(option, extractKeys) !== -1) {
+                return;
+            }
 
                 // Change option name to key that is in `compatKeys`.
-                if (compatKeys[option]) {
-                    option = compatKeys[option];
-                }
+            if (compatKeys[option]) {
+                option = compatKeys[option];
+            }
 
                 // Pre-process data.
-                if (conversions[option]) {
-                    if (_.isFunction(conversions[option])) {
-                        value = conversions[option].call(this, value);
-                    } else {
-                        throw new TypeError(option + ' is not a function.');
-                    }
+            if (conversions[option]) {
+                if (_.isFunction(conversions[option])) {
+                    value = conversions[option].call(this, value);
+                } else {
+                    throw new TypeError(option + ' is not a function.');
                 }
-                config[option] = value;
-            });
+            }
+            config[option] = value;
+        });
 
-            return config;
-        }
+        return config;
+    }
 
     // ***************************************************************
     // Public functions start here.
@@ -459,7 +479,6 @@ function (VideoPlayer, i18n, moment) {
     function bindTo(methodsDict, obj, context, rewrite) {
         $.each(methodsDict, function(name, method) {
             if (_.isFunction(method)) {
-
                 if (_.isUndefined(rewrite)) {
                     rewrite = true;
                 }
@@ -483,7 +502,6 @@ function (VideoPlayer, i18n, moment) {
     }
 
     function loadHtmlPlayer() {
-
         // When the youtube link doesn't work for any reason
         // (for example, firewall) any
         // alternate sources should automatically play.
@@ -498,7 +516,7 @@ function (VideoPlayer, i18n, moment) {
             this.el.find('.video-player div')
                 .removeClass('hidden');
             this.el.find('.video-player .video-error')
-                .addClass('hidden');
+                .addClass('is-hidden');
 
             // If in reality the timeout was to short, try to
             // continue loading the YouTube video anyways.
@@ -561,15 +579,15 @@ function (VideoPlayer, i18n, moment) {
         this.speed = this.speedToString(
             this.config.speed || this.config.generalSpeed
         );
+        this.auto_advance = this.config.autoAdvance;
         this.htmlPlayerLoaded = false;
+        this.duration = this.metadata.duration;
 
         _setConfigurations(this);
 
         if (!(_parseYouTubeIDs(this))) {
-
             // If we do not have YouTube ID's, try parsing HTML5 video sources.
             if (!_prepareHTML5Video(this)) {
-
                 __dfd__.reject();
                 // Non-YouTube sources were not found either.
                 return __dfd__.promise();
@@ -626,7 +644,7 @@ function (VideoPlayer, i18n, moment) {
 
         this.videos = {};
 
-        _.each(youtubeStreams.split(/,/), function (video) {
+        _.each(youtubeStreams.split(/,/), function(video) {
             var speed;
             video = video.split(/:/);
             speed = this.speedToString(video[0]);
@@ -648,8 +666,8 @@ function (VideoPlayer, i18n, moment) {
 
         this.metadata = {};
 
-        metadataXHRs = _.map(this.videos, function (url, speed) {
-            return self.getVideoMetadata(url, function (data) {
+        metadataXHRs = _.map(this.videos, function(url, speed) {
+            return self.getVideoMetadata(url, function(data) {
                 if (data.items.length > 0) {
                     var metaDataItem = data.items[0];
                     self.metadata[metaDataItem.id] = metaDataItem.contentDetails;
@@ -657,7 +675,7 @@ function (VideoPlayer, i18n, moment) {
             });
         });
 
-        $.when.apply(this, metadataXHRs).done(function () {
+        $.when.apply(this, metadataXHRs).done(function() {
             self.el.trigger('metadata_received');
 
             // Not only do we trigger the "metadata_received" event, we also
@@ -667,7 +685,6 @@ function (VideoPlayer, i18n, moment) {
             // cases when some code will subscribe to the "metadata_received"
             // event after it has been triggered.
             self.youtubeMetadataReceived = true;
-
         });
     }
 
@@ -684,10 +701,10 @@ function (VideoPlayer, i18n, moment) {
         // Youtube Flash =  [0.75, 1, 1.25, 1.5]
         // Youtube HTML5 =  [0.25, 0.5, 1, 1.5, 2]
         var map = {
-            '0.25': '0.75', // Youtube HTML5 -> HTML5 or Youtube Flash
+            0.25: '0.75', // Youtube HTML5 -> HTML5 or Youtube Flash
             '0.50': '0.75', // Youtube HTML5 -> HTML5 or Youtube Flash
-            '0.75': '0.50', // HTML5 or Youtube Flash -> Youtube HTML5
-            '1.25': '1.50', // HTML5 or Youtube Flash -> Youtube HTML5
+            0.75: '0.50', // HTML5 or Youtube Flash -> Youtube HTML5
+            1.25: '1.50', // HTML5 or Youtube Flash -> Youtube HTML5
             '2.0': '1.50'   // Youtube HTML5 -> HTML5 or Youtube Flash
         };
 
@@ -699,6 +716,10 @@ function (VideoPlayer, i18n, moment) {
         }
     }
 
+    function setAutoAdvance(enabled) {
+        this.auto_advance = enabled;
+    }
+
     function getVideoMetadata(url, callback) {
         if (!(_.isString(url))) {
             url = this.videos['1.0'] || '';
@@ -708,7 +729,14 @@ function (VideoPlayer, i18n, moment) {
             return $.ajax({
                 url: [this.config.ytMetadataUrl, '?id=', url, '&part=contentDetails&key=', this.config.ytKey].join(''),
                 timeout: this.config.ytTestTimeout,
-                success: _.isFunction(callback) ? callback : null
+                success: _.isFunction(callback) ? callback : null,
+                error: function() {
+                    console.warn(
+                        'YouTube API request failed - usually this means the YouTube API key is invalid. ' +
+                            'Some video metadata may be unavailable.'
+                    );
+                },
+                notifyOnError: false
             });
         } else {
             return $.Deferred().reject().promise();
@@ -718,7 +746,7 @@ function (VideoPlayer, i18n, moment) {
     function youtubeId(speed) {
         var currentSpeed = this.isFlashMode() ? this.speed : '1.0';
 
-        return  this.videos[speed] ||
+        return this.videos[speed] ||
                 this.videos[currentSpeed] ||
                 this.videos['1.0'];
     }
@@ -839,5 +867,4 @@ function (VideoPlayer, i18n, moment) {
         return true;
     }
 });
-
 }(RequireJS.requirejs, RequireJS.require, RequireJS.define));

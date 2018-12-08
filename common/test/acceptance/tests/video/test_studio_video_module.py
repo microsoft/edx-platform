@@ -4,15 +4,18 @@
 Acceptance tests for CMS Video Module.
 """
 import os
+from unittest import skipIf
 
 from mock import patch
 from nose.plugins.attrib import attr
-from unittest import skipIf
-from ...pages.studio.auto_auth import AutoAuthPage
-from ...pages.studio.overview import CourseOutlinePage
-from ...pages.studio.video.video import VideoComponentPage
-from ...fixtures.course import CourseFixture, XBlockFixtureDesc
-from ..helpers import UniqueCourseTest, is_youtube_available, YouTubeStubConfig
+
+from bok_choy.promise import EmptyPromise
+
+from common.test.acceptance.fixtures.course import CourseFixture, XBlockFixtureDesc
+from common.test.acceptance.pages.common.auto_auth import AutoAuthPage
+from common.test.acceptance.pages.studio.overview import CourseOutlinePage
+from common.test.acceptance.pages.studio.video.video import VideoComponentPage
+from common.test.acceptance.tests.helpers import UniqueCourseTest, YouTubeStubConfig, is_youtube_available
 
 
 @skipIf(is_youtube_available() is False, 'YouTube is not available!')
@@ -45,6 +48,7 @@ class CMSVideoBaseTest(UniqueCourseTest):
         )
 
         self.assets = []
+        self.metadata = None
         self.addCleanup(YouTubeStubConfig.reset)
 
     def _create_course_unit(self, youtube_stub_config=None, subtitles=False):
@@ -76,7 +80,7 @@ class CMSVideoBaseTest(UniqueCourseTest):
         # Why 2? One video component is created by default for each test. Please see
         # test_studio_video_module.py:CMSVideoTest._create_course_unit
         # And we are creating second video component here.
-        self.assertTrue(video_xblocks == 2)
+        self.assertEqual(video_xblocks, 2)
 
     def _install_course_fixture(self):
         """
@@ -86,6 +90,7 @@ class CMSVideoBaseTest(UniqueCourseTest):
             Create a user and make that user a course author
             Log the user into studio
         """
+
         if self.assets:
             self.course_fixture.add_asset(self.assets)
 
@@ -94,7 +99,7 @@ class CMSVideoBaseTest(UniqueCourseTest):
             XBlockFixtureDesc('chapter', 'Test Section').add_children(
                 XBlockFixtureDesc('sequential', 'Test Subsection').add_children(
                     XBlockFixtureDesc('vertical', 'Test Unit').add_children(
-                        XBlockFixtureDesc('video', 'Video')
+                        XBlockFixtureDesc('video', 'Video', metadata=self.metadata)
                     )
                 )
             )
@@ -138,6 +143,11 @@ class CMSVideoBaseTest(UniqueCourseTest):
             xblock_index: number starting from 1 (0th entry is the unit page itself)
         """
         self.unit_page.xblocks[xblock_index].edit()
+        EmptyPromise(
+            lambda: self.video.q(css='div.basic_metadata_edit').visible,
+            "Wait for the basic editor to be open",
+            timeout=5
+        ).fulfill()
 
     def open_advanced_tab(self):
         """
@@ -161,7 +171,7 @@ class CMSVideoBaseTest(UniqueCourseTest):
         self.unit_page.xblocks[1].save_settings()
 
 
-@attr('shard_4')
+@attr(shard=13)
 class CMSVideoTest(CMSVideoBaseTest):
     """
     CMS Video Test Class
@@ -234,6 +244,7 @@ class CMSVideoTest(CMSVideoBaseTest):
         And first is private video
         When I reload the page
         Then video controls for all videos are visible
+        And the error message isn't shown
         """
         self._create_course_unit(youtube_stub_config={'youtube_api_private_video': True})
         self.video.create_video()
@@ -247,6 +258,9 @@ class CMSVideoTest(CMSVideoBaseTest):
         # again open unit page and check that video controls show for both videos
         self._navigate_to_course_unit_page()
         self.assertTrue(self.video.is_controls_visible())
+
+        # verify that the error message isn't shown by default
+        self.assertFalse(self.video.is_error_message_shown)
 
     def test_captions_shown_correctly(self):
         """
@@ -339,15 +353,3 @@ class CMSVideoA11yTest(CMSVideoBaseTest):
 
         with patch.dict(os.environ, {'SELENIUM_BROWSER': browser}):
             super(CMSVideoA11yTest, self).setUp()
-
-    def test_video_player_a11y(self):
-        # Limit the scope of the audit to the video player only.
-        self.outline.a11y_audit.config.set_scope(include=["div.video"])
-        self.outline.a11y_audit.config.set_rules({
-            "ignore": [
-                'link-href',  # TODO: AC-223
-            ],
-        })
-
-        self._create_course_unit()
-        self.outline.a11y_audit.check_for_accessibility_errors()

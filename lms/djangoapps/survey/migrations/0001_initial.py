@@ -5,7 +5,7 @@ from django.db import migrations, models
 import django.utils.timezone
 from django.conf import settings
 import model_utils.fields
-import xmodule_django.models
+from opaque_keys.edx.django.models import CourseKeyField
 
 
 class Migration(migrations.Migration):
@@ -23,7 +23,7 @@ class Migration(migrations.Migration):
                 ('modified', model_utils.fields.AutoLastModifiedField(default=django.utils.timezone.now, verbose_name='modified', editable=False)),
                 ('field_name', models.CharField(max_length=255, db_index=True)),
                 ('field_value', models.CharField(max_length=1024)),
-                ('course_key', xmodule_django.models.CourseKeyField(max_length=255, null=True, db_index=True)),
+                ('course_key', CourseKeyField(max_length=255, null=True, db_index=True)),
             ],
             options={
                 'abstract': False,
@@ -45,11 +45,11 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='surveyanswer',
             name='form',
-            field=models.ForeignKey(to='survey.SurveyForm'),
+            field=models.ForeignKey(to='survey.SurveyForm', on_delete=models.CASCADE),
         ),
         migrations.AddField(
             model_name='surveyanswer',
             name='user',
-            field=models.ForeignKey(to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(to=settings.AUTH_USER_MODEL, on_delete=models.CASCADE),
         ),
     ]

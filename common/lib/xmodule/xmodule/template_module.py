@@ -1,11 +1,12 @@
 """
 Template module
 """
-from xmodule.x_module import XModule, DEPRECATION_VSCOMPAT_EVENT
-from xmodule.raw_module import RawDescriptor
 from lxml import etree
 from mako.template import Template
+
 import dogstats_wrapper as dog_stats_api
+from xmodule.raw_module import RawDescriptor
+from xmodule.x_module import DEPRECATION_VSCOMPAT_EVENT, XModule
 
 
 class CustomTagModule(XModule):
@@ -37,6 +38,7 @@ class CustomTagModule(XModule):
 class CustomTagDescriptor(RawDescriptor):
     """ Descriptor for custom tags.  Loads the template when created."""
     module_class = CustomTagModule
+    resources_dir = None
     template_dir_name = 'customtag'
 
     def render_template(self, system, xml_data):

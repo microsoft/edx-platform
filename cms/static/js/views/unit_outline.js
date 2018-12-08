@@ -18,7 +18,8 @@ define(['underscore', 'js/views/xblock_outline', 'js/views/unit_outline_child'],
 
             renderAncestors: function() {
                 var i, listElement,
-                    ancestors, ancestor, ancestorView = this,
+                    ancestors, ancestor,
+                    ancestorView = this,
                     previousAncestor = null;
                 if (this.model.get('ancestor_info')) {
                     ancestors = this.model.get('ancestor_info').ancestors;
@@ -26,7 +27,7 @@ define(['underscore', 'js/views/xblock_outline', 'js/views/unit_outline_child'],
                     // Note: the ancestors are processed in reverse order because the tree wants to
                     // start at the root, but the ancestors are ordered by closeness to the unit,
                     // i.e. subsection and then section.
-                    for (i=ancestors.length - 1; i >= 0; i--) {
+                    for (i = ancestors.length - 1; i >= 0; i--) {
                         ancestor = ancestors[i];
                         ancestorView = this.createChildView(
                             ancestor,

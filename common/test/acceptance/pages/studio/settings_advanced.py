@@ -3,9 +3,13 @@ Course Advanced Settings page
 """
 
 from bok_choy.promise import EmptyPromise
-from .course_page import CoursePage
-from .utils import press_the_notification_button, type_in_codemirror, get_codemirror_value
 
+from common.test.acceptance.pages.studio.course_page import CoursePage
+from common.test.acceptance.pages.studio.utils import (
+    get_codemirror_value,
+    press_the_notification_button,
+    type_in_codemirror
+)
 
 KEY_CSS = '.key h3.title'
 UNDO_BUTTON_SELECTOR = ".action-item .action-undo"
@@ -14,6 +18,9 @@ MODAL_SELECTOR = ".validation-error-modal-content"
 ERROR_ITEM_NAME_SELECTOR = ".error-item-title strong"
 ERROR_ITEM_CONTENT_SELECTOR = ".error-item-message"
 SETTINGS_NAME_SELECTOR = ".is-not-editable"
+CONFIRMATION_MESSAGE_SELECTOR = "#alert-confirmation-title"
+DEPRECATED_SETTINGS_SELECTOR = ".field-group.course-advanced-policy-list-item.is-deprecated"
+DEPRECATED_SETTINGS_BUTTON_SELECTOR = ".deprecated-settings-label"
 
 
 class AdvancedSettingsPage(CoursePage):
@@ -29,6 +36,20 @@ class AdvancedSettingsPage(CoursePage):
 
         EmptyPromise(_is_finished_loading, 'Finished rendering the advanced policy items.').fulfill()
         return self.q(css='body.advanced').present
+
+    @property
+    def key_names(self):
+        """
+            Returns a list of key names of all settings.
+        """
+        return self.q(css=KEY_CSS).text
+
+    @property
+    def deprecated_settings_button_text(self):
+        """
+            Returns text for deprecated settings button
+        """
+        return self.q(css=DEPRECATED_SETTINGS_BUTTON_SELECTOR).text[0]
 
     def wait_for_modal_load(self):
         """
@@ -172,11 +193,12 @@ class AdvancedSettingsPage(CoursePage):
             'cert_name_short',
             'certificates_display_behavior',
             'course_image',
+            'banner_image',
+            'video_thumbnail_image',
             'cosmetic_display_price',
             'advertised_start',
             'announcement',
             'display_name',
-            'info_sidebar_name',
             'is_new',
             'issue_badges',
             'max_student_enrollments_allowed',
@@ -184,9 +206,7 @@ class AdvancedSettingsPage(CoursePage):
             'display_coursenumber',
             'display_organization',
             'catalog_visibility',
-            'chrome',
             'days_early_for_beta',
-            'default_tab',
             'disable_progress_graph',
             'discussion_blackouts',
             'discussion_sort_alpha',
@@ -211,12 +231,16 @@ class AdvancedSettingsPage(CoursePage):
             'show_reset_button',
             'static_asset_path',
             'teams_configuration',
-            'text_customization',
             'annotation_storage_url',
             'social_sharing_url',
             'video_bumper',
-            'cert_html_view_enabled',
             'enable_proctored_exams',
+            'allow_proctoring_opt_out',
             'enable_timed_exams',
             'enable_subsection_gating',
+            'learning_info',
+            'instructor_info',
+            'create_zendesk_tickets',
+            'ccx_connector',
+            'enable_ccx',
         ]

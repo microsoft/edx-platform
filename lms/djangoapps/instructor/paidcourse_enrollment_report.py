@@ -2,15 +2,22 @@
 Defines concrete class for cybersource  Enrollment Report.
 
 """
-from courseware.access import has_access
 import collections
+
 from django.conf import settings
 from django.utils.translation import ugettext as _
+
+from courseware.access import has_access
 from courseware.courses import get_course_by_id
-from instructor.enrollment_report import BaseAbstractEnrollmentReportProvider
-from microsite_configuration import microsite
-from shoppingcart.models import RegistrationCodeRedemption, PaidCourseRegistration, CouponRedemption, OrderItem, \
-    InvoiceTransaction
+from lms.djangoapps.instructor.enrollment_report import BaseAbstractEnrollmentReportProvider
+from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
+from shoppingcart.models import (
+    CouponRedemption,
+    InvoiceTransaction,
+    OrderItem,
+    PaidCourseRegistration,
+    RegistrationCodeRedemption
+)
 from student.models import CourseEnrollment, ManualEnrollmentAudit
 
 
@@ -29,7 +36,7 @@ class PaidCourseEnrollmentReportProvider(BaseAbstractEnrollmentReportProvider):
 
         # check the user enrollment role
         if user.is_staff:
-            platform_name = microsite.get_value('platform_name', settings.PLATFORM_NAME)
+            platform_name = configuration_helpers.get_value('platform_name', settings.PLATFORM_NAME)
             enrollment_role = _('{platform_name} Staff').format(platform_name=platform_name)
         elif is_course_staff:
             enrollment_role = _('Course Staff')

@@ -8,7 +8,6 @@ from rest_framework import serializers
 from course_modes.models import CourseMode
 from student.models import CourseEnrollment
 
-
 log = logging.getLogger(__name__)
 
 
@@ -36,6 +35,7 @@ class CourseSerializer(serializers.Serializer):  # pylint: disable=abstract-meth
     """
 
     course_id = serializers.CharField(source="id")
+    course_name = serializers.CharField(source="display_name_with_default")
     enrollment_start = serializers.DateTimeField(format=None)
     enrollment_end = serializers.DateTimeField(format=None)
     course_start = serializers.DateTimeField(source="start", format=None)
@@ -98,3 +98,4 @@ class ModeSerializer(serializers.Serializer):
     expiration_datetime = serializers.DateTimeField()
     description = serializers.CharField()
     sku = serializers.CharField()
+    bulk_sku = serializers.CharField()

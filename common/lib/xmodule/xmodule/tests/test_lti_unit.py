@@ -2,12 +2,13 @@
 """Test for LTI Xmodule functional logic."""
 
 import datetime
-from django.utils.timezone import UTC
+from pytz import UTC
 from mock import Mock, patch, PropertyMock
 import textwrap
 from lxml import etree
 from webob.request import Request
 from copy import copy
+from six import text_type
 import urllib
 
 from xmodule.fields import Timedelta
@@ -19,6 +20,7 @@ from . import LogicTest
 
 class LTIModuleTest(LogicTest):
     """Logic tests for LTI module."""
+    shard = 1
     descriptor_class = LTIDescriptor
 
     def setUp(self):
@@ -72,6 +74,7 @@ class LTIModuleTest(LogicTest):
 
         self.xmodule.due = None
         self.xmodule.graceperiod = None
+        self.xmodule.descriptor = self.system.construct_xblock_from_class(self.descriptor_class, self.xmodule.scope_ids)
 
     def get_request_body(self, params=None):
         """Fetches the body of a request specified by params"""
@@ -179,7 +182,7 @@ class LTIModuleTest(LogicTest):
         Should fail if we do not accept past due grades, and it is past due.
         """
         self.xmodule.accept_grades_past_due = False
-        self.xmodule.due = datetime.datetime.now(UTC())
+        self.xmodule.due = datetime.datetime.now(UTC)
         self.xmodule.graceperiod = Timedelta().from_json("0 seconds")
         request = Request(self.environ)
         request.body = self.get_request_body()
@@ -275,7 +278,7 @@ class LTIModuleTest(LogicTest):
         self.assertEqual(self.xmodule.module_score, float(self.defaults['grade']))
 
     def test_user_id(self):
-        expected_user_id = unicode(urllib.quote(self.xmodule.runtime.anonymous_student_id))
+        expected_user_id = text_type(urllib.quote(self.xmodule.runtime.anonymous_student_id))
         real_user_id = self.xmodule.get_user_id()
         self.assertEqual(real_user_id, expected_user_id)
 
@@ -294,13 +297,13 @@ class LTIModuleTest(LogicTest):
     def test_resource_link_id(self):
         with patch('xmodule.lti_module.LTIModule.location', new_callable=PropertyMock):
             self.xmodule.location.html_id = lambda: 'i4x-2-3-lti-31de800015cf4afb973356dbe81496df'
-            expected_resource_link_id = unicode(urllib.quote(self.unquoted_resource_link_id))
+            expected_resource_link_id = text_type(urllib.quote(self.unquoted_resource_link_id))
             real_resource_link_id = self.xmodule.get_resource_link_id()
             self.assertEqual(real_resource_link_id, expected_resource_link_id)
 
     def test_lis_result_sourcedid(self):
         expected_sourced_id = u':'.join(urllib.quote(i) for i in (
-            self.system.course_id.to_deprecated_string(),
+            text_type(self.system.course_id),
             self.xmodule.get_resource_link_id(),
             self.user_id
         ))
@@ -519,4 +522,4 @@ class LTIModuleTest(LogicTest):
         """
         Tests that LTI parameter context_id is equal to course_id.
         """
-        self.assertEqual(self.system.course_id.to_deprecated_string(), self.xmodule.context_id)
+        self.assertEqual(text_type(self.system.course_id), self.xmodule.context_id)

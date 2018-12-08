@@ -4,11 +4,13 @@ tasks.
 """
 import json
 import logging
-from util.date_utils import get_default_time_display
-from bulk_email.models import CourseEmail
+
 from django.utils.translation import ugettext as _
 from django.utils.translation import ungettext
-from instructor_task.views import get_task_completion_info
+
+from bulk_email.models import CourseEmail
+from lms.djangoapps.instructor_task.views import get_task_completion_info
+from util.date_utils import get_default_time_display
 
 log = logging.getLogger(__name__)
 
@@ -33,7 +35,7 @@ def extract_email_features(email_task):
     From the given task, extract email content information
 
     Expects that the given task has the following attributes:
-    * task_input (dict containing email_id and to_option)
+    * task_input (dict containing email_id)
     * task_output (optional, dict containing total emails sent)
     * requester, the user who executed the task
 
@@ -57,7 +59,7 @@ def extract_email_features(email_task):
     email = CourseEmail.objects.get(id=task_input_information['email_id'])
     email_feature_dict = {
         'created': get_default_time_display(email.created),
-        'sent_to': task_input_information['to_option'],
+        'sent_to': [target.long_display() for target in email.targets.all()],
         'requester': str(email_task.requester),
     }
     features = ['subject', 'html_message', 'id']

@@ -11,7 +11,6 @@ BaseMicrositeTemplateBackend is Base Class for the microsite template backend.
 from __future__ import absolute_import
 
 import abc
-import edxmako
 import os.path
 import threading
 
@@ -272,9 +271,7 @@ class BaseMicrositeBackend(AbstractBaseMicrositeBackend):
         Configure the paths for the microsites feature
         """
         microsites_root = settings.MICROSITE_ROOT_DIR
-
         if os.path.isdir(microsites_root):
-            edxmako.paths.add_lookup('main', microsites_root)
             settings.STATICFILES_DIRS.insert(0, microsites_root)
 
             log.info('Loading microsite path at %s', microsites_root)
@@ -284,17 +281,6 @@ class BaseMicrositeBackend(AbstractBaseMicrositeBackend):
                 microsites_root
             )
 
-    def enable_microsites_pre_startup(self, log):
-        """
-        The TEMPLATE_ENGINE directory to search for microsite templates
-        in non-mako templates must be loaded before the django startup
-        """
-        microsites_root = settings.MICROSITE_ROOT_DIR
-        microsite_config_dict = settings.MICROSITE_CONFIGURATION
-
-        if microsite_config_dict:
-            settings.DEFAULT_TEMPLATE_ENGINE['DIRS'].append(microsites_root)
-
 
 class BaseMicrositeTemplateBackend(object):
     """
@@ -303,7 +289,7 @@ class BaseMicrositeTemplateBackend(object):
     configuration of microsite on filesystem.
     """
 
-    def get_template_path(self, relative_path, **kwargs):
+    def get_template_path(self, template_path, **kwargs):
         """
         Returns a path (string) to a Mako template, which can either be in
         an override or will just return what is passed in which is expected to be a string
@@ -312,7 +298,6 @@ class BaseMicrositeTemplateBackend(object):
         from microsite_configuration.microsite import get_value as microsite_get_value
 
         microsite_template_path = microsite_get_value('template_dir', None)
-
         if not microsite_template_path:
             microsite_template_path = '/'.join([
                 settings.MICROSITE_ROOT_DIR,
@@ -320,6 +305,7 @@ class BaseMicrositeTemplateBackend(object):
                 'templates',
             ])
 
+        relative_path = template_path[1:] if template_path.startswith('/') else template_path
         search_path = os.path.join(microsite_template_path, relative_path)
         if os.path.isfile(search_path):
             path = '/{0}/templates/{1}'.format(
@@ -328,7 +314,7 @@ class BaseMicrositeTemplateBackend(object):
             )
             return path
         else:
-            return relative_path
+            return template_path
 
     def get_template(self, uri):
         """

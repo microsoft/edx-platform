@@ -1,13 +1,10 @@
 """
 Holds base classes for microsite tests
 """
+from django.test import TestCase
 from mock import DEFAULT
 
-from django.test import TestCase
-from microsite_configuration.tests.factories import (
-    MicrositeFactory,
-    MicrositeOrganizationMappingFactory,
-)
+from microsite_configuration.tests.factories import MicrositeFactory, MicrositeOrganizationMappingFactory
 
 MICROSITE_BACKENDS = (
     'microsite_configuration.backends.filebased.FilebasedMicrositeBackend',
@@ -22,7 +19,7 @@ class DatabaseMicrositeTestCase(TestCase):
     def setUp(self):
         super(DatabaseMicrositeTestCase, self).setUp()
         self.microsite = MicrositeFactory.create()
-        MicrositeOrganizationMappingFactory.create(microsite=self.microsite, organization='TestMicrositeX')
+        MicrositeOrganizationMappingFactory.create(microsite=self.microsite, organization='TestSiteX')
 
 
 def side_effect_for_get_value(value, return_value):

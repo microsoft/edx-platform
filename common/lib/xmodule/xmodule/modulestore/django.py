@@ -7,9 +7,11 @@ Passes settings.MODULESTORE as kwargs to MongoModuleStore
 from __future__ import absolute_import
 
 from importlib import import_module
+import gettext
 import logging
-
+from pkg_resources import resource_filename
 import re
+
 from django.conf import settings
 
 # This configuration must be executed BEFORE any additional Django imports. Otherwise, the imports may fail due to
@@ -20,22 +22,13 @@ if not settings.configured:
 from django.core.cache import caches, InvalidCacheBackendError
 import django.dispatch
 import django.utils
+from django.utils.translation import get_language, to_locale
 
-from pymongo import ReadPreference
+from openedx.core.djangoapps.request_cache.middleware import RequestCache
 from xmodule.contentstore.django import contentstore
 from xmodule.modulestore.draft_and_published import BranchSettingMixin
 from xmodule.modulestore.mixed import MixedModuleStore
 from xmodule.util.django import get_current_request_hostname
-import xblock.reference.plugins
-
-
-try:
-    # We may not always have the request_cache module available
-    from request_cache.middleware import RequestCache
-
-    HAS_REQUEST_CACHE = True
-except ImportError:
-    HAS_REQUEST_CACHE = False
 
 # We also may not always have the current request user (crum) module available
 try:
@@ -47,12 +40,92 @@ except ImportError:
     HAS_USER_SERVICE = False
 
 try:
-    from xblock_django.models import XBlockDisableConfig
+    from xblock_django.api import disabled_xblocks
 except ImportError:
-    XBlockDisableConfig = None
+    disabled_xblocks = None
 
 log = logging.getLogger(__name__)
 ASSET_IGNORE_REGEX = getattr(settings, "ASSET_IGNORE_REGEX", r"(^\._.*$)|(^\.DS_Store$)|(^.*~$)")
+
+
+class SwitchedSignal(django.dispatch.Signal):
+    """
+    SwitchedSignal is like a normal Django signal, except that you can turn it
+    on and off. This is especially useful for tests where we want to be able to
+    isolate signals and disable expensive operations that are irrelevant to
+    what's being tested (like everything that triggers off of a course publish).
+
+    SwitchedSignals default to being on. You should be very careful if you ever
+    turn one off -- the only instances of this class are shared class attributes
+    of `SignalHandler`. You have to make sure that you re-enable the signal when
+    you're done, or else you may permanently turn that signal off for that
+    process. I can't think of any reason you'd want to disable signals outside
+    of running tests.
+    """
+    def __init__(self, name, *args, **kwargs):
+        """
+        The `name` parameter exists only to make debugging more convenient.
+
+        All other args are passed to the constructor for django.dispatch.Signal.
+        """
+        super(SwitchedSignal, self).__init__(*args, **kwargs)
+        self.name = name
+        self._allow_signals = True
+
+    def disable(self):
+        """
+        Turn off signal sending.
+
+        All calls to send/send_robust will no-op.
+        """
+        self._allow_signals = False
+
+    def enable(self):
+        """
+        Turn on signal sending.
+
+        Calls to send/send_robust will behave like normal Django Signals.
+        """
+        self._allow_signals = True
+
+    def send(self, *args, **kwargs):
+        """
+        See `django.dispatch.Signal.send()`
+
+        This method will no-op and return an empty list if the signal has been
+        disabled.
+        """
+        log.debug(
+            "SwitchedSignal %s's send() called with args %s, kwargs %s - %s",
+            self.name,
+            args,
+            kwargs,
+            "ALLOW" if self._allow_signals else "BLOCK"
+        )
+        if self._allow_signals:
+            return super(SwitchedSignal, self).send(*args, **kwargs)
+        return []
+
+    def send_robust(self, *args, **kwargs):
+        """
+        See `django.dispatch.Signal.send_robust()`
+
+        This method will no-op and return an empty list if the signal has been
+        disabled.
+        """
+        log.debug(
+            "SwitchedSignal %s's send_robust() called with args %s, kwargs %s - %s",
+            self.name,
+            args,
+            kwargs,
+            "ALLOW" if self._allow_signals else "BLOCK"
+        )
+        if self._allow_signals:
+            return super(SwitchedSignal, self).send_robust(*args, **kwargs)
+        return []
+
+    def __repr__(self):
+        return u"SwitchedSignal('{}')".format(self.name)
 
 
 class SignalHandler(object):
@@ -86,22 +159,33 @@ class SignalHandler(object):
        almost no work. Its main job is to kick off the celery task that will
        do the actual work.
     """
-    pre_publish = django.dispatch.Signal(providing_args=["course_key"])
-    course_published = django.dispatch.Signal(providing_args=["course_key"])
-    course_deleted = django.dispatch.Signal(providing_args=["course_key"])
-    library_updated = django.dispatch.Signal(providing_args=["library_key"])
-    item_deleted = django.dispatch.Signal(providing_args=["usage_key", "user_id"])
+
+    # If you add a new signal, please don't forget to add it to the _mapping
+    # as well.
+    pre_publish = SwitchedSignal("pre_publish", providing_args=["course_key"])
+    course_published = SwitchedSignal("course_published", providing_args=["course_key"])
+    course_deleted = SwitchedSignal("course_deleted", providing_args=["course_key"])
+    library_updated = SwitchedSignal("library_updated", providing_args=["library_key"])
+    item_deleted = SwitchedSignal("item_deleted", providing_args=["usage_key", "user_id"])
 
     _mapping = {
-        "pre_publish": pre_publish,
-        "course_published": course_published,
-        "course_deleted": course_deleted,
-        "library_updated": library_updated,
-        "item_deleted": item_deleted,
+        signal.name: signal
+        for signal
+        in [pre_publish, course_published, course_deleted, library_updated, item_deleted]
     }
 
     def __init__(self, modulestore_class):
         self.modulestore_class = modulestore_class
+
+    @classmethod
+    def all_signals(cls):
+        """Return a list with all our signals in it."""
+        return cls._mapping.values()
+
+    @classmethod
+    def signal_by_name(cls, signal_name):
+        """Given a signal name, return the appropriate signal."""
+        return cls._mapping[signal_name]
 
     def send(self, signal_name, **kwargs):
         """
@@ -118,11 +202,25 @@ def load_function(path):
     """
     Load a function by name.
 
-    path is a string of the form "path.to.module.function"
-    returns the imported python object `function` from `path.to.module`
+    Arguments:
+        path: String of the form 'path.to.module.function'. Strings of the form
+            'path.to.module:Class.function' are also valid.
+
+    Returns:
+        The imported object 'function'.
     """
-    module_path, _, name = path.rpartition('.')
-    return getattr(import_module(module_path), name)
+    if ':' in path:
+        module_path, _, method_path = path.rpartition(':')
+        module = import_module(module_path)
+
+        class_name, method_name = method_path.split('.')
+        _class = getattr(module, class_name)
+        function = getattr(_class, method_name)
+    else:
+        module_path, _, name = path.rpartition('.')
+        function = getattr(import_module(module_path), name)
+
+    return function
 
 
 def create_modulestore_instance(
@@ -138,6 +236,9 @@ def create_modulestore_instance(
     """
     This will return a new instance of a modulestore given an engine and options
     """
+    # Import is placed here to avoid model import at project startup.
+    import xblock.reference.plugins
+
     class_ = load_function(engine)
 
     _options = {}
@@ -148,10 +249,7 @@ def create_modulestore_instance(
         if key in _options and isinstance(_options[key], basestring):
             _options[key] = load_function(_options[key])
 
-    if HAS_REQUEST_CACHE:
-        request_cache = RequestCache.get_request_cache()
-    else:
-        request_cache = None
+    request_cache = RequestCache.get_request_cache()
 
     try:
         metadata_inheritance_cache = caches['mongo_metadata_inheritance']
@@ -169,13 +267,25 @@ def create_modulestore_instance(
     else:
         xb_user_service = None
 
-    if 'read_preference' in doc_store_config:
-        doc_store_config['read_preference'] = getattr(ReadPreference, doc_store_config['read_preference'])
+    xblock_field_data_wrappers = [load_function(path) for path in settings.XBLOCK_FIELD_DATA_WRAPPERS]
 
-    if XBlockDisableConfig and settings.FEATURES.get('ENABLE_DISABLING_XBLOCK_TYPES', False):
-        disabled_xblock_types = XBlockDisableConfig.disabled_block_types()
-    else:
-        disabled_xblock_types = ()
+    def fetch_disabled_xblock_types():
+        """
+        Get the disabled xblock names, using the request_cache if possible to avoid hitting
+        a database every time the list is needed.
+        """
+        # If the import could not be loaded, return an empty list.
+        if disabled_xblocks is None:
+            return []
+
+        if request_cache:
+            if 'disabled_xblock_types' not in request_cache.data:
+                request_cache.data['disabled_xblock_types'] = [block.name for block in disabled_xblocks()]
+            return request_cache.data['disabled_xblock_types']
+        else:
+            disabled_xblock_types = [block.name for block in disabled_xblocks()]
+
+        return disabled_xblock_types
 
     return class_(
         contentstore=content_store,
@@ -183,9 +293,10 @@ def create_modulestore_instance(
         request_cache=request_cache,
         xblock_mixins=getattr(settings, 'XBLOCK_MIXINS', ()),
         xblock_select=getattr(settings, 'XBLOCK_SELECT_FUNCTION', None),
-        disabled_xblock_types=disabled_xblock_types,
+        xblock_field_data_wrappers=xblock_field_data_wrappers,
+        disabled_xblock_types=fetch_disabled_xblock_types,
         doc_store_config=doc_store_config,
-        i18n_service=i18n_service or ModuleI18nService(),
+        i18n_service=i18n_service or ModuleI18nService,
         fs_service=fs_service or xblock.reference.plugins.FSService(),
         user_service=user_service or xb_user_service,
         signal_handler=signal_handler or SignalHandler(class_),
@@ -243,9 +354,36 @@ class ModuleI18nService(object):
     i18n service.
 
     """
+    def __init__(self, block=None):
+        """
+        Attempt to load an XBlock-specific GNU gettext translator using the XBlock's own domain
+        translation catalog, currently expected to be found at:
+            <xblock_root>/conf/locale/<language>/LC_MESSAGES/<domain>.po|mo
+        If we can't locate the domain translation catalog then we fall-back onto
+        django.utils.translation, which will point to the system's own domain translation catalog
+        This effectively achieves translations by coincidence for an XBlock which does not provide
+        its own dedicated translation catalog along with its implementation.
+        """
+        self.translator = django.utils.translation
+        if block:
+            xblock_class = getattr(block, 'unmixed_class', block.__class__)
+            xblock_resource = xblock_class.__module__
+            xblock_locale_dir = '/translations'
+            xblock_locale_path = resource_filename(xblock_resource, xblock_locale_dir)
+            xblock_domain = 'text'
+            selected_language = get_language()
+            try:
+                self.translator = gettext.translation(
+                    xblock_domain,
+                    xblock_locale_path,
+                    [to_locale(selected_language if selected_language else settings.LANGUAGE_CODE)]
+                )
+            except IOError:
+                # Fall back to the default Django translator if the XBlock translator is not found.
+                pass
 
     def __getattr__(self, name):
-        return getattr(django.utils.translation, name)
+        return getattr(self.translator, name)
 
     def strftime(self, *args, **kwargs):
         """

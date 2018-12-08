@@ -2,10 +2,10 @@
 import json
 
 import httpretty
-
 from provider.constants import PUBLIC
 from provider.oauth2.models import Client
-from social.apps.django_app.default.models import UserSocialAuth
+from social_core.backends.facebook import FacebookOAuth2, API_VERSION as FACEBOOK_API_VERSION
+from social_django.models import UserSocialAuth, Partial
 
 from student.tests.factories import UserFactory
 
@@ -22,22 +22,35 @@ class ThirdPartyOAuthTestMixin(ThirdPartyAuthTestMixin):
     USER_URL: The URL of the endpoint that the backend retrieves user data from
     UID_FIELD: The field in the user data that the backend uses as the user id
     """
-    def setUp(self, create_user=True):
+    social_uid = "test_social_uid"
+    access_token = "test_access_token"
+    client_id = "test_client_id"
+
+    CREATE_USER = True
+
+    def setUp(self):
         super(ThirdPartyOAuthTestMixin, self).setUp()
-        self.social_uid = "test_social_uid"
-        self.access_token = "test_access_token"
-        self.client_id = "test_client_id"
-        self.oauth_client = Client.objects.create(
-            client_id=self.client_id,
-            client_type=PUBLIC
-        )
-        if create_user:
+        if self.CREATE_USER:
             self.user = UserFactory()
             UserSocialAuth.objects.create(user=self.user, provider=self.BACKEND, uid=self.social_uid)
+        self.oauth_client = self._create_client()
         if self.BACKEND == 'google-oauth2':
-            self.configure_google_provider(enabled=True)
+            self.configure_google_provider(enabled=True, visible=True)
         elif self.BACKEND == 'facebook':
-            self.configure_facebook_provider(enabled=True)
+            self.configure_facebook_provider(enabled=True, visible=True)
+
+    def tearDown(self):
+        super(ThirdPartyOAuthTestMixin, self).tearDown()
+        Partial.objects.all().delete()
+
+    def _create_client(self):
+        """
+        Create an OAuth2 client application
+        """
+        return Client.objects.create(
+            client_id=self.client_id,
+            client_type=PUBLIC,
+        )
 
     def _setup_provider_response(self, success=False, email=''):
         """
@@ -65,14 +78,14 @@ class ThirdPartyOAuthTestMixin(ThirdPartyAuthTestMixin):
             self.USER_URL,
             body=body,
             status=status,
-            content_type="application/json"
+            content_type="application/json",
         )
 
 
 class ThirdPartyOAuthTestMixinFacebook(object):
     """Tests oauth with the Facebook backend"""
     BACKEND = "facebook"
-    USER_URL = "https://graph.facebook.com/v2.3/me"
+    USER_URL = FacebookOAuth2.USER_DATA_URL.format(version=FACEBOOK_API_VERSION)
     # In facebook responses, the "id" field is used as the user's identifier
     UID_FIELD = "id"
 

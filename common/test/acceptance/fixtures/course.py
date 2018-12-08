@@ -2,19 +2,17 @@
 Fixture to create a course and course components (XBlocks).
 """
 
-import mimetypes
-import json
-
 import datetime
-
-from textwrap import dedent
+import json
+import mimetypes
 from collections import namedtuple
-from path import Path as path
+from textwrap import dedent
 
 from opaque_keys.edx.keys import CourseKey
+from path import Path
 
-from . import STUDIO_BASE_URL
-from .base import XBlockContainerFixture, FixtureError
+from common.test.acceptance.fixtures import STUDIO_BASE_URL
+from common.test.acceptance.fixtures.base import FixtureError, XBlockContainerFixture
 
 
 class XBlockFixtureDesc(object):
@@ -22,7 +20,8 @@ class XBlockFixtureDesc(object):
     Description of an XBlock, used to configure a course fixture.
     """
 
-    def __init__(self, category, display_name, data=None, metadata=None, grader_type=None, publish='make_public'):
+    def __init__(self, category, display_name, data=None,
+                 metadata=None, grader_type=None, publish='make_public', **kwargs):
         """
         Configure the XBlock to be created by the fixture.
         These arguments have the same meaning as in the Studio REST API:
@@ -41,6 +40,7 @@ class XBlockFixtureDesc(object):
         self.publish = publish
         self.children = []
         self.locator = None
+        self.fields = kwargs
 
     def add_children(self, *args):
         """
@@ -59,13 +59,15 @@ class XBlockFixtureDesc(object):
 
         XBlocks are always set to public visibility.
         """
-        return json.dumps({
+        returned_data = {
             'display_name': self.display_name,
             'data': self.data,
             'metadata': self.metadata,
             'graderType': self.grader_type,
-            'publish': self.publish
-        })
+            'publish': self.publish,
+            'fields': self.fields,
+        }
+        return json.dumps(returned_data)
 
     def __str__(self):
         """
@@ -223,9 +225,9 @@ class CourseFixture(XBlockContainerFixture):
         self._configure_course()
 
     @property
-    def course_outline(self):
+    def studio_course_outline_as_json(self):
         """
-        Retrieves course outline in JSON format.
+        Retrieves Studio course outline in JSON format.
         """
         url = STUDIO_BASE_URL + '/course/' + self._course_key + "?format=json"
         response = self.session.get(url, headers=self.headers)
@@ -354,7 +356,7 @@ class CourseFixture(XBlockContainerFixture):
             'children': None,
             'data': handouts_html,
             'id': self._handouts_loc,
-            'metadata': dict()
+            'metadata': dict(),
         })
 
         response = self.session.post(url, data=payload, headers=self.headers)
@@ -388,7 +390,7 @@ class CourseFixture(XBlockContainerFixture):
         """
         url = STUDIO_BASE_URL + self._assets_url
 
-        test_dir = path(__file__).abspath().dirname().dirname().dirname()
+        test_dir = Path(__file__).abspath().dirname().dirname().dirname()
 
         for asset_name in self._assets:
             asset_file_path = test_dir + '/data/uploads/' + asset_name

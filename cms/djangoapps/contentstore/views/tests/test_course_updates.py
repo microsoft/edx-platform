@@ -2,13 +2,14 @@
 unit tests for course_info views and models.
 """
 import json
-from mock import patch
+
 from django.test.utils import override_settings
+from mock import patch
+from opaque_keys.edx.keys import UsageKey
 
 from contentstore.models import PushNotificationConfig
 from contentstore.tests.test_course_settings import CourseTestCase
 from contentstore.utils import reverse_course_url, reverse_usage_url
-from opaque_keys.edx.keys import UsageKey
 from xmodule.modulestore.django import modulestore
 
 
@@ -71,7 +72,7 @@ class CourseUpdateTest(CourseTestCase):
         course_update_url = self.create_update_url()
         resp = self.client.get_json(course_update_url)
         payload = json.loads(resp.content)
-        self.assertTrue(len(payload) == 2)
+        self.assertEqual(len(payload), 2)
 
         # try json w/o required fields
         self.assertContains(
@@ -123,7 +124,7 @@ class CourseUpdateTest(CourseTestCase):
         url = self.create_update_url(provided_id=this_id)
         resp = self.client.delete(url)
         payload = json.loads(resp.content)
-        self.assertTrue(len(payload) == before_delete - 1)
+        self.assertEqual(len(payload), before_delete - 1)
 
     def test_course_updates_compatibility(self):
         '''
@@ -149,7 +150,7 @@ class CourseUpdateTest(CourseTestCase):
         resp = self.client.get_json(course_update_url)
         payload = json.loads(resp.content)
         self.assertEqual(payload, [{u'date': update_date, u'content': update_content, u'id': 1}])
-        self.assertTrue(len(payload) == 1)
+        self.assertEqual(len(payload), 1)
 
         # test getting single update item
 
@@ -234,7 +235,7 @@ class CourseUpdateTest(CourseTestCase):
         # now confirm that the bad news and the iframe make up single update
         resp = self.client.get_json(course_update_url)
         payload = json.loads(resp.content)
-        self.assertTrue(len(payload) == 1)
+        self.assertEqual(len(payload), 1)
 
     def post_course_update(self, send_push_notification=False):
         """
@@ -269,7 +270,7 @@ class CourseUpdateTest(CourseTestCase):
 
         updates_location = self.course.id.make_usage_key('course_info', 'updates')
         self.assertTrue(isinstance(updates_location, UsageKey))
-        self.assertEqual(updates_location.name, u'updates')
+        self.assertEqual(updates_location.block_id, u'updates')
 
         # check posting on handouts
         handouts_location = self.course.id.make_usage_key('course_info', 'handouts')

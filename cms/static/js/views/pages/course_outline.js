@@ -1,17 +1,21 @@
 /**
  * This page is used to show the user an outline of the course.
  */
-define(["jquery", "underscore", "gettext", "js/views/pages/base_page", "js/views/utils/xblock_utils",
-        "js/views/course_outline", "common/js/components/utils/view_utils", "common/js/components/views/feedback_alert",
-        "common/js/components/views/feedback_notification"],
-    function ($, _, gettext, BasePage, XBlockViewUtils, CourseOutlineView, ViewUtils, AlertView, NoteView) {
+define([
+    'jquery', 'underscore', 'gettext', 'js/views/pages/base_page', 'js/views/utils/xblock_utils',
+    'js/views/course_outline', 'common/js/components/utils/view_utils', 'common/js/components/views/feedback_alert',
+    'common/js/components/views/feedback_notification', 'js/views/course_highlights_enable'],
+    function($, _, gettext, BasePage, XBlockViewUtils, CourseOutlineView, ViewUtils, AlertView, NoteView,
+             CourseHighlightsEnableView
+    ) {
+        'use strict';
         var expandedLocators, CourseOutlinePage;
 
         CourseOutlinePage = BasePage.extend({
             // takes XBlockInfo as a model
 
             events: {
-                "click .button-toggle-expand-collapse": "toggleExpandCollapse"
+                'click .button-toggle-expand-collapse': 'toggleExpandCollapse'
             },
 
             options: {
@@ -29,23 +33,23 @@ define(["jquery", "underscore", "gettext", "js/views/pages/base_page", "js/views
                     self.handleReIndexEvent(event);
                 });
                 this.model.on('change', this.setCollapseExpandVisibility, this);
-                $('.dismiss-button').bind('click', ViewUtils.deleteNotificationHandler(function () {
+                $('.dismiss-button').bind('click', ViewUtils.deleteNotificationHandler(function() {
                     $('.wrapper-alert-announcement').removeClass('is-shown').addClass('is-hidden');
                 }));
             },
 
             setCollapseExpandVisibility: function() {
                 var has_content = this.hasContent(),
-                    collapseExpandButton = $('.button-toggle-expand-collapse');
+                    $collapseExpandButton = $('.button-toggle-expand-collapse');
                 if (has_content) {
-                    collapseExpandButton.removeClass('is-hidden');
+                    $collapseExpandButton.removeClass('is-hidden');
                 } else {
-                    collapseExpandButton.addClass('is-hidden');
+                    $collapseExpandButton.addClass('is-hidden');
                 }
             },
 
             renderPage: function() {
-                var setInitialExpandState = function (xblockInfo, expandedLocators) {
+                var setInitialExpandState = function(xblockInfo, expandedLocators) {
                     if (xblockInfo.isCourse() || xblockInfo.isChapter()) {
                         expandedLocators.add(xblockInfo.get('id'));
                     }
@@ -55,14 +59,23 @@ define(["jquery", "underscore", "gettext", "js/views/pages/base_page", "js/views
                 this.expandedLocators = expandedLocators;
                 this.expandedLocators.clear();
                 if (this.model.get('child_info')) {
-                    _.each(this.model.get('child_info').children, function (childXBlockInfo) {
-                       setInitialExpandState(childXBlockInfo, this.expandedLocators);
+                    _.each(this.model.get('child_info').children, function(childXBlockInfo) {
+                        setInitialExpandState(childXBlockInfo, this.expandedLocators);
                     }, this);
                 }
                 setInitialExpandState(this.model, this.expandedLocators);
 
                 if (this.initialState && this.initialState.expanded_locators) {
                     this.expandedLocators.addAll(this.initialState.expanded_locators);
+                }
+
+                /* globals course */
+                if (this.model.get('highlights_enabled') && course.get('self_paced')) {
+                    this.highlightsEnableView = new CourseHighlightsEnableView({
+                        el: this.$('.status-highlights-enabled'),
+                        model: this.model
+                    });
+                    this.highlightsEnableView.render();
                 }
 
                 this.outlineView = new CourseOutlineView({
@@ -87,19 +100,18 @@ define(["jquery", "underscore", "gettext", "js/views/pages/base_page", "js/views
                 event.preventDefault();
                 toggleButton.toggleClass('collapse-all expand-all');
                 this.$('.list-sections > li').each(function(index, domElement) {
-                    var element = $(domElement);
+                    var $element = $(domElement);
                     if (collapse) {
-                        element.addClass('is-collapsed');
+                        $element.addClass('is-collapsed');
                     } else {
-                        element.removeClass('is-collapsed');
+                        $element.removeClass('is-collapsed');
                     }
                 });
                 if (this.model.get('child_info')) {
-                    _.each(this.model.get('child_info').children, function (childXBlockInfo) {
+                    _.each(this.model.get('child_info').children, function(childXBlockInfo) {
                         if (collapse) {
                             this.expandedLocators.remove(childXBlockInfo.get('id'));
-                        }
-                        else {
+                        } else {
                             this.expandedLocators.add(childXBlockInfo.get('id'));
                         }
                     }, this);
@@ -109,37 +121,37 @@ define(["jquery", "underscore", "gettext", "js/views/pages/base_page", "js/views
             handleReIndexEvent: function(event) {
                 var self = this;
                 event.preventDefault();
-                var target = $(event.currentTarget);
-                target.css('cursor', 'wait');
-                this.startReIndex(target.attr('href'))
-                    .done(function(data) {self.onIndexSuccess(data);})
-                    .fail(function(data) {self.onIndexError(data);})
-                    .always(function() {target.css('cursor', 'pointer');});
+                var $target = $(event.currentTarget);
+                $target.css('cursor', 'wait');
+                this.startReIndex($target.attr('href'))
+                    .done(function(data) { self.onIndexSuccess(data); })
+                    .fail(function(data) { self.onIndexError(data); })
+                    .always(function() { $target.css('cursor', 'pointer'); });
             },
 
             startReIndex: function(reindex_url) {
                 return $.ajax({
-                        url: reindex_url,
-                        method: 'GET',
-                        global: false,
-                        contentType: "application/json; charset=utf-8",
-                        dataType: "json"
-                    });
+                    url: reindex_url,
+                    method: 'GET',
+                    global: false,
+                    contentType: 'application/json; charset=utf-8',
+                    dataType: 'json'
+                });
             },
 
             onIndexSuccess: function(data) {
                 var msg = new AlertView.Announcement({
-                        title: gettext('Course Index'),
-                        message: data.user_message
-                    });
+                    title: gettext('Course Index'),
+                    message: data.user_message
+                });
                 msg.show();
             },
 
             onIndexError: function(data) {
                 var msg = new NoteView.Error({
-                        title: gettext('There were errors reindexing course.'),
-                        message: data.user_message
-                    });
+                    title: gettext('There were errors reindexing course.'),
+                    message: data.user_message
+                });
                 msg.show();
             }
         });
@@ -153,9 +165,9 @@ define(["jquery", "underscore", "gettext", "js/views/pages/base_page", "js/views
             /**
              * Add the locator to the set if it is not already present.
              */
-            add: function (locator) {
+            add: function(locator) {
                 if (!this.contains(locator)) {
-                   this.locators.push(locator);
+                    this.locators.push(locator);
                 }
             },
 
@@ -171,7 +183,7 @@ define(["jquery", "underscore", "gettext", "js/views/pages/base_page", "js/views
             /**
              * Remove the locator from the set if it is present.
              */
-            remove: function (locator) {
+            remove: function(locator) {
                 var index = this.locators.indexOf(locator);
                 if (index >= 0) {
                     this.locators.splice(index, 1);
@@ -181,14 +193,14 @@ define(["jquery", "underscore", "gettext", "js/views/pages/base_page", "js/views
             /**
              * Returns true iff the locator is present in the set.
              */
-            contains: function (locator) {
+            contains: function(locator) {
                 return this.locators.indexOf(locator) >= 0;
             },
 
             /**
              * Clears all expanded locators from the set.
              */
-            clear: function () {
+            clear: function() {
                 this.locators = [];
             }
         };

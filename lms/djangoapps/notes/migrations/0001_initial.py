@@ -3,7 +3,7 @@ from __future__ import unicode_literals
 
 from django.db import migrations, models
 from django.conf import settings
-import xmodule_django.models
+from opaque_keys.edx.django.models import CourseKeyField
 
 
 class Migration(migrations.Migration):
@@ -17,7 +17,7 @@ class Migration(migrations.Migration):
             name='Note',
             fields=[
                 ('id', models.AutoField(verbose_name='ID', serialize=False, auto_created=True, primary_key=True)),
-                ('course_id', xmodule_django.models.CourseKeyField(max_length=255, db_index=True)),
+                ('course_id', CourseKeyField(max_length=255, db_index=True)),
                 ('uri', models.CharField(max_length=255, db_index=True)),
                 ('text', models.TextField(default=b'')),
                 ('quote', models.TextField(default=b'')),
@@ -28,7 +28,7 @@ class Migration(migrations.Migration):
                 ('tags', models.TextField(default=b'')),
                 ('created', models.DateTimeField(db_index=True, auto_now_add=True, null=True)),
                 ('updated', models.DateTimeField(auto_now=True, db_index=True)),
-                ('user', models.ForeignKey(to=settings.AUTH_USER_MODEL)),
+                ('user', models.ForeignKey(to=settings.AUTH_USER_MODEL, on_delete=models.CASCADE)),
             ],
         ),
     ]

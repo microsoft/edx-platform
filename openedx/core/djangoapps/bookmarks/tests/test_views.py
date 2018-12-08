@@ -1,24 +1,22 @@
 """
 Tests for bookmark views.
 """
-
-import ddt
 import json
-from unittest import skipUnless
 import urllib
 
+import ddt
 from django.conf import settings
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from mock import patch
+from nose.plugins.attrib import attr
 from rest_framework.test import APIClient
 
+from openedx.core.djangolib.testing.utils import skip_unless_lms
 from xmodule.modulestore import ModuleStoreEnum
-
-from .test_models import BookmarksTestsBase
 from .test_api import BookmarkApiEventTestMixin
+from .test_models import BookmarksTestsBase
 
 
-# pylint: disable=no-member
 class BookmarksViewsTestsBase(BookmarksTestsBase, BookmarkApiEventTestMixin):
     """
     Base class for bookmarks views tests.
@@ -63,8 +61,9 @@ class BookmarksViewsTestsBase(BookmarksTestsBase, BookmarkApiEventTestMixin):
         return response
 
 
+@attr(shard=9)
 @ddt.ddt
-@skipUnless(settings.ROOT_URLCONF == 'lms.urls', 'Tests only valid in LMS')
+@skip_unless_lms
 class BookmarksListViewTests(BookmarksViewsTestsBase):
     """
     This contains the tests for GET & POST methods of bookmark.views.BookmarksListView class
@@ -266,7 +265,7 @@ class BookmarksListViewTests(BookmarksViewsTestsBase):
         self.assertEqual(response.data['developer_message'], u'Parameter usage_id not provided.')
 
         # Send empty data dictionary.
-        with self.assertNumQueries(6):  # No queries for bookmark table.
+        with self.assertNumQueries(8):  # No queries for bookmark table.
             response = self.send_post(
                 client=self.client,
                 url=reverse('bookmarks'),
@@ -367,8 +366,9 @@ class BookmarksListViewTests(BookmarksViewsTestsBase):
         )
 
 
+@attr(shard=9)
 @ddt.ddt
-@skipUnless(settings.ROOT_URLCONF == 'lms.urls', 'Tests only valid in LMS')
+@skip_unless_lms
 class BookmarksDetailViewTests(BookmarksViewsTestsBase):
     """
     This contains the tests for GET & DELETE methods of bookmark.views.BookmarksDetailView class
@@ -396,15 +396,28 @@ class BookmarksDetailViewTests(BookmarksViewsTestsBase):
 
     def test_get_bookmark_that_belongs_to_other_user(self):
         """
-        Test that requesting bookmark that belongs to other user returns 404 status code.
+        Test that requesting bookmark that belongs to other user returns 403 status code.
         """
         self.send_get(
             client=self.client,
             url=reverse(
                 'bookmarks_detail',
-                kwargs={'username': 'other', 'usage_id': unicode(self.vertical_1.location)}
+                kwargs={'username': self.other_user.username, 'usage_id': unicode(self.vertical_1.location)}
             ),
-            expected_status=404
+            expected_status=403
+        )
+
+    def test_get_bookmark_that_belongs_to_nonexistent_user(self):
+        """
+        Test that requesting bookmark that belongs to a non-existent user also returns 403 status code.
+        """
+        self.send_get(
+            client=self.client,
+            url=reverse(
+                'bookmarks_detail',
+                kwargs={'username': 'non-existent', 'usage_id': unicode(self.vertical_1.location)}
+            ),
+            expected_status=403
         )
 
     def test_get_bookmark_that_does_not_exist(self):
@@ -481,7 +494,7 @@ class BookmarksDetailViewTests(BookmarksViewsTestsBase):
 
     def test_delete_bookmark_that_belongs_to_other_user(self):
         """
-        Test that delete bookmark that belongs to other user returns 404.
+        Test that delete bookmark that belongs to other user returns 403.
         """
         self.send_delete(
             client=self.client,
@@ -489,7 +502,7 @@ class BookmarksDetailViewTests(BookmarksViewsTestsBase):
                 'bookmarks_detail',
                 kwargs={'username': 'other', 'usage_id': unicode(self.vertical_1.location)}
             ),
-            expected_status=404
+            expected_status=403
         )
 
     def test_delete_bookmark_that_does_not_exist(self):

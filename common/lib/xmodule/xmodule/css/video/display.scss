@@ -10,59 +10,14 @@
 // --------
 
 // the html target is necessary for xblocks and xmodules, but works across the board
-html:not('.afontgarde') .icon-fallback-img {
 
-  .fa-play {
-    background: url('#{$static-path}/images/fontawesome/play.svg') center center no-repeat;
-  }
-
-  .fa-pause {
-    background: url('#{$static-path}/images/fontawesome/pause.svg') center center no-repeat;
-  }
-
-  .fa-step-forward {
-    background: url('#{$static-path}/images/fontawesome/step-forward.svg') center center no-repeat;
-  }
-
-  .fa-arrows-alt {
-    background: url('#{$static-path}/images/fontawesome/arrows-alt.svg') center center no-repeat;
-  }
-
-  .fa-caret-right {
-    background: url('#{$static-path}/images/fontawesome/caret-right.svg') center center no-repeat;
-  }
-
-  .fa-caret-left {
-    background: url('#{$static-path}/images/fontawesome/caret-left.svg') center center no-repeat;
-  }
-
-  .fa-caret-up {
-    background: url('#{$static-path}/images/fontawesome/caret-up.svg') center center no-repeat;
-  }
-
-  .fa-compress {
-    background: url('#{$static-path}/images/fontawesome/compress.svg') center center no-repeat;
-  }
-
-  .fa-quote-left {
-    background: url('#{$static-path}/images/fontawesome/quote-left.svg') center center no-repeat;
-  }
-
-  .fa-volume-up {
-    background: url('#{$static-path}/images/fontawesome/volume-up.svg') center center no-repeat;
-  }
-
-  .fa-volume-down {
-    background: url('#{$static-path}/images/fontawesome/volume-down.svg') center center no-repeat;
-  }
-
-  .fa-volume-off {
-    background: url('#{$static-path}/images/fontawesome/volume-off.svg') center center no-repeat;
-  }
-}
+$secondary-dark: rgb(142, 62, 99); // UXPL secondary dark
+$secondary-base: rgb(203, 89, 141); // UXPL secondary base
+$secondary-light: rgb(219, 139, 175); // UXPL secondary light
+$cool-dark: rgb(79, 89, 93); // UXPL cool dark
 
 & {
-    margin-bottom: ($baseline*1.5);
+  margin-bottom: ($baseline*1.5);
 }
 
 .is-hidden {
@@ -71,7 +26,8 @@ html:not('.afontgarde') .icon-fallback-img {
 
 .video {
   @include clearfix();
-  background: rgb(240, 243, 245); // UXPL grayscale-cool xx-light;
+
+  background: rgb(245, 245, 245); // UXPL grayscale x-back
   display: block;
   margin: 0 -12px;
   padding: 12px;
@@ -85,9 +41,7 @@ html:not('.afontgarde') .icon-fallback-img {
   }
 
   &.is-initialized {
-
     .video-wrapper {
-
       .spinner {
         display: none;
       }
@@ -96,7 +50,6 @@ html:not('.afontgarde') .icon-fallback-img {
 
   // CASE: video pre-roll state
   &.is-pre-roll {
-
     .slider {
       visibility: hidden;
     }
@@ -104,7 +57,7 @@ html:not('.afontgarde') .icon-fallback-img {
     .video-player {
       position: relative;
 
-      &:before {
+      &::before {
         display: block;
         content: "";
         width: 100%;
@@ -115,68 +68,69 @@ html:not('.afontgarde') .icon-fallback-img {
 
   .tc-wrapper {
     @include clearfix();
+
     position: relative;
   }
 
   .focus_grabber {
     position: relative;
     display: inline;
-    width: 0px;
-    height: 0px;
+    width: 0;
+    height: 0;
+  }
+
+  .downloads-heading {
+    margin: 1em 0 0;
   }
 
   .wrapper-downloads {
-    margin: 0;
-    padding: 0;
+    @include media-breakpoint-up(md) {
+      display: flex;
+    }
 
-    .video-download-button {
-      display: inline-block;
+    .hd {
+      margin: 0;
+    }
+
+    .wrapper-download-video,
+    .wrapper-download-transcripts,
+    .wrapper-handouts,
+    .branding {
+      flex: 1;
+      margin-top: $baseline;
+
+      @include padding-right($baseline);
+
       vertical-align: top;
-      margin: ($baseline*0.75) ($baseline/2) 0 0;
+    }
 
-      > a {
-        @include transition(all $tmg-f2 ease-in-out 0s);
-        @include font-size(14);
-        line-height : 14px;
-        float: left;
-        border-radius: 3px;
-        background-color: $very-light-text;
-        padding: ($baseline*0.75);
-        color: $lighter-base-font-color;
+    .wrapper-download-video {
+      .video-sources {
+        margin: 0;
+      }
+    }
 
-        &:hover,
-        &:focus {
-          background-color: $action-primary-active-bg;
-          color: $very-light-text;
+    .wrapper-download-transcripts {
+      .list-download-transcripts {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+
+        .transcript-option {
+          margin: 0;
         }
       }
     }
 
-    .video-tracks {
-
-      > a {
-        border-radius: 3px 0 0 3px;
-      }
-
-      > a.external-track {
-        border-radius: 3px;
-      }
-    }
-
     .branding {
-      display: inline-block;
-      float: right;
-      margin: 15px 0 0 10px;
-      vertical-align: top;
+      @include padding-right(0);
 
       .host-tag {
-        @include margin-right($baseline/2);
         position: absolute;
         left: -9999em;
         display: inline-block;
         vertical-align: middle;
-        font-size: 70%;
-        color: #777;
+        color: $body-color;
       }
 
       .brand-logo {
@@ -192,18 +146,30 @@ html:not('.afontgarde') .icon-fallback-img {
   .video-wrapper {
     @include float(left);
     @include margin-right(flex-gutter(9));
+
     width: flex-grid(6, 9);
     background-color: black;
     position: relative;
 
-    .video-player-pre, 
+    &:hover {
+      .btn-play {
+        color: theme-color("primary");
+      }
+
+      .btn-play::after {
+        background: theme-color("inverse");
+      }
+    }
+
+    .video-player-pre,
     .video-player-post {
-       height: 50px;
-       background-color: rgb(17, 16, 16) // UXPL grayscale black;
+      height: 50px;
+      background-color: rgb(17, 16, 16) // UXPL grayscale black;
     }
 
     .spinner {
       @include transform(translate(-50%, -50%));
+
       position: absolute;
       z-index: 1;
       background: rgba(0, 0, 0, 0.7);
@@ -212,8 +178,9 @@ html:not('.afontgarde') .icon-fallback-img {
       padding: 30px;
       border-radius: 25%;
 
-      &:after{
+      &::after {
         @include animation(rotateCW 3s infinite linear);
+
         content: '';
         display: block;
         width: 30px;
@@ -227,30 +194,35 @@ html:not('.afontgarde') .icon-fallback-img {
 
     .btn-play {
       @include transform(translate(-50%, -50%));
+
       position: absolute;
       z-index: 1;
-      background: rgba(0, 0, 0, 0.7);
-      top: 50%;
+      top: 46%;
       left: 50%;
-      padding: 30px;
-      border-radius: 25%;
+      font-size: 4em;
+      cursor: pointer;
 
-      &:after{
+      &::after {
+        background: $white;
+        position: absolute;
+        width: 50%;
+        height: 50%;
         content: '';
-        display: block;
-        width: 0px;
-        height: 0px;
-        border-style: solid;
-        border-width: 30px 0 30px 50px;
-        border-color: transparent transparent transparent $white;
-        position: relative;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        right: 0;
+        margin: auto;
+        z-index: -1;
       }
     }
 
     .closed-captions {
+      @include left(5%);
+
       position: absolute;
-      width: 85%;
-      left: 5%;
+      width: 90%;
+      box-sizing: border-box;
       top: 70%;
       text-align: center;
     }
@@ -259,8 +231,32 @@ html:not('.afontgarde') .icon-fallback-img {
       max-height: ($baseline * 3);
       border-radius: ($baseline / 5);
       padding: 8px ($baseline / 2) 8px ($baseline * 1.5);
-      background: rgba(0, 0, 0, .75);
+      background: rgba(0, 0, 0, 0.75);
       color: $yellow;
+
+      &::before {
+        position: absolute;
+        display: inline-block;
+        top: 50%;
+
+        @include left($baseline);
+
+        margin-top: -0.6em;
+        font-family: 'FontAwesome';
+        content: "\f142";
+        color: $white;
+        opacity: 0.5;
+      }
+
+      &:hover,
+      &.is-dragging {
+        background: rgba(0, 0, 0, 1);
+        cursor: move;
+
+        &::before {
+          opacity: 1;
+        }
+      }
     }
 
     .video-player {
@@ -275,15 +271,24 @@ html:not('.afontgarde') .icon-fallback-img {
         }
       }
 
+      .video-error,
+      .video-hls-error {
+        padding: ($baseline / 5);
+        background: black;
+        color: white !important; // the pattern library headings shim is more scoped
+      }
+
       object,
       iframe,
       video {
+        @include left(0);
+
         display: block;
         border: none;
         width: 100%;
       }
 
-      h3 {
+      h4 {
         text-align: center;
         color: white;
 
@@ -295,6 +300,7 @@ html:not('.afontgarde') .icon-fallback-img {
 
     .video-controls {
       @include clearfix();
+
       position: relative;
       border: 0;
       background: rgb(40, 44, 46); // UXPL grayscale-cool x-dark
@@ -302,7 +308,6 @@ html:not('.afontgarde') .icon-fallback-img {
 
       &:hover,
       &:focus {
-
         ul,
         div {
           opacity: 1;
@@ -312,6 +317,7 @@ html:not('.afontgarde') .icon-fallback-img {
       %video-control {
         @extend %t-strong;
         @extend %t-title7;
+
         display: inline-block;
         vertical-align: middle;
         margin: 0;
@@ -338,18 +344,13 @@ html:not('.afontgarde') .icon-fallback-img {
       .control {
         @extend %video-control;
 
-        .icon-fallback-img {
+        .icon {
+          width: 1em;
 
-          .icon {
-            // if the icon font doesn't render, we need to provide dimensions for the svg's
-            width: 1em;
-            height: 1em;
-
-            &.icon-hd {
-              // except when it's text, like with HD
-              // otherwise it's shifted to the right because "HD" is wider than 1em
-              width: auto;
-            }
+          &.icon-hd {
+            // except when it's text, like with HD
+            // otherwise it's shifted to the right because "HD" is wider than 1em
+            width: auto;
           }
         }
       }
@@ -357,7 +358,9 @@ html:not('.afontgarde') .icon-fallback-img {
       .slider {
         @include clearfix();
         @include transform-origin(bottom left);
-        @include transition(height .7s ease-in-out 0s);
+        @include transition(height 0.7s ease-in-out 0s);
+
+        box-sizing: border-box;
         position: absolute;
         bottom: 100%;
         left: 0;
@@ -365,13 +368,16 @@ html:not('.afontgarde') .icon-fallback-img {
         z-index: 1;
         height: ($baseline / 4);
         margin-left: 0;
-        border: 0;
+        border: 1px solid $cool-dark;
         border-radius: 0;
-        background: rgb(79, 89, 93); // UXPL grayscale-cool dark
+        background: $cool-dark;
 
         .ui-widget-header {
-          background: rgb(142, 62, 99); // UXPL secondary dark
+          background: $secondary-dark;
+          border: 1px solid $secondary-dark;
           box-shadow: none;
+          top: -1px;
+          left: -1px;
         }
 
         .ui-corner-all.slider-range {
@@ -381,37 +387,45 @@ html:not('.afontgarde') .icon-fallback-img {
 
         .ui-slider-handle {
           @extend %ui-fake-link;
+
           @include transform-origin(bottom left);
-          @include transition(all .7s ease-in-out 0s);
-          top: 0;
+          @include transition(all 0.7s ease-in-out 0s);
+
+          box-sizing: border-box;
+          top: -1px;
           height: ($baseline / 4);
           width: ($baseline / 4);
           margin-left: -($baseline / 8); // center-center causes the control to be beyond the end of the sider
-          border: 0;
+          border: 1px solid $secondary-base;
           border-radius: ($baseline / 5);
-          background: rgb(203, 89, 141); // UXPL secondary base
+          padding: 0;
+          background: $secondary-base;
           box-shadow: none;
 
           &:focus,
           &:hover {
-            background-color: rgb(219, 139, 175); // UXPL secondary light
+            background-color: $secondary-light;
+            border-color: $secondary-light;
           }
         }
       }
 
       .vcr {
         @include float(left);
+
         list-style: none;
+
         @include border-right(1px solid rgb(40, 44, 46)); // UXPL grayscale-cool x-dark
+
         padding: 0;
 
         @media (max-width: 1120px) {
           @include margin-right(lh(0.5));
+
           font-size: em(14);
         }
 
         .video_control {
-
           &:focus {
             position: relative;
           }
@@ -424,10 +438,12 @@ html:not('.afontgarde') .icon-fallback-img {
         .vidtime {
           @extend %t-strong;
           @extend %t-title7;
-          @include padding-left(lh(.75));
+
+          @include padding-left(lh(0.75));
+
           display: inline-block;
           color: rgb(207, 216, 220); // UXPL grayscale-cool light
-          -webkit-font-smoothing: antialiased;;
+          -webkit-font-smoothing: antialiased;
 
           @media (max-width: 1120px) {
             @include padding-left(lh(0.5));
@@ -442,6 +458,7 @@ html:not('.afontgarde') .icon-fallback-img {
         .volume,
         .add-fullscreen,
         .grouped-controls,
+        .auto-advance,
         .quality-control {
           @include border-left(1px dotted rgb(79, 89, 93)); // UXPL grayscale-cool x-dark
         }
@@ -449,9 +466,9 @@ html:not('.afontgarde') .icon-fallback-img {
         .speed-button,
         .volume > .control,
         .add-fullscreen,
+        .auto-advance,
         .quality-control,
         .toggle-transcript {
-
           &:focus {
             position: relative;
           }
@@ -462,11 +479,15 @@ html:not('.afontgarde') .icon-fallback-img {
 
           .menu {
             @include transition(none);
+
             @extend %ui-depth1;
+
             position: absolute;
             display: none;
             bottom: ($baseline * 2);
+
             @include right(0); // right-align menus since this whole collection is on the right
+
             width: 120px;
             margin: 0;
             border: none;
@@ -477,11 +498,13 @@ html:not('.afontgarde') .icon-fallback-img {
 
             li {
               @extend %ui-fake-link;
+
               color: rgb(231, 236, 238); // UXPL grayscale-cool x-light
 
               .speed-option,
               .control-lang {
                 @include text-align(left);
+
                 display: block;
                 width: 100%;
                 border: 0;
@@ -503,9 +526,11 @@ html:not('.afontgarde') .icon-fallback-img {
               }
 
               &.is-active {
-
                 .speed-option,
                 .control-lang {
+                  @include border-left($baseline/10 solid rgb(14, 166, 236));
+
+                  font-weight: $font-bold;
                   color: rgb(14, 166, 236); // UXPL primary accent
                 }
               }
@@ -513,7 +538,6 @@ html:not('.afontgarde') .icon-fallback-img {
           }
 
           &.is-opened {
-
             .menu {
               display: block;
             }
@@ -524,24 +548,12 @@ html:not('.afontgarde') .icon-fallback-img {
         .lang,
         .grouped-controls {
           display: inline-block;
-
-          .control {
-
-            .icon-fallback-img {
-              @include float(left);
-              @include transform-origin(center center);
-            }
-          }
         }
 
         .speeds {
-
           &.is-opened {
-
             .control {
-
               .icon {
-
                 @include ltr {
                   @include transform(rotate(-90deg));
                 }
@@ -554,10 +566,10 @@ html:not('.afontgarde') .icon-fallback-img {
           }
 
           .speed-button {
-
             .label {
               @include padding(0 ($baseline/3) 0 0);
-              font-family: $body-font-family;
+
+              font-family: $font-family-sans-serif;
               color: rgb(231, 236, 238); // UXPL grayscale-cool x-light
 
               @media (max-width: 1120px) {
@@ -567,6 +579,7 @@ html:not('.afontgarde') .icon-fallback-img {
 
             .value {
               @include padding(0, lh(0.5), 0, 0);
+
               color: rgb(231, 236, 238); // UXPL grayscale-cool x-light
               font-weight: bold;
 
@@ -578,16 +591,13 @@ html:not('.afontgarde') .icon-fallback-img {
         }
 
         .lang {
-
           .language-menu {
             width: $baseline;
             padding: ($baseline / 2) 0;
           }
 
           .control {
-
             .icon {
-
               @include rtl {
                 @include transform(rotate(-180deg));
               }
@@ -595,11 +605,8 @@ html:not('.afontgarde') .icon-fallback-img {
           }
 
           &.is-opened {
-
             .control {
-
               .icon {
-
                 @include ltr {
                   @include transform(rotate(90deg));
                 }
@@ -617,7 +624,6 @@ html:not('.afontgarde') .icon-fallback-img {
           position: relative;
 
           &.is-opened {
-
             .volume-slider-container {
               display: block;
               opacity: 1;
@@ -630,11 +636,15 @@ html:not('.afontgarde') .icon-fallback-img {
 
           .volume-slider-container {
             @include transition(none);
+
             @extend %ui-depth1;
+
             display: none;
             position: absolute;
             bottom: ($baseline * 2);
+
             @include right(0);
+
             width: 41px;
             height: 120px;
             background-color: rgb(40, 44, 46); // UXPL grayscale-cool x-dark
@@ -643,27 +653,37 @@ html:not('.afontgarde') .icon-fallback-img {
               height: 100px;
               width: ($baseline / 4);
               margin: 14px auto;
-              border: 0;
-              background: rgb(79, 89, 93); // UXPL grayscale-cool dark
+              box-sizing: border-box;
+              border: 1px solid $cool-dark;
+              background: $cool-dark;
 
               .ui-slider-handle {
                 @extend %ui-fake-link;
+
                 @include transition(height $tmg-s2 ease-in-out 0s, width $tmg-s2 ease-in-out 0s);
                 @include left(-5px);
-                height: 15px;
-                width: 15px;
-                background: rgb(203, 89, 141); // UXPL secondary base
-                border: 0;
+
+                box-sizing: border-box;
+                height: 13px;
+                width: 13px;
+                border: 1px solid $secondary-base;
                 border-radius: ($baseline / 5);
+                padding: 0;
+                background: $secondary-base;
+                box-shadow: none;
 
                 &:hover,
                 &:focus {
-                  background: rgb(219, 139, 175); // UXPL secondary light
+                  background: $secondary-light;
+                  border-color: $secondary-light;
                 }
               }
 
               .ui-slider-range {
-                background: rgb(142, 62, 99); // UXPL secondary dark
+                background: $secondary-dark;
+                border: 1px solid $secondary-dark;
+                left: -1px;
+                bottom: -1px;
               }
             }
           }
@@ -683,14 +703,12 @@ html:not('.afontgarde') .icon-fallback-img {
         }
 
         .toggle-transcript {
-
-            &.is-active {
-              color: rgb(14, 166, 236); // UXPL primary accent
-            }
+          &.is-active {
+            color: rgb(14, 166, 236); // UXPL primary accent
+          }
         }
 
         .lang {
-
           & > .hide-subtitles {
             @include transition(none);
           }
@@ -699,9 +717,7 @@ html:not('.afontgarde') .icon-fallback-img {
     }
 
     &:hover {
-
       .video-controls {
-
         .slider {
           height: ($baseline / 1.5);
 
@@ -714,8 +730,19 @@ html:not('.afontgarde') .icon-fallback-img {
     }
   }
 
+  &.video-fullscreen {
+    .closed-captions {
+      width: 65%;
+    }
+
+    &.closed .closed-captions {
+      width: 90%;
+    }
+  }
+
   .subtitles {
     @include float(left);
+
     overflow: auto;
     max-height: 460px;
     width: flex-grid(3, 9);
@@ -723,19 +750,28 @@ html:not('.afontgarde') .icon-fallback-img {
     font-size: 14px;
     visibility: visible;
 
+    a {
+      color: #0074b5;
+    }
+
     .subtitles-menu {
       height: 100%;
       margin: 0;
-      padding: 0;
+      padding: 0 3px;
       list-style: none;
 
       li {
         @extend %ui-fake-link;
+
         margin-bottom: 8px;
         border: 0;
         padding: 0;
         color: #0074b5; // AA compliant
         line-height: lh();
+
+        span {
+          display: block;
+        }
 
         &.current {
           color: #333;
@@ -755,14 +791,22 @@ html:not('.afontgarde') .icon-fallback-img {
         &:empty {
           margin-bottom: 0;
         }
+
+        &.spacing:last-of-type {
+          position: relative;
+
+          .transcript-end {
+            position: absolute;
+            bottom: 0;
+          }
+        }
       }
     }
   }
 
   &.closed {
-
     .video-wrapper {
-      width: flex-grid(9,9);
+      width: flex-grid(9, 9);
       background-color: inherit;
     }
 
@@ -776,7 +820,7 @@ html:not('.afontgarde') .icon-fallback-img {
 
     .video-wrapper .video-player-pre,
     .video-wrapper .video-player-post {
-        height: 0;
+      height: 0;
     }
 
     .video-wrapper .video-player {
@@ -786,26 +830,28 @@ html:not('.afontgarde') .icon-fallback-img {
     }
 
     .subtitles {
-        @extend .is-hidden;
+      @extend .is-hidden;
     }
 
     .subtitles.html5 {
-        @extend %ui-depth0;
-        background-color: rgba(243, 243, 243, 0.8);
-        height: 100%;
-        position: absolute;
-        right: 0;
-        bottom: 0;
-        top: 0;
-        width: 275px;
-        padding: 0 $baseline;
-        display: none;
+      @extend %ui-depth0;
+
+      background-color: rgba(243, 243, 243, 0.8);
+      height: 100%;
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      top: 0;
+      width: 275px;
+      padding: 0 $baseline;
+      display: none;
     }
   }
 
   &.video-fullscreen {
     @extend %ui-depth4;
-    background: rgba(#000, .95);
+
+    background: rgba(#000, 0.95);
     border: 0;
     bottom: 0;
     height: 100%;
@@ -828,11 +874,11 @@ html:not('.afontgarde') .icon-fallback-img {
 
     .video-wrapper .video-player-pre,
     .video-wrapper .video-player-post {
-        height: 0;
+      height: 0;
     }
 
     .video-wrapper {
-        position: static;
+      position: static;
     }
 
     .video-wrapper .video-player {
@@ -843,20 +889,22 @@ html:not('.afontgarde') .icon-fallback-img {
 
     .tc-wrapper {
       @include clearfix();
+
       width: 100%;
       height: 100%;
-
       position: static;
 
       .video-wrapper {
         height: 100%;
         width: 75%;
+
         @include margin-right(0);
+
         vertical-align: middle;
 
         object,
         iframe,
-        video{
+        video {
           position: absolute;
           width: auto;
           height: auto;
@@ -865,6 +913,7 @@ html:not('.afontgarde') .icon-fallback-img {
 
       .video-controls {
         @extend %ui-depth4;
+
         position: absolute;
         bottom: 0;
         left: 0;
@@ -876,8 +925,10 @@ html:not('.afontgarde') .icon-fallback-img {
       height: 100%;
       width: 25%;
       padding: lh();
+
       @include box-sizing(border-box);
       @include transition(none);
+
       background: $black;
       visibility: visible;
 
@@ -906,6 +957,7 @@ html:not('.afontgarde') .icon-fallback-img {
 
   .video-pre-roll {
     @extend %ui-depth3;
+
     position: absolute;
     top: 0;
     left: 0;
@@ -927,7 +979,7 @@ html:not('.afontgarde') .icon-fallback-img {
       background: $black-t2;
       box-shadow: none;
 
-      &:after {
+      &::after {
         // the button class, ties to functionality, also uses an icon font
         // we're overriding it here so we can use our image instead
         display: none;

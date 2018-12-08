@@ -1,34 +1,37 @@
+"""Tests the course modules and their functions"""
+import ddt
 import unittest
 from datetime import datetime, timedelta
+from dateutil import parser
 
-from fs.memoryfs import MemoryFS
-
-from mock import Mock, patch
 import itertools
-
+from fs.memoryfs import MemoryFS
+from mock import Mock, patch
+from pytz import utc
 from xblock.runtime import KvsFieldData, DictKeyValueStore
 
 import xmodule.course_module
 from xmodule.modulestore.xml import ImportSystem, XMLModuleStore
-from opaque_keys.edx.locations import SlashSeparatedCourseKey
-from django.utils.timezone import UTC
+from opaque_keys.edx.keys import CourseKey
 
 
 ORG = 'test_org'
 COURSE = 'test_course'
 
-NOW = datetime.strptime('2013-01-01T01:00:00', '%Y-%m-%dT%H:%M:00').replace(tzinfo=UTC())
+NOW = datetime.strptime('2013-01-01T01:00:00', '%Y-%m-%dT%H:%M:00').replace(tzinfo=utc)
 
-_TODAY = datetime.now(UTC())
+_TODAY = datetime.now(utc)
 _LAST_WEEK = _TODAY - timedelta(days=7)
 _NEXT_WEEK = _TODAY + timedelta(days=7)
 
 
 class CourseFieldsTestCase(unittest.TestCase):
+    shard = 1
+
     def test_default_start_date(self):
         self.assertEqual(
             xmodule.course_module.CourseFields.start.default,
-            datetime(2030, 1, 1, tzinfo=UTC())
+            datetime(2030, 1, 1, tzinfo=utc)
         )
 
 
@@ -38,7 +41,7 @@ class DummySystem(ImportSystem):
 
         xmlstore = XMLModuleStore("data_dir", source_dirs=[],
                                   load_error_modules=load_error_modules)
-        course_id = SlashSeparatedCourseKey(ORG, COURSE, 'test_run')
+        course_id = CourseKey.from_string('/'.join([ORG, COURSE, 'test_run']))
         course_dir = "test_dir"
         error_tracker = Mock()
 
@@ -94,6 +97,7 @@ def get_dummy_course(start, announcement=None, is_new=None, advertised_start=Non
 
 class HasEndedMayCertifyTestCase(unittest.TestCase):
     """Double check the semantics around when to finalize courses."""
+    shard = 1
 
     def setUp(self):
         super(HasEndedMayCertifyTestCase, self).setUp()
@@ -142,8 +146,21 @@ class HasEndedMayCertifyTestCase(unittest.TestCase):
         self.assertFalse(self.future_noshow_certs.may_certify())
 
 
+class CourseSummaryHasEnded(unittest.TestCase):
+    """ Test for has_ended method when end date is missing timezone information. """
+    shard = 1
+
+    def test_course_end(self):
+        test_course = get_dummy_course("2012-01-01T12:00")
+        bad_end_date = parser.parse("2012-02-21 10:28:45")
+        summary = xmodule.course_module.CourseSummary(test_course.id, end=bad_end_date)
+        self.assertTrue(summary.has_ended())
+
+
+@ddt.ddt
 class IsNewCourseTestCase(unittest.TestCase):
     """Make sure the property is_new works on courses"""
+    shard = 1
 
     def setUp(self):
         super(IsNewCourseTestCase, self).setUp()
@@ -208,22 +225,6 @@ class IsNewCourseTestCase(unittest.TestCase):
         (xmodule.course_module.CourseFields.start.default, 'January 2014', 'January 2014', False, 'January 2014'),
     ]
 
-    @patch('xmodule.course_metadata_utils.datetime.now')
-    def test_start_date_text(self, gmtime_mock):
-        gmtime_mock.return_value = NOW
-        for s in self.start_advertised_settings:
-            d = get_dummy_course(start=s[0], advertised_start=s[1])
-            print "Checking start=%s advertised=%s" % (s[0], s[1])
-            self.assertEqual(d.start_datetime_text(), s[2])
-
-    @patch('xmodule.course_metadata_utils.datetime.now')
-    def test_start_date_time_text(self, gmtime_mock):
-        gmtime_mock.return_value = NOW
-        for setting in self.start_advertised_settings:
-            course = get_dummy_course(start=setting[0], advertised_start=setting[1])
-            print "Checking start=%s advertised=%s" % (setting[0], setting[1])
-            self.assertEqual(course.start_datetime_text("DATE_TIME"), setting[4])
-
     def test_start_date_is_default(self):
         for s in self.start_advertised_settings:
             d = get_dummy_course(start=s[0], advertised_start=s[1])
@@ -261,24 +262,10 @@ class IsNewCourseTestCase(unittest.TestCase):
         descriptor = get_dummy_course(start='2012-12-31T12:00')
         assert descriptor.is_newish is True
 
-    def test_end_date_text(self):
-        # No end date set, returns empty string.
-        d = get_dummy_course('2012-12-02T12:00')
-        self.assertEqual('', d.end_datetime_text())
-
-        d = get_dummy_course('2012-12-02T12:00', end='2014-9-04T12:00')
-        self.assertEqual('Sep 04, 2014', d.end_datetime_text())
-
-    def test_end_date_time_text(self):
-        # No end date set, returns empty string.
-        course = get_dummy_course('2012-12-02T12:00')
-        self.assertEqual('', course.end_datetime_text("DATE_TIME"))
-
-        course = get_dummy_course('2012-12-02T12:00', end='2014-9-04T12:00')
-        self.assertEqual('Sep 04, 2014 at 12:00 UTC', course.end_datetime_text("DATE_TIME"))
-
 
 class DiscussionTopicsTestCase(unittest.TestCase):
+    shard = 1
+
     def test_default_discussion_topics(self):
         d = get_dummy_course('2012-12-02T12:00')
         self.assertEqual({'General': {'id': 'i4x-test_org-test_course-course-test'}}, d.discussion_topics)
@@ -288,6 +275,7 @@ class TeamsConfigurationTestCase(unittest.TestCase):
     """
     Tests for the configuration of teams and the helper methods for accessing them.
     """
+    shard = 1
 
     def setUp(self):
         super(TeamsConfigurationTestCase, self).setUp()
@@ -356,6 +344,7 @@ class TeamsConfigurationTestCase(unittest.TestCase):
 
 class SelfPacedTestCase(unittest.TestCase):
     """Tests for self-paced courses."""
+    shard = 1
 
     def setUp(self):
         super(SelfPacedTestCase, self).setUp()
@@ -363,6 +352,18 @@ class SelfPacedTestCase(unittest.TestCase):
 
     def test_default(self):
         self.assertFalse(self.course.self_paced)
+
+
+class BypassHomeTestCase(unittest.TestCase):
+    """Tests for setting which allows course home to be bypassed."""
+    shard = 1
+
+    def setUp(self):
+        super(BypassHomeTestCase, self).setUp()
+        self.course = get_dummy_course('2012-12-02T12:00')
+
+    def test_default(self):
+        self.assertFalse(self.course.bypass_home)
 
 
 class CourseDescriptorTestCase(unittest.TestCase):
@@ -374,13 +375,14 @@ class CourseDescriptorTestCase(unittest.TestCase):
     class definitely isn't a comprehensive test case for CourseDescriptor, as
     writing a such a test case was out of the scope of the PR.
     """
+    shard = 1
 
     def setUp(self):
         """
         Initialize dummy testing course.
         """
         super(CourseDescriptorTestCase, self).setUp()
-        self.course = get_dummy_course(start=_TODAY)
+        self.course = get_dummy_course(start=_TODAY, end=_NEXT_WEEK)
 
     def test_clean_id(self):
         """
@@ -409,3 +411,11 @@ class CourseDescriptorTestCase(unittest.TestCase):
         Test CourseDescriptor.number.
         """
         self.assertEqual(self.course.number, COURSE)
+
+    def test_set_default_certificate_available_date(self):
+        """
+        The certificate_available_date field should default to two days
+        after the course end date.
+        """
+        expected_certificate_available_date = self.course.end + timedelta(days=2)
+        self.assertEqual(expected_certificate_available_date, self.course.certificate_available_date)

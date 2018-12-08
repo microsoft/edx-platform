@@ -1,12 +1,13 @@
 # pylint: disable=missing-docstring
 # pylint: disable=redefined-outer-name
 
-from lettuce import world, step
-from common import *
-from terrain.steps import reload_the_page
+from lettuce import step, world
+from nose.tools import assert_equal, assert_in, assert_not_equal
 from selenium.common.exceptions import InvalidElementStateException
+
+from common import *
 from contentstore.utils import reverse_course_url
-from nose.tools import assert_in, assert_equal, assert_not_equal
+from terrain.steps import reload_the_page
 
 
 @step(u'I am viewing the grading settings')
@@ -19,7 +20,7 @@ def view_grading_settings(step):
 @step(u'I add "([^"]*)" new grade')
 def add_grade(step, many):
     grade_css = '.new-grade-button'
-    for i in range(int(many)):
+    for __ in range(int(many)):
         world.css_click(grade_css)
 
 
@@ -120,7 +121,7 @@ def set_weight(step, weight):
     weight_id = '#course-grading-assignment-gradeweight'
     weight_field = world.css_find(weight_id)[-1]
     old_weight = world.css_value(weight_id, -1)
-    for count in range(len(old_weight)):
+    for __ in range(len(old_weight)):
         weight_field._element.send_keys(Keys.END, Keys.BACK_SPACE)
     weight_field._element.send_keys(weight)
 

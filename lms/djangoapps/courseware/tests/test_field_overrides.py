@@ -1,38 +1,75 @@
 """
 Tests for `field_overrides` module.
 """
+# pylint: disable=missing-docstring
 import unittest
-from nose.plugins.attrib import attr
 
 from django.test.utils import override_settings
+from nose.plugins.attrib import attr
 from xblock.field_data import DictFieldData
+
+from xmodule.modulestore.tests.django_utils import SharedModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
-from xmodule.modulestore.tests.django_utils import (
-    ModuleStoreTestCase,
-)
 
 from ..field_overrides import (
-    disable_overrides,
     FieldOverrideProvider,
     OverrideFieldData,
-    resolve_dotted,
+    OverrideModulestoreFieldData,
+    disable_overrides,
+    resolve_dotted
 )
-
+from ..testutils import FieldOverrideTestMixin
 
 TESTUSER = "testuser"
 
 
-@attr('shard_1')
+class TestOverrideProvider(FieldOverrideProvider):
+    """
+    A concrete implementation of `FieldOverrideProvider` for testing.
+    """
+    def get(self, block, name, default):
+        if self.user:
+            assert self.user is TESTUSER
+
+        assert block == 'block'
+
+        if name == 'foo':
+            return 'fu'
+        elif name == 'oh':
+            return 'man'
+
+        return default
+
+    @classmethod
+    def enabled_for(cls, course):
+        return True
+
+
+class OverrideFieldBase(SharedModuleStoreTestCase):
+    """
+    Base class for field data override tests.  Using override_settings and
+    a setUpClass() override in a test class which is inherited by another
+    test class doesn't work well with pytest-django.
+    """
+    @classmethod
+    def setUpClass(cls):
+        """
+        Course is created here and shared by all the class's tests.
+        """
+        super(OverrideFieldBase, cls).setUpClass()
+        cls.course = CourseFactory.create(enable_ccx=True)
+
+
+@attr(shard=1)
 @override_settings(FIELD_OVERRIDE_PROVIDERS=(
     'courseware.tests.test_field_overrides.TestOverrideProvider',))
-class OverrideFieldDataTests(ModuleStoreTestCase):
+class OverrideFieldDataTests(OverrideFieldBase):
     """
     Tests for `OverrideFieldData`.
     """
 
     def setUp(self):
         super(OverrideFieldDataTests, self).setUp()
-        self.course = CourseFactory.create(enable_ccx=True)
         OverrideFieldData.provider_classes = None
 
     def tearDown(self):
@@ -95,7 +132,24 @@ class OverrideFieldDataTests(ModuleStoreTestCase):
         self.assertIsInstance(data, DictFieldData)
 
 
-@attr('shard_1')
+@attr(shard=1)
+@override_settings(
+    MODULESTORE_FIELD_OVERRIDE_PROVIDERS=['courseware.tests.test_field_overrides.TestOverrideProvider']
+)
+class OverrideModulestoreFieldDataTests(FieldOverrideTestMixin, OverrideFieldDataTests):
+    def make_one(self):
+        return OverrideModulestoreFieldData.wrap(self.course, DictFieldData({
+            'foo': 'bar',
+            'bees': 'knees',
+        }))
+
+    @override_settings(MODULESTORE_FIELD_OVERRIDE_PROVIDERS=[])
+    def test_no_overrides_configured(self):
+        data = self.make_one()
+        self.assertIsInstance(data, DictFieldData)
+
+
+@attr(shard=1)
 class ResolveDottedTests(unittest.TestCase):
     """
     Tests for `resolve_dotted`.
@@ -114,24 +168,6 @@ class ResolveDottedTests(unittest.TestCase):
             resolve_dotted('courseware.tests.animport.SOMENAME'),
             'bar'
         )
-
-
-class TestOverrideProvider(FieldOverrideProvider):
-    """
-    A concrete implementation of `FieldOverrideProvider` for testing.
-    """
-    def get(self, block, name, default):
-        assert self.user is TESTUSER
-        assert block == 'block'
-        if name == 'foo':
-            return 'fu'
-        if name == 'oh':
-            return 'man'
-        return default
-
-    @classmethod
-    def enabled_for(cls, course):
-        return True
 
 
 def inject_field_overrides(blocks, course, user):

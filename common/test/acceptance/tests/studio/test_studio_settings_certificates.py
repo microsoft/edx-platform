@@ -2,23 +2,23 @@
 Acceptance tests for Studio's Setting pages
 """
 import re
-import uuid
 
 from nose.plugins.attrib import attr
 
-from .base_studio_test import StudioCourseTest
-from ...pages.lms.create_mode import ModeCreationPage
-from ...pages.studio.settings_certificates import CertificatesPage
-from ...pages.studio.settings_advanced import AdvancedSettingsPage
+from common.test.acceptance.pages.lms.create_mode import ModeCreationPage
+from common.test.acceptance.pages.studio.settings_advanced import AdvancedSettingsPage
+from common.test.acceptance.pages.studio.settings_certificates import CertificatesPage
+from common.test.acceptance.tests.helpers import skip_if_browser
+from common.test.acceptance.tests.studio.base_studio_test import StudioCourseTest
 
 
-@attr('shard_8')
+@attr(shard=22)
 class CertificatesTest(StudioCourseTest):
     """
     Tests for settings/certificates Page.
     """
     def setUp(self):  # pylint: disable=arguments-differ
-        super(CertificatesTest, self).setUp(is_staff=True)
+        super(CertificatesTest, self).setUp(is_staff=True, test_xss=False)
         self.certificates_page = CertificatesPage(
             self.browser,
             self.course_info['org'],
@@ -72,7 +72,7 @@ class CertificatesTest(StudioCourseTest):
             certificate.signatories[idx].name = signatory['name']
             certificate.signatories[idx].title = signatory['title']
             certificate.signatories[idx].organization = signatory['organization']
-            certificate.signatories[idx].upload_signature_image('Signature-{}.png'.format(uuid.uuid4().hex[:4]))
+            certificate.signatories[idx].upload_signature_image('Signature-{}.png'.format(idx))
 
             added_signatories += 1
             if len(signatories) > added_signatories:
@@ -160,6 +160,7 @@ class CertificatesTest(StudioCourseTest):
         self.certificates_page.visit()
         self.assertEqual(len(self.certificates_page.certificates), 0)
 
+    @skip_if_browser('chrome')  # TODO Need to fix this for chrome browser
     def test_can_create_and_edit_signatories_of_certficate(self):
         """
         Scenario: Ensure that the certificates can be created with signatories and edited correctly.

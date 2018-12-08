@@ -6,10 +6,11 @@ acceptance tests.
 # pylint: disable=missing-docstring
 # pylint: disable=redefined-outer-name
 
-from lettuce import world, step
-from nose.tools import assert_in, assert_regexp_matches
-from terrain.steps import reload_the_page
 from django.utils import http
+from lettuce import step, world
+from nose.tools import assert_in, assert_regexp_matches
+
+from terrain.steps import reload_the_page
 
 
 @step(u'I see a table of student profiles')
@@ -63,7 +64,7 @@ Graded sections:
 Listing grading context for course {}
 graded sections:
 []
-all descriptors:
+all graded blocks:
 length=0""".format(world.course_key)
     assert_in(expected_config, world.css_text('#data-grade-config-text'))
 
@@ -74,7 +75,7 @@ def verify_report_is_generated(report_name_substring):
     world.wait_for_visible('#report-downloads-table')
     # Find table and assert a .csv file is present
     quoted_id = http.urlquote(world.course_key).replace('/', '_')
-    expected_file_regexp = quoted_id + '_' + report_name_substring + '_\d{4}-\d{2}-\d{2}-\d{4}\.csv'
+    expected_file_regexp = quoted_id + '_' + report_name_substring + r'_\d{4}-\d{2}-\d{2}-\d{4}\.csv'
     assert_regexp_matches(
         world.css_html('#report-downloads-table'), expected_file_regexp,
         msg="Expected report filename was not found."

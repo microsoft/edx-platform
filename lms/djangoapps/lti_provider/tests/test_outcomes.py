@@ -1,27 +1,24 @@
 """
 Tests for the LTI outcome service handlers, both in outcomes.py and in tasks.py
 """
-import unittest
 
 from django.test import TestCase
 from lxml import etree
-from mock import patch, MagicMock, ANY
-import requests_oauthlib
-import requests
+from mock import ANY, MagicMock, patch
+from opaque_keys.edx.locator import BlockUsageLocator, CourseLocator
 
-from opaque_keys.edx.locator import CourseLocator, BlockUsageLocator
-from student.tests.factories import UserFactory
-
-from lti_provider.models import GradedAssignment, LtiConsumer, OutcomeService
 import lti_provider.outcomes as outcomes
+from lti_provider.models import GradedAssignment, LtiConsumer, OutcomeService
+from student.tests.factories import UserFactory
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
-from xmodule.modulestore.tests.factories import ItemFactory, CourseFactory, check_mongo_calls
+from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory, check_mongo_calls
 
 
 class StoreOutcomeParametersTest(TestCase):
     """
     Tests for the store_outcome_parameters method in outcomes.py
     """
+    shard = 4
 
     def setUp(self):
         super(StoreOutcomeParametersTest, self).setUp()
@@ -136,6 +133,7 @@ class SignAndSendReplaceResultTest(TestCase):
     """
     Tests for the sign_and_send_replace_result method in outcomes.py
     """
+    shard = 4
 
     def setUp(self):
         super(SignAndSendReplaceResultTest, self).setUp()
@@ -187,6 +185,7 @@ class XmlHandlingTest(TestCase):
     Tests for the generate_replace_result_xml and check_replace_result_response
     methods in outcomes.py
     """
+    shard = 4
 
     response_xml = """
         <imsx_POXEnvelopeResponse xmlns = "http://www.imsglobal.org/services/ltiv1p1/xsd/imsoms_v1p0">
@@ -295,51 +294,12 @@ class XmlHandlingTest(TestCase):
         self.assertFalse(outcomes.check_replace_result_response(response))
 
 
-class TestBodyHashClient(unittest.TestCase):
-    """
-    Test our custom BodyHashClient
-
-    This Client should do everything a normal oauthlib.oauth1.Client would do,
-    except it also adds oauth_body_hash to the Authorization headers.
-    """
-    def test_simple_message(self):
-        oauth = requests_oauthlib.OAuth1(
-            '1000000000000000',  # fake consumer key
-            '2000000000000000',  # fake consumer secret
-            signature_method='HMAC-SHA1',
-            client_class=outcomes.BodyHashClient,
-            force_include_body=True
-        )
-        headers = {'content-type': 'application/xml'}
-        req = requests.Request(
-            'POST',
-            "http://example.edx.org/fake",
-            data="Hello world!",
-            auth=oauth,
-            headers=headers
-        )
-        prepped_req = req.prepare()
-
-        # Make sure that our body hash is now part of the test...
-        self.assertIn(
-            'oauth_body_hash="00hq6RNueFa8QiEjhep5cJRHWAI%3D"',
-            prepped_req.headers['Authorization']
-        )
-
-        # But make sure we haven't wiped out any of the other oauth values
-        # that we would expect to be in the Authorization header as well
-        expected_oauth_headers = [
-            "oauth_nonce", "oauth_timestamp", "oauth_version",
-            "oauth_signature_method", "oauth_consumer_key", "oauth_signature",
-        ]
-        for oauth_header in expected_oauth_headers:
-            self.assertIn(oauth_header, prepped_req.headers['Authorization'])
-
-
 class TestAssignmentsForProblem(ModuleStoreTestCase):
     """
     Test cases for the assignments_for_problem method in outcomes.py
     """
+    shard = 4
+
     def setUp(self):
         super(TestAssignmentsForProblem, self).setUp()
         self.user = UserFactory.create()
@@ -386,6 +346,30 @@ class TestAssignmentsForProblem(ModuleStoreTestCase):
         )
         assignment.save()
         return assignment
+
+    def test_create_two_lti_consumers_with_empty_instance_guid(self):
+        """
+        Test ability to create two or more LTI consumers through the Django admin
+        with empty instance_guid field.
+        A blank guid field is required when a customer enables a new secret/key combination for
+        LTI integration with their LMS.
+        """
+        lti_consumer_first = LtiConsumer(
+            consumer_name='lti_consumer_name_second',
+            consumer_key='lti_consumer_key_second',
+            consumer_secret='lti_consumer_secret_second',
+            instance_guid=''
+        )
+        lti_consumer_first.save()
+        lti_consumer_second = LtiConsumer(
+            consumer_name='lti_consumer_name_third',
+            consumer_key='lti_consumer_key_third',
+            consumer_secret='lti_consumer_secret_third',
+            instance_guid=''
+        )
+        lti_consumer_second.save()
+        count = LtiConsumer.objects.count()
+        self.assertEqual(count, 3)
 
     def test_with_no_graded_assignments(self):
         with check_mongo_calls(3):

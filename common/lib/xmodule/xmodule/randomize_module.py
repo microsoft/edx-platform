@@ -1,13 +1,12 @@
 import logging
 import random
 
-from xmodule.x_module import XModule, STUDENT_VIEW
-from xmodule.seq_module import SequenceDescriptor
-
 from lxml import etree
+from web_fragments.fragment import Fragment
+from xblock.fields import Integer, Scope
 
-from xblock.fields import Scope, Integer
-from xblock.fragment import Fragment
+from xmodule.seq_module import SequenceDescriptor
+from xmodule.x_module import STUDENT_VIEW, XModule
 
 log = logging.getLogger('edx.' + __name__)
 
@@ -98,6 +97,7 @@ class RandomizeModule(RandomizeFields, XModule):
 class RandomizeDescriptor(RandomizeFields, SequenceDescriptor):
     # the editing interface can be the same as for sequences -- just a container
     module_class = RandomizeModule
+    resources_dir = None
 
     filename_extension = "xml"
 

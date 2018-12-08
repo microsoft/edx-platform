@@ -3,10 +3,11 @@ Tools for creating edxnotes content fixture data.
 """
 
 import json
+
 import factory
 import requests
 
-from . import EDXNOTES_STUB_URL
+from common.test.acceptance.fixtures import EDXNOTES_STUB_URL
 
 
 class Range(factory.Factory):

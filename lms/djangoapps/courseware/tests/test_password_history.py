@@ -2,27 +2,27 @@
 This file will test through the LMS some of the PasswordHistory features
 """
 import json
-from mock import patch
+from datetime import timedelta
 from uuid import uuid4
+
+import ddt
+from django.contrib.auth.models import User
+from django.contrib.auth.tokens import default_token_generator
+from django.urls import reverse
+from django.test.utils import override_settings
+from django.utils import timezone
+from django.utils.http import int_to_base36
+from freezegun import freeze_time
+from mock import patch
 from nose.plugins.attrib import attr
 
-from django.contrib.auth.models import User
-from django.utils import timezone
-from datetime import timedelta
-from django.test.utils import override_settings
-
-from django.core.urlresolvers import reverse
-from django.contrib.auth.tokens import default_token_generator
-from django.utils.http import int_to_base36
-
-from freezegun import freeze_time
-
-from student.models import PasswordHistory
 from courseware.tests.helpers import LoginEnrollmentTestCase
+from student.models import PasswordHistory
 
 
-@attr('shard_1')
+@attr(shard=1)
 @patch.dict("django.conf.settings.FEATURES", {'ADVANCED_SECURITY': True})
+@ddt.ddt
 class TestPasswordHistory(LoginEnrollmentTestCase):
     """
     Go through some of the PasswordHistory use cases
@@ -70,6 +70,20 @@ class TestPasswordHistory(LoginEnrollmentTestCase):
         user.save()
         history = PasswordHistory()
         history.create(user)
+
+    def assertPasswordResetError(self, response, error_message, valid_link=True):
+        """
+        This method is a custom assertion that verifies that a password reset
+        view returns an error response as expected.
+        Args:
+            response: response from calling a password reset endpoint
+            error_message: message we expect to see in the response
+            valid_link: if the current password reset link is still valid
+
+        """
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context_data['validlink'], valid_link)
+        self.assertIn(error_message, response.content)
 
     @patch.dict("django.conf.settings.ADVANCED_SECURITY_CONFIG", {'MIN_DAYS_FOR_STAFF_ACCOUNTS_PASSWORD_RESETS': None})
     @patch.dict("django.conf.settings.ADVANCED_SECURITY_CONFIG", {'MIN_DAYS_FOR_STUDENT_ACCOUNTS_PASSWORD_RESETS': None})
@@ -168,10 +182,7 @@ class TestPasswordHistory(LoginEnrollmentTestCase):
             'new_password2': 'foo'
         }, follow=True)
 
-        self.assertIn(
-            err_msg,
-            resp.content
-        )
+        self.assertPasswordResetError(resp, err_msg)
 
         # now retry with a different password
         resp = self.client.post('/password_reset_confirm/{0}-{1}/'.format(uidb36, token), {
@@ -179,10 +190,7 @@ class TestPasswordHistory(LoginEnrollmentTestCase):
             'new_password2': 'bar'
         }, follow=True)
 
-        self.assertIn(
-            success_msg,
-            resp.content
-        )
+        self.assertIn(success_msg, resp.content)
 
     @patch.dict("django.conf.settings.ADVANCED_SECURITY_CONFIG", {'MIN_DIFFERENT_STAFF_PASSWORDS_BEFORE_REUSE': 2})
     def test_staff_password_reset_reuse(self):
@@ -204,10 +212,7 @@ class TestPasswordHistory(LoginEnrollmentTestCase):
             'new_password2': 'foo',
         }, follow=True)
 
-        self.assertIn(
-            err_msg,
-            resp.content
-        )
+        self.assertPasswordResetError(resp, err_msg)
 
         # now use different one
         user = User.objects.get(email=staff_email)
@@ -219,10 +224,7 @@ class TestPasswordHistory(LoginEnrollmentTestCase):
             'new_password2': 'bar',
         }, follow=True)
 
-        self.assertIn(
-            success_msg,
-            resp.content
-        )
+        self.assertIn(success_msg, resp.content)
 
         # now try again with the first one
         user = User.objects.get(email=staff_email)
@@ -234,11 +236,7 @@ class TestPasswordHistory(LoginEnrollmentTestCase):
             'new_password2': 'foo',
         }, follow=True)
 
-        # should be rejected
-        self.assertIn(
-            err_msg,
-            resp.content
-        )
+        self.assertPasswordResetError(resp, err_msg)
 
         # now use different one
         user = User.objects.get(email=staff_email)
@@ -250,10 +248,7 @@ class TestPasswordHistory(LoginEnrollmentTestCase):
             'new_password2': 'baz',
         }, follow=True)
 
-        self.assertIn(
-            success_msg,
-            resp.content
-        )
+        self.assertIn(success_msg, resp.content)
 
         # now we should be able to reuse the first one
         user = User.objects.get(email=staff_email)
@@ -265,10 +260,7 @@ class TestPasswordHistory(LoginEnrollmentTestCase):
             'new_password2': 'foo',
         }, follow=True)
 
-        self.assertIn(
-            success_msg,
-            resp.content
-        )
+        self.assertIn(success_msg, resp.content)
 
     @patch.dict("django.conf.settings.ADVANCED_SECURITY_CONFIG", {'MIN_TIME_IN_DAYS_BETWEEN_ALLOWED_RESETS': 1})
     def test_password_reset_frequency_limit(self):
@@ -308,10 +300,7 @@ class TestPasswordHistory(LoginEnrollmentTestCase):
                 'new_password2': 'foo',
             }, follow=True)
 
-            self.assertIn(
-                success_msg,
-                resp.content
-            )
+            self.assertIn(success_msg, resp.content)
 
     @patch.dict("django.conf.settings.FEATURES", {'ENFORCE_PASSWORD_POLICY': True})
     @override_settings(PASSWORD_MIN_LENGTH=6)
@@ -350,7 +339,28 @@ class TestPasswordHistory(LoginEnrollmentTestCase):
             'new_password2': 'foofoo',
         }, follow=True)
 
-        self.assertIn(
-            success_msg,
-            resp.content
-        )
+        self.assertIn(success_msg, resp.content)
+
+    @ddt.data(
+        ('foo', 'foobar', 'Error in resetting your password. Please try again.'),
+        ('', '', 'Enter a password with at least'),
+    )
+    @ddt.unpack
+    def test_password_reset_form_invalid(self, password1, password2, err_msg):
+        """
+        Tests that password reset fail when providing bad passwords and error message is displayed
+        to the user.
+        """
+        user_email, _ = self._setup_user()
+
+        # try to reset password, it should fail
+        user = User.objects.get(email=user_email)
+        token = default_token_generator.make_token(user)
+        uidb36 = int_to_base36(user.id)
+
+        # try to do a password reset with the same password as before
+        resp = self.client.post('/password_reset_confirm/{0}-{1}/'.format(uidb36, token), {
+            'new_password1': password1,
+            'new_password2': password2,
+        }, follow=True)
+        self.assertPasswordResetError(resp, err_msg)

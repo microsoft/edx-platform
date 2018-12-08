@@ -5,11 +5,11 @@
       <h3 class="sr">Page Actions</h3>
       <ul>
         <li class="nav-item">
-          <a href="#" class="button new-button new-course-button"><i class="icon fa fa-plus icon-inline"></i>
+          <a href="#" class="button new-button new-course-button"><span class="icon fa fa-plus icon-inline" aria-hidden="true"></span>
               New Course</a>
         </li>
         <li class="nav-item">
-          <a href="#" class="button new-button new-library-button"><i class="icon fa fa-plus icon-inline"></i>
+          <a href="#" class="button new-button new-library-button"><span class="icon fa fa-plus icon-inline" aria-hidden="true"></span>
               New Library</a>
         </li>
       </ul>
@@ -42,7 +42,7 @@
                   <span class="tip">The public display name for your course. This cannot be changed, but you can set a different display name in Advanced Settings later.</span>
                   <span class="tip tip-error is-hiding"></span>
                 </li>
-                <li class="field text required" id="field-organization">
+                <li class="field text required">
                   <label for="new-course-org">Organization</label>
                   <input class="new-course-org" id="new-course-org" type="text" name="new-course-org" aria-required="true" placeholder="e.g. UniversityX or OrganizationX" />
                   <span class="tip">The name of the organization sponsoring the course.  <strong>Note: This is part of your course URL, so no spaces or special characters are allowed.</strong> This cannot be changed, but you can set a different display name in Advanced Settings later.</span>
@@ -96,7 +96,7 @@
                   <span class="tip">The public display name for your library.</span>
                   <span class="tip tip-error is-hiding"></span>
                 </li>
-                <li class="field text required" id="field-organization">
+                <li class="field text required">
                   <label for="new-library-org">Organization</label>
                   <input class="new-library-org" id="new-library-org" type="text" name="new-library-org" aria-required="true" placeholder="e.g. UniversityX or OrganizationX" />
                   <span class="tip">The public organization name for your library. This cannot be changed.</span>
@@ -150,7 +150,7 @@
                 <dl class="course-status">
                   <dt class="label sr">This re-run processing status:</dt>
                   <dd class="value">
-                    <i class="icon fa fa-refresh fa-spin"></i>
+                    <span class="icon fa fa-refresh fa-spin" aria-hidden="true"></span>
                     <span class="copy">Configuring as re-run</span>
                   </dd>
                 </dl>
@@ -186,7 +186,7 @@
                 <dl class="course-status">
                   <dt class="label sr">This re-run processing status:</dt>
                   <dd class="value">
-                    <i class="icon fa fa-warning"></i>
+                    <span class="icon fa fa-warning" aria-hidden="true"></span>
                     <span class="copy">Configuration Error</span>
                   </dd>
                 </dl>
@@ -198,7 +198,7 @@
                 <ul  class="status-actions">
                   <li class="action action-dismiss">
                     <a href="#" class="button dismiss-button" data-dismiss-link="dummy_dismiss_url">
-                      <i class="icon fa fa-times-circle"></i>
+                      <span class="icon fa fa-times-circle" aria-hidden="true"></span>
                       <span class="button-copy">Dismiss</span>
                     </a>
                   </li>

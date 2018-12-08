@@ -4,7 +4,7 @@ Basic unit tests for LibraryRoot
 """
 from mock import patch
 
-from xblock.fragment import Fragment
+from web_fragments.fragment import Fragment
 from xblock.runtime import Runtime as VanillaRuntime
 from xmodule.x_module import AUTHOR_VIEW
 
@@ -18,11 +18,14 @@ dummy_render = lambda block, _: Fragment(block.data)  # pylint: disable=invalid-
     'xmodule.modulestore.split_mongo.caching_descriptor_system.CachingDescriptorSystem.render', VanillaRuntime.render
 )
 @patch('xmodule.html_module.HtmlDescriptor.author_view', dummy_render, create=True)
+@patch('xmodule.html_module.HtmlDescriptor.has_author_view', True, create=True)
 @patch('xmodule.x_module.DescriptorSystem.applicable_aside_types', lambda self, block: [])
 class TestLibraryRoot(MixedSplitTestCase):
     """
     Basic unit tests for LibraryRoot (library_root_xblock.py)
     """
+    shard = 1
+
     def test_library_author_view(self):
         """
         Test that LibraryRoot.author_view can run and includes content from its

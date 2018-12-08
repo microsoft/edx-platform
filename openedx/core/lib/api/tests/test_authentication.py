@@ -4,29 +4,34 @@ Tests for OAuth2.  This module is copied from django-rest-framework-oauth
 """
 
 from __future__ import unicode_literals
-from collections import namedtuple
-from datetime import datetime, timedelta
+
 import itertools
 import json
+import unittest
+from collections import namedtuple
+from datetime import timedelta
 
 import ddt
-from django.conf.urls import patterns, url, include
+from django.conf import settings
+from django.conf.urls import include, url
 from django.contrib.auth.models import User
 from django.http import HttpResponse
 from django.test import TestCase
-from django.utils import unittest
+from django.test.utils import override_settings
 from django.utils.http import urlencode
-
+from django.utils.timezone import now
+from nose.plugins.attrib import attr
+from oauth2_provider import models as dot_models
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.test import APIClient, APIRequestFactory
+from rest_framework.views import APIView
 from rest_framework_oauth import permissions
 from rest_framework_oauth.compat import oauth2_provider, oauth2_provider_scope
-from rest_framework.test import APIRequestFactory, APIClient
-from rest_framework.views import APIView
 
-from provider import scope, constants
+from openedx.core.djangoapps.oauth_dispatch import adapters
 from openedx.core.lib.api import authentication
-
+from provider import constants, scope
 
 factory = APIRequestFactory()  # pylint: disable=invalid-name
 
@@ -34,13 +39,13 @@ factory = APIRequestFactory()  # pylint: disable=invalid-name
 class MockView(APIView):  # pylint: disable=missing-docstring
     permission_classes = (IsAuthenticated,)
 
-    def get(self, request):  # pylint: disable=missing-docstring,unused-argument
+    def get(self, request):  # pylint: disable=unused-argument
         return HttpResponse({'a': 1, 'b': 2, 'c': 3})
 
-    def post(self, request):  # pylint: disable=missing-docstring,unused-argument
+    def post(self, request):  # pylint: disable=unused-argument
         return HttpResponse({'a': 1, 'b': 2, 'c': 3})
 
-    def put(self, request):  # pylint: disable=missing-docstring,unused-argument
+    def put(self, request):  # pylint: disable=unused-argument
         return HttpResponse({'a': 1, 'b': 2, 'c': 3})
 
 
@@ -51,8 +56,7 @@ class OAuth2AuthenticationDebug(authentication.OAuth2AuthenticationAllowInactive
     allow_query_params_token = True
 
 
-urlpatterns = patterns(
-    '',
+urlpatterns = [
     url(r'^oauth2/', include('provider.oauth2.urls', namespace='oauth2')),
     url(
         r'^oauth2-test/$',
@@ -66,16 +70,19 @@ urlpatterns = patterns(
             permission_classes=[permissions.TokenHasReadWriteScope]
         )
     ),
-)
+]
 
 
+@attr(shard=2)
 @ddt.ddt
+@unittest.skipUnless(settings.FEATURES.get("ENABLE_OAUTH2_PROVIDER"), "OAuth2 not enabled")
+@override_settings(ROOT_URLCONF=__name__)
 class OAuth2Tests(TestCase):
     """OAuth 2.0 authentication"""
-    urls = 'openedx.core.lib.api.tests.test_authentication'
-
     def setUp(self):
         super(OAuth2Tests, self).setUp()
+        self.dop_adapter = adapters.DOPAdapter()
+        self.dot_adapter = adapters.DOTAdapter()
         self.csrf_client = APIClient(enforce_csrf_checks=True)
         self.username = 'john'
         self.email = 'lennon@thebeatles.com'
@@ -87,24 +94,35 @@ class OAuth2Tests(TestCase):
         self.ACCESS_TOKEN = 'access_token'  # pylint: disable=invalid-name
         self.REFRESH_TOKEN = 'refresh_token'  # pylint: disable=invalid-name
 
-        self.oauth2_client = oauth2_provider.oauth2.models.Client.objects.create(
-            client_id=self.CLIENT_ID,
-            client_secret=self.CLIENT_SECRET,
-            redirect_uri='',
-            client_type=0,
+        self.dop_oauth2_client = self.dop_adapter.create_public_client(
             name='example',
-            user=None,
+            user=self.user,
+            client_id=self.CLIENT_ID,
+            redirect_uri='https://example.edx/redirect',
         )
 
         self.access_token = oauth2_provider.oauth2.models.AccessToken.objects.create(
             token=self.ACCESS_TOKEN,
-            client=self.oauth2_client,
+            client=self.dop_oauth2_client,
             user=self.user,
         )
         self.refresh_token = oauth2_provider.oauth2.models.RefreshToken.objects.create(
             user=self.user,
             access_token=self.access_token,
-            client=self.oauth2_client
+            client=self.dop_oauth2_client,
+        )
+
+        self.dot_oauth2_client = self.dot_adapter.create_public_client(
+            name='example',
+            user=self.user,
+            client_id='dot-client-id',
+            redirect_uri='https://example.edx/redirect',
+        )
+        self.dot_access_token = dot_models.AccessToken.objects.create(
+            user=self.user,
+            token='dot-access-token',
+            application=self.dot_oauth2_client,
+            expires=now() + timedelta(days=30),
         )
 
         # This is the a change we've made from the django-rest-framework-oauth version
@@ -174,6 +192,10 @@ class OAuth2Tests(TestCase):
         response = self.get_with_bearer_token('/oauth2-test/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
+    def test_get_form_passing_auth_with_dot(self):
+        response = self.get_with_bearer_token('/oauth2-test/', token=self.dot_access_token.token)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
     @unittest.skipUnless(oauth2_provider, 'django-oauth2-provider not installed')
     def test_post_form_passing_auth_url_transport(self):
         """Ensure GETing form over OAuth with correct client credentials in form data succeed"""
@@ -230,7 +252,7 @@ class OAuth2Tests(TestCase):
     @unittest.skipUnless(oauth2_provider, 'django-oauth2-provider not installed')
     def test_post_form_with_expired_access_token_failing_auth(self):
         """Ensure POSTing with expired access token fails with a 'token_expired' error"""
-        self.access_token.expires = datetime.now() - timedelta(seconds=10)  # 10 seconds late
+        self.access_token.expires = now() - timedelta(seconds=10)  # 10 seconds late
         self.access_token.save()
         response = self.post_with_bearer_token('/oauth2-test/')
         self.check_error_codes(

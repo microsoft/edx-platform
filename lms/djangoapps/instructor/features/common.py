@@ -7,11 +7,11 @@ Define common steps for instructor dashboard acceptance tests.
 
 from __future__ import absolute_import
 
-from lettuce import world, step
+from lettuce import step, world
 from mock import patch
 from nose.tools import assert_in
 
-from courseware.tests.factories import StaffFactory, InstructorFactory
+from courseware.tests.factories import InstructorFactory, StaffFactory
 
 
 @step(u'Given I am "([^"]*)" for a very large course')
@@ -76,7 +76,7 @@ def go_to_section(section_name):
     # course_info, membership, student_admin, data_download, analytics, send_email
     world.visit(u'/courses/{}'.format(world.course_key))
     world.css_click(u'a[href="/courses/{}/instructor"]'.format(world.course_key))
-    world.css_click('a[data-section="{0}"]'.format(section_name))
+    world.css_click('[data-section="{0}"]'.format(section_name))
 
 
 @step(u'I click "([^"]*)"')
@@ -92,7 +92,7 @@ def click_a_button(step, button):  # pylint: disable=unused-argument
         # Expect to see a message that grade report is being generated
         expected_msg = "The grade report is being created." \
                        " To view the status of the report, see" \
-                       " Pending Instructor Tasks below."
+                       " Pending Tasks below."
         world.wait_for_visible('#report-request-response')
         assert_in(
             expected_msg, world.css_text('#report-request-response'),

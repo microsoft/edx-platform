@@ -1,117 +1,90 @@
 """Tests covering Credentials utilities."""
-from django.core.cache import cache
-from django.test import TestCase
-import httpretty
-from oauth2_provider.tests.factories import ClientFactory
+import uuid
+
+from edx_oauth2_provider.tests.factories import ClientFactory
+import mock
+from nose.plugins.attrib import attr
 from provider.constants import CONFIDENTIAL
 
-from openedx.core.djangoapps.credentials.tests.mixins import CredentialsApiConfigMixin, CredentialsDataMixin
 from openedx.core.djangoapps.credentials.models import CredentialsApiConfig
-from openedx.core.djangoapps.credentials.utils import (
-    get_user_credentials, get_user_program_credentials
-)
-from openedx.core.djangoapps.programs.tests.mixins import ProgramsApiConfigMixin, ProgramsDataMixin
-from openedx.core.djangoapps.programs.models import ProgramsApiConfig
+from openedx.core.djangoapps.credentials.tests.mixins import CredentialsApiConfigMixin
+from openedx.core.djangoapps.credentials.utils import get_credentials
+from openedx.core.djangoapps.credentials.tests import factories
+from openedx.core.djangolib.testing.utils import CacheIsolationTestCase, skip_unless_lms
 from student.tests.factories import UserFactory
 
 
-class TestCredentialsRetrieval(ProgramsApiConfigMixin, CredentialsApiConfigMixin, CredentialsDataMixin,
-                               ProgramsDataMixin, TestCase):
-    """ Tests covering the retrieval of user credentials from the Credentials
-    service.
-    """
+UTILS_MODULE = 'openedx.core.djangoapps.credentials.utils'
+
+
+@skip_unless_lms
+@attr(shard=2)
+@mock.patch(UTILS_MODULE + '.get_edx_api_data')
+class TestGetCredentials(CredentialsApiConfigMixin, CacheIsolationTestCase):
+    """ Tests for credentials utility functions. """
+
+    ENABLED_CACHES = ['default']
+
     def setUp(self):
-        super(TestCredentialsRetrieval, self).setUp()
+        super(TestGetCredentials, self).setUp()
 
         ClientFactory(name=CredentialsApiConfig.OAUTH2_CLIENT_NAME, client_type=CONFIDENTIAL)
-        ClientFactory(name=ProgramsApiConfig.OAUTH2_CLIENT_NAME, client_type=CONFIDENTIAL)
+
+        self.credentials_config = self.create_credentials_config(cache_ttl=1)
         self.user = UserFactory()
 
-        cache.clear()
+    def test_get_many(self, mock_get_edx_api_data):
+        expected = factories.UserCredential.create_batch(3)
+        mock_get_edx_api_data.return_value = expected
 
-    @httpretty.activate
-    def test_get_user_credentials(self):
-        """Verify user credentials data can be retrieve."""
-        self.create_credentials_config()
-        self.mock_credentials_api(self.user)
+        actual = get_credentials(self.user)
 
-        actual = get_user_credentials(self.user)
-        self.assertEqual(actual, self.CREDENTIALS_API_RESPONSE['results'])
+        mock_get_edx_api_data.assert_called_once()
+        call = mock_get_edx_api_data.mock_calls[0]
+        __, __, kwargs = call
 
-    @httpretty.activate
-    def test_get_user_credentials_caching(self):
-        """Verify that when enabled, the cache is used for non-staff users."""
-        self.create_credentials_config(cache_ttl=1)
-        self.mock_credentials_api(self.user)
+        querystring = {
+            'username': self.user.username,
+            'status': 'awarded',
+        }
+        cache_key = '{}.{}'.format(self.credentials_config.CACHE_KEY, self.user.username)
+        self.assertEqual(kwargs['querystring'], querystring)
+        self.assertEqual(kwargs['cache_key'], cache_key)
 
-        # Warm up the cache.
-        get_user_credentials(self.user)
-
-        # Hit the cache.
-        get_user_credentials(self.user)
-
-        # Verify only one request was made.
-        self.assertEqual(len(httpretty.httpretty.latest_requests), 1)
-
-        staff_user = UserFactory(is_staff=True)
-
-        # Hit the Credentials API twice.
-        for _ in range(2):
-            get_user_credentials(staff_user)
-
-        # Verify that three requests have been made (one for student, two for staff).
-        self.assertEqual(len(httpretty.httpretty.latest_requests), 3)
-
-    def test_get_user_program_credentials_issuance_disable(self):
-        """Verify that user program credentials cannot be retrieved if issuance is disabled."""
-        self.create_credentials_config(enable_learner_issuance=False)
-        actual = get_user_program_credentials(self.user)
-        self.assertEqual(actual, [])
-
-    @httpretty.activate
-    def test_get_user_program_credentials_no_credential(self):
-        """Verify behavior if no credential exist."""
-        self.create_credentials_config()
-        self.mock_credentials_api(self.user, data={'results': []})
-        actual = get_user_program_credentials(self.user)
-        self.assertEqual(actual, [])
-
-    @httpretty.activate
-    def test_get_user_programs_credentials(self):
-        """Verify program credentials data can be retrieved and parsed correctly."""
-        # create credentials and program configuration
-        self.create_credentials_config()
-        self.create_programs_config()
-
-        # Mocking the API responses from programs and credentials
-        self.mock_programs_api()
-        self.mock_credentials_api(self.user, reset_url=False)
-
-        actual = get_user_program_credentials(self.user)
-        expected = self.PROGRAMS_API_RESPONSE['results']
-        expected[0]['credential_url'] = self.PROGRAMS_CREDENTIALS_DATA[0]['certificate_url']
-        expected[1]['credential_url'] = self.PROGRAMS_CREDENTIALS_DATA[1]['certificate_url']
-
-        # checking response from API is as expected
-        self.assertEqual(len(actual), 2)
         self.assertEqual(actual, expected)
 
-    @httpretty.activate
-    def test_get_user_program_credentials_revoked(self):
-        """Verify behavior if credential revoked."""
-        self.create_credentials_config()
-        credential_data = {"results": [
-            {
-                "id": 1,
-                "username": "test",
-                "credential": {
-                    "credential_id": 1,
-                    "program_id": 1
-                },
-                "status": "revoked",
-                "uuid": "dummy-uuid-1"
-            }
-        ]}
-        self.mock_credentials_api(self.user, data=credential_data)
-        actual = get_user_program_credentials(self.user)
-        self.assertEqual(actual, [])
+    def test_get_one(self, mock_get_edx_api_data):
+        expected = factories.UserCredential()
+        mock_get_edx_api_data.return_value = expected
+
+        program_uuid = str(uuid.uuid4())
+        actual = get_credentials(self.user, program_uuid=program_uuid)
+
+        mock_get_edx_api_data.assert_called_once()
+        call = mock_get_edx_api_data.mock_calls[0]
+        __, __, kwargs = call
+
+        querystring = {
+            'username': self.user.username,
+            'status': 'awarded',
+            'program_uuid': program_uuid,
+        }
+        cache_key = '{}.{}.{}'.format(self.credentials_config.CACHE_KEY, self.user.username, program_uuid)
+        self.assertEqual(kwargs['querystring'], querystring)
+        self.assertEqual(kwargs['cache_key'], cache_key)
+
+        self.assertEqual(actual, expected)
+
+    def test_type_filter(self, mock_get_edx_api_data):
+        get_credentials(self.user, credential_type='program')
+
+        mock_get_edx_api_data.assert_called_once()
+        call = mock_get_edx_api_data.mock_calls[0]
+        __, __, kwargs = call
+
+        querystring = {
+            'username': self.user.username,
+            'status': 'awarded',
+            'type': 'program',
+        }
+        self.assertEqual(kwargs['querystring'], querystring)

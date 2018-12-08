@@ -1,19 +1,17 @@
 define(
     [
-        "jquery", "backbone", "underscore",
-        "js/views/video/transcripts/utils",
-        "js/views/metadata", "js/collections/metadata",
-        "js/views/video/transcripts/metadata_videolist"
+        'jquery', 'backbone', 'underscore',
+        'js/views/video/transcripts/utils',
+        'js/views/metadata', 'js/collections/metadata',
+        'js/views/video/transcripts/metadata_videolist'
     ],
 function($, Backbone, _, Utils, MetadataView, MetadataCollection) {
-
     var Editor = Backbone.View.extend({
 
         tagName: 'div',
 
-        initialize: function () {
+        initialize: function() {
             // prepare data for MetadataView.Editor
-
             var metadata = this.$el.data('metadata'),
                 models = this.toModels(metadata);
 
@@ -24,6 +22,23 @@ function($, Backbone, _, Utils, MetadataView, MetadataCollection) {
                 el: this.$el,
                 collection: this.collection
             });
+
+            // Listen to edx_video_id update
+            this.listenTo(Backbone, 'transcripts:basicTabUpdateEdxVideoId', this.handleUpdateEdxVideoId);
+
+            // Listen to `video_url` and `edx_video_id` updates
+            this.listenTo(Backbone, 'transcripts:basicTabFieldChanged', this.handleFieldChanged);
+
+            // Listen to modal hidden event
+            this.listenTo(Backbone, 'xblock:editorModalHidden', this.destroy);
+
+            // Now `video_url` and `edx_video_id` viwes are rendered so
+            // send a `check_transcript` request to get transctip status
+            // This is needed because we need to update the transcrript status
+            // when basic tabs renders. We trigger `basicTabFieldChanged` event
+            // in `video_url` field but that event triggers before event is
+            // actually binded
+            this.handleFieldChanged();
         },
 
         /**
@@ -45,7 +60,7 @@ function($, Backbone, _, Utils, MetadataView, MetadataCollection) {
         * toModels(metadata) // => [{.1.}, {.2.}]
         *
         */
-        toModels: function (data) {
+        toModels: function(data) {
             var metadata = (_.isString(data)) ? JSON.parse(data) : data,
                 models = [];
 
@@ -69,11 +84,10 @@ function($, Backbone, _, Utils, MetadataView, MetadataCollection) {
         *                                    setting editors in `Advanced` tab.
         *
         */
-        syncBasicTab: function (metadataCollection, metadataView) {
+        syncBasicTab: function(metadataCollection, metadataView) {
             var result = [],
                 getField = Utils.getField,
                 component_locator = this.$el.closest('[data-locator]').data('locator'),
-                subs = getField(metadataCollection, 'sub'),
                 values = {},
                 videoUrl, metadata, modifiedValues;
 
@@ -87,44 +101,13 @@ function($, Backbone, _, Utils, MetadataView, MetadataCollection) {
 
             modifiedValues = metadataView.getModifiedMetadataValues();
 
-            var isSubsModified = (function (values) {
-                var isSubsChanged = subs.hasChanged("value");
-
-                return Boolean(
-                    isSubsChanged &&
-                    (
-                        // If the user changes the field, `values.sub` contains
-                        // string value;
-                        // If the user clicks `clear` button, the field contains
-                        // null value.
-                        // Otherwise, undefined.
-                        _.isString(values.sub) || _.isNull(subs.getValue())
-                    )
-                );
-            }(modifiedValues));
-
-            // When we change value of `sub` field in the `Advanced`,
-            // we update data on backend. That provides possibility to remove
-            // transcripts.
-            if (isSubsModified) {
-                metadata = $.extend(true, {}, modifiedValues);
-                // Save module state
-                Utils.command('save', component_locator, null, {
-                    metadata: metadata,
-                    current_subs: _.pluck(
-                        Utils.getVideoList(videoUrl.getDisplayValue()),
-                        'video'
-                    )
-                });
-            }
-
             // Get values from `Advanced` tab fields (`html5_sources`,
             // `youtube_id_1_0`) that should be synchronized.
             var html5Sources = getField(metadataCollection, 'html5_sources').getDisplayValue();
 
             values.youtube = getField(metadataCollection, 'youtube_id_1_0').getDisplayValue();
 
-            values.html5Sources = _.filter(html5Sources, function (value) {
+            values.html5Sources = _.filter(html5Sources, function(value) {
                 var link = Utils.parseLink(value),
                     mode = link && link.mode;
 
@@ -149,17 +132,6 @@ function($, Backbone, _, Utils, MetadataView, MetadataCollection) {
 
             // Synchronize other fields that has the same `field_name` property.
             Utils.syncCollections(metadataCollection, this.collection);
-
-            if (isSubsModified){
-                // When `sub` field is changed, clean Storage to avoid overwriting.
-                Utils.Storage.remove('sub');
-
-                // Trigger `change` event manually if `video_url` model
-                // isn't changed.
-                if (!videoUrl.hasChanged()) {
-                    videoUrl.trigger('change');
-                }
-            }
         },
 
         /**
@@ -173,10 +145,8 @@ function($, Backbone, _, Utils, MetadataView, MetadataCollection) {
         *                                    setting editors in `Advanced` tab.
         *
         */
-        syncAdvancedTab: function (metadataCollection, metadataView) {
+        syncAdvancedTab: function(metadataCollection, metadataView) {
             var getField = Utils.getField,
-                subsValue = Utils.Storage.get('sub'),
-                subs = getField(metadataCollection, 'sub'),
                 html5Sources, youtube, videoUrlValue, result;
 
             // if metadataCollection is not passed, just exit.
@@ -213,7 +183,7 @@ function($, Backbone, _, Utils, MetadataView, MetadataCollection) {
             // }
             result = _.groupBy(
                 videoUrlValue,
-                function (value) {
+                function(value) {
                     return Utils.parseLink(value).mode;
                 }
             );
@@ -232,18 +202,45 @@ function($, Backbone, _, Utils, MetadataView, MetadataCollection) {
                 youtube.setValue(result);
             }
 
-            // If Utils.Storage contain some subtitles, update them.
-            if (_.isString(subsValue)) {
-                subs.setValue(subsValue);
-                // After updating should be removed, because it might overwrite
-                // subtitles added by user manually.
-                Utils.Storage.remove('sub');
-            }
-
             // Synchronize other fields that has the same `field_name` property.
             Utils.syncCollections(this.collection, metadataCollection);
-        }
+        },
 
+        handleUpdateEdxVideoId: function(edxVideoId) {
+            var edxVideoIdField = Utils.getField(this.collection, 'edx_video_id');
+            edxVideoIdField.setValue(edxVideoId);
+        },
+
+        getLocator: function() {
+            return this.$el.closest('[data-locator]').data('locator');
+        },
+
+        /**
+         * Event handler for `transcripts:basicTabFieldChanged` event.
+         */
+        handleFieldChanged: function() {
+            var views = this.settingsView.views,
+                videoURLSView = views.video_url,
+                edxVideoIdView = views.edx_video_id,
+                edxVideoIdData = edxVideoIdView.getData(),
+                videoURLsData = videoURLSView.getVideoObjectsList(),
+                data = videoURLsData.concat(edxVideoIdData),
+                locator = this.getLocator();
+
+            Utils.command('check', locator, data)
+                .done(function(response) {
+                    videoURLSView.updateOnCheckTranscriptSuccess(videoURLsData, response);
+                })
+                .fail(function(response) {
+                    videoURLSView.showServerError(response);
+                });
+        },
+
+        destroy: function() {
+            this.stopListening();
+            this.undelegateEvents();
+            this.$el.empty();
+        }
     });
 
     return Editor;

@@ -2,22 +2,28 @@
 Test data created by CourseSerializer and CourseDetailSerializer
 """
 
+from __future__ import unicode_literals
+
 from datetime import datetime
 
-from openedx.core.djangoapps.models.course_details import CourseDetails
-from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
-from rest_framework.test import APIRequestFactory
+import ddt
+from nose.plugins.attrib import attr
 from rest_framework.request import Request
-
+from rest_framework.test import APIRequestFactory
 from xblock.core import XBlock
+
+from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
+from openedx.core.djangoapps.models.course_details import CourseDetails
 from xmodule.course_module import DEFAULT_START_DATE
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import check_mongo_calls
 
-from ..serializers import CourseSerializer, CourseDetailSerializer
+from ..serializers import CourseDetailSerializer, CourseSerializer
 from .mixins import CourseApiFactoryMixin
 
 
+@attr(shard=3)
+@ddt.ddt
 class TestCourseSerializer(CourseApiFactoryMixin, ModuleStoreTestCase):
     """
     Test CourseSerializer
@@ -26,12 +32,16 @@ class TestCourseSerializer(CourseApiFactoryMixin, ModuleStoreTestCase):
     maxDiff = 5000  # long enough to show mismatched dicts, in case of error
     serializer_class = CourseSerializer
 
+    ENABLED_SIGNALS = ['course_published']
+
     def setUp(self):
         super(TestCourseSerializer, self).setUp()
         self.staff_user = self.create_user('staff', is_staff=True)
         self.honor_user = self.create_user('honor', is_staff=False)
         self.request_factory = APIRequestFactory()
 
+        image_path = u'/c4x/edX/toy/asset/just_a_test.jpg'
+        image_url = u'http://testserver' + image_path
         self.expected_data = {
             'id': u'edX/toy/2012_Fall',
             'name': u'Toy Course',
@@ -40,10 +50,15 @@ class TestCourseSerializer(CourseApiFactoryMixin, ModuleStoreTestCase):
             'short_description': u'A course about toys.',
             'media': {
                 'course_image': {
-                    'uri': u'/c4x/edX/toy/asset/just_a_test.jpg',
+                    'uri': image_path,
                 },
                 'course_video': {
                     'uri': u'http://www.youtube.com/watch?v=test_youtube_id',
+                },
+                'image': {
+                    'raw': image_url,
+                    'small': image_url,
+                    'large': image_url,
                 }
             },
             'start': u'2015-07-17T12:00:00Z',
@@ -54,6 +69,10 @@ class TestCourseSerializer(CourseApiFactoryMixin, ModuleStoreTestCase):
             'enrollment_end': u'2015-07-15T00:00:00Z',
             'blocks_url': u'http://testserver/api/courses/v1/blocks/?course_id=edX%2Ftoy%2F2012_Fall',
             'effort': u'6 hours',
+            'pacing': 'instructor',
+            'mobile_available': True,
+            'hidden': False,
+            'invitation_only': False,
 
             # 'course_id' is a deprecated field, please use 'id' instead.
             'course_id': u'edX/toy/2012_Fall',
@@ -83,6 +102,15 @@ class TestCourseSerializer(CourseApiFactoryMixin, ModuleStoreTestCase):
             result = self._get_result(course)
         self.assertDictEqual(result, self.expected_data)
 
+    def test_hidden(self):
+        course = self.create_course(
+            course=u'custom',
+            start=datetime(2015, 3, 15),
+            catalog_visibility=u'none'
+        )
+        result = self._get_result(course)
+        self.assertEqual(result['hidden'], True)
+
     def test_advertised_start(self):
         course = self.create_course(
             course=u'custom',
@@ -100,6 +128,16 @@ class TestCourseSerializer(CourseApiFactoryMixin, ModuleStoreTestCase):
         self.assertEqual(result['course_id'], u'edX/custom/2012_Fall')
         self.assertEqual(result['start_type'], u'empty')
         self.assertIsNone(result['start_display'])
+
+    @ddt.unpack
+    @ddt.data(
+        (True, 'self'),
+        (False, 'instructor'),
+    )
+    def test_pacing(self, self_paced, expected_pacing):
+        course = self.create_course(self_paced=self_paced)
+        result = self._get_result(course)
+        self.assertEqual(result['pacing'], expected_pacing)
 
 
 class TestCourseDetailSerializer(TestCourseSerializer):  # pylint: disable=test-inherits-tests

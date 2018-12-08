@@ -3,21 +3,24 @@ Tests for the fake software secure response.
 """
 
 from django.test import TestCase
-
 from mock import patch
+
+from lms.djangoapps.verify_student.models import SoftwareSecurePhotoVerification
 from student.tests.factories import UserFactory
 from util.testing import UrlResetMixin
-from lms.djangoapps.verify_student.models import SoftwareSecurePhotoVerification
 
 
 class SoftwareSecureFakeViewTest(UrlResetMixin, TestCase):
     """
     Base class to test the fake software secure view.
     """
+
+    URLCONF_MODULES = ['verify_student.urls']
+
     def setUp(self, **kwargs):
         enable_software_secure_fake = kwargs.get('enable_software_secure_fake', False)
         with patch.dict('django.conf.settings.FEATURES', {'ENABLE_SOFTWARE_SECURE_FAKE': enable_software_secure_fake}):
-            super(SoftwareSecureFakeViewTest, self).setUp('verify_student.urls')
+            super(SoftwareSecureFakeViewTest, self).setUp()
 
         self.user = UserFactory.create(username="test", password="test")
         self.attempt = SoftwareSecurePhotoVerification.objects.create(user=self.user)
@@ -29,6 +32,8 @@ class SoftwareSecureFakeViewDisabledTest(SoftwareSecureFakeViewTest):
     Test the fake software secure response when feature flag
     'ENABLE_SOFTWARE_SECURE_FAKE' is not enabled.
     """
+    shard = 4
+
     def setUp(self):
         super(SoftwareSecureFakeViewDisabledTest, self).setUp(enable_software_secure_fake=False)
 
@@ -49,6 +54,8 @@ class SoftwareSecureFakeViewEnabledTest(SoftwareSecureFakeViewTest):
     Test the fake software secure response when feature flag
     'ENABLE_SOFTWARE_SECURE_FAKE' is enabled.
     """
+    shard = 4
+
     def setUp(self):
         super(SoftwareSecureFakeViewEnabledTest, self).setUp(enable_software_secure_fake=True)
 

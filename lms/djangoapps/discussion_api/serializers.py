@@ -6,28 +6,19 @@ from urlparse import urlunparse
 
 from django.contrib.auth.models import User as DjangoUser
 from django.core.exceptions import ValidationError
-from django.core.urlresolvers import reverse
-
+from django.urls import reverse
 from rest_framework import serializers
 
-from discussion_api.permissions import (
-    NON_UPDATABLE_COMMENT_FIELDS,
-    NON_UPDATABLE_THREAD_FIELDS,
-    get_editable_fields,
-)
+from discussion_api.permissions import NON_UPDATABLE_COMMENT_FIELDS, NON_UPDATABLE_THREAD_FIELDS, get_editable_fields
 from discussion_api.render import render_body
 from django_comment_client.utils import is_comment_too_deep
-from django_comment_common.models import (
-    FORUM_ROLE_ADMINISTRATOR,
-    FORUM_ROLE_COMMUNITY_TA,
-    FORUM_ROLE_MODERATOR,
-    Role,
-)
+from django_comment_common.models import FORUM_ROLE_ADMINISTRATOR, FORUM_ROLE_COMMUNITY_TA, FORUM_ROLE_MODERATOR, Role
+from django_comment_common.utils import get_course_discussion_settings
+from lms.djangoapps.django_comment_client.utils import course_discussion_division_enabled, get_group_names_by_id
 from lms.lib.comment_client.comment import Comment
 from lms.lib.comment_client.thread import Thread
 from lms.lib.comment_client.user import User as CommentClientUser
 from lms.lib.comment_client.utils import CommentClientRequestError
-from openedx.core.djangoapps.course_groups.cohorts import get_cohort_names
 
 
 def get_context(course, request, thread=None):
@@ -52,12 +43,13 @@ def get_context(course, request, thread=None):
     requester = request.user
     cc_requester = CommentClientUser.from_django_user(requester).retrieve()
     cc_requester["course_id"] = course.id
+    course_discussion_settings = get_course_discussion_settings(course.id)
     return {
         "course": course,
         "request": request,
         "thread": thread,
-        # For now, the only groups are cohorts
-        "group_ids_to_names": get_cohort_names(course),
+        "discussion_division_enabled": course_discussion_division_enabled(course_discussion_settings),
+        "group_ids_to_names": get_group_names_by_id(course_discussion_settings),
         "is_requester_privileged": requester.id in staff_user_ids or requester.id in ta_user_ids,
         "staff_user_ids": staff_user_ids,
         "ta_user_ids": ta_user_ids,
@@ -76,7 +68,9 @@ def validate_not_blank(value):
 
 
 class _ContentSerializer(serializers.Serializer):
-    """A base class for thread and comment serializers."""
+    """
+    A base class for thread and comment serializers.
+    """
     id = serializers.CharField(read_only=True)  # pylint: disable=invalid-name
     author = serializers.SerializerMethodField()
     author_label = serializers.SerializerMethodField()
@@ -121,7 +115,9 @@ class _ContentSerializer(serializers.Serializer):
         )
 
     def get_author(self, obj):
-        """Returns the author's username, or None if the content is anonymous."""
+        """
+        Returns the author's username, or None if the content is anonymous.
+        """
         return None if self._is_anonymous(obj) else obj["username"]
 
     def _get_user_label(self, user_id):
@@ -136,7 +132,9 @@ class _ContentSerializer(serializers.Serializer):
         )
 
     def get_author_label(self, obj):
-        """Returns the role label for the content author."""
+        """
+        Returns the role label for the content author.
+        """
         if self._is_anonymous(obj) or obj["user_id"] is None:
             return None
         else:
@@ -144,7 +142,9 @@ class _ContentSerializer(serializers.Serializer):
             return self._get_user_label(user_id)
 
     def get_rendered_body(self, obj):
-        """Returns the rendered body content."""
+        """
+        Returns the rendered body content.
+        """
         return render_body(obj["body"])
 
     def get_abuse_flagged(self, obj):
@@ -162,11 +162,15 @@ class _ContentSerializer(serializers.Serializer):
         return obj["id"] in self.context["cc_requester"]["upvoted_ids"]
 
     def get_vote_count(self, obj):
-        """Returns the number of votes for the content."""
+        """
+        Returns the number of votes for the content.
+        """
         return obj.get("votes", {}).get("up_count", 0)
 
     def get_editable_fields(self, obj):
-        """Return the list of the fields the requester can edit"""
+        """
+        Return the list of the fields the requester can edit
+        """
         return sorted(get_editable_fields(obj, self.context))
 
 
@@ -196,7 +200,7 @@ class ThreadSerializer(_ContentSerializer):
     endorsed_comment_list_url = serializers.SerializerMethodField()
     non_endorsed_comment_list_url = serializers.SerializerMethodField()
     read = serializers.BooleanField(required=False)
-    has_endorsed = serializers.BooleanField(read_only=True, source="endorsed")
+    has_endorsed = serializers.BooleanField(source="endorsed", read_only=True)
     response_count = serializers.IntegerField(source="resp_total", read_only=True, required=False)
 
     non_updatable_fields = NON_UPDATABLE_THREAD_FIELDS
@@ -216,7 +220,9 @@ class ThreadSerializer(_ContentSerializer):
         return bool(obj["pinned"])
 
     def get_group_name(self, obj):
-        """Returns the name of the group identified by the thread's group_id."""
+        """
+        Returns the name of the group identified by the thread's group_id.
+        """
         return self.context["group_ids_to_names"].get(obj["group_id"])
 
     def get_following(self, obj):
@@ -245,22 +251,31 @@ class ThreadSerializer(_ContentSerializer):
         )
 
     def get_endorsed_comment_list_url(self, obj):
-        """Returns the URL to retrieve the thread's endorsed comments."""
+        """
+        Returns the URL to retrieve the thread's endorsed comments.
+        """
         return self.get_comment_list_url(obj, endorsed=True)
 
     def get_non_endorsed_comment_list_url(self, obj):
-        """Returns the URL to retrieve the thread's non-endorsed comments."""
+        """
+        Returns the URL to retrieve the thread's non-endorsed comments.
+        """
         return self.get_comment_list_url(obj, endorsed=False)
 
     def get_comment_count(self, obj):
-        """Increments comment count to include post and returns total count of
-        contributions (i.e. post + responses + comments) for the thread"""
+        """
+        Increments comment count to include post and returns total count of
+        contributions (i.e. post + responses + comments) for the thread
+        """
         return obj["comments_count"] + 1
 
     def get_unread_comment_count(self, obj):
-        """Increments comment count to include post if thread is unread and returns
-        total count of unread contributions (i.e. post + responses + comments) for the thread"""
-        if not obj["read"]:
+        """
+        Returns the number of unread comments. If the thread has never been read,
+        this additionally includes 1 for the post itself, in addition to its responses and
+        comments.
+        """
+        if not obj["read"] and obj["comments_count"] == obj["unread_comments_count"]:
             return obj["unread_comments_count"] + 1
         return obj["unread_comments_count"]
 
@@ -272,7 +287,7 @@ class ThreadSerializer(_ContentSerializer):
     def update(self, instance, validated_data):
         for key, val in validated_data.items():
             instance[key] = val
-        instance.save(params={"requested_user_id": self.context["cc_requester"]["id"]})
+        instance.save()
         return instance
 
 
@@ -290,6 +305,7 @@ class CommentSerializer(_ContentSerializer):
     endorsed_by = serializers.SerializerMethodField()
     endorsed_by_label = serializers.SerializerMethodField()
     endorsed_at = serializers.SerializerMethodField()
+    child_count = serializers.IntegerField(read_only=True)
     children = serializers.SerializerMethodField(required=False)
 
     non_updatable_fields = NON_UPDATABLE_COMMENT_FIELDS
@@ -332,7 +348,9 @@ class CommentSerializer(_ContentSerializer):
             return None
 
     def get_endorsed_at(self, obj):
-        """Returns the timestamp for the endorsement, if available."""
+        """
+        Returns the timestamp for the endorsement, if available.
+        """
         endorsement = obj.get("endorsement")
         return endorsement["time"] if endorsement else None
 
@@ -394,3 +412,33 @@ class CommentSerializer(_ContentSerializer):
 
         instance.save()
         return instance
+
+
+class DiscussionTopicSerializer(serializers.Serializer):
+    """
+    Serializer for DiscussionTopic
+    """
+    id = serializers.CharField(read_only=True)  # pylint: disable=invalid-name
+    name = serializers.CharField(read_only=True)
+    thread_list_url = serializers.CharField(read_only=True)
+    children = serializers.SerializerMethodField()
+
+    def get_children(self, obj):
+        """
+        Returns a list of children of DiscussionTopicSerializer type
+        """
+        if not obj.children:
+            return []
+        return [DiscussionTopicSerializer(child).data for child in obj.children]
+
+    def create(self, validated_data):
+        """
+        Overriden create abstract method
+        """
+        pass
+
+    def update(self, instance, validated_data):
+        """
+        Overriden update abstract method
+        """
+        pass

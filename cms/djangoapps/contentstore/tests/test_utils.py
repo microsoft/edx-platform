@@ -2,90 +2,66 @@
 import collections
 from datetime import datetime, timedelta
 
-import mock
-import ddt
-from pytz import UTC
 from django.test import TestCase
-from django.test.utils import override_settings
-from xmodule.modulestore import ModuleStoreEnum
-from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
-from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
-from opaque_keys.edx.locations import SlashSeparatedCourseKey
-from xmodule.modulestore.django import modulestore
-from xmodule.partitions.partitions import UserPartition, Group
+from opaque_keys.edx.locator import CourseLocator
+from pytz import UTC
 
 from contentstore import utils
 from contentstore.tests.utils import CourseTestCase
+from openedx.core.djangoapps.site_configuration.tests.test_util import with_site_configuration_context
+from xmodule.modulestore import ModuleStoreEnum
+from xmodule.modulestore.django import modulestore
+from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase, SharedModuleStoreTestCase
+from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
+from xmodule.partitions.partitions import Group, UserPartition
 
 
 class LMSLinksTestCase(TestCase):
     """ Tests for LMS links. """
 
-    def about_page_test(self):
-        """ Get URL for about page, no marketing site """
-        # default for ENABLE_MKTG_SITE is False.
-        self.assertEquals(self.get_about_page_link(), "//localhost:8000/courses/mitX/101/test/about")
-
-    @override_settings(MKTG_URLS={'ROOT': 'dummy-root'})
-    def about_page_marketing_site_test(self):
-        """ Get URL for about page, marketing root present. """
-        with mock.patch.dict('django.conf.settings.FEATURES', {'ENABLE_MKTG_SITE': True}):
-            self.assertEquals(self.get_about_page_link(), "//dummy-root/courses/mitX/101/test/about")
-        with mock.patch.dict('django.conf.settings.FEATURES', {'ENABLE_MKTG_SITE': False}):
-            self.assertEquals(self.get_about_page_link(), "//localhost:8000/courses/mitX/101/test/about")
-
-    @override_settings(MKTG_URLS={'ROOT': 'http://www.dummy'})
-    def about_page_marketing_site_remove_http_test(self):
-        """ Get URL for about page, marketing root present, remove http://. """
-        with mock.patch.dict('django.conf.settings.FEATURES', {'ENABLE_MKTG_SITE': True}):
-            self.assertEquals(self.get_about_page_link(), "//www.dummy/courses/mitX/101/test/about")
-
-    @override_settings(MKTG_URLS={'ROOT': 'https://www.dummy'})
-    def about_page_marketing_site_remove_https_test(self):
-        """ Get URL for about page, marketing root present, remove https://. """
-        with mock.patch.dict('django.conf.settings.FEATURES', {'ENABLE_MKTG_SITE': True}):
-            self.assertEquals(self.get_about_page_link(), "//www.dummy/courses/mitX/101/test/about")
-
-    @override_settings(MKTG_URLS={'ROOT': 'www.dummyhttps://x'})
-    def about_page_marketing_site_https__edge_test(self):
-        """ Get URL for about page, only remove https:// at the beginning of the string. """
-        with mock.patch.dict('django.conf.settings.FEATURES', {'ENABLE_MKTG_SITE': True}):
-            self.assertEquals(self.get_about_page_link(), "//www.dummyhttps://x/courses/mitX/101/test/about")
-
-    @override_settings(MKTG_URLS={})
-    def about_page_marketing_urls_not_set_test(self):
-        """ Error case. ENABLE_MKTG_SITE is True, but there is either no MKTG_URLS, or no MKTG_URLS Root property. """
-        with mock.patch.dict('django.conf.settings.FEATURES', {'ENABLE_MKTG_SITE': True}):
-            self.assertEquals(self.get_about_page_link(), None)
-
-    @override_settings(LMS_BASE=None)
-    def about_page_no_lms_base_test(self):
-        """ No LMS_BASE, nor is ENABLE_MKTG_SITE True """
-        self.assertEquals(self.get_about_page_link(), None)
-
-    def get_about_page_link(self):
-        """ create mock course and return the about page link """
-        course_key = SlashSeparatedCourseKey('mitX', '101', 'test')
-        return utils.get_lms_link_for_about_page(course_key)
-
     def lms_link_test(self):
         """ Tests get_lms_link_for_item. """
-        course_key = SlashSeparatedCourseKey('mitX', '101', 'test')
+        course_key = CourseLocator('mitX', '101', 'test')
         location = course_key.make_usage_key('vertical', 'contacting_us')
         link = utils.get_lms_link_for_item(location, False)
-        self.assertEquals(link, "//localhost:8000/courses/mitX/101/test/jump_to/i4x://mitX/101/vertical/contacting_us")
+        self.assertEquals(link, "//localhost:8000/courses/course-v1:mitX+101+test/jump_to/block-v1:mitX+101+test+type@vertical+block@contacting_us")
 
         # test preview
         link = utils.get_lms_link_for_item(location, True)
         self.assertEquals(
             link,
-            "//preview/courses/mitX/101/test/jump_to/i4x://mitX/101/vertical/contacting_us"
+            "//preview.localhost/courses/course-v1:mitX+101+test/jump_to/block-v1:mitX+101+test+type@vertical+block@contacting_us"
         )
 
         # now test with the course' location
         location = course_key.make_usage_key('course', 'test')
         link = utils.get_lms_link_for_item(location)
-        self.assertEquals(link, "//localhost:8000/courses/mitX/101/test/jump_to/i4x://mitX/101/course/test")
+        self.assertEquals(link, "//localhost:8000/courses/course-v1:mitX+101+test/jump_to/block-v1:mitX+101+test+type@course+block@test")
+
+    def lms_link_for_certificate_web_view_test(self):
+        """ Tests get_lms_link_for_certificate_web_view. """
+        course_key = CourseLocator('mitX', '101', 'test')
+        dummy_user = ModuleStoreEnum.UserID.test
+        mode = 'professional'
+
+        self.assertEquals(
+            utils.get_lms_link_for_certificate_web_view(dummy_user, course_key, mode),
+            "//localhost:8000/certificates/user/{user_id}/course/{course_key}?preview={mode}".format(
+                user_id=dummy_user,
+                course_key=course_key,
+                mode=mode
+            )
+        )
+
+        with with_site_configuration_context(configuration={"course_org_filter": "mitX", "LMS_BASE": "dummyhost:8000"}):
+            self.assertEquals(
+                utils.get_lms_link_for_certificate_web_view(dummy_user, course_key, mode),
+                "//dummyhost:8000/certificates/user/{user_id}/course/{course_key}?preview={mode}".format(
+                    user_id=dummy_user,
+                    course_key=course_key,
+                    mode=mode
+                )
+            )
 
 
 class ExtraPanelTabTestCase(TestCase):
@@ -110,16 +86,17 @@ class ExtraPanelTabTestCase(TestCase):
         return course
 
 
-class XBlockVisibilityTestCase(ModuleStoreTestCase):
+class XBlockVisibilityTestCase(SharedModuleStoreTestCase):
     """Tests for xblock visibility for students."""
 
-    def setUp(self):
-        super(XBlockVisibilityTestCase, self).setUp()
+    @classmethod
+    def setUpClass(cls):
+        super(XBlockVisibilityTestCase, cls).setUpClass()
 
-        self.dummy_user = ModuleStoreEnum.UserID.test
-        self.past = datetime(1970, 1, 1, tzinfo=UTC)
-        self.future = datetime.now(UTC) + timedelta(days=1)
-        self.course = CourseFactory.create()
+        cls.dummy_user = ModuleStoreEnum.UserID.test
+        cls.past = datetime(1970, 1, 1, tzinfo=UTC)
+        cls.future = datetime.now(UTC) + timedelta(days=1)
+        cls.course = CourseFactory.create()
 
     def test_private_unreleased_xblock(self):
         """Verifies that a private unreleased xblock is not visible"""
@@ -413,8 +390,8 @@ class GroupVisibilityTest(CourseTestCase):
         def verify_all_components_visible_to_all():  # pylint: disable=invalid-name
             """ Verifies when group_access has not been set on anything. """
             for item in (self.sequential, self.vertical, self.html, self.problem):
-                self.assertFalse(utils.has_children_visible_to_specific_content_groups(item))
-                self.assertFalse(utils.is_visible_to_specific_content_groups(item))
+                self.assertFalse(utils.has_children_visible_to_specific_partition_groups(item))
+                self.assertFalse(utils.is_visible_to_specific_partition_groups(item))
 
         verify_all_components_visible_to_all()
 
@@ -431,16 +408,16 @@ class GroupVisibilityTest(CourseTestCase):
         self.set_group_access(self.vertical, {1: []})
         self.set_group_access(self.problem, {2: [3, 4]})
 
-        # Note that "has_children_visible_to_specific_content_groups" only checks immediate children.
-        self.assertFalse(utils.has_children_visible_to_specific_content_groups(self.sequential))
-        self.assertTrue(utils.has_children_visible_to_specific_content_groups(self.vertical))
-        self.assertFalse(utils.has_children_visible_to_specific_content_groups(self.html))
-        self.assertFalse(utils.has_children_visible_to_specific_content_groups(self.problem))
+        # Note that "has_children_visible_to_specific_partition_groups" only checks immediate children.
+        self.assertFalse(utils.has_children_visible_to_specific_partition_groups(self.sequential))
+        self.assertTrue(utils.has_children_visible_to_specific_partition_groups(self.vertical))
+        self.assertFalse(utils.has_children_visible_to_specific_partition_groups(self.html))
+        self.assertFalse(utils.has_children_visible_to_specific_partition_groups(self.problem))
 
-        self.assertTrue(utils.is_visible_to_specific_content_groups(self.sequential))
-        self.assertFalse(utils.is_visible_to_specific_content_groups(self.vertical))
-        self.assertFalse(utils.is_visible_to_specific_content_groups(self.html))
-        self.assertTrue(utils.is_visible_to_specific_content_groups(self.problem))
+        self.assertTrue(utils.is_visible_to_specific_partition_groups(self.sequential))
+        self.assertFalse(utils.is_visible_to_specific_partition_groups(self.vertical))
+        self.assertFalse(utils.is_visible_to_specific_partition_groups(self.html))
+        self.assertTrue(utils.is_visible_to_specific_partition_groups(self.problem))
 
 
 class GetUserPartitionInfoTest(ModuleStoreTestCase):
@@ -484,18 +461,18 @@ class GetUserPartitionInfoTest(ModuleStoreTestCase):
         expected = [
             {
                 "id": 0,
-                "name": "Cohort user partition",
-                "scheme": "cohort",
+                "name": u"Cohort user partition",
+                "scheme": u"cohort",
                 "groups": [
                     {
                         "id": 0,
-                        "name": "Group A",
+                        "name": u"Group A",
                         "selected": False,
                         "deleted": False,
                     },
                     {
                         "id": 1,
-                        "name": "Group B",
+                        "name": u"Group B",
                         "selected": False,
                         "deleted": False,
                     },
@@ -503,24 +480,24 @@ class GetUserPartitionInfoTest(ModuleStoreTestCase):
             },
             {
                 "id": 1,
-                "name": "Random user partition",
-                "scheme": "random",
+                "name": u"Random user partition",
+                "scheme": u"random",
                 "groups": [
                     {
                         "id": 0,
-                        "name": "Group C",
+                        "name": u"Group C",
                         "selected": False,
                         "deleted": False,
                     },
                 ]
             }
         ]
-        self.assertEqual(self._get_partition_info(), expected)
+        self.assertEqual(self._get_partition_info(schemes=["cohort", "random"]), expected)
 
         # Update group access and expect that now one group is marked as selected.
         self._set_group_access({0: [1]})
         expected[0]["groups"][1]["selected"] = True
-        self.assertEqual(self._get_partition_info(), expected)
+        self.assertEqual(self._get_partition_info(schemes=["cohort", "random"]), expected)
 
     def test_deleted_groups(self):
         # Select a group that is not defined in the partition
@@ -532,9 +509,34 @@ class GetUserPartitionInfoTest(ModuleStoreTestCase):
         self.assertEqual(len(groups), 3)
         self.assertEqual(groups[2], {
             "id": 3,
-            "name": "Deleted group",
+            "name": "Deleted Group",
             "selected": True,
             "deleted": True
+        })
+
+    def test_singular_deleted_group(self):
+        """
+        Verify that a partition with only one deleted group is
+        shown in the partition info with the group marked as deleted
+        """
+        self._set_partitions([
+            UserPartition(
+                id=0,
+                name="Cohort user partition",
+                scheme=UserPartition.get_scheme("cohort"),
+                description="Cohorted user partition",
+                groups=[],
+            ),
+        ])
+        self._set_group_access({0: [1]})
+        partitions = self._get_partition_info()
+        groups = partitions[0]["groups"]
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0], {
+            "id": 1,
+            "name": "Deleted Group",
+            "selected": True,
+            "deleted": True,
         })
 
     def test_filter_by_partition_scheme(self):
@@ -557,9 +559,9 @@ class GetUserPartitionInfoTest(ModuleStoreTestCase):
             ),
             UserPartition(
                 id=1,
-                name="Verification user partition",
-                scheme=UserPartition.get_scheme("verification"),
-                description="Verification user partition",
+                name="Completely random user partition",
+                scheme=UserPartition.get_scheme("random"),
+                description="Random user partition",
                 groups=[
                     Group(id=0, name="Group C"),
                 ],
@@ -568,7 +570,7 @@ class GetUserPartitionInfoTest(ModuleStoreTestCase):
         ])
 
         # Expect that the inactive scheme is excluded from the results
-        partitions = self._get_partition_info()
+        partitions = self._get_partition_info(schemes=["cohort", "verification"])
         self.assertEqual(len(partitions), 1)
         self.assertEqual(partitions[0]["scheme"], "cohort")
 
@@ -584,9 +586,9 @@ class GetUserPartitionInfoTest(ModuleStoreTestCase):
             ),
             UserPartition(
                 id=1,
-                name="Verification user partition",
-                scheme=UserPartition.get_scheme("verification"),
-                description="Verification user partition",
+                name="Completely random user partition",
+                scheme=UserPartition.get_scheme("random"),
+                description="Random user partition",
                 groups=[
                     Group(id=0, name="Group C"),
                 ],
@@ -594,9 +596,9 @@ class GetUserPartitionInfoTest(ModuleStoreTestCase):
         ])
 
         # Expect that the partition with no groups is excluded from the results
-        partitions = self._get_partition_info()
+        partitions = self._get_partition_info(schemes=["cohort", "random"])
         self.assertEqual(len(partitions), 1)
-        self.assertEqual(partitions[0]["scheme"], "verification")
+        self.assertEqual(partitions[0]["scheme"], "random")
 
     def _set_partitions(self, partitions):
         """Set the user partitions of the course descriptor. """

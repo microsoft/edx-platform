@@ -1,40 +1,27 @@
-# pylint: disable=missing-docstring
+"""
+Dump the course_ids available to the lms.
 
-from optparse import make_option
+Output is UTF-8 encoded by default.
+"""
+from __future__ import unicode_literals
+
 from textwrap import dedent
 
-from django.core.management.base import BaseCommand, CommandError
+from six import text_type
 
-from xmodule.modulestore.django import modulestore
+from django.core.management.base import BaseCommand
+from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
 
 
 class Command(BaseCommand):
-    """
-    Simple command to dump the course_ids available to the lms.
-
-    Output is UTF-8 encoded by default.
-
-    """
     help = dedent(__doc__).strip()
-    option_list = BaseCommand.option_list + (
-        make_option('--modulestore',
-                    action='store',
-                    default='default',
-                    help='Name of the modulestore to use'),
-    )
+
+    def add_arguments(self, parser):
+        parser.add_argument('--modulestore',
+                            default='default',
+                            help='name of the modulestore to use')
 
     def handle(self, *args, **options):
-        store = modulestore()
-        name = options['modulestore']
-        if name != 'default':
-            # since a store type is given, get that specific store
-            if hasattr(store, '_get_modulestore_by_type'):
-                store = store._get_modulestore_by_type(name)
-            if store.get_modulestore_type() != name:
-                raise CommandError("Modulestore {} not found".format(name))
-
-        if store is None:
-            raise CommandError("Unknown modulestore {}".format(name))
-        output = u'\n'.join(unicode(course.id) for course in store.get_courses()) + '\n'
+        output = '\n'.join(text_type(course_overview.id) for course_overview in CourseOverview.get_all_courses()) + '\n'
 
         return output

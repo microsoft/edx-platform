@@ -13,13 +13,14 @@ class TwitterIntegrationTest(base.Oauth2IntegrationTest):
         super(TwitterIntegrationTest, self).setUp()
         self.provider = self.configure_twitter_provider(
             enabled=True,
+            visible=True,
             key='twitter_oauth1_key',
             secret='twitter_oauth1_secret',
         )
 
         # To test an OAuth1 provider, we need to patch an additional method:
         patcher = patch(
-            'social.backends.twitter.TwitterOAuth.unauthorized_token',
+            'social_core.backends.twitter.TwitterOAuth.unauthorized_token',
             create=True,
             return_value="unauth_token"
         )

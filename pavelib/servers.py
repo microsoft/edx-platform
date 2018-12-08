@@ -2,6 +2,7 @@
 Run and manage servers for local development.
 """
 from __future__ import print_function
+
 import argparse
 import sys
 
@@ -9,11 +10,12 @@ from paver.easy import call_task, cmdopts, consume_args, needs, sh, task
 
 from .assets import collect_assets
 from .utils.cmd import django_cmd
-from .utils.process import run_process, run_multi_processes
-
+from .utils.envs import Env
+from .utils.process import run_multi_processes, run_process
+from .utils.timer import timed
 
 DEFAULT_PORT = {"lms": 8000, "studio": 8001}
-DEFAULT_SETTINGS = 'devstack'
+DEFAULT_SETTINGS = Env.DEVSTACK_SETTINGS
 OPTIMIZED_SETTINGS = "devstack_optimized"
 OPTIMIZED_ASSETS_SETTINGS = "test_static_optimized"
 
@@ -156,7 +158,7 @@ def celery(options):
     """
     Runs Celery workers.
     """
-    settings = getattr(options, 'settings', 'dev_with_worker')
+    settings = getattr(options, 'settings', 'devstack_with_worker')
     run_process(django_cmd('lms', settings, 'celery', 'worker', '--beat', '--loglevel=INFO', '--pythonpath=.'))
 
 
@@ -164,14 +166,21 @@ def celery(options):
 @needs('pavelib.prereqs.install_prereqs')
 @cmdopts([
     ("settings=", "s", "Django settings for both LMS and Studio"),
-    ("asset_settings=", "a", "Django settings for updating assets for both LMS and Studio (defaults to settings)"),
-    ("worker_settings=", "w", "Celery worker Django settings"),
+    ("asset-settings=", "a", "Django settings for updating assets for both LMS and Studio (defaults to settings)"),
+    ("worker-settings=", "w", "Celery worker Django settings"),
     ("fast", "f", "Skip updating assets"),
     ("optimized", "o", "Run with optimized assets"),
-    ("settings_lms=", "l", "Set LMS only, overriding the value from --settings (if provided)"),
-    ("asset_settings_lms=", None, "Set LMS only, overriding the value from --asset_settings (if provided)"),
-    ("settings_cms=", "c", "Set Studio only, overriding the value from --settings (if provided)"),
-    ("asset_settings_cms=", None, "Set Studio only, overriding the value from --asset_settings (if provided)"),
+    ("settings-lms=", "l", "Set LMS only, overriding the value from --settings (if provided)"),
+    ("asset-settings-lms=", None, "Set LMS only, overriding the value from --asset-settings (if provided)"),
+    ("settings-cms=", "c", "Set Studio only, overriding the value from --settings (if provided)"),
+    ("asset-settings-cms=", None, "Set Studio only, overriding the value from --asset-settings (if provided)"),
+
+    ("asset_settings=", None, "deprecated in favor of asset-settings"),
+    ("asset_settings_cms=", None, "deprecated in favor of asset-settings-cms"),
+    ("asset_settings_lms=", None, "deprecated in favor of asset-settings-lms"),
+    ("settings_cms=", None, "deprecated in favor of settings-cms"),
+    ("settings_lms=", None, "deprecated in favor of settings-lms"),
+    ("worker_settings=", None, "deprecated in favor of worker-settings"),
 ])
 def run_all_servers(options):
     """
@@ -179,7 +188,7 @@ def run_all_servers(options):
     """
     settings = getattr(options, 'settings', DEFAULT_SETTINGS)
     asset_settings = getattr(options, 'asset_settings', settings)
-    worker_settings = getattr(options, 'worker_settings', 'dev_with_worker')
+    worker_settings = getattr(options, 'worker_settings', 'devstack_with_worker')
     fast = getattr(options, 'fast', False)
     optimized = getattr(options, 'optimized', False)
 
@@ -237,19 +246,25 @@ def run_all_servers(options):
     ("settings=", "s", "Django settings"),
     ("fake-initial", None, "Fake the initial migrations"),
 ])
+@timed
 def update_db(options):
     """
-    Runs syncdb and then migrate.
+    Migrates the lms and cms across all databases
     """
     settings = getattr(options, 'settings', DEFAULT_SETTINGS)
     fake = "--fake-initial" if getattr(options, 'fake_initial', False) else ""
     for system in ('lms', 'cms'):
-        sh(django_cmd(system, settings, 'migrate', fake, '--traceback', '--pythonpath=.'))
+        # pylint: disable=line-too-long
+        sh("NO_EDXAPP_SUDO=1 EDX_PLATFORM_SETTINGS_OVERRIDE={settings} /edx/bin/edxapp-migrate-{system} --traceback --pythonpath=. {fake}".format(
+            settings=settings,
+            system=system,
+            fake=fake))
 
 
 @task
 @needs('pavelib.prereqs.install_prereqs')
 @consume_args
+@timed
 def check_settings(args):
     """
     Checks settings files.

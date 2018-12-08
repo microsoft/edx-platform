@@ -2,14 +2,19 @@
 Course API Views
 """
 
+import search
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from rest_framework.generics import ListAPIView, RetrieveAPIView
+from rest_framework.throttling import UserRateThrottle
 
-from openedx.core.lib.api.paginators import NamespacedPageNumberPagination
-from openedx.core.lib.api.view_utils import view_auth_classes, DeveloperErrorViewMixin
+from edx_rest_framework_extensions.paginators import NamespacedPageNumberPagination
+from openedx.core.lib.api.view_utils import DeveloperErrorViewMixin, view_auth_classes
+
+from . import USE_RATE_LIMIT_2_FOR_COURSE_LIST_API, USE_RATE_LIMIT_10_FOR_COURSE_LIST_API
 from .api import course_detail, list_courses
 from .forms import CourseDetailGetForm, CourseListGetForm
-from .serializers import CourseSerializer, CourseDetailSerializer
+from .serializers import CourseDetailSerializer, CourseSerializer
 
 
 @view_auth_classes(is_authenticated=False)
@@ -17,7 +22,7 @@ class CourseDetailView(DeveloperErrorViewMixin, RetrieveAPIView):
     """
     **Use Cases**
 
-        Request information on a course
+        Request details for a course
 
     **Example Requests**
 
@@ -27,12 +32,11 @@ class CourseDetailView(DeveloperErrorViewMixin, RetrieveAPIView):
 
         Body consists of the following fields:
 
-        * blocks_url: Used to fetch the course blocks
         * effort: A textual description of the weekly hours of effort expected
             in the course.
-        * end: Date the course ends
-        * enrollment_end: Date enrollment ends
-        * enrollment_start: Date enrollment begins
+        * end: Date the course ends, in ISO 8601 notation
+        * enrollment_end: Date enrollment ends, in ISO 8601 notation
+        * enrollment_start: Date enrollment begins, in ISO 8601 notation
         * id: A unique identifier of the course; a serialized representation
             of the opaque key identifying the course.
         * media: An object that contains named media items.  Included here:
@@ -46,15 +50,17 @@ class CourseDetailView(DeveloperErrorViewMixin, RetrieveAPIView):
             Note: this field is only included in the Course Detail view, not
             the Course List view.
         * short_description: A textual description of the course
-        * start: Date the course begins
+        * start: Date the course begins, in ISO 8601 notation
         * start_display: Readably formatted start of the course
         * start_type: Hint describing how `start_display` is set. One of:
-            * `"string"`: manually set
-            * `"timestamp"`: generated form `start` timestamp
-            * `"empty"`: the start date should not be shown
+            * `"string"`: manually set by the course author
+            * `"timestamp"`: generated from the `start` timestamp
+            * `"empty"`: no start date is specified
+        * pacing: Course pacing. Possible values: instructor, self
 
         Deprecated fields:
 
+        * blocks_url: Used to fetch the course blocks
         * course_id: Course key (use 'id' instead)
 
     **Parameters:**
@@ -94,7 +100,8 @@ class CourseDetailView(DeveloperErrorViewMixin, RetrieveAPIView):
                 "overview: "<p>A verbose description of the course.</p>"
                 "start": "2015-07-17T12:00:00Z",
                 "start_display": "July 17, 2015",
-                "start_type": "timestamp"
+                "start_type": "timestamp",
+                "pacing": "instructor"
             }
     """
 
@@ -118,6 +125,41 @@ class CourseDetailView(DeveloperErrorViewMixin, RetrieveAPIView):
         )
 
 
+class CourseListUserThrottle(UserRateThrottle):
+    """Limit the number of requests users can make to the course list API."""
+    # The course list endpoint is likely being inefficient with how it's querying
+    # various parts of the code and can take courseware down, it needs to be rate
+    # limited until optimized. LEARNER-5527
+
+    THROTTLE_RATES = {
+        'user': '20/minute',
+        'staff': '40/minute',
+    }
+
+    def check_for_switches(self):
+        if USE_RATE_LIMIT_2_FOR_COURSE_LIST_API.is_enabled():
+            self.THROTTLE_RATES = {
+                'user': '2/minute',
+                'staff': '10/minute',
+            }
+        elif USE_RATE_LIMIT_10_FOR_COURSE_LIST_API.is_enabled():
+            self.THROTTLE_RATES = {
+                'user': '10/minute',
+                'staff': '20/minute',
+            }
+
+    def allow_request(self, request, view):
+        self.check_for_switches()
+        # Use a special scope for staff to allow for a separate throttle rate
+        user = request.user
+        if user.is_authenticated and (user.is_staff or user.is_superuser):
+            self.scope = 'staff'
+            self.rate = self.get_rate()
+            self.num_requests, self.duration = self.parse_rate(self.rate)
+
+        return super(CourseListUserThrottle, self).allow_request(request, view)
+
+
 @view_auth_classes(is_authenticated=False)
 class CourseListView(DeveloperErrorViewMixin, ListAPIView):
     """
@@ -134,6 +176,8 @@ class CourseListView(DeveloperErrorViewMixin, ListAPIView):
         Body comprises a list of objects as returned by `CourseDetailView`.
 
     **Parameters**
+        search_term (optional):
+            Search term to filter courses (used by ElasticSearch).
 
         username (optional):
             The username of the specified user whose visible courses we
@@ -188,7 +232,14 @@ class CourseListView(DeveloperErrorViewMixin, ListAPIView):
     """
 
     pagination_class = NamespacedPageNumberPagination
+    pagination_class.max_page_size = 100
     serializer_class = CourseSerializer
+    throttle_classes = CourseListUserThrottle,
+
+    # Return all the results, 10K is the maximum allowed value for ElasticSearch.
+    # We should use 0 after upgrading to 1.1+:
+    #   - https://github.com/elastic/elasticsearch/commit/8b0a863d427b4ebcbcfb1dcd69c996c52e7ae05e
+    results_size_infinity = 10000
 
     def get_queryset(self):
         """
@@ -198,9 +249,24 @@ class CourseListView(DeveloperErrorViewMixin, ListAPIView):
         if not form.is_valid():
             raise ValidationError(form.errors)
 
-        return list_courses(
+        db_courses = list_courses(
             self.request,
             form.cleaned_data['username'],
             org=form.cleaned_data['org'],
             filter_=form.cleaned_data['filter_'],
         )
+
+        if not settings.FEATURES['ENABLE_COURSEWARE_SEARCH'] or not form.cleaned_data['search_term']:
+            return db_courses
+
+        search_courses = search.api.course_discovery_search(
+            form.cleaned_data['search_term'],
+            size=self.results_size_infinity,
+        )
+
+        search_courses_ids = {course['data']['id']: True for course in search_courses['results']}
+
+        return [
+            course for course in db_courses
+            if unicode(course.id) in search_courses_ids
+        ]

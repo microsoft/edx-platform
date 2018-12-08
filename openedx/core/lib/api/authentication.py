@@ -2,12 +2,12 @@
 
 import logging
 
+import django.utils.timezone
+from oauth2_provider import models as dot_models
+from provider.oauth2 import models as dop_models
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.authentication import SessionAuthentication
-from rest_framework import exceptions as drf_exceptions
 from rest_framework_oauth.authentication import OAuth2Authentication
-from rest_framework_oauth.compat import oauth2_provider, provider_now
-
-from openedx.core.lib.api.exceptions import AuthenticationFailed
 
 
 OAUTH2_TOKEN_ERROR = u'token_error'
@@ -58,7 +58,7 @@ class SessionAuthenticationAllowInactiveUser(SessionAuthentication):
         # This is where regular `SessionAuthentication` checks that the user is active.
         # We have removed that check in this implementation.
         # But we added a check to prevent anonymous users since we require a logged-in account.
-        if not user or user.is_anonymous():
+        if not user or user.is_anonymous:
             return None
 
         self.enforce_csrf(request)
@@ -88,47 +88,68 @@ class OAuth2AuthenticationAllowInactiveUser(OAuth2Authentication):
         succeeds, raises an AuthenticationFailed (HTTP 401) if authentication
         fails or None if the user did not try to authenticate using an access
         token.
-
-        Overrides base class implementation to return edX-style error
-        responses.
         """
 
         try:
             return super(OAuth2AuthenticationAllowInactiveUser, self).authenticate(*args, **kwargs)
-        except AuthenticationFailed:
-            # AuthenticationFailed is a subclass of drf_exceptions.AuthenticationFailed,
-            # but we don't want to post-process the exception detail for our own class.
-            raise
-        except drf_exceptions.AuthenticationFailed as exc:
-            if 'No credentials provided' in exc.detail:
-                error_code = OAUTH2_TOKEN_ERROR_NOT_PROVIDED
-            elif 'Token string should not contain spaces' in exc.detail:
-                error_code = OAUTH2_TOKEN_ERROR_MALFORMED
+        except AuthenticationFailed as exc:
+            if isinstance(exc.detail, dict):
+                developer_message = exc.detail['developer_message']
+                error_code = exc.detail['error_code']
             else:
-                error_code = OAUTH2_TOKEN_ERROR
+                developer_message = exc.detail
+                if 'No credentials provided' in developer_message:
+                    error_code = OAUTH2_TOKEN_ERROR_NOT_PROVIDED
+                elif 'Token string should not contain spaces' in developer_message:
+                    error_code = OAUTH2_TOKEN_ERROR_MALFORMED
+                else:
+                    error_code = OAUTH2_TOKEN_ERROR
             raise AuthenticationFailed({
                 u'error_code': error_code,
-                u'developer_message': exc.detail
+                u'developer_message': developer_message
             })
 
     def authenticate_credentials(self, request, access_token):
         """
         Authenticate the request, given the access token.
-        Overrides base class implementation to discard failure if user is inactive.
+
+        Overrides base class implementation to discard failure if user is
+        inactive.
         """
-        token_query = oauth2_provider.oauth2.models.AccessToken.objects.select_related('user')
-        token = token_query.filter(token=access_token).first()
+
+        token = self.get_access_token(access_token)
         if not token:
             raise AuthenticationFailed({
                 u'error_code': OAUTH2_TOKEN_ERROR_NONEXISTENT,
                 u'developer_message': u'The provided access token does not match any valid tokens.'
             })
-        # provider_now switches to timezone aware datetime when
-        # the oauth2_provider version supports it.
-        elif token.expires < provider_now():
+        elif token.expires < django.utils.timezone.now():
             raise AuthenticationFailed({
                 u'error_code': OAUTH2_TOKEN_ERROR_EXPIRED,
                 u'developer_message': u'The provided access token has expired and is no longer valid.',
             })
         else:
             return token.user, token
+
+    def get_access_token(self, access_token):
+        """
+        Return a valid access token that exists in one of our OAuth2 libraries,
+        or None if no matching token is found.
+        """
+        return self._get_dot_token(access_token) or self._get_dop_token(access_token)
+
+    def _get_dop_token(self, access_token):
+        """
+        Return a valid access token stored by django-oauth2-provider (DOP), or
+        None if no matching token is found.
+        """
+        token_query = dop_models.AccessToken.objects.select_related('user')
+        return token_query.filter(token=access_token).first()
+
+    def _get_dot_token(self, access_token):
+        """
+        Return a valid access token stored by django-oauth-toolkit (DOT), or
+        None if no matching token is found.
+        """
+        token_query = dot_models.AccessToken.objects.select_related('user')
+        return token_query.filter(token=access_token).first()

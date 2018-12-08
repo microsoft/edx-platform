@@ -3,13 +3,14 @@ Tests for bookmarks api.
 """
 import ddt
 from mock import patch
-from unittest import skipUnless
+from nose.plugins.attrib import attr
 
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
 
 from opaque_keys.edx.keys import UsageKey
 
+from openedx.core.djangolib.testing.utils import skip_unless_lms
 from xmodule.modulestore.exceptions import ItemNotFoundError
 
 from .. import api
@@ -35,16 +36,13 @@ class BookmarkApiEventTestMixin(object):
         self.assertFalse(mock_tracker.called)  # pylint: disable=maybe-no-member
 
 
+@attr(shard=9)
 @ddt.ddt
-@skipUnless(settings.ROOT_URLCONF == 'lms.urls', 'Tests only valid in LMS')
+@skip_unless_lms
 class BookmarksAPITests(BookmarkApiEventTestMixin, BookmarksTestsBase):
     """
     These tests cover the parts of the API methods.
     """
-
-    def setUp(self):
-        super(BookmarksAPITests, self).setUp()
-
     def test_get_bookmark(self):
         """
         Verifies that get_bookmark returns data as expected.
@@ -112,7 +110,7 @@ class BookmarksAPITests(BookmarkApiEventTestMixin, BookmarksTestsBase):
         with self.assertNumQueries(1):
             bookmarks = api.get_bookmarks(user=self.user, course_key=course.id, serialized=False)
             self.assertEqual(len(bookmarks), count)
-        self.assertTrue(bookmarks.model is Bookmark)  # pylint: disable=no-member
+        self.assertIs(bookmarks.model, Bookmark)  # pylint: disable=no-member
 
     @patch('openedx.core.djangoapps.bookmarks.api.tracker.emit')
     def test_create_bookmark(self, mock_tracker):

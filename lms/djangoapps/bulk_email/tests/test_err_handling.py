@@ -2,31 +2,33 @@
 """
 Unit tests for handling email sending errors
 """
+import json
 from itertools import cycle
+from smtplib import SMTPConnectError, SMTPDataError, SMTPServerDisconnected
 
-from celery.states import SUCCESS, RETRY  # pylint: disable=no-name-in-module, import-error
+import ddt
+from celery.states import RETRY, SUCCESS  # pylint: disable=no-name-in-module, import-error
 from django.conf import settings
 from django.core.management import call_command
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.db import DatabaseError
-import json
-from mock import patch, Mock
+from mock import Mock, patch
 from nose.plugins.attrib import attr
-from smtplib import SMTPDataError, SMTPServerDisconnected, SMTPConnectError
+from opaque_keys.edx.locator import CourseLocator
+from six import text_type
 
-from bulk_email.models import CourseEmail, SEND_TO_ALL
+from bulk_email.models import SEND_TO_MYSELF, BulkEmailFlag, CourseEmail
 from bulk_email.tasks import perform_delegate_email_batches, send_course_email
-from instructor_task.models import InstructorTask
-from instructor_task.subtasks import (
-    initialize_subtask_info,
+from lms.djangoapps.instructor_task.exceptions import DuplicateTaskException
+from lms.djangoapps.instructor_task.models import InstructorTask
+from lms.djangoapps.instructor_task.subtasks import (
+    MAX_DATABASE_LOCK_RETRIES,
     SubtaskStatus,
     check_subtask_is_valid,
-    update_subtask_status,
-    DuplicateTaskException,
-    MAX_DATABASE_LOCK_RETRIES,
+    initialize_subtask_info,
+    update_subtask_status
 )
-from opaque_keys.edx.locations import SlashSeparatedCourseKey
-from student.tests.factories import UserFactory, AdminFactory, CourseEnrollmentFactory
+from student.tests.factories import AdminFactory, CourseEnrollmentFactory, UserFactory
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
 
@@ -36,13 +38,15 @@ class EmailTestException(Exception):
     pass
 
 
-@attr('shard_1')
+@ddt.ddt
+@attr(shard=1)
 @patch('bulk_email.models.html_to_text', Mock(return_value='Mocking CourseEmail.text_message', autospec=True))
-@patch.dict(settings.FEATURES, {'ENABLE_INSTRUCTOR_EMAIL': True, 'REQUIRE_COURSE_EMAIL_AUTH': False})
 class TestEmailErrors(ModuleStoreTestCase):
     """
     Test that errors from sending email are handled properly.
     """
+
+    ENABLED_CACHES = ['default', 'mongo_metadata_inheritance', 'loc_cache']
 
     def setUp(self):
         super(TestEmailErrors, self).setUp()
@@ -53,12 +57,22 @@ class TestEmailErrors(ModuleStoreTestCase):
 
         # load initial content (since we don't run migrations as part of tests):
         call_command("loaddata", "course_email_template.json")
-        self.url = reverse('instructor_dashboard', kwargs={'course_id': self.course.id.to_deprecated_string()})
-        self.send_mail_url = reverse('send_email', kwargs={'course_id': self.course.id.to_deprecated_string()})
+        self.url = reverse('instructor_dashboard', kwargs={'course_id': text_type(self.course.id)})
+        self.send_mail_url = reverse('send_email', kwargs={'course_id': text_type(self.course.id)})
         self.success_content = {
-            'course_id': self.course.id.to_deprecated_string(),
+            'course_id': text_type(self.course.id),
             'success': True,
         }
+
+    @classmethod
+    def setUpClass(cls):
+        super(TestEmailErrors, cls).setUpClass()
+        BulkEmailFlag.objects.create(enabled=True, require_course_email_auth=False)
+
+    @classmethod
+    def tearDownClass(cls):
+        super(TestEmailErrors, cls).tearDownClass()
+        BulkEmailFlag.objects.all().delete()
 
     @patch('bulk_email.tasks.get_connection', autospec=True)
     @patch('bulk_email.tasks.send_course_email.retry')
@@ -69,7 +83,7 @@ class TestEmailErrors(ModuleStoreTestCase):
         get_conn.return_value.send_messages.side_effect = SMTPDataError(455, "Throttling: Sending rate exceeded")
         test_email = {
             'action': 'Send email',
-            'send_to': 'myself',
+            'send_to': '["myself"]',
             'subject': 'test subject for myself',
             'message': 'test message for myself'
         }
@@ -92,13 +106,14 @@ class TestEmailErrors(ModuleStoreTestCase):
         # have every fourth email fail due to blacklisting:
         get_conn.return_value.send_messages.side_effect = cycle([SMTPDataError(554, "Email address is blacklisted"),
                                                                  None, None, None])
-        students = [UserFactory() for _ in xrange(settings.BULK_EMAIL_EMAILS_PER_TASK)]
+        # Don't forget to account for the "myself" instructor user
+        students = [UserFactory() for _ in xrange(settings.BULK_EMAIL_EMAILS_PER_TASK - 1)]
         for student in students:
             CourseEnrollmentFactory.create(user=student, course_id=self.course.id)
 
         test_email = {
             'action': 'Send email',
-            'send_to': 'all',
+            'send_to': '["myself", "staff", "learners"]',
             'subject': 'test subject for all',
             'message': 'test message for all'
         }
@@ -123,7 +138,7 @@ class TestEmailErrors(ModuleStoreTestCase):
         get_conn.return_value.open.side_effect = SMTPServerDisconnected(425, "Disconnecting")
         test_email = {
             'action': 'Send email',
-            'send_to': 'myself',
+            'send_to': '["myself"]',
             'subject': 'test subject for myself',
             'message': 'test message for myself'
         }
@@ -145,7 +160,7 @@ class TestEmailErrors(ModuleStoreTestCase):
 
         test_email = {
             'action': 'Send email',
-            'send_to': 'myself',
+            'send_to': '["myself"]',
             'subject': 'test subject for myself',
             'message': 'test message for myself'
         }
@@ -179,7 +194,7 @@ class TestEmailErrors(ModuleStoreTestCase):
         """
         Tests exception when the course in the email doesn't exist
         """
-        course_id = SlashSeparatedCourseKey("I", "DONT", "EXIST")
+        course_id = CourseLocator("I", "DONT", "EXIST")
         email = CourseEmail(course_id=course_id)
         email.save()
         entry = InstructorTask.create(course_id, "task_type", "task_key", "task_input", self.instructor)
@@ -192,19 +207,40 @@ class TestEmailErrors(ModuleStoreTestCase):
         """
         Tests exception when the to_option in the email doesn't exist
         """
-        email = CourseEmail(course_id=self.course.id, to_option="IDONTEXIST")
-        email.save()
-        entry = InstructorTask.create(self.course.id, "task_type", "task_key", "task_input", self.instructor)
-        task_input = {"email_id": email.id}
-        with self.assertRaisesRegexp(Exception, 'Unexpected bulk email TO_OPTION found: IDONTEXIST'):
-            perform_delegate_email_batches(entry.id, self.course.id, task_input, "action_name")
+        with self.assertRaisesRegexp(ValueError, 'Course email being sent to unrecognized target: "IDONTEXIST" *'):
+            email = CourseEmail.create(  # pylint: disable=unused-variable
+                self.course.id,
+                self.instructor,
+                ["IDONTEXIST"],
+                "re: subject",
+                "dummy body goes here"
+            )
+
+    @ddt.data('track', 'cohort')
+    def test_nonexistent_grouping(self, target_type):
+        """
+        Tests exception when the cohort or course mode doesn't exist
+        """
+        with self.assertRaisesRegexp(ValueError, '.* IDONTEXIST does not exist .*'):
+            email = CourseEmail.create(  # pylint: disable=unused-variable
+                self.course.id,
+                self.instructor,
+                ["{}:IDONTEXIST".format(target_type)],
+                "re: subject",
+                "dummy body goes here"
+            )
 
     def test_wrong_course_id_in_task(self):
         """
         Tests exception when the course_id in task is not the same as one explicitly passed in.
         """
-        email = CourseEmail(course_id=self.course.id, to_option=SEND_TO_ALL)
-        email.save()
+        email = CourseEmail.create(
+            self.course.id,
+            self.instructor,
+            [SEND_TO_MYSELF],
+            "re: subject",
+            "dummy body goes here"
+        )
         entry = InstructorTask.create("bogus/task/id", "task_type", "task_key", "task_input", self.instructor)
         task_input = {"email_id": email.id}
         with self.assertRaisesRegexp(ValueError, 'does not match task value'):
@@ -214,8 +250,13 @@ class TestEmailErrors(ModuleStoreTestCase):
         """
         Tests exception when the course_id in CourseEmail is not the same as one explicitly passed in.
         """
-        email = CourseEmail(course_id=SlashSeparatedCourseKey("bogus", "course", "id"), to_option=SEND_TO_ALL)
-        email.save()
+        email = CourseEmail.create(
+            CourseLocator("bogus", "course", "id"),
+            self.instructor,
+            [SEND_TO_MYSELF],
+            "re: subject",
+            "dummy body goes here"
+        )
         entry = InstructorTask.create(self.course.id, "task_type", "task_key", "task_input", self.instructor)
         task_input = {"email_id": email.id}
         with self.assertRaisesRegexp(ValueError, 'does not match email value'):
@@ -307,7 +348,7 @@ class TestEmailErrors(ModuleStoreTestCase):
         bogus_email_id = 1001
         to_list = ['test@test.com']
         global_email_context = {'course_title': 'dummy course'}
-        with patch('instructor_task.subtasks.InstructorTask.save') as mock_task_save:
+        with patch('lms.djangoapps.instructor_task.subtasks.InstructorTask.save') as mock_task_save:
             mock_task_save.side_effect = DatabaseError
             with self.assertRaises(DatabaseError):
                 send_course_email(entry_id, bogus_email_id, to_list, global_email_context, subtask_status.to_dict())

@@ -8,6 +8,7 @@
 // +utility navigation
 // +toggling utilities
 // +case - calculator spacing
+// +tabs
 
 // +notes:
 // --------------------
@@ -20,7 +21,7 @@
   @extend %text-sr;
 }
 
-.nav-contents, .nav-skip {
+.nav-contents, .nav-skip, .transcript-skip {
   @extend %nav-skip;
 }
 
@@ -28,19 +29,23 @@
 // --------------------
 .nav-utilities {
   @extend %ui-depth3;
+
   position: fixed;
   right: ($baseline/4);
   bottom: 0;
 
   .wrapper-utility {
     @extend %wipe-last-child;
+
     display: inline-block;
     vertical-align: bottom;
+
     @include margin-right(6px);
   }
 
   .utility-control {
     @include transition(background-color $tmg-f2 ease-in-out 0s, color $tmg-f2 ease-in-out 0s);
+
     position: relative;
     bottom: -($baseline/5);
     display: inline-block;
@@ -92,9 +97,12 @@
   .action-toggle-message {
     @extend %t-title8;
     @extend %t-strong;
+
     position: absolute;
     bottom: 0;
+
     @include right($baseline*2.5);
+
     display: inline-block;
     min-width: ($baseline*5);
     padding: ($baseline/2) ($baseline*0.75);
@@ -112,6 +120,57 @@
   // +case - calculator spacing (needed for overriding calculator positioning)
   // --------------------
   &.has-utility-calculator {
-    @include right($baseline*2.50);
+    @include right($baseline*2.75);
+  }
+}
+
+%button-reset {
+  box-shadow: none;
+  border: none;
+  border-radius: 0;
+  background: transparent none;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+%page-content-nav {
+  margin-bottom: $baseline;
+  border-bottom: 1px solid $gray-l5;
+
+  .nav-item {
+    @extend %button-reset;
+
+    display: inline-block;
+    padding: ($baseline*0.75);
+    color: $gray-d2;
+
+    &.is-active {
+      border-bottom: 4px solid $link-color;
+      color: $gray-d2;
+    }
+
+    // STATE: hover and focus
+    &:hover,
+    &:focus {
+      border-bottom: 4px solid $link-color;
+      color: $link-color;
+    }
+  }
+}
+
+// +tabs - styles for tabs and tabpanels (teams and learner profile, currently)
+// --------------------
+.page-content-nav {
+  .tab {
+        
+  }
+}
+
+.page-content-main {
+  .tabs {
+    .tabpanel {
+      outline: none;
+    }
   }
 }

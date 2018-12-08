@@ -1,32 +1,28 @@
 #-*- coding: utf-8 -*-
 
 """
-Group Configuration Tests.
+Certificates Tests.
 """
+import itertools
 import json
-import mock
-import ddt
 
+import ddt
+import mock
 from django.conf import settings
 from django.test.utils import override_settings
-
 from opaque_keys.edx.keys import AssetKey
-from opaque_keys.edx.locations import AssetLocation
 
-from contentstore.utils import reverse_course_url
-from contentstore.views.certificates import CERTIFICATE_SCHEMA_VERSION
 from contentstore.tests.utils import CourseTestCase
-from xmodule.contentstore.django import contentstore
-from xmodule.contentstore.content import StaticContent
-from xmodule.exceptions import NotFoundError
+from contentstore.utils import get_lms_link_for_certificate_web_view, reverse_course_url
+from contentstore.views.certificates import CERTIFICATE_SCHEMA_VERSION, CertificateManager
+from course_modes.tests.factories import CourseModeFactory
 from student.models import CourseEnrollment
 from student.roles import CourseInstructorRole, CourseStaffRole
 from student.tests.factories import UserFactory
-from course_modes.tests.factories import CourseModeFactory
-from contentstore.views.certificates import CertificateManager
-from django.test.utils import override_settings
-from contentstore.utils import get_lms_link_for_certificate_web_view
-from util.testing import EventTestMixin
+from util.testing import EventTestMixin, UrlResetMixin
+from xmodule.contentstore.content import StaticContent
+from xmodule.contentstore.django import contentstore
+from xmodule.exceptions import NotFoundError
 
 FEATURES_WITH_CERTS_ENABLED = settings.FEATURES.copy()
 FEATURES_WITH_CERTS_ENABLED['CERTIFICATES_HTML_VIEW'] = True
@@ -53,6 +49,9 @@ CERTIFICATE_JSON_WITH_SIGNATORIES = {
     ]
 }
 
+C4X_SIGNATORY_PATH = '/c4x/test/CSS101/asset/Signature{}.png'
+SIGNATORY_PATH = 'asset-v1:test+CSS101+SP2017+type@asset+block@Signature{}.png'
+
 
 # pylint: disable=no-member
 class HelperMethods(object):
@@ -70,7 +69,8 @@ class HelperMethods(object):
             )
             contentstore().save(content)
 
-    def _add_course_certificates(self, count=1, signatory_count=0, is_active=False):
+    def _add_course_certificates(self, count=1, signatory_count=0, is_active=False,
+                                 asset_path_format=C4X_SIGNATORY_PATH):
         """
         Create certificate for the course.
         """
@@ -78,18 +78,14 @@ class HelperMethods(object):
             {
                 'name': 'Name ' + str(i),
                 'title': 'Title ' + str(i),
-                'signature_image_path': '/c4x/test/CSS101/asset/Signature{}.png'.format(i),
+                'signature_image_path': asset_path_format.format(i),
                 'id': i
-            } for i in xrange(0, signatory_count)
+            } for i in xrange(signatory_count)
 
         ]
 
         # create images for signatory signatures except the last signatory
-        for idx, signatory in enumerate(signatories):
-            if len(signatories) > 2 and idx == len(signatories) - 1:
-                continue
-            else:
-                self._create_fake_images([signatory['signature_image_path']])
+        self._create_fake_images(signatory['signature_image_path'] for signatory in signatories[:-1])
 
         certificates = [
             {
@@ -99,7 +95,7 @@ class HelperMethods(object):
                 'signatories': signatories,
                 'version': CERTIFICATE_SCHEMA_VERSION,
                 'is_active': is_active
-            } for i in xrange(0, count)
+            } for i in xrange(count)
         ]
         self.course.certificates = {'certificates': certificates}
         self.save_course()
@@ -110,6 +106,7 @@ class CertificatesBaseTestCase(object):
     """
     Mixin with base test cases for the certificates.
     """
+    shard = 1
 
     def _remove_ids(self, content):
         """
@@ -181,7 +178,7 @@ class CertificatesBaseTestCase(object):
         with self.assertRaises(Exception) as context:
             CertificateManager.validate(json_data_1)
 
-        self.assertTrue("Unsupported certificate schema version: 100.  Expected version: 1." in context.exception)
+        self.assertIn("Unsupported certificate schema version: 100.  Expected version: 1.", context.exception)
 
         #Test certificate name is missing
         json_data_2 = {
@@ -192,26 +189,31 @@ class CertificatesBaseTestCase(object):
         with self.assertRaises(Exception) as context:
             CertificateManager.validate(json_data_2)
 
-        self.assertTrue('must have name of the certificate' in context.exception)
+        self.assertIn('must have name of the certificate', context.exception)
 
 
 @ddt.ddt
 @override_settings(FEATURES=FEATURES_WITH_CERTS_ENABLED)
-class CertificatesListHandlerTestCase(EventTestMixin, CourseTestCase, CertificatesBaseTestCase, HelperMethods):
+class CertificatesListHandlerTestCase(
+        EventTestMixin, CourseTestCase, CertificatesBaseTestCase, HelperMethods, UrlResetMixin
+):
     """
     Test cases for certificates_list_handler.
     """
+    shard = 1
+
     def setUp(self):
         """
         Set up CertificatesListHandlerTestCase.
         """
         super(CertificatesListHandlerTestCase, self).setUp('contentstore.views.certificates.tracker')
+        self.reset_urls()
 
     def _url(self):
         """
         Return url for the handler.
         """
-        return reverse_course_url('certificates.certificates_list_handler', self.course.id)
+        return reverse_course_url('certificates_list_handler', self.course.id)
 
     def test_can_create_certificate(self):
         """
@@ -420,10 +422,13 @@ class CertificatesListHandlerTestCase(EventTestMixin, CourseTestCase, Certificat
 
 @ddt.ddt
 @override_settings(FEATURES=FEATURES_WITH_CERTS_ENABLED)
-class CertificatesDetailHandlerTestCase(EventTestMixin, CourseTestCase, CertificatesBaseTestCase, HelperMethods):
+class CertificatesDetailHandlerTestCase(
+        EventTestMixin, CourseTestCase, CertificatesBaseTestCase, HelperMethods, UrlResetMixin
+):
     """
     Test cases for CertificatesDetailHandlerTestCase.
     """
+    shard = 1
 
     _id = 0
 
@@ -432,6 +437,7 @@ class CertificatesDetailHandlerTestCase(EventTestMixin, CourseTestCase, Certific
         Set up CertificatesDetailHandlerTestCase.
         """
         super(CertificatesDetailHandlerTestCase, self).setUp('contentstore.views.certificates.tracker')
+        self.reset_urls()
 
     def _url(self, cid=-1):
         """
@@ -439,7 +445,7 @@ class CertificatesDetailHandlerTestCase(EventTestMixin, CourseTestCase, Certific
         """
         cid = cid if cid > 0 else self._id
         return reverse_course_url(
-            'certificates.certificates_detail_handler',
+            'certificates_detail_handler',
             self.course.id,
             kwargs={'certificate_id': cid},
         )
@@ -551,11 +557,12 @@ class CertificatesDetailHandlerTestCase(EventTestMixin, CourseTestCase, Certific
         content = json.loads(response.content)
         self.assertEqual(content, expected)
 
-    def test_can_delete_certificate_with_signatories(self):
+    @ddt.data(C4X_SIGNATORY_PATH, SIGNATORY_PATH)
+    def test_can_delete_certificate_with_signatories(self, signatory_path):
         """
         Delete certificate
         """
-        self._add_course_certificates(count=2, signatory_count=1)
+        self._add_course_certificates(count=2, signatory_count=1, asset_path_format=signatory_path)
         response = self.client.delete(
             self._url(cid=1),
             content_type="application/json",
@@ -575,11 +582,61 @@ class CertificatesDetailHandlerTestCase(EventTestMixin, CourseTestCase, Certific
         self.assertEqual(certificates[0].get('name'), 'Name 0')
         self.assertEqual(certificates[0].get('description'), 'Description 0')
 
-    def test_delete_certificate_without_write_permissions(self):
+    def test_can_delete_certificate_with_slash_prefix_signatory(self):
+        """
+        Delete certificate
+        """
+        self._add_course_certificates(count=2, signatory_count=1, asset_path_format="/" + SIGNATORY_PATH)
+        response = self.client.delete(
+            self._url(cid=1),
+            content_type="application/json",
+            HTTP_ACCEPT="application/json",
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(response.status_code, 204)
+        self.assert_event_emitted(
+            'edx.certificate.configuration.deleted',
+            course_id=unicode(self.course.id),
+            configuration_id='1',
+        )
+        self.reload_course()
+        # Verify that certificates are properly updated in the course.
+        certificates = self.course.certificates['certificates']
+        self.assertEqual(len(certificates), 1)
+        self.assertEqual(certificates[0].get('name'), 'Name 0')
+        self.assertEqual(certificates[0].get('description'), 'Description 0')
+
+    @ddt.data("not_a_valid_asset_key{}.png", "/not_a_valid_asset_key{}.png")
+    def test_can_delete_certificate_with_invalid_signatory(self, signatory_path):
+        """
+        Delete certificate
+        """
+        self._add_course_certificates(count=2, signatory_count=1, asset_path_format=signatory_path)
+        response = self.client.delete(
+            self._url(cid=1),
+            content_type="application/json",
+            HTTP_ACCEPT="application/json",
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(response.status_code, 204)
+        self.assert_event_emitted(
+            'edx.certificate.configuration.deleted',
+            course_id=unicode(self.course.id),
+            configuration_id='1',
+        )
+        self.reload_course()
+        # Verify that certificates are properly updated in the course.
+        certificates = self.course.certificates['certificates']
+        self.assertEqual(len(certificates), 1)
+        self.assertEqual(certificates[0].get('name'), 'Name 0')
+        self.assertEqual(certificates[0].get('description'), 'Description 0')
+
+    @ddt.data(C4X_SIGNATORY_PATH, SIGNATORY_PATH)
+    def test_delete_certificate_without_write_permissions(self, signatory_path):
         """
         Tests certificate deletion without write permission on course.
         """
-        self._add_course_certificates(count=2, signatory_count=1)
+        self._add_course_certificates(count=2, signatory_count=1, asset_path_format=signatory_path)
         user = UserFactory()
         self.client.login(username=user.username, password='test')
         response = self.client.delete(
@@ -590,11 +647,12 @@ class CertificatesDetailHandlerTestCase(EventTestMixin, CourseTestCase, Certific
         )
         self.assertEqual(response.status_code, 403)
 
-    def test_delete_certificate_without_global_staff_permissions(self):
+    @ddt.data(C4X_SIGNATORY_PATH, SIGNATORY_PATH)
+    def test_delete_certificate_without_global_staff_permissions(self, signatory_path):
         """
         Tests deletion of an active certificate without global staff permission on course.
         """
-        self._add_course_certificates(count=2, signatory_count=1, is_active=True)
+        self._add_course_certificates(count=2, signatory_count=1, is_active=True, asset_path_format=signatory_path)
         user = UserFactory()
         for role in [CourseInstructorRole, CourseStaffRole]:
             role(self.course.id).add_users(user)
@@ -607,11 +665,12 @@ class CertificatesDetailHandlerTestCase(EventTestMixin, CourseTestCase, Certific
         )
         self.assertEqual(response.status_code, 403)
 
-    def test_update_active_certificate_without_global_staff_permissions(self):
+    @ddt.data(C4X_SIGNATORY_PATH, SIGNATORY_PATH)
+    def test_update_active_certificate_without_global_staff_permissions(self, signatory_path):
         """
         Tests update of an active certificate without global staff permission on course.
         """
-        self._add_course_certificates(count=2, signatory_count=1, is_active=True)
+        self._add_course_certificates(count=2, signatory_count=1, is_active=True, asset_path_format=signatory_path)
         cert_data = {
             u'id': 1,
             u'version': CERTIFICATE_SCHEMA_VERSION,
@@ -648,14 +707,15 @@ class CertificatesDetailHandlerTestCase(EventTestMixin, CourseTestCase, Certific
         )
         self.assertEqual(response.status_code, 404)
 
-    def test_can_delete_signatory(self):
+    @ddt.data(C4X_SIGNATORY_PATH, SIGNATORY_PATH)
+    def test_can_delete_signatory(self, signatory_path):
         """
         Delete an existing certificate signatory
         """
-        self._add_course_certificates(count=2, signatory_count=3)
+        self._add_course_certificates(count=2, signatory_count=3, asset_path_format=signatory_path)
         certificates = self.course.certificates['certificates']
         signatory = certificates[1].get("signatories")[1]
-        image_asset_location = AssetLocation.from_deprecated_string(signatory['signature_image_path'])
+        image_asset_location = AssetKey.from_string(signatory['signature_image_path'])
         content = contentstore().find(image_asset_location)
         self.assertIsNotNone(content)
         test_url = '{}/signatories/1'.format(self._url(cid=1))
@@ -674,11 +734,12 @@ class CertificatesDetailHandlerTestCase(EventTestMixin, CourseTestCase, Certific
         # make sure signatory signature image is deleted too
         self.assertRaises(NotFoundError, contentstore().find, image_asset_location)
 
-    def test_deleting_signatory_without_signature(self):
+    @ddt.data(C4X_SIGNATORY_PATH, SIGNATORY_PATH)
+    def test_deleting_signatory_without_signature(self, signatory_path):
         """
         Delete an signatory whose signature image is already removed or does not exist
         """
-        self._add_course_certificates(count=2, signatory_count=4)
+        self._add_course_certificates(count=2, signatory_count=4, asset_path_format=signatory_path)
         test_url = '{}/signatories/3'.format(self._url(cid=1))
         response = self.client.delete(
             test_url,
@@ -702,12 +763,13 @@ class CertificatesDetailHandlerTestCase(EventTestMixin, CourseTestCase, Certific
         )
         self.assertEqual(response.status_code, 404)
 
-    def test_certificate_activation_success(self):
+    @ddt.data(C4X_SIGNATORY_PATH, SIGNATORY_PATH)
+    def test_certificate_activation_success(self, signatory_path):
         """
         Activate and Deactivate the course certificate
         """
-        test_url = reverse_course_url('certificates.certificate_activation_handler', self.course.id)
-        self._add_course_certificates(count=1, signatory_count=2)
+        test_url = reverse_course_url('certificate_activation_handler', self.course.id)
+        self._add_course_certificates(count=1, signatory_count=2, asset_path_format=signatory_path)
 
         is_active = True
         for i in range(2):
@@ -730,14 +792,15 @@ class CertificatesDetailHandlerTestCase(EventTestMixin, CourseTestCase, Certific
                 course_id=unicode(self.course.id),
             )
 
-    @ddt.data(True, False)
-    def test_certificate_activation_without_write_permissions(self, activate):
+    @ddt.data(*itertools.product([True, False], [C4X_SIGNATORY_PATH, SIGNATORY_PATH]))
+    @ddt.unpack
+    def test_certificate_activation_without_write_permissions(self, activate, signatory_path):
         """
         Tests certificate Activate and Deactivate should not be allowed if user
         does not have write permissions on course.
         """
-        test_url = reverse_course_url('certificates.certificate_activation_handler', self.course.id)
-        self._add_course_certificates(count=1, signatory_count=2)
+        test_url = reverse_course_url('certificate_activation_handler', self.course.id)
+        self._add_course_certificates(count=1, signatory_count=2, asset_path_format=signatory_path)
         user = UserFactory()
         self.client.login(username=user.username, password='test')
         response = self.client.post(
@@ -749,36 +812,16 @@ class CertificatesDetailHandlerTestCase(EventTestMixin, CourseTestCase, Certific
         )
         self.assertEquals(response.status_code, 403)
 
-    @ddt.data(True, False)
-    def test_certificate_activation_without_global_staff_permissions(self, activate):
-        """
-        Tests certificate Activate and Deactivate should not be allowed if user
-        does not have global staff permissions on course.
-        """
-        test_url = reverse_course_url('certificates.certificate_activation_handler', self.course.id)
-        self._add_course_certificates(count=1, signatory_count=2)
-        user = UserFactory()
-        for role in [CourseInstructorRole, CourseStaffRole]:
-            role(self.course.id).add_users(user)
-        self.client.login(username=user.username, password='test')
-        response = self.client.post(
-            test_url,
-            data=json.dumps({"is_active": activate}),
-            content_type="application/json",
-            HTTP_ACCEPT="application/json",
-            HTTP_X_REQUESTED_WITH="XMLHttpRequest"
-        )
-        self.assertEquals(response.status_code, 403)
-
-    def test_certificate_activation_failure(self):
+    @ddt.data(C4X_SIGNATORY_PATH, SIGNATORY_PATH)
+    def test_certificate_activation_failure(self, signatory_path):
         """
         Certificate activation should fail when user has not read access to course then permission denied exception
         should raised.
         """
-        test_url = reverse_course_url('certificates.certificate_activation_handler', self.course.id)
+        test_url = reverse_course_url('certificate_activation_handler', self.course.id)
         test_user_client, test_user = self.create_non_staff_authed_user_client()
         CourseEnrollment.enroll(test_user, self.course.id)
-        self._add_course_certificates(count=1, signatory_count=2)
+        self._add_course_certificates(count=1, signatory_count=2, asset_path_format=signatory_path)
         response = test_user_client.post(
             test_url,
             data=json.dumps({"is_active": True}),

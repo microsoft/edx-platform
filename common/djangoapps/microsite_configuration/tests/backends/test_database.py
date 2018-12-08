@@ -40,10 +40,7 @@ class DatabaseMicrositeBackendTests(DatabaseMicrositeTestCase):
     """
     def setUp(self):
         super(DatabaseMicrositeBackendTests, self).setUp()
-
-    def tearDown(self):
-        super(DatabaseMicrositeBackendTests, self).tearDown()
-        microsite.clear()
+        self.addCleanup(microsite.clear)
 
     def test_get_value(self):
         """
@@ -105,22 +102,6 @@ class DatabaseMicrositeBackendTests(DatabaseMicrositeTestCase):
         microsite.clear()
         self.assertIsNone(microsite.get_value('platform_name'))
 
-    def test_enable_microsites_pre_startup(self):
-        """
-        Tests microsite.test_enable_microsites_pre_startup works as expected.
-        """
-        # remove microsite root directory paths first
-        settings.DEFAULT_TEMPLATE_ENGINE['DIRS'] = [
-            path for path in settings.DEFAULT_TEMPLATE_ENGINE['DIRS']
-            if path != settings.MICROSITE_ROOT_DIR
-        ]
-        with patch.dict('django.conf.settings.FEATURES', {'USE_MICROSITES': False}):
-            microsite.enable_microsites_pre_startup(log)
-            self.assertNotIn(settings.MICROSITE_ROOT_DIR, settings.DEFAULT_TEMPLATE_ENGINE['DIRS'])
-        with patch.dict('django.conf.settings.FEATURES', {'USE_MICROSITES': True}):
-            microsite.enable_microsites_pre_startup(log)
-            self.assertIn(settings.MICROSITE_ROOT_DIR, settings.DEFAULT_TEMPLATE_ENGINE['DIRS'])
-
     @patch('edxmako.paths.add_lookup')
     def test_enable_microsites(self, add_lookup):
         """
@@ -138,7 +119,6 @@ class DatabaseMicrositeBackendTests(DatabaseMicrositeTestCase):
         with patch.dict('django.conf.settings.FEATURES', {'USE_MICROSITES': True}):
             microsite.enable_microsites(log)
             self.assertIn(settings.MICROSITE_ROOT_DIR, settings.STATICFILES_DIRS)
-            add_lookup.assert_called_once_with('main', settings.MICROSITE_ROOT_DIR)
 
     def test_get_all_configs(self):
         """
@@ -172,6 +152,15 @@ class DatabaseMicrositeBackendTests(DatabaseMicrositeTestCase):
         self.assertEqual(MicrositeHistory.objects.all().count(), 2)
         with self.assertRaises(Exception):
             microsite.set_by_domain('test.microsite2.com')
+
+    def test_has_configuration_set(self):
+        """
+        Tests microsite.has_configuration_set works as expected on this backend.
+        """
+        self.assertTrue(microsite.BACKEND.has_configuration_set())
+
+        Microsite.objects.all().delete()
+        self.assertFalse(microsite.BACKEND.has_configuration_set())
 
 
 @patch(

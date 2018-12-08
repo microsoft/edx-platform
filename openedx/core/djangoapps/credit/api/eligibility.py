@@ -7,14 +7,14 @@ import logging
 
 from opaque_keys.edx.keys import CourseKey
 
-from openedx.core.djangoapps.credit.exceptions import InvalidCreditRequirements, InvalidCreditCourse
 from openedx.core.djangoapps.credit.email_utils import send_credit_notifications
+from openedx.core.djangoapps.credit.exceptions import InvalidCreditRequirements, InvalidCreditCourse
 from openedx.core.djangoapps.credit.models import (
-    CreditCourse,
-    CreditRequirement,
-    CreditRequirementStatus,
-    CreditEligibility,
+    CreditCourse, CreditRequirement, CreditRequirementStatus, CreditEligibility, CreditRequest
 )
+
+from course_modes.models import CourseMode
+from student.models import CourseEnrollment
 
 # TODO: Cleanup this mess! ECOM-2908
 
@@ -47,12 +47,6 @@ def set_credit_requirements(course_key, requirements):
         >>> set_credit_requirements(
                 "course-v1-edX-DemoX-1T2015",
                 [
-                    {
-                        "namespace": "reverification",
-                        "name": "i4x://edX/DemoX/edx-reverification-block/assessment_uuid",
-                        "display_name": "Assessment 1",
-                        "criteria": {},
-                    },
                     {
                         "namespace": "proctored_exam",
                         "name": "i4x://edX/DemoX/proctoring-block/final_uuid",
@@ -106,12 +100,6 @@ def get_credit_requirements(course_key, namespace=None):
             {
                 requirements =
                 [
-                    {
-                        "namespace": "reverification",
-                        "name": "i4x://edX/DemoX/edx-reverification-block/assessment_uuid",
-                        "display_name": "Assessment 1",
-                        "criteria": {},
-                    },
                     {
                         "namespace": "proctored_exam",
                         "name": "i4x://edX/DemoX/proctoring-block/final_uuid",
@@ -199,7 +187,7 @@ def get_eligibilities_for_user(username, course_key=None):
     ]
 
 
-def set_credit_requirement_status(username, course_key, req_namespace, req_name, status="satisfied", reason=None):
+def set_credit_requirement_status(user, course_key, req_namespace, req_name, status="satisfied", reason=None):
     """
     Update the user's requirement status.
 
@@ -208,7 +196,7 @@ def set_credit_requirement_status(username, course_key, req_namespace, req_name,
     as eligible for credit in the course.
 
     Args:
-        username (str): Username of the user
+        user(User): User object to set credit requirement for.
         course_key (CourseKey): Identifier for the course associated with the requirement.
         req_namespace (str): Namespace of the requirement (e.g. "grade" or "reverification")
         req_name (str): Name of the requirement (e.g. "grade" or the location of the ICRV XBlock)
@@ -216,26 +204,31 @@ def set_credit_requirement_status(username, course_key, req_namespace, req_name,
     Keyword Arguments:
         status (str): Status of the requirement (either "satisfied" or "failed")
         reason (dict): Reason of the status
-
-    Example:
-        >>> set_credit_requirement_status(
-                "staff",
-                CourseKey.from_string("course-v1-edX-DemoX-1T2015"),
-                "reverification",
-                "i4x://edX/DemoX/edx-reverification-block/assessment_uuid",
-                status="satisfied",
-                reason={}
-            )
-
     """
-    # Check if we're already eligible for credit.
-    # If so, short-circuit this process.
-    if CreditEligibility.is_user_eligible_for_credit(course_key, username):
+    # Check whether user has credit eligible enrollment.
+    enrollment_mode, is_active = CourseEnrollment.enrollment_mode_for_user(user, course_key)
+    has_credit_eligible_enrollment = (CourseMode.is_credit_eligible_slug(enrollment_mode) and is_active)
+
+    # Refuse to set status of requirement if the user enrollment is not credit eligible.
+    if not has_credit_eligible_enrollment:
+        return
+
+    # Do not allow students who have requested credit to change their eligibility
+    if CreditRequest.get_user_request_status(user.username, course_key):
         log.info(
-            u'Skipping update of credit requirement with namespace "%s" '
-            u'and name "%s" because the user "%s" is already eligible for credit '
-            u'in the course "%s".',
-            req_namespace, req_name, username, course_key
+            u'Refusing to set status of requirement with namespace "%s" and name "%s" because the '
+            u'user "%s" has already requested credit for the course "%s".',
+            req_namespace, req_name, user.username, course_key
+        )
+        return
+
+    # Do not allow a student who has earned eligibility to un-earn eligibility
+    eligible_before_update = CreditEligibility.is_user_eligible_for_credit(course_key, user.username)
+    if eligible_before_update and status == 'failed':
+        log.info(
+            u'Refusing to set status of requirement with namespace "%s" and name "%s" to "failed" because the '
+            u'user "%s" is already eligible for credit in the course "%s".',
+            req_namespace, req_name, user.username, course_key
         )
         return
 
@@ -264,24 +257,24 @@ def set_credit_requirement_status(username, course_key, req_namespace, req_name,
                 u'because the requirement does not exist. '
                 u'The user "%s" should have had his/her status updated to "%s".'
             ),
-            unicode(course_key), req_namespace, req_name, username, status
+            unicode(course_key), req_namespace, req_name, user.username, status
         )
         return
 
     # Update the requirement status
     CreditRequirementStatus.add_or_update_requirement_status(
-        username, req_to_update, status=status, reason=reason
+        user.username, req_to_update, status=status, reason=reason
     )
 
-    # If we're marking this requirement as "satisfied", there's a chance
-    # that the user has met all eligibility requirements.
-    if status == "satisfied":
-        is_eligible, eligibility_record_created = CreditEligibility.update_eligibility(reqs, username, course_key)
+    # If we're marking this requirement as "satisfied", there's a chance that the user has met all eligibility
+    # requirements, and should be notified. However, if the user was already eligible, do not send another notification.
+    if status == "satisfied" and not eligible_before_update:
+        is_eligible, eligibility_record_created = CreditEligibility.update_eligibility(reqs, user.username, course_key)
         if eligibility_record_created and is_eligible:
             try:
-                send_credit_notifications(username, course_key)
+                send_credit_notifications(user.username, course_key)
             except Exception:  # pylint: disable=broad-except
-                log.error("Error sending email")
+                log.exception("Error sending email")
 
 
 # pylint: disable=invalid-name
@@ -301,18 +294,10 @@ def remove_credit_requirement_status(username, course_key, req_namespace, req_na
         req_name (str): Name of the requirement
                         (e.g. "grade" or the location of the ICRV XBlock)
 
-    Example:
-        >>> remove_credit_requirement_status(
-                "staff",
-                CourseKey.from_string("course-v1-edX-DemoX-1T2015"),
-                "reverification",
-                "i4x://edX/DemoX/edx-reverification-block/assessment_uuid".
-            )
-
     """
 
     # Find the requirement we're trying to remove
-    req_to_remove = CreditRequirement.get_course_requirements(course_key, namespace=req_namespace, name=req_name)
+    req_to_remove = CreditRequirement.get_course_requirement(course_key, req_namespace, req_name)
 
     # If we can't find the requirement, then the most likely explanation
     # is that there was a lag removing the credit requirements after the course
@@ -348,16 +333,6 @@ def get_credit_requirement_status(course_key, username, namespace=None, name=Non
         >>> get_credit_requirement_status("course-v1-edX-DemoX-1T2015", "john")
 
                 [
-                    {
-                        "namespace": "reverification",
-                        "name": "i4x://edX/DemoX/edx-reverification-block/assessment_uuid",
-                        "display_name": "In Course Reverification",
-                        "criteria": {},
-                        "reason": {},
-                        "status": "failed",
-                        "status_date": "2015-06-26 07:49:13",
-                        "order": 0,
-                    },
                     {
                         "namespace": "proctored_exam",
                         "name": "i4x://edX/DemoX/proctoring-block/final_uuid",

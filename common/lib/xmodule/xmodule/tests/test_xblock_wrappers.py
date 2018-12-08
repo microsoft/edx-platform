@@ -25,17 +25,15 @@ from xblock.field_data import DictFieldData
 from xblock.fields import ScopeIds
 from xblock.core import XBlock
 
-from opaque_keys.edx.locations import Location
+from opaque_keys.edx.locator import BlockUsageLocator, CourseLocator
 
 from xmodule.x_module import ModuleSystem, XModule, XModuleDescriptor, DescriptorSystem, STUDENT_VIEW, STUDIO_VIEW
 from xmodule.annotatable_module import AnnotatableDescriptor
 from xmodule.capa_module import CapaDescriptor
 from xmodule.course_module import CourseDescriptor
-from xmodule.discussion_module import DiscussionDescriptor
 from xmodule.html_module import HtmlDescriptor
 from xmodule.poll_module import PollDescriptor
 from xmodule.word_cloud_module import WordCloudDescriptor
-from xmodule.crowdsource_hinter import CrowdsourceHinterDescriptor
 #from xmodule.video_module import VideoDescriptor
 from xmodule.seq_module import SequenceDescriptor
 from xmodule.conditional_module import ConditionalDescriptor
@@ -51,7 +49,6 @@ from xmodule.tests import get_test_descriptor_system, get_test_system
 LEAF_XMODULES = {
     AnnotatableDescriptor: [{}],
     CapaDescriptor: [{}],
-    DiscussionDescriptor: [{}],
     HtmlDescriptor: [{}],
     PollDescriptor: [{'display_name': 'Poll Display Name'}],
     WordCloudDescriptor: [{}],
@@ -66,7 +63,6 @@ LEAF_XMODULES = {
 CONTAINER_XMODULES = {
     ConditionalDescriptor: [{}],
     CourseDescriptor: [{}],
-    CrowdsourceHinterDescriptor: [{}],
     RandomizeDescriptor: [{}],
     SequenceDescriptor: [{}],
     VerticalBlock: [{}],
@@ -75,8 +71,7 @@ CONTAINER_XMODULES = {
 
 # These modules are not editable in studio yet
 NOT_STUDIO_EDITABLE = (
-    CrowdsourceHinterDescriptor,
-    PollDescriptor
+    PollDescriptor,
 )
 
 
@@ -193,7 +188,7 @@ class LeafDescriptorFactory(Factory):
 
     @lazy_attribute
     def location(self):
-        return Location('org', 'course', 'run', 'category', self.url_name, None)
+        return BlockUsageLocator(CourseLocator('org', 'course', 'run'), 'category', self.url_name)
 
     @lazy_attribute
     def block_type(self):
@@ -268,6 +263,7 @@ class XBlockWrapperTestMixin(object):
     You can create an actual test case by inheriting from this class and UnitTest,
     and implement skip_if_invalid and check_property.
     """
+    shard = 1
 
     def skip_if_invalid(self, descriptor_cls):
         """
@@ -295,6 +291,7 @@ class XBlockWrapperTestMixin(object):
         # pylint: disable=no-member
         descriptor.runtime.id_reader.get_definition_id = Mock(return_value='a')
         descriptor.runtime.modulestore = modulestore
+        descriptor._xmodule.graded = 'False'
         self.check_property(descriptor)
 
     # Test that when an xmodule is generated from descriptor_cls
@@ -325,6 +322,8 @@ class TestStudentView(XBlockWrapperTestMixin, TestCase):
     """
     This tests that student_view and XModule.get_html produce the same results.
     """
+    shard = 1
+
     def skip_if_invalid(self, descriptor_cls):
         pure_xblock_class = issubclass(descriptor_cls, XBlock) and not issubclass(descriptor_cls, XModuleDescriptor)
         if pure_xblock_class:
@@ -348,6 +347,8 @@ class TestStudioView(XBlockWrapperTestMixin, TestCase):
     """
     This tests that studio_view and XModuleDescriptor.get_html produce the same results
     """
+    shard = 1
+
     def skip_if_invalid(self, descriptor_cls):
         if descriptor_cls in NOT_STUDIO_EDITABLE:
             raise SkipTest(descriptor_cls.__name__ + " is not editable in studio")
@@ -367,10 +368,12 @@ class TestStudioView(XBlockWrapperTestMixin, TestCase):
         self.assertEqual(html, rendered_content)
 
 
+@ddt.ddt
 class TestXModuleHandler(TestCase):
     """
     Tests that the xmodule_handler function correctly wraps handle_ajax
     """
+    shard = 1
 
     def setUp(self):
         super(TestXModuleHandler, self).setUp()
@@ -391,11 +394,28 @@ class TestXModuleHandler(TestCase):
         self.assertIsInstance(response, webob.Response)
         self.assertEqual(response.body, '{}')
 
+    @ddt.data(
+        u'{"test_key": "test_value"}',
+        '{"test_key": "test_value"}',
+    )
+    def test_xmodule_handler_with_data(self, response_data):
+        """
+        Tests that xmodule_handler function correctly wraps handle_ajax when handle_ajax response is either
+        str or unicode.
+        """
+
+        self.module.handle_ajax = Mock(return_value=response_data)
+        response = self.module.xmodule_handler(self.request)
+        self.assertIsInstance(response, webob.Response)
+        self.assertEqual(response.body, '{"test_key": "test_value"}')
+
 
 class TestXmlExport(XBlockWrapperTestMixin, TestCase):
     """
     This tests that XModuleDescriptor.export_course_to_xml and add_xml_to_node produce the same results.
     """
+    shard = 1
+
     def skip_if_invalid(self, descriptor_cls):
         if descriptor_cls.add_xml_to_node != XModuleDescriptor.add_xml_to_node:
             raise SkipTest(descriptor_cls.__name__ + " implements add_xml_to_node")

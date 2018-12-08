@@ -3,9 +3,10 @@
 
 from lettuce import world
 from nose.tools import assert_equal, assert_in
-from terrain.steps import reload_the_page
-from common import type_in_codemirror
 from selenium.webdriver.common.keys import Keys
+
+from common import type_in_codemirror
+from terrain.steps import reload_the_page
 
 
 @world.absorb
@@ -27,6 +28,8 @@ def create_component_instance(step, category, component_type=None, is_advanced=F
         module_css = 'div.xmodule_CapaModule'
     elif category == 'advanced':
         module_css = 'div.xmodule_{}Module'.format(advanced_component.title())
+    elif category == 'discussion':
+        module_css = 'div.xblock-author_view-{}'.format(category.lower())
     else:
         module_css = 'div.xmodule_{}Module'.format(category.title())
 
@@ -127,8 +130,8 @@ def edit_component(index=0):
     # Verify that the "loading" indication has been hidden.
     world.wait_for_loading()
     # Verify that the "edit" button is present.
-    world.wait_for(lambda _driver: world.css_visible('a.edit-button'))
-    world.css_click('a.edit-button', index)
+    world.wait_for(lambda _driver: world.css_visible('.edit-button'))
+    world.css_click('.edit-button', index)
     world.wait_for_ajax_complete()
 
 
@@ -168,7 +171,9 @@ def verify_setting_entry(setting, display_name, value, explicitly_set):
         for the problem, rather than derived from the defaults. This is verified
         by the existence of a "Clear" button next to the field value.
     """
-    assert_equal(display_name, setting.find_by_css('.setting-label')[0].html.strip())
+    label_element = setting.find_by_css('.setting-label')[0]
+    assert_equal(display_name, label_element.html.strip())
+    label_for = label_element['for']
 
     # Check if the web object is a list type
     # If so, we use a slightly different mechanism for determining its value
@@ -179,7 +184,7 @@ def verify_setting_entry(setting, display_name, value, explicitly_set):
         list_value = ', '.join(ele.find_by_css('input')[0].value for ele in setting.find_by_css('.videolist-settings-item'))
         assert_equal(value, list_value)
     else:
-        assert_equal(value, setting.find_by_css('.setting-input')[0].value)
+        assert_equal(value, setting.find_by_id(label_for).value)
 
     # VideoList doesn't have clear button
     if not setting.has_class('metadata-videolist-enum'):
@@ -201,7 +206,7 @@ def verify_all_setting_entries(expected_entries):
 
 @world.absorb
 def save_component():
-    world.css_click("a.action-save")
+    world.css_click("a.action-save,a.save-button")
     world.wait_for_ajax_complete()
 
 
@@ -241,7 +246,7 @@ def get_setting_entry(label):
 @world.absorb
 def get_setting_entry_index(label):
     def get_index():
-        settings = world.css_find('.metadata_edit .wrapper-comp-setting')
+        settings = world.css_find('.wrapper-comp-setting')
         for index, setting in enumerate(settings):
             if setting.find_by_css('.setting-label')[0].value == label:
                 return index
@@ -259,6 +264,6 @@ def set_field_value(index, value):
     Instead we will find the element, set its value, then hit the Tab key
     to get to the next field.
     """
-    elem = world.css_find('.metadata_edit div.wrapper-comp-setting input.setting-input')[index]
+    elem = world.css_find('div.wrapper-comp-setting input')[index]
     elem.value = value
     elem.type(Keys.TAB)

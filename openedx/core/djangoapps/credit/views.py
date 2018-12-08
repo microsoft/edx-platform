@@ -2,32 +2,49 @@
 Views for the credit Django app.
 """
 from __future__ import unicode_literals
-import logging
-import datetime
 
+import datetime
+import logging
+
+import pytz
 from django.conf import settings
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
+from edx_rest_framework_extensions.authentication import JwtAuthentication
 from opaque_keys import InvalidKeyError
 from opaque_keys.edx.keys import CourseKey
-import pytz
-from rest_framework import viewsets, mixins, permissions, views, generics
+from rest_framework import generics, mixins, permissions, views, viewsets
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework_oauth.authentication import OAuth2Authentication
+from six import text_type
 
 from openedx.core.djangoapps.credit.api import create_credit_request
-from openedx.core.djangoapps.credit.exceptions import (UserNotEligibleException, InvalidCourseKey, CreditApiBadRequest,
-                                                       InvalidCreditRequest)
-from openedx.core.djangoapps.credit.models import (CreditCourse, CreditProvider, CREDIT_PROVIDER_ID_REGEX,
-                                                   CreditEligibility, CreditRequest)
-from openedx.core.djangoapps.credit.serializers import (CreditCourseSerializer, CreditProviderSerializer,
-                                                        CreditEligibilitySerializer, CreditProviderCallbackSerializer)
+from openedx.core.djangoapps.credit.exceptions import (
+    CreditApiBadRequest,
+    InvalidCourseKey,
+    InvalidCreditRequest,
+    UserNotEligibleException
+)
+from openedx.core.djangoapps.credit.models import (
+    CREDIT_PROVIDER_ID_REGEX,
+    CreditCourse,
+    CreditEligibility,
+    CreditProvider,
+    CreditRequest
+)
+from openedx.core.djangoapps.credit.serializers import (
+    CreditCourseSerializer,
+    CreditEligibilitySerializer,
+    CreditProviderCallbackSerializer,
+    CreditProviderSerializer
+)
 from openedx.core.lib.api.mixins import PutAsCreateMixin
 from openedx.core.lib.api.permissions import IsStaffOrOwner
 
 log = logging.getLogger(__name__)
+AUTHENTICATION_CLASSES = (JwtAuthentication, OAuth2Authentication, SessionAuthentication,)
 
 
 class CreditProviderViewSet(viewsets.ReadOnlyModelViewSet):
@@ -35,7 +52,7 @@ class CreditProviderViewSet(viewsets.ReadOnlyModelViewSet):
 
     lookup_field = 'provider_id'
     lookup_value_regex = CREDIT_PROVIDER_ID_REGEX
-    authentication_classes = (OAuth2Authentication, SessionAuthentication,)
+    authentication_classes = AUTHENTICATION_CLASSES
     pagination_class = None
     permission_classes = (permissions.IsAuthenticated,)
     queryset = CreditProvider.objects.all()
@@ -57,7 +74,7 @@ class CreditProviderViewSet(viewsets.ReadOnlyModelViewSet):
 class CreditProviderRequestCreateView(views.APIView):
     """ Creates a credit request for the given user and course, if the user is eligible for credit."""
 
-    authentication_classes = (OAuth2Authentication, SessionAuthentication,)
+    authentication_classes = AUTHENTICATION_CLASSES
     permission_classes = (permissions.IsAuthenticated, IsStaffOrOwner,)
 
     def post(self, request, provider_id):
@@ -85,7 +102,7 @@ class CreditProviderRequestCreateView(views.APIView):
             credit_request = create_credit_request(course_key, provider.provider_id, username)
             return Response(credit_request)
         except CreditApiBadRequest as ex:
-            raise InvalidCreditRequest(ex.message)
+            raise InvalidCreditRequest(text_type(ex))
 
 
 class CreditProviderCallbackView(views.APIView):
@@ -127,7 +144,7 @@ class CreditProviderCallbackView(views.APIView):
 class CreditEligibilityView(generics.ListAPIView):
     """ Returns eligibility for a user-course combination. """
 
-    authentication_classes = (OAuth2Authentication, SessionAuthentication,)
+    authentication_classes = AUTHENTICATION_CLASSES
     pagination_class = None
     permission_classes = (permissions.IsAuthenticated, IsStaffOrOwner)
     serializer_class = CreditEligibilitySerializer
@@ -161,7 +178,7 @@ class CreditCourseViewSet(PutAsCreateMixin, mixins.UpdateModelMixin, viewsets.Re
     lookup_value_regex = settings.COURSE_KEY_REGEX
     queryset = CreditCourse.objects.all()
     serializer_class = CreditCourseSerializer
-    authentication_classes = (OAuth2Authentication, SessionAuthentication,)
+    authentication_classes = AUTHENTICATION_CLASSES
     permission_classes = (permissions.IsAuthenticated, permissions.IsAdminUser)
 
     # In Django Rest Framework v3, there is a default pagination

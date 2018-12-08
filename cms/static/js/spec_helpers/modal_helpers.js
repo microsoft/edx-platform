@@ -1,9 +1,9 @@
 /**
  * Provides helper methods for invoking Studio modal windows in Jasmine tests.
  */
-define(["jquery", "common/js/spec_helpers/template_helpers", "common/js/spec_helpers/view_helpers"],
+define(['jquery', 'common/js/spec_helpers/template_helpers', 'common/js/spec_helpers/view_helpers'],
     function($, TemplateHelpers, ViewHelpers) {
-        var installModalTemplates, getModalElement, getModalWindow, getModalTitle, isShowingModal, 
+        var installModalTemplates, getModalElement, getModalWindow, getModalTitle, isShowingModal,
             hideModalIfShowing, pressModalButton, cancelModal, cancelModalIfShowing;
 
         installModalTemplates = function(append) {
@@ -13,13 +13,13 @@ define(["jquery", "common/js/spec_helpers/template_helpers", "common/js/spec_hel
         };
 
         getModalElement = function(modal) {
-            var modalElement;
+            var $modalElement;
             if (modal) {
-                modalElement = modal.$('.wrapper-modal-window');
+                $modalElement = modal.$('.wrapper-modal-window');
             } else {
-                modalElement = $('.wrapper-modal-window');
+                $modalElement = $('.wrapper-modal-window');
             }
-            return modalElement;
+            return $modalElement;
         };
 
         getModalWindow = function(modal) {
@@ -62,14 +62,14 @@ define(["jquery", "common/js/spec_helpers/template_helpers", "common/js/spec_hel
         };
 
         return $.extend(ViewHelpers, {
-            'getModalElement': getModalElement,
-            'getModalWindow': getModalWindow,
-            'getModalTitle': getModalTitle,
-            'installModalTemplates': installModalTemplates,
-            'isShowingModal': isShowingModal,
-            'hideModalIfShowing': hideModalIfShowing,
-            'pressModalButton': pressModalButton,
-            'cancelModal': cancelModal,
-            'cancelModalIfShowing': cancelModalIfShowing
+            getModalElement: getModalElement,
+            getModalWindow: getModalWindow,
+            getModalTitle: getModalTitle,
+            installModalTemplates: installModalTemplates,
+            isShowingModal: isShowingModal,
+            hideModalIfShowing: hideModalIfShowing,
+            pressModalButton: pressModalButton,
+            cancelModal: cancelModal,
+            cancelModalIfShowing: cancelModalIfShowing
         });
     });

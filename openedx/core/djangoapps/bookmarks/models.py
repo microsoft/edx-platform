@@ -5,15 +5,14 @@ import logging
 
 from django.contrib.auth.models import User
 from django.db import models
-
 from jsonfield.fields import JSONField
 from model_utils.models import TimeStampedModel
-
+from opaque_keys.edx.django.models import CourseKeyField, UsageKeyField
 from opaque_keys.edx.keys import UsageKey
+
 from xmodule.modulestore import search
 from xmodule.modulestore.django import modulestore
 from xmodule.modulestore.exceptions import ItemNotFoundError, NoPathToItem
-from xmodule_django.models import CourseKeyField, LocationKeyField
 
 from . import PathItem
 
@@ -43,12 +42,12 @@ class Bookmark(TimeStampedModel):
     """
     Bookmarks model.
     """
-    user = models.ForeignKey(User, db_index=True)
+    user = models.ForeignKey(User, db_index=True, on_delete=models.CASCADE)
     course_key = CourseKeyField(max_length=255, db_index=True)
-    usage_key = LocationKeyField(max_length=255, db_index=True)
+    usage_key = UsageKeyField(max_length=255, db_index=True)
     _path = JSONField(db_column='path', help_text='Path in course tree to the block')
 
-    xblock_cache = models.ForeignKey('bookmarks.XBlockCache')
+    xblock_cache = models.ForeignKey('bookmarks.XBlockCache', on_delete=models.CASCADE)
 
     class Meta(object):
         """
@@ -90,6 +89,9 @@ class Bookmark(TimeStampedModel):
 
         user = data.pop('user')
 
+        # Sometimes this ends up in data, but newer versions of Django will fail on having unknown keys in defaults
+        data.pop('display_name', None)
+
         bookmark, created = cls.objects.get_or_create(usage_key=usage_key, user=user, defaults=data)
         return bookmark, created
 
@@ -98,7 +100,7 @@ class Bookmark(TimeStampedModel):
         """
         Return the resource id: {username,usage_id}.
         """
-        return "{0},{1}".format(self.user.username, self.usage_key)  # pylint: disable=no-member
+        return u"{0},{1}".format(self.user.username, self.usage_key)  # pylint: disable=no-member
 
     @property
     def display_name(self):
@@ -177,9 +179,8 @@ class Bookmark(TimeStampedModel):
                         block = modulestore().get_item(ancestor_usage_key)
                     except ItemNotFoundError:
                         return []  # No valid path can be found.
-
                     path_data.append(
-                        PathItem(usage_key=block.location, display_name=block.display_name)
+                        PathItem(usage_key=block.location, display_name=block.display_name_with_default)
                     )
 
         return path_data
@@ -191,7 +192,7 @@ class XBlockCache(TimeStampedModel):
     """
 
     course_key = CourseKeyField(max_length=255, db_index=True)
-    usage_key = LocationKeyField(max_length=255, db_index=True, unique=True)
+    usage_key = UsageKeyField(max_length=255, db_index=True, unique=True)
 
     display_name = models.CharField(max_length=255, default='')
     _paths = JSONField(

@@ -2,43 +2,110 @@
 """
 Admin site configuration for third party authentication
 """
+from config_models.admin import KeyedConfigurationModelAdmin
 from django import forms
-
 from django.contrib import admin
+from django.urls import reverse
+from django.db import DatabaseError, transaction
+from django.utils.translation import ugettext_lazy as _
 
-from config_models.admin import ConfigurationModelAdmin, KeyedConfigurationModelAdmin
+from third_party_auth.provider import Registry
+
 from .models import (
-    OAuth2ProviderConfig,
-    SAMLProviderConfig,
-    SAMLConfiguration,
-    SAMLProviderData,
+    _PSA_OAUTH2_BACKENDS,
+    _PSA_SAML_BACKENDS,
     LTIProviderConfig,
-    ProviderApiPermissions
+    OAuth2ProviderConfig,
+    ProviderApiPermissions,
+    SAMLConfiguration,
+    SAMLProviderConfig,
+    SAMLProviderData
 )
 from .tasks import fetch_saml_metadata
-from third_party_auth.provider import Registry
+from openedx.core.djangolib.markup import HTML
+
+
+class OAuth2ProviderConfigForm(forms.ModelForm):
+    """ Django Admin form class for OAuth2ProviderConfig """
+    backend_name = forms.ChoiceField(choices=((name, name) for name in _PSA_OAUTH2_BACKENDS))
 
 
 class OAuth2ProviderConfigAdmin(KeyedConfigurationModelAdmin):
     """ Django Admin class for OAuth2ProviderConfig """
+    form = OAuth2ProviderConfigForm
+
     def get_list_display(self, request):
         """ Don't show every single field in the admin change list """
         return (
-            'name', 'enabled', 'backend_name', 'secondary', 'skip_registration_form',
+            'name', 'enabled', 'slug', 'site', 'backend_name', 'secondary', 'skip_registration_form',
             'skip_email_verification', 'change_date', 'changed_by', 'edit_link',
         )
 
 admin.site.register(OAuth2ProviderConfig, OAuth2ProviderConfigAdmin)
 
 
+class SAMLProviderConfigForm(forms.ModelForm):
+    """ Django Admin form class for SAMLProviderConfig """
+    backend_name = forms.ChoiceField(choices=((name, name) for name in _PSA_SAML_BACKENDS))
+
+
 class SAMLProviderConfigAdmin(KeyedConfigurationModelAdmin):
     """ Django Admin class for SAMLProviderConfig """
+    form = SAMLProviderConfigForm
+
+    def get_queryset(self, request):
+        """
+        Filter the queryset to exclude the archived records.
+        """
+        queryset = super(SAMLProviderConfigAdmin, self).get_queryset(request).exclude(archived=True)
+        return queryset
+
+    def archive_provider_configuration(self, request, queryset):
+        """
+        Archived the selected provider configurations.
+        """
+        with transaction.atomic():
+            for obj in queryset:
+                self.model.objects.filter(pk=obj.pk).update(archived=True, enabled=False)
+        self.message_user(request, _("Deleted the selected configuration(s)."))
+
     def get_list_display(self, request):
         """ Don't show every single field in the admin change list """
         return (
-            'name', 'enabled', 'backend_name', 'entity_id', 'metadata_source',
-            'has_data', 'icon_class', 'change_date', 'changed_by', 'edit_link'
+            'name_with_update_link', 'enabled', 'site', 'entity_id', 'metadata_source',
+            'has_data', 'mode', 'saml_configuration', 'change_date', 'changed_by',
         )
+
+    list_display_links = None
+
+    def get_actions(self, request):
+        """
+        Get the actions.
+        """
+        actions = super(SAMLProviderConfigAdmin, self).get_actions(request)
+        action_delete = {
+            'archive_provider_configuration': (
+                SAMLProviderConfigAdmin.archive_provider_configuration,
+                'archive_provider_configuration',
+                _('Delete the selected configuration')
+            )
+        }
+        actions.update(action_delete)
+        return actions
+
+    def name_with_update_link(self, instance):
+        """
+        Record name with link for the change view.
+        """
+        if not instance.is_active:
+            return instance.name
+
+        update_url = reverse('admin:{}_{}_add'.format(self.model._meta.app_label, self.model._meta.model_name))
+        update_url += '?source={}'.format(instance.pk)
+        return HTML(u'<a href="{}">{}</a>').format(update_url, instance.name)
+
+    name_with_update_link.allow_tags = True
+    name_with_update_link.short_description = u'Name'
 
     def has_data(self, inst):
         """ Do we have cached metadata for this SAML provider? """
@@ -48,6 +115,13 @@ class SAMLProviderConfigAdmin(KeyedConfigurationModelAdmin):
         return bool(data and data.is_valid())
     has_data.short_description = u'Metadata Ready'
     has_data.boolean = True
+
+    def mode(self, inst):
+        """ Indicate if debug_mode is enabled or not"""
+        if inst.debug_mode:
+            return '<span style="color: red;">Debug</span>'
+        return "Normal"
+    mode.allow_tags = True
 
     def save_model(self, request, obj, form, change):
         """
@@ -63,13 +137,13 @@ class SAMLProviderConfigAdmin(KeyedConfigurationModelAdmin):
 admin.site.register(SAMLProviderConfig, SAMLProviderConfigAdmin)
 
 
-class SAMLConfigurationAdmin(ConfigurationModelAdmin):
+class SAMLConfigurationAdmin(KeyedConfigurationModelAdmin):
     """ Django Admin class for SAMLConfiguration """
     def get_list_display(self, request):
         """ Shorten the public/private keys in the change view """
         return (
-            'change_date', 'changed_by', 'enabled', 'entity_id',
-            'org_info_str', 'key_summary',
+            'site', 'slug', 'change_date', 'changed_by', 'enabled', 'entity_id',
+            'org_info_str', 'key_summary', 'edit_link',
         )
 
     def key_summary(self, inst):
@@ -93,8 +167,9 @@ class SAMLProviderDataAdmin(admin.ModelAdmin):
 
     def get_readonly_fields(self, request, obj=None):
         if obj:  # editing an existing object
-            return self.model._meta.get_all_field_names()  # pylint: disable=protected-access
+            return [field.name for field in self.model._meta.get_fields()]  # pylint: disable=protected-access
         return self.readonly_fields
+
 
 admin.site.register(SAMLProviderData, SAMLProviderDataAdmin)
 
@@ -104,6 +179,7 @@ class LTIProviderConfigAdmin(KeyedConfigurationModelAdmin):
 
     exclude = (
         'icon_class',
+        'icon_image',
         'secondary',
     )
 
@@ -112,6 +188,7 @@ class LTIProviderConfigAdmin(KeyedConfigurationModelAdmin):
         return (
             'name',
             'enabled',
+            'site',
             'lti_consumer_key',
             'lti_max_timestamp_age',
             'change_date',

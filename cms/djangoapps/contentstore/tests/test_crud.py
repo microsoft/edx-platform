@@ -1,14 +1,12 @@
-import unittest
-
 from xmodule import templates
-from xmodule.modulestore import ModuleStoreEnum
-from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
-from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase, TEST_DATA_SPLIT_MODULESTORE
-from xmodule.course_module import CourseDescriptor
-from xmodule.seq_module import SequenceDescriptor
 from xmodule.capa_module import CapaDescriptor
+from xmodule.course_module import CourseDescriptor
 from xmodule.html_module import HtmlDescriptor
+from xmodule.modulestore import ModuleStoreEnum
 from xmodule.modulestore.exceptions import DuplicateCourseError
+from xmodule.modulestore.tests.django_utils import TEST_DATA_SPLIT_MODULESTORE, ModuleStoreTestCase
+from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
+from xmodule.seq_module import SequenceDescriptor
 
 
 class TemplateTests(ModuleStoreTestCase):
@@ -37,8 +35,8 @@ class TemplateTests(ModuleStoreTestCase):
         self.assertIsNotNone(dropdown)
         self.assertIn('markdown', dropdown['metadata'])
         self.assertIn('data', dropdown)
-        self.assertRegexpMatches(dropdown['metadata']['markdown'], r'^Dropdown.*')
-        self.assertRegexpMatches(dropdown['data'], r'<problem>\s*<p>Dropdown.*')
+        self.assertRegexpMatches(dropdown['metadata']['markdown'], r'.*dropdown problems.*')
+        self.assertRegexpMatches(dropdown['data'], r'<problem>\s*<optionresponse>\s*<p>.*dropdown problems.*')
 
     def test_get_some_templates(self):
         self.assertEqual(len(SequenceDescriptor.templates()), 0)

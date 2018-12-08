@@ -2,31 +2,29 @@
 This file contains utility functions which will responsible for sending emails.
 """
 
-import os
-
+import HTMLParser
 import logging
-import pynliner
+import os
 import urlparse
 import uuid
-import HTMLParser
+from email.mime.image import MIMEImage
+from email.mime.multipart import MIMEMultipart
 
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.staticfiles import finders
 from django.core.cache import cache
 from django.core.mail import EmailMessage, SafeMIMEText
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.utils.translation import ugettext as _
-
-from email.mime.image import MIMEImage
-from email.mime.multipart import MIMEMultipart
-from eventtracking import tracker
 
 from edxmako.shortcuts import render_to_string
 from edxmako.template import Template
-from microsite_configuration import microsite
+from eventtracking import tracker
+from openedx.core.djangoapps.commerce.utils import ecommerce_api_client
+from openedx.core.djangoapps.credit.models import CreditConfig, CreditProvider
+from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 from xmodule.modulestore.django import modulestore
-
 
 log = logging.getLogger(__name__)
 
@@ -67,14 +65,17 @@ def send_credit_notifications(username, course_key):
         # strip enclosing angle brackets from 'logo_image' cache 'Content-ID'
         logo_image_id = logo_image.get('Content-ID', '')[1:-1]
 
+    providers_names = get_credit_provider_display_names(course_key)
+    providers_string = make_providers_strings(providers_names)
     context = {
         'full_name': user.get_full_name(),
-        'platform_name': settings.PLATFORM_NAME,
+        'platform_name': configuration_helpers.get_value('PLATFORM_NAME', settings.PLATFORM_NAME),
         'course_name': course_display_name,
         'branded_logo': logo_image_id,
         'dashboard_link': dashboard_link,
         'credit_course_link': credit_course_link,
         'tracking_pixel': tracking_pixel,
+        'providers': providers_string,
     }
 
     # create the root email message
@@ -85,6 +86,11 @@ def send_credit_notifications(username, course_key):
     notification_msg.attach(msg_alternative)
     # render the credit notification templates
     subject = _(u'Course Credit Eligibility')
+
+    if providers_string:
+        subject = _(u'You are eligible for credit from {providers_string}').format(
+            providers_string=providers_string
+        )
 
     # add alternative plain text message
     email_body_plain = render_to_string('credit_notifications/credit_eligibility_email.txt', context)
@@ -107,7 +113,7 @@ def send_credit_notifications(username, course_key):
         else:
             email_body_content = ''
 
-    email_body = Template(email_body_content).render([context])
+    email_body = Template(email_body_content).render(context)
     msg_alternative.attach(SafeMIMEText(email_body, _subtype='html', _charset='utf-8'))
 
     # attach logo image
@@ -115,11 +121,11 @@ def send_credit_notifications(username, course_key):
         notification_msg.attach(logo_image)
 
     # add email addresses of sender and receiver
-    from_address = microsite.get_value('default_from_email', settings.DEFAULT_FROM_EMAIL)
+    from_address = configuration_helpers.get_value('email_from_address', settings.DEFAULT_FROM_EMAIL)
     to_address = user.email
 
     # send the root email message
-    msg = EmailMessage(subject, None, from_address, [to_address])
+    msg = EmailMessage(subject, '', from_address, [to_address])
     msg.attach(notification_msg)
     msg.send()
 
@@ -135,6 +141,13 @@ def with_inline_css(html_without_css):
     if css_filepath:
         with open(css_filepath, "r") as _file:
             css_content = _file.read()
+
+        # pynliner imports cssutils, which has an expensive initialization. All
+        # told, it can account for 15-20% of "fast" LMS startup (without asset
+        # compilation). So we're going to load it locally here so that we delay
+        # that one-time hit until we actually do the (rare) operation that is
+        # sending a credit notification email.
+        import pynliner
 
         # insert style tag in the html and run pyliner.
         html_with_inline_css = pynliner.fromString('<style>' + css_content + '</style>' + html_without_css)
@@ -176,7 +189,92 @@ def _email_url_parser(url_name, extra_param=None):
     Returns:
         str
     """
-    site_name = microsite.get_value('SITE_NAME', settings.SITE_NAME)
+    site_name = configuration_helpers.get_value('SITE_NAME', settings.SITE_NAME)
     dashboard_url_path = reverse(url_name) + extra_param if extra_param else reverse(url_name)
     dashboard_link_parts = ("https", site_name, dashboard_url_path, '', '', '')
     return urlparse.urlunparse(dashboard_link_parts)
+
+
+def get_credit_provider_display_names(course_key):
+    """Get the course information from ecommerce and parse the data to get providers.
+
+    Arguments:
+        course_key (CourseKey): The identifier for the course.
+
+    Returns:
+        List of credit provider display names.
+    """
+    course_id = unicode(course_key)
+    credit_config = CreditConfig.current()
+
+    cache_key = None
+    provider_names = None
+
+    if credit_config.is_cache_enabled:
+        cache_key = '{key_prefix}.{course_key}'.format(
+            key_prefix=credit_config.CACHE_KEY, course_key=course_id
+        )
+        provider_names = cache.get(cache_key)
+
+    if provider_names is not None:
+        return provider_names
+
+    try:
+        user = User.objects.get(username=settings.ECOMMERCE_SERVICE_WORKER_USERNAME)
+        response = ecommerce_api_client(user).courses(course_id).get(include_products=1)
+    except Exception:  # pylint: disable=broad-except
+        log.exception("Failed to receive data from the ecommerce course API for Course ID '%s'.", course_id)
+        return provider_names
+
+    if not response:
+        log.info("No Course information found from ecommerce API for Course ID '%s'.", course_id)
+        return provider_names
+
+    provider_ids = []
+    for product in response.get('products'):
+        provider_ids += [
+            attr.get('value') for attr in product.get('attribute_values') if attr.get('name') == 'credit_provider'
+        ]
+
+    provider_names = []
+    credit_providers = CreditProvider.get_credit_providers()
+    for provider in credit_providers:
+        if provider['id'] in provider_ids:
+            provider_names.append(provider['display_name'])
+
+    if credit_config.is_cache_enabled:
+        cache.set(cache_key, provider_names, credit_config.cache_ttl)
+
+    return provider_names
+
+
+def make_providers_strings(providers):
+    """Get the list of course providers and make them comma seperated string.
+
+    Arguments:
+        providers : List containing the providers names
+
+    Returns:
+        strings containing providers names in readable way .
+    """
+    if not providers:
+        return None
+
+    if len(providers) == 1:
+        providers_string = providers[0]
+
+    elif len(providers) == 2:
+        # Translators: The join of two university names (e.g., Harvard and MIT).
+        providers_string = _("{first_provider} and {second_provider}").format(
+            first_provider=providers[0],
+            second_provider=providers[1]
+        )
+    else:
+        # Translators: The join of three or more university names. The first of these formatting strings
+        # represents a comma-separated list of names (e.g., MIT, Harvard, Dartmouth).
+        providers_string = _("{first_providers}, and {last_provider}").format(
+            first_providers=u", ".join(providers[:-1]),
+            last_provider=providers[-1]
+        )
+
+    return providers_string

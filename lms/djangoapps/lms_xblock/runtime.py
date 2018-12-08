@@ -1,69 +1,23 @@
 """
 Module implementing `xblock.runtime.Runtime` functionality for the LMS
 """
-
-import re
+from completion.services import CompletionService
+from django.conf import settings
+from django.urls import reverse
 import xblock.reference.plugins
 
-from django.core.urlresolvers import reverse
-from django.conf import settings
-from request_cache.middleware import RequestCache
+from badges.service import BadgingService
+from badges.utils import badges_enabled
 from lms.djangoapps.lms_xblock.models import XBlockAsidesConfig
 from openedx.core.djangoapps.user_api.course_tag import api as user_course_tag_api
-from xmodule.modulestore.django import modulestore
-from xmodule.services import SettingsService
+from openedx.core.lib.url_utils import quote_slashes
+from openedx.core.lib.xblock_utils import xblock_local_resource_url
+from openedx.core.djangoapps.request_cache.middleware import RequestCache
 from xmodule.library_tools import LibraryToolsService
-from xmodule.x_module import ModuleSystem
+from xmodule.modulestore.django import ModuleI18nService, modulestore
 from xmodule.partitions.partitions_service import PartitionService
-
-
-def _quote_slashes(match):
-    """
-    Helper function for `quote_slashes`
-    """
-    matched = match.group(0)
-    # We have to escape ';', because that is our
-    # escape sequence identifier (otherwise, the escaping)
-    # couldn't distinguish between us adding ';_' to the string
-    # and ';_' appearing naturally in the string
-    if matched == ';':
-        return ';;'
-    elif matched == '/':
-        return ';_'
-    else:
-        return matched
-
-
-def quote_slashes(text):
-    """
-    Quote '/' characters so that they aren't visible to
-    django's url quoting, unquoting, or url regex matching.
-
-    Escapes '/'' to the sequence ';_', and ';' to the sequence
-    ';;'. By making the escape sequence fixed length, and escaping
-    identifier character ';', we are able to reverse the escaping.
-    """
-    return re.sub(ur'[;/]', _quote_slashes, text)
-
-
-def _unquote_slashes(match):
-    """
-    Helper function for `unquote_slashes`
-    """
-    matched = match.group(0)
-    if matched == ';;':
-        return ';'
-    elif matched == ';_':
-        return '/'
-    else:
-        return matched
-
-
-def unquote_slashes(text):
-    """
-    Unquote slashes quoted by `quote_slashes`
-    """
-    return re.sub(r'(;;|;_)', _unquote_slashes, text)
+from xmodule.services import SettingsService
+from xmodule.x_module import ModuleSystem
 
 
 def handler_url(block, handler_name, suffix='', query='', thirdparty=False):
@@ -123,27 +77,7 @@ def local_resource_url(block, uri):
     """
     local_resource_url for Studio
     """
-    path = reverse('xblock_resource_url', kwargs={
-        'block_type': block.scope_ids.block_type,
-        'uri': uri,
-    })
-    return '//{}{}'.format(settings.SITE_NAME, path)
-
-
-class LmsPartitionService(PartitionService):
-    """
-    Another runtime mixin that provides access to the student partitions defined on the
-    course.
-
-    (If and when XBlock directly provides access from one block (e.g. a split_test_module)
-    to another (e.g. a course_module), this won't be necessary, but for now it seems like
-    the least messy way to hook things through)
-
-    """
-    @property
-    def course_partitions(self):
-        course = modulestore().get_course(self._course_id)
-        return course.user_partitions
+    return xblock_local_resource_url(block, uri)
 
 
 class UserTagsService(object):
@@ -200,17 +134,21 @@ class LmsModuleSystem(ModuleSystem):  # pylint: disable=abstract-method
     """
     def __init__(self, **kwargs):
         request_cache_dict = RequestCache.get_request_cache().data
+        store = modulestore()
+
         services = kwargs.setdefault('services', {})
-        services['user_tags'] = UserTagsService(self)
-        services['partitions'] = LmsPartitionService(
-            user=kwargs.get('user'),
+        services['completion'] = CompletionService(user=kwargs.get('user'), course_key=kwargs.get('course_id'))
+        services['fs'] = xblock.reference.plugins.FSService()
+        services['i18n'] = ModuleI18nService
+        services['library_tools'] = LibraryToolsService(store)
+        services['partitions'] = PartitionService(
             course_id=kwargs.get('course_id'),
-            track_function=kwargs.get('track_function', None),
             cache=request_cache_dict
         )
-        services['library_tools'] = LibraryToolsService(modulestore())
-        services['fs'] = xblock.reference.plugins.FSService()
         services['settings'] = SettingsService()
+        services['user_tags'] = UserTagsService(self)
+        if badges_enabled():
+            services['badging'] = BadgingService(course_id=kwargs.get('course_id'), modulestore=store)
         self.request_token = kwargs.pop('request_token', None)
         super(LmsModuleSystem, self).__init__(**kwargs)
 
@@ -277,4 +215,10 @@ class LmsModuleSystem(ModuleSystem):  # pylint: disable=abstract-method
         if block.scope_ids.block_type in config.disabled_blocks.split():
             return []
 
-        return super(LmsModuleSystem, self).applicable_aside_types()
+        # TODO: aside_type != 'acid_aside' check should be removed once AcidBlock is only installed during tests
+        # (see https://openedx.atlassian.net/browse/TE-811)
+        return [
+            aside_type
+            for aside_type in super(LmsModuleSystem, self).applicable_aside_types(block)
+            if aside_type != 'acid_aside'
+        ]

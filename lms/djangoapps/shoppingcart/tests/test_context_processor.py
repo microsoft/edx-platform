@@ -3,21 +3,22 @@ Unit tests for shoppingcart context_processor
 """
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
-from mock import patch, Mock
+from mock import Mock, patch
 
 from course_modes.tests.factories import CourseModeFactory
+from shoppingcart.context_processor import user_has_cart_context_processor
+from shoppingcart.models import Order, PaidCourseRegistration
 from student.tests.factories import UserFactory
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
-
-from shoppingcart.models import Order, PaidCourseRegistration
-from shoppingcart.context_processor import user_has_cart_context_processor
 
 
 class UserCartContextProcessorUnitTest(ModuleStoreTestCase):
     """
     Unit test for shoppingcart context_processor
     """
+    shard = 4
+
     def setUp(self):
         super(UserCartContextProcessorUnitTest, self).setUp()
 
@@ -29,7 +30,7 @@ class UserCartContextProcessorUnitTest(ModuleStoreTestCase):
         Adds content to self.user's cart
         """
         course = CourseFactory.create(org='MITx', number='999', display_name='Robot Super Course')
-        CourseModeFactory(course_id=course.id)
+        CourseModeFactory.create(course_id=course.id)
         cart = Order.get_cart_for_user(self.user)
         PaidCourseRegistration.add_to_order(cart, course.id)
 

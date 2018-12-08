@@ -2,8 +2,10 @@
 Django REST Framework serializers for the User API application
 """
 from django.contrib.auth.models import User
+from django.utils.timezone import now
 from rest_framework import serializers
-from student.models import UserProfile
+
+from lms.djangoapps.verify_student.models import SoftwareSecurePhotoVerification, SSOVerification, ManualVerification
 
 from .models import UserPreference
 
@@ -17,16 +19,15 @@ class UserSerializer(serializers.HyperlinkedModelSerializer):
 
     def get_name(self, user):
         """
-        Return the name attribute from the user profile object
+        Return the name attribute from the user profile object if profile exists else none
         """
-        profile = UserProfile.objects.get(user=user)
-        return profile.name
+        return user.profile.name
 
     def get_preferences(self, user):
         """
         Returns the set of preferences as a dict for the specified user
         """
-        return dict([(pref.key, pref.value) for pref in user.preferences.all()])
+        return UserPreference.get_all_preferences(user)
 
     class Meta(object):
         model = User
@@ -37,13 +38,14 @@ class UserSerializer(serializers.HyperlinkedModelSerializer):
 
 class UserPreferenceSerializer(serializers.HyperlinkedModelSerializer):
     """
-    Serializer that generates a represenation of a UserPreference entity
+    Serializer that generates a representation of a UserPreference entity.
     """
     user = UserSerializer()
 
     class Meta(object):
         model = UserPreference
         depth = 1
+        fields = ('user', 'key', 'value', 'url')
 
 
 class RawUserPreferenceSerializer(serializers.ModelSerializer):
@@ -55,6 +57,7 @@ class RawUserPreferenceSerializer(serializers.ModelSerializer):
     class Meta(object):
         model = UserPreference
         depth = 1
+        fields = ('user', 'key', 'value', 'url')
 
 
 class ReadOnlyFieldsSerializerMixin(object):
@@ -81,3 +84,45 @@ class ReadOnlyFieldsSerializerMixin(object):
         """
         all_fields = getattr(cls.Meta, 'fields', tuple())
         return tuple(set(all_fields) - set(cls.get_read_only_fields()))
+
+
+class CountryTimeZoneSerializer(serializers.Serializer):  # pylint: disable=abstract-method
+    """
+    Serializer that generates a list of common time zones for a country
+    """
+    time_zone = serializers.CharField()
+    description = serializers.CharField()
+
+
+class IDVerificationSerializer(serializers.ModelSerializer):
+    """
+    Serializer that generates a representation of a user's ID verification status.
+    """
+    is_verified = serializers.SerializerMethodField()
+
+    def get_is_verified(self, obj):
+        """
+        Return a boolean indicating if a the user is verified.
+        """
+        return obj.status == 'approved' and obj.expiration_datetime > now()
+
+
+class SoftwareSecurePhotoVerificationSerializer(IDVerificationSerializer):
+
+    class Meta(object):
+        fields = ('status', 'expiration_datetime', 'is_verified')
+        model = SoftwareSecurePhotoVerification
+
+
+class SSOVerificationSerializer(IDVerificationSerializer):
+
+    class Meta(object):
+        fields = ('status', 'expiration_datetime', 'is_verified')
+        model = SSOVerification
+
+
+class ManualVerificationSerializer(IDVerificationSerializer):
+
+    class Meta(object):
+        fields = ('status', 'expiration_datetime', 'is_verified')
+        model = ManualVerification

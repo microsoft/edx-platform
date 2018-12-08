@@ -3,20 +3,21 @@ Course Outline page in Studio.
 """
 import datetime
 
+from bok_choy.javascript import js_defined, wait_for_js
 from bok_choy.page_object import PageObject
 from bok_choy.promise import EmptyPromise
-
 from selenium.webdriver import ActionChains
-from selenium.webdriver.support.ui import Select
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.ui import Select
 
-from ..common.utils import click_css, confirm_prompt
+from common.test.acceptance.pages.common.utils import click_css, confirm_prompt
+from common.test.acceptance.pages.studio.container import ContainerPage
+from common.test.acceptance.pages.studio.course_page import CoursePage
+from common.test.acceptance.pages.studio.utils import set_input_value, set_input_value_and_save
+from common.test.acceptance.tests.helpers import disable_animations, enable_animations, select_option_by_text
 
-from .course_page import CoursePage
-from .container import ContainerPage
-from .utils import set_input_value_and_save, set_input_value
 
-
+@js_defined('jQuery')
 class CourseOutlineItem(object):
     """
     A mixin class for any :class:`PageObject` shown in a course outline.
@@ -88,6 +89,11 @@ class CourseOutlineItem(object):
         return self.status_message == 'Contains staff only content' if self.has_status_message else False
 
     @property
+    def has_restricted_warning(self):
+        """ Returns True if the 'Access to this unit is restricted to' message is visible """
+        return 'Access to this unit is restricted to' in self.status_message if self.has_status_message else False
+
+    @property
     def is_staff_only(self):
         """ Returns True if the visiblity state of this item is staff only (has a black sidebar) """
         return "is-staff-only" in self.q(css=self._bounded_selector(''))[0].get_attribute("class")  # pylint: disable=no-member
@@ -128,6 +134,29 @@ class CourseOutlineItem(object):
         modal.is_explicitly_locked = is_locked
         modal.save()
 
+    def get_enrollment_select_options(self):
+        """
+        Gets the option names available for unit group access
+        """
+        modal = self.edit()
+        group_options = self.q(css='.group-select-title option').text
+        modal.cancel()
+        return group_options
+
+    def toggle_unit_access(self, partition_name, group_ids):
+        """
+        Toggles unit access to the groups in group_ids
+        """
+        if group_ids:
+            modal = self.edit()
+            groups_select = self.q(css='.group-select-title select')
+            select_option_by_text(groups_select, partition_name)
+
+            for group_id in group_ids:
+                checkbox = self.q(css='#content-group-{group_id}'.format(group_id=group_id))
+                checkbox.click()
+            modal.save()
+
     def in_editable_form(self):
         """
         Return whether this outline item's display name is in its editable form.
@@ -142,7 +171,10 @@ class CourseOutlineItem(object):
         Puts the item into editable form.
         """
         self.q(css=self._bounded_selector(self.CONFIGURATION_BUTTON_SELECTOR)).first.click()  # pylint: disable=no-member
-        modal = CourseOutlineModal(self)
+        if 'subsection' in self.BODY_SELECTOR:
+            modal = SubsectionOutlineModal(self)
+        else:
+            modal = CourseOutlineModal(self)
         EmptyPromise(lambda: modal.is_shown(), 'Modal is shown.')  # pylint: disable=unnecessary-lambda
         return modal
 
@@ -170,6 +202,7 @@ class CourseOutlineItem(object):
         element = self.q(css=self._bounded_selector(".status-grading-value"))  # pylint: disable=no-member
         return element.first.text[0] if element.present else None
 
+    @wait_for_js
     def publish(self):
         """
         Publish the unit.
@@ -248,8 +281,7 @@ class CourseOutlineContainer(CourseOutlineItem):
         """
         Toggle the expansion of this subsection.
         """
-        # pylint: disable=no-member
-        self.browser.execute_script("jQuery.fx.off = true;")
+        disable_animations(self)
 
         def subsection_expanded():
             """
@@ -258,14 +290,18 @@ class CourseOutlineContainer(CourseOutlineItem):
             self.wait_for_element_presence(
                 self._bounded_selector(self.ADD_BUTTON_SELECTOR), 'Toggle control is present'
             )
-            add_button = self.q(css=self._bounded_selector(self.ADD_BUTTON_SELECTOR)).first.results
+            css_element = self._bounded_selector(self.ADD_BUTTON_SELECTOR)
+            add_button = self.q(css=css_element).first.results  # pylint: disable=no-member
+            self.scroll_to_element(css_element)  # pylint: disable=no-member
             return add_button and add_button[0].is_displayed()
 
         currently_expanded = subsection_expanded()
 
         # Need to click slightly off-center in order for the click to be recognized.
-        ele = self.browser.find_element_by_css_selector(self._bounded_selector('.ui-toggle-expansion i'))
-        ActionChains(self.browser).move_to_element_with_offset(ele, 4, 4).click().perform()
+        css_element = self._bounded_selector('.ui-toggle-expansion .fa')
+        self.scroll_to_element(css_element)  # pylint: disable=no-member
+        ele = self.browser.find_element_by_css_selector(css_element)  # pylint: disable=no-member
+        ActionChains(self.browser).move_to_element_with_offset(ele, 8, 8).click().perform()  # pylint: disable=no-member
         self.wait_for_element_presence(self._bounded_selector(self.ADD_BUTTON_SELECTOR), 'Subsection is expanded')
 
         EmptyPromise(
@@ -273,7 +309,7 @@ class CourseOutlineContainer(CourseOutlineItem):
             "Check that the container {} has been toggled".format(self.locator)
         ).fulfill()
 
-        self.browser.execute_script("jQuery.fx.off = false;")
+        enable_animations(self)
 
         return self
 
@@ -282,7 +318,9 @@ class CourseOutlineContainer(CourseOutlineItem):
         """
         Return whether this outline item is currently collapsed.
         """
-        return "is-collapsed" in self.q(css=self._bounded_selector('')).first.attrs("class")[0]  # pylint: disable=no-member
+        css_element = self._bounded_selector('')
+        self.scroll_to_element(css_element)  # pylint: disable=no-member
+        return "is-collapsed" in self.q(css=css_element).first.attrs("class")[0]  # pylint: disable=no-member
 
 
 class CourseOutlineChild(PageObject, CourseOutlineItem):
@@ -465,6 +503,7 @@ class CourseOutlinePage(CoursePage, CourseOutlineContainer):
         Clicks the "View Live" link and switches to the new tab
         """
         click_css(self, '.view-live-button', require_notification=False)
+        self.wait_for_page()
         self.browser.switch_to_window(self.browser.window_handles[-1])
 
     def section(self, title):
@@ -508,12 +547,6 @@ class CourseOutlinePage(CoursePage, CourseOutlineContainer):
         self.q(css='{} .section-name .save-button'.format(parent_css)).first.click()
         self.wait_for_ajax()
 
-    def click_release_date(self):
-        """
-        Open release date edit modal of first section in course outline
-        """
-        self.q(css='div.section-published-date a.edit-release-date').first.click()
-
     def sections(self):
         """
         Returns the sections of this course outline page.
@@ -555,7 +588,7 @@ class CourseOutlinePage(CoursePage, CourseOutlineContainer):
         self.q(css=".subsection-header-actions .configure-button").nth(index).click()
         self.wait_for_element_presence('.course-outline-modal', 'Subsection settings modal is present.')
 
-    def change_problem_release_date_in_studio(self):
+    def change_problem_release_date(self):
         """
         Sets a new start date
         """
@@ -564,26 +597,58 @@ class CourseOutlinePage(CoursePage, CourseOutlineContainer):
         self.q(css=".action-save").first.click()
         self.wait_for_ajax()
 
-    def select_advanced_tab(self):
+    def change_problem_due_date(self, date):
+        """
+        Sets a new due date.
+
+        Expects date to be a string that will be accepted by the input (for example, '01/01/1970')
+        """
+        self.q(css=".subsection-header-actions .configure-button").first.click()
+        self.q(css="#due_date").fill(date)
+        self.q(css=".action-save").first.click()
+        self.wait_for_ajax()
+
+    def select_visibility_tab(self):
+        """
+        Select the advanced settings tab
+        """
+        self.q(css=".settings-tab-button[data-tab='visibility']").first.click()
+        self.wait_for_element_presence('input[value=hide_after_due]', 'Visibility fields not present.')
+
+    def select_advanced_tab(self, desired_item='special_exam'):
         """
         Select the advanced settings tab
         """
         self.q(css=".settings-tab-button[data-tab='advanced']").first.click()
-        self.wait_for_element_presence('#id_not_timed', 'Special exam settings fields not present.')
+        if desired_item == 'special_exam':
+            self.wait_for_element_presence('input.no_special_exam', 'Special exam settings fields not present.')
+        if desired_item == 'gated_content':
+            self.wait_for_element_visibility('#is_prereq', 'Gating settings fields are present.')
 
     def make_exam_proctored(self):
         """
         Makes a Proctored exam.
         """
-        self.q(css="#id_proctored_exam").first.click()
+        self.q(css="input.proctored_exam").first.click()
         self.q(css=".action-save").first.click()
         self.wait_for_ajax()
 
-    def make_exam_timed(self):
+    def make_exam_timed(self, hide_after_due=False):
         """
         Makes a timed exam.
         """
-        self.q(css="#id_timed_exam").first.click()
+        self.q(css="input.timed_exam").first.click()
+        if hide_after_due:
+            self.select_visibility_tab()
+            self.q(css='input[name=content-visibility][value=hide_after_due]').first.click()
+        self.q(css=".action-save").first.click()
+        self.wait_for_ajax()
+
+    def make_subsection_hidden_after_due_date(self):
+        """
+        Sets a subsection to be hidden after due date.
+        """
+        self.q(css='input[value=hide_after_due]').first.click()
         self.q(css=".action-save").first.click()
         self.wait_for_ajax()
 
@@ -591,37 +656,37 @@ class CourseOutlinePage(CoursePage, CourseOutlineContainer):
         """
         Choose "none" exam but do not press enter
         """
-        self.q(css="#id_not_timed").first.click()
+        self.q(css="input.no_special_exam").first.click()
 
     def select_timed_exam(self):
         """
         Choose a timed exam but do not press enter
         """
-        self.q(css="#id_timed_exam").first.click()
+        self.q(css="input.timed_exam").first.click()
 
     def select_proctored_exam(self):
         """
         Choose a proctored exam but do not press enter
         """
-        self.q(css="#id_proctored_exam").first.click()
+        self.q(css="input.proctored_exam").first.click()
 
     def select_practice_exam(self):
         """
         Choose a practice exam but do not press enter
         """
-        self.q(css="#id_practice_exam").first.click()
+        self.q(css="input.practice_exam").first.click()
 
     def time_allotted_field_visible(self):
         """
         returns whether the time allotted field is visible
         """
-        return self.q(css="#id_time_limit_div").visible
+        return self.q(css=".field-time-limit").visible
 
     def exam_review_rules_field_visible(self):
         """
         Returns whether the review rules field is visible
         """
-        return self.q(css=".exam-review-rules-list-fields").visible
+        return self.q(css=".field-exam-review-rules").visible
 
     def proctoring_items_are_displayed(self):
         """
@@ -629,29 +694,22 @@ class CourseOutlinePage(CoursePage, CourseOutlineContainer):
         """
 
         # The None radio button
-        if not self.q(css="#id_not_timed").present:
+        if not self.q(css="input.no_special_exam").present:
             return False
 
         # The Timed exam radio button
-        if not self.q(css="#id_timed_exam").present:
+        if not self.q(css="input.timed_exam").present:
             return False
 
         # The Proctored exam radio button
-        if not self.q(css="#id_proctored_exam").present:
+        if not self.q(css="input.proctored_exam").present:
             return False
 
         # The Practice exam radio button
-        if not self.q(css="#id_practice_exam").present:
+        if not self.q(css="input.practice_exam").present:
             return False
 
         return True
-
-    def select_access_tab(self):
-        """
-        Select the access settings tab.
-        """
-        self.q(css=".settings-tab-button[data-tab='access']").first.click()
-        self.wait_for_element_visibility('#is_prereq', 'Gating settings fields are present.')
 
     def make_gating_prerequisite(self):
         """
@@ -662,12 +720,13 @@ class CourseOutlinePage(CoursePage, CourseOutlineContainer):
         self.q(css=".action-save").first.click()
         self.wait_for_ajax()
 
-    def add_prerequisite_to_subsection(self, min_score):
+    def add_prerequisite_to_subsection(self, min_score, min_completion):
         """
         Adds a prerequisite to a subsection.
         """
         Select(self.q(css="#prereq")[0]).select_by_index(1)
         self.q(css="#prereq_min_score").fill(min_score)
+        self.q(css="#prereq_min_completion").fill(min_completion)
         self.q(css=".action-save").first.click()
         self.wait_for_ajax()
 
@@ -835,6 +894,8 @@ class CourseOutlinePage(CoursePage, CourseOutlineContainer):
 class CourseOutlineModal(object):
     """
     Page object specifically for a modal window on the course outline page.
+
+    Subsections are handled slightly differently in some regards, and should use SubsectionOutlineModal.
     """
     MODAL_SELECTOR = ".wrapper-modal-window"
 
@@ -1024,19 +1085,40 @@ class CourseOutlineModal(object):
         ).fulfill()
 
     @property
+    def is_staff_lock_visible(self):
+        """
+        Returns True if the staff lock option is visible.
+        """
+        return self.find_css('#staff_lock').visible
+
+    def ensure_staff_lock_visible(self):
+        """
+        Ensures the staff lock option is visible, clicking on the advanced tab
+        if needed.
+        """
+        if not self.is_staff_lock_visible:
+            self.find_css(".settings-tab-button[data-tab=visibility]").click()
+        EmptyPromise(
+            lambda: self.is_staff_lock_visible,
+            "Staff lock option is visible",
+        ).fulfill()
+
+    @property
     def is_explicitly_locked(self):
         """
         Returns true if the explict staff lock checkbox is checked, false otherwise.
         """
+        self.ensure_staff_lock_visible()
         return self.find_css('#staff_lock')[0].is_selected()
 
     @is_explicitly_locked.setter
     def is_explicitly_locked(self, value):
         """
-        Checks the explicit staff lock box if value is true, otherwise unchecks the box.
+        Checks the explicit staff lock box if value is true, otherwise selects "visible".
         """
+        self.ensure_staff_lock_visible()
         if value != self.is_explicitly_locked:
-            self.find_css('label[for="staff_lock"]').click()
+            self.find_css('#staff_lock').click()
         EmptyPromise(lambda: value == self.is_explicitly_locked, "Explicit staff lock is updated").fulfill()
 
     def shows_staff_lock_warning(self):
@@ -1054,3 +1136,49 @@ class CourseOutlineModal(object):
             return select.first_selected_option.text
         else:
             return None
+
+
+class SubsectionOutlineModal(CourseOutlineModal):
+    """
+    Subclass to handle a few special cases with subsection modals.
+    """
+
+    @property
+    def is_explicitly_locked(self):
+        """
+        Override - returns True if staff_only is set.
+        """
+        return self.subsection_visibility == 'staff_only'
+
+    @property
+    def subsection_visibility(self):
+        """
+        Returns the current visibility setting for a subsection
+        """
+        self.ensure_staff_lock_visible()
+        return self.find_css('input[name=content-visibility]:checked').first.attrs('value')[0]
+
+    @is_explicitly_locked.setter
+    def is_explicitly_locked(self, value):  # pylint: disable=arguments-differ
+        """
+        Override - sets visibility to staff_only if True, else 'visible'.
+
+        For hide_after_due, use the set_subsection_visibility method directly.
+        """
+        self.subsection_visibility = 'staff_only' if value else 'visible'
+
+    @subsection_visibility.setter
+    def subsection_visibility(self, value):
+        """
+        Sets the subsection visibility to the given value.
+        """
+        self.ensure_staff_lock_visible()
+        self.find_css('input[name=content-visibility][value=' + value + ']').click()
+        EmptyPromise(lambda: value == self.subsection_visibility, "Subsection visibility is updated").fulfill()
+
+    @property
+    def is_staff_lock_visible(self):
+        """
+        Override - Returns true if the staff lock option is visible.
+        """
+        return self.find_css('input[name=content-visibility]').visible

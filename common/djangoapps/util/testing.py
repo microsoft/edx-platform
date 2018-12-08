@@ -5,13 +5,12 @@ Utility Mixins for unit tests
 import json
 import sys
 
+from django.conf import settings
+from django.urls import clear_url_caches, resolve
+from django.test import TestCase
 from mock import patch
 
-from django.conf import settings
-from django.core.urlresolvers import clear_url_caches, resolve
-from django.test import TestCase
-
-from util.db import OuterAtomic, CommitOnSuccessManager
+from util.db import CommitOnSuccessManager, OuterAtomic
 
 
 class UrlResetMixin(object):
@@ -29,8 +28,16 @@ class UrlResetMixin(object):
     that affect the contents of urls.py
     """
 
-    def _reset_urls(self, urlconf_modules):
+    URLCONF_MODULES = None
+
+    def reset_urls(self, urlconf_modules=None):
         """Reset `urls.py` for a set of Django apps."""
+
+        if urlconf_modules is None:
+            urlconf_modules = [settings.ROOT_URLCONF]
+            if self.URLCONF_MODULES is not None:
+                urlconf_modules.extend(self.URLCONF_MODULES)
+
         for urlconf in urlconf_modules:
             if urlconf in sys.modules:
                 reload(sys.modules[urlconf])
@@ -39,32 +46,28 @@ class UrlResetMixin(object):
         # Resolve a URL so that the new urlconf gets loaded
         resolve('/')
 
-    def setUp(self, *args, **kwargs):
+    def setUp(self):
         """Reset Django urls before tests and after tests
 
         If you need to reset `urls.py` from a particular Django app (or apps),
-        specify these modules in *args.
+        specify these modules by setting the URLCONF_MODULES class attribute.
 
         Examples:
 
             # Reload only the root urls.py
-            super(MyTestCase, self).setUp()
+            URLCONF_MODULES = None
 
             # Reload urls from my_app
-            super(MyTestCase, self).setUp("my_app.urls")
+            URLCONF_MODULES = ['myapp.url']
 
             # Reload urls from my_app and another_app
-            super(MyTestCase, self).setUp("my_app.urls", "another_app.urls")
+            URLCONF_MODULES = ['myapp.url', 'another_app.urls']
 
         """
-        super(UrlResetMixin, self).setUp(**kwargs)
+        super(UrlResetMixin, self).setUp()
 
-        urlconf_modules = [settings.ROOT_URLCONF]
-        if args:
-            urlconf_modules.extend(args)
-
-        self._reset_urls(urlconf_modules)
-        self.addCleanup(lambda: self._reset_urls(urlconf_modules))
+        self.reset_urls()
+        self.addCleanup(self.reset_urls)
 
 
 class EventTestMixin(object):
@@ -93,11 +96,28 @@ class EventTestMixin(object):
             kwargs
         )
 
+    def assert_event_emission_count(self, event_name, expected_count):
+        """
+        Verify that the event with the given name was emitted
+        a specific number of times.
+        """
+        actual_count = 0
+        for call_args in self.mock_tracker.emit.call_args_list:
+            if call_args[0][0] == event_name:
+                actual_count += 1
+        self.assertEqual(actual_count, expected_count)
+
     def reset_tracker(self):
         """
         Reset the mock tracker in order to forget about old events.
         """
         self.mock_tracker.reset_mock()
+
+    def get_latest_call_args(self):
+        """
+        Return the arguments of the latest call to emit.
+        """
+        return self.mock_tracker.emit.call_args[0]
 
 
 class PatchMediaTypeMixin(object):

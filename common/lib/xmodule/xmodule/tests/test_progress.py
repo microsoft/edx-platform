@@ -15,6 +15,7 @@ class ProgressTest(unittest.TestCase):
     ''' Test that basic Progress objects work.  A Progress represents a
     fraction between 0 and 1.
     '''
+    shard = 1
     not_started = Progress(0, 17)
     part_done = Progress(2, 6)
     half_done = Progress(3, 6)
@@ -85,27 +86,6 @@ class ProgressTest(unittest.TestCase):
         self.assertEqual(str(Progress(2.0034, 7)), '2/7')
         self.assertEqual(str(Progress(0.999, 7)), '1/7')
 
-    def test_ternary_str(self):
-        self.assertEqual(self.not_started.ternary_str(), "none")
-        self.assertEqual(self.half_done.ternary_str(), "in_progress")
-        self.assertEqual(self.done.ternary_str(), "done")
-
-    def test_to_js_status(self):
-        '''Test the Progress.to_js_status_str() method'''
-
-        self.assertEqual(Progress.to_js_status_str(self.not_started), "none")
-        self.assertEqual(Progress.to_js_status_str(self.half_done), "in_progress")
-        self.assertEqual(Progress.to_js_status_str(self.done), "done")
-        self.assertEqual(Progress.to_js_status_str(None), "0")
-
-    def test_to_js_detail_str(self):
-        '''Test the Progress.to_js_detail_str() method'''
-        f = Progress.to_js_detail_str
-        for prg in (self.not_started, self.half_done, self.done):
-            self.assertEqual(f(prg), str(prg))
-        # But None should be encoded as 0
-        self.assertEqual(f(None), "0")
-
     def test_add(self):
         '''Test the Progress.add_counts() method'''
         prg1 = Progress(0, 2)
@@ -138,6 +118,8 @@ class ProgressTest(unittest.TestCase):
 class ModuleProgressTest(unittest.TestCase):
     ''' Test that get_progress() does the right thing for the different modules
     '''
+    shard = 1
+
     def test_xmodule_default(self):
         '''Make sure default get_progress exists, returns None'''
         xmod = x_module.XModule(Mock(), get_test_system(), DictFieldData({'location': 'a://b/c/d/e'}), Mock())

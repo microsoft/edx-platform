@@ -1,8 +1,8 @@
-(function () {
+(function() {
     var timeout = 100;
 
     // Simple "lock" to prevent applets from being initialized more than once
-    if (typeof(_editamolecule_loaded) == 'undefined' || _editamolecule_loaded == false) {
+    if (typeof(_editamolecule_loaded) === 'undefined' || _editamolecule_loaded == false) {
         _editamolecule_loaded = true;
         loadGWTScripts();
         waitForGWT();
@@ -13,7 +13,7 @@
     function loadScript(src) {
         var script = document.createElement('script');
         script.setAttribute('type', 'text/javascript');
-        script.setAttribute('src',  src);
+        script.setAttribute('src', src);
         $('head')[0].appendChild(script);
     }
 
@@ -27,12 +27,12 @@
 
         // Make sure we don't request the scripts twice
 
-        if (typeof (_jsmolcalc) == 'undefined') {
+        if (typeof (_jsmolcalc) === 'undefined') {
             _jsmolcalc = true;
             loadScript(jsmolcalc_src);
         }
 
-        if (typeof (_jsme) == 'undefined') {
+        if (typeof (_jsme) === 'undefined') {
             _jsme = true;
             loadScript(jsme_src);
         }
@@ -43,20 +43,18 @@
         // script loader. To fix this, wait for the scripts to load,
         // initialize them manually and wait until they are ready
 
-        if (typeof(jsmolcalc) != 'undefined' && jsmolcalc)
-        {
+        if (typeof(jsmolcalc) !== 'undefined' && jsmolcalc) {
             jsmolcalc.onInjectionDone('jsmolcalc');
         }
 
-        if (typeof(jsme) != 'undefined' && jsme)
-        {
+        if (typeof(jsme) !== 'undefined' && jsme) {
             // dummy function called by jsme
-            window.jsmeOnLoad  = function() {};
+            window.jsmeOnLoad = function() {};
             jsme.onInjectionDone('jsme');
         }
 
         // jsmol is defined my jsmolcalc and JavaScriptApplet is defined by jsme
-        if (typeof(jsmol) != 'undefined' && typeof(JavaScriptApplet) != 'undefined') {
+        if (typeof(jsmol) !== 'undefined' && typeof(JavaScriptApplet) !== 'undefined') {
             // ready, initialize applets
             initializeApplets();
             _editamolecule_loaded = false;  // for reloading when checking is pressed
@@ -66,16 +64,16 @@
     }
 
     function initializeApplets() {
-        var applets = $('.editamoleculeinput div.applet');
-        applets.each(function(i, element) {
+        var $applets = $('.editamoleculeinput div.applet');
+        $applets.each(function(i, element) {
             if (!$(element).hasClass('loaded')) {
                 var applet = new JavaScriptApplet.JSME(
                     element.id,
                     $(element).width(),
                     $(element).height(),
                     {
-    	                "options" : "query, hydrogens"
-    	            });
+    	                                                                                                                                                                                                    options: 'query, hydrogens'
+    	                                                                                                                                                                            });
                 $(element).addClass('loaded');
                 configureApplet(element, applet);
             }
@@ -95,7 +93,7 @@
         // Load initial data
         var value = input_field.val();
         if (value) {
-            var data = JSON.parse(value)["mol"];
+            var data = JSON.parse(value).mol;
             loadAppletData(applet, data, input_field);
         } else {
             requestAppletData(element, applet, input_field);
@@ -118,12 +116,12 @@
         var molFile = $(element).data('molfile-src');
         jQuery.ajax({
             url: molFile,
-            dataType: "text",
+            dataType: 'text',
             success: function(data) {
                 loadAppletData(applet, data, input_field);
             },
             error: function() {
-                console.error("Cannot load mol data from: " + molFile);
+                console.error('Cannot load mol data from: ' + molFile);
             }
         });
     }
@@ -141,7 +139,7 @@
         var raw_info = jsmol.API.getInfo(mol, smiles, jme).toString();
         var info = formatInfo(raw_info);
         var error = formatError(raw_info);
-        var value = { mol: mol, info: info, error: error };
+        var value = {mol: mol, info: info, error: error};
 
         input_field.val(JSON.stringify(value));
 
@@ -151,9 +149,9 @@
     function formatInfo(raw_info) {
         var results = [];
 
-        if (raw_info.search("It is not possible") == -1) {
+        if (raw_info.search('It is not possible') == -1) {
             var fragment = $('<div>').append(raw_info);
-            fragment.find('font').each(function () {
+            fragment.find('font').each(function() {
                 results.push($(this).html());
             });
         }
@@ -164,17 +162,16 @@
     function formatError(raw_info) {
         var error = '';
 
-        if (raw_info.search("It is not possible") != -1) {
+        if (raw_info.search('It is not possible') != -1) {
             var tags = /<((\/)?\w{1,7})>/g;
             error = raw_info.replace(tags, ' ');
-
         }
         return error;
     }
 
 
     function updateMessages(message_field, values) {
-        var error = values['error'];
+        var error = values.error;
         if (error) {
             message_field.html(error).show();
         } else {

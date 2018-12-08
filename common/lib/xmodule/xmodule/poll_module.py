@@ -9,40 +9,64 @@ If student have answered - Question with statistics for each answers.
 import cgi
 import json
 import logging
-from copy import deepcopy
 from collections import OrderedDict
+from copy import deepcopy
 
 from lxml import etree
 from pkg_resources import resource_string
+from xblock.fields import Boolean, Dict, List, Scope, String
 
-from xmodule.x_module import XModule
-from xmodule.stringify import stringify_children
+from openedx.core.djangolib.markup import Text
 from xmodule.mako_module import MakoModuleDescriptor
+from xmodule.stringify import stringify_children
+from xmodule.x_module import XModule
 from xmodule.xml_module import XmlDescriptor
-from xblock.fields import Scope, String, Dict, Boolean, List
 
 log = logging.getLogger(__name__)
+_ = lambda text: text
 
 
 class PollFields(object):
     # Name of poll to use in links to this poll
-    display_name = String(help="Display name for this module", scope=Scope.settings)
+    display_name = String(
+        help=_("The display name for this component."),
+        scope=Scope.settings
+    )
 
-    voted = Boolean(help="Whether this student has voted on the poll", scope=Scope.user_state, default=False)
-    poll_answer = String(help="Student answer", scope=Scope.user_state, default='')
-    poll_answers = Dict(help="Poll answers from all students", scope=Scope.user_state_summary)
+    voted = Boolean(
+        help=_("Whether this student has voted on the poll"),
+        scope=Scope.user_state,
+        default=False
+    )
+    poll_answer = String(
+        help=_("Student answer"),
+        scope=Scope.user_state,
+        default=''
+    )
+    poll_answers = Dict(
+        help=_("Poll answers from all students"),
+        scope=Scope.user_state_summary
+    )
 
     # List of answers, in the form {'id': 'some id', 'text': 'the answer text'}
-    answers = List(help="Poll answers from xml", scope=Scope.content, default=[])
+    answers = List(
+        help=_("Poll answers from xml"),
+        scope=Scope.content,
+        default=[]
+    )
 
-    question = String(help="Poll question", scope=Scope.content, default='')
+    question = String(
+        help=_("Poll question"),
+        scope=Scope.content,
+        default=''
+    )
 
 
 class PollModule(PollFields, XModule):
     """Poll Module"""
     js = {
-        'coffee': [resource_string(__name__, 'js/src/javascript_loader.coffee')],
         'js': [
+            resource_string(__name__, 'js/src/javascript_loader.js'),
             resource_string(__name__, 'js/src/poll/poll.js'),
             resource_string(__name__, 'js/src/poll/poll_main.js')
         ]
@@ -97,7 +121,7 @@ class PollModule(PollFields, XModule):
         """Renders parameters to template."""
         params = {
             'element_id': self.location.html_id(),
-            'element_class': self.location.category,
+            'element_class': self.location.block_type,
             'ajax_url': self.system.ajax_url,
             'configuration_json': self.dump_poll(),
         }
@@ -145,6 +169,7 @@ class PollDescriptor(PollFields, MakoModuleDescriptor, XmlDescriptor):
     _child_tag_name = 'answer'
 
     module_class = PollModule
+    resources_dir = None
 
     @classmethod
     def definition_from_xml(cls, xml_object, system):
@@ -194,9 +219,11 @@ class PollDescriptor(PollFields, MakoModuleDescriptor, XmlDescriptor):
         xml_object.set('display_name', self.display_name)
 
         def add_child(xml_obj, answer):
+            # Escape answer text before adding to xml tree.
+            answer_text = unicode(Text(answer['text']))
             child_str = u'<{tag_name} id="{id}">{text}</{tag_name}>'.format(
                 tag_name=self._child_tag_name, id=answer['id'],
-                text=answer['text'])
+                text=answer_text)
             child_node = etree.fromstring(child_str)
             xml_object.append(child_node)
 

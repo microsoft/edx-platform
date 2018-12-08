@@ -2,11 +2,12 @@
 Tests for Course API forms.
 """
 
+from itertools import product
+from urllib import urlencode
+
 import ddt
 from django.contrib.auth.models import AnonymousUser
 from django.http import QueryDict
-from itertools import product
-from urllib import urlencode
 
 from openedx.core.djangoapps.util.test_forms import FormTestMixin
 from student.tests.factories import UserFactory
@@ -20,14 +21,17 @@ class UsernameTestMixin(object):
     """
     Tests the username Form field.
     """
+    shard = 4
+
     def test_no_user_param_anonymous_access(self):
         self.set_up_data(AnonymousUser())
         self.form_data.pop('username')
         self.assert_valid(self.cleaned_data)
 
     def test_no_user_param(self):
+        self.set_up_data(AnonymousUser())
         self.form_data.pop('username')
-        self.assert_error('username', "A username is required for non-anonymous access.")
+        self.assert_valid(self.cleaned_data)
 
 
 @ddt.ddt
@@ -35,6 +39,7 @@ class TestCourseListGetForm(FormTestMixin, UsernameTestMixin, SharedModuleStoreT
     """
     Tests for CourseListGetForm
     """
+    shard = 4
     FORM_CLASS = CourseListGetForm
 
     @classmethod
@@ -64,6 +69,7 @@ class TestCourseListGetForm(FormTestMixin, UsernameTestMixin, SharedModuleStoreT
             'username': user.username,
             'org': '',
             'mobile': None,
+            'search_term': '',
             'filter_': None,
         }
 
@@ -99,6 +105,7 @@ class TestCourseDetailGetForm(FormTestMixin, UsernameTestMixin, SharedModuleStor
     """
     Tests for CourseDetailGetForm
     """
+    shard = 4
     FORM_CLASS = CourseDetailGetForm
 
     @classmethod

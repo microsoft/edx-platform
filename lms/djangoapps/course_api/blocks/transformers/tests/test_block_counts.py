@@ -3,7 +3,7 @@ Tests for BlockCountsTransformer.
 """
 
 # pylint: disable=protected-access
-from openedx.core.lib.block_structure.factory import BlockStructureFactory
+from openedx.core.djangoapps.content.block_structure.factory import BlockStructureFactory
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import SampleCourseFactory
 
@@ -14,6 +14,8 @@ class TestBlockCountsTransformer(ModuleStoreTestCase):
     """
     Test behavior of BlockCountsTransformer
     """
+    shard = 4
+
     def setUp(self):
         super(TestBlockCountsTransformer, self).setUp()
         self.course_key = SampleCourseFactory.create().id
@@ -38,13 +40,13 @@ class TestBlockCountsTransformer(ModuleStoreTestCase):
         )
 
         # verify count of chapters
-        self.assertEquals(block_counts_for_course['chapter'], 2)
+        self.assertEquals(block_counts_for_course.chapter, 2)
 
         # verify count of problems
-        self.assertEquals(block_counts_for_course['problem'], 6)
-        self.assertEquals(block_counts_for_chapter_x['problem'], 3)
+        self.assertEquals(block_counts_for_course.problem, 6)
+        self.assertEquals(block_counts_for_chapter_x.problem, 3)
 
         # verify other block types are not counted
         for block_type in ['course', 'html', 'video']:
-            self.assertNotIn(block_type, block_counts_for_course)
-            self.assertNotIn(block_type, block_counts_for_chapter_x)
+            self.assertFalse(hasattr(block_counts_for_course, block_type))
+            self.assertFalse(hasattr(block_counts_for_chapter_x, block_type))

@@ -1,5 +1,10 @@
 import json
 import re
+
+from course_modes.models import CourseMode
+from course_modes.tests.factories import CourseModeFactory
+from django_comment_common.models import CourseDiscussionSettings
+from django_comment_common.utils import set_course_discussion_settings
 from lms.djangoapps.teams.tests.factories import CourseTeamFactory
 
 
@@ -24,10 +29,10 @@ class GroupIdAssertionMixin(object):
 
     def _assert_html_response_contains_group_info(self, response):
         group_info = {"group_id": None, "group_name": None}
-        match = re.search(r'&#34;group_id&#34;: ([\d]*)', response.content)
+        match = re.search(r'"group_id": (\d*),', response.content)
         if match and match.group(1) != '':
             group_info["group_id"] = int(match.group(1))
-        match = re.search(r'&#34;group_name&#34;: &#34;([^&]*)&#34;', response.content)
+        match = re.search(r'"group_name": "(\w*)",', response.content)
         if match:
             group_info["group_name"] = match.group(1)
         self._assert_thread_contains_group_info(group_info)
@@ -95,7 +100,21 @@ class CohortedTopicGroupIdTestMixin(GroupIdAssertionMixin):
     def test_cohorted_topic_moderator_with_invalid_group_id(self, mock_request):
         invalid_id = self.student_cohort.id + self.moderator_cohort.id
         response = self.call_view(mock_request, "cohorted_topic", self.moderator, invalid_id)
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 500)
+
+    def test_cohorted_topic_enrollment_track_invalid_group_id(self, mock_request):
+        CourseModeFactory.create(course_id=self.course.id, mode_slug=CourseMode.AUDIT)
+        CourseModeFactory.create(course_id=self.course.id, mode_slug=CourseMode.VERIFIED)
+        set_course_discussion_settings(
+            course_key=self.course.id,
+            divided_discussions=['cohorted_topic'],
+            division_scheme=CourseDiscussionSettings.ENROLLMENT_TRACK,
+            always_divide_inline_discussions=True,
+        )
+
+        invalid_id = -1000
+        response = self.call_view(mock_request, "cohorted_topic", self.moderator, invalid_id)
+        self.assertEqual(response.status_code, 500)
 
 
 class NonCohortedTopicGroupIdTestMixin(GroupIdAssertionMixin):

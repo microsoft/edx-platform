@@ -2,19 +2,20 @@
 Integration tests of the payment flow, including course mode selection.
 """
 
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 
-from xmodule.modulestore.tests.factories import CourseFactory
-from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
-from student.tests.factories import UserFactory
-from student.models import CourseEnrollment
 from course_modes.tests.factories import CourseModeFactory
+from student.models import CourseEnrollment
+from student.tests.factories import UserFactory
+from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
+from xmodule.modulestore.tests.factories import CourseFactory
 
 
 class TestProfEdVerification(ModuleStoreTestCase):
     """
     Integration test for professional ed verification, including course mode selection.
     """
+    shard = 4
 
     # Choose an uncommon number for the price so we can search for it on the page
     MIN_PRICE = 1438
@@ -26,13 +27,13 @@ class TestProfEdVerification(ModuleStoreTestCase):
         self.client.login(username="rusty", password="test")
         course = CourseFactory.create(org='Robot', number='999', display_name='Test Course')
         self.course_key = course.id
-        CourseModeFactory(
+        CourseModeFactory.create(
             mode_slug="professional",
             course_id=self.course_key,
             min_price=self.MIN_PRICE,
             suggested_prices=''
         )
-
+        purchase_workflow = "?purchase_workflow=single"
         self.urls = {
             'course_modes_choose': reverse(
                 'course_modes_choose',
@@ -42,7 +43,7 @@ class TestProfEdVerification(ModuleStoreTestCase):
             'verify_student_start_flow': reverse(
                 'verify_student_start_flow',
                 args=[unicode(self.course_key)]
-            ),
+            ) + purchase_workflow,
         }
 
     def test_start_flow(self):

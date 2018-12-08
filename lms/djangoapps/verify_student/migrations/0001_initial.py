@@ -4,10 +4,10 @@ from __future__ import unicode_literals
 from django.db import migrations, models
 import lms.djangoapps.verify_student.models
 import model_utils.fields
-import xmodule_django.models
 import django.db.models.deletion
 import django.utils.timezone
 from django.conf import settings
+from opaque_keys.edx.django.models import CourseKeyField
 
 
 class Migration(migrations.Migration):
@@ -23,7 +23,7 @@ class Migration(migrations.Migration):
                 ('id', models.IntegerField(verbose_name='ID', db_index=True, auto_created=True, blank=True)),
                 ('created', model_utils.fields.AutoCreatedField(default=django.utils.timezone.now, verbose_name='created', editable=False)),
                 ('modified', model_utils.fields.AutoLastModifiedField(default=django.utils.timezone.now, verbose_name='modified', editable=False)),
-                ('course_key', xmodule_django.models.CourseKeyField(help_text='The course for which this deadline applies', max_length=255, db_index=True)),
+                ('course_key', CourseKeyField(help_text='The course for which this deadline applies', max_length=255, db_index=True)),
                 ('deadline', models.DateTimeField(help_text='The datetime after which users are no longer allowed to submit photos for verification.')),
                 ('history_id', models.AutoField(serialize=False, primary_key=True)),
                 ('history_date', models.DateTimeField()),
@@ -66,7 +66,7 @@ class Migration(migrations.Migration):
             name='SkippedReverification',
             fields=[
                 ('id', models.AutoField(verbose_name='ID', serialize=False, auto_created=True, primary_key=True)),
-                ('course_id', xmodule_django.models.CourseKeyField(max_length=255, db_index=True)),
+                ('course_id', CourseKeyField(max_length=255, db_index=True)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
             ],
         ),
@@ -88,9 +88,9 @@ class Migration(migrations.Migration):
                 ('error_msg', models.TextField(blank=True)),
                 ('error_code', models.CharField(max_length=50, blank=True)),
                 ('photo_id_key', models.TextField(max_length=1024)),
-                ('copy_id_photo_from', models.ForeignKey(blank=True, to='verify_student.SoftwareSecurePhotoVerification', null=True)),
-                ('reviewing_user', models.ForeignKey(related_name='photo_verifications_reviewed', default=None, to=settings.AUTH_USER_MODEL, null=True)),
-                ('user', models.ForeignKey(to=settings.AUTH_USER_MODEL)),
+                ('copy_id_photo_from', models.ForeignKey(blank=True, to='verify_student.SoftwareSecurePhotoVerification', null=True, on_delete=models.CASCADE)),
+                ('reviewing_user', models.ForeignKey(related_name='photo_verifications_reviewed', default=None, to=settings.AUTH_USER_MODEL, null=True, on_delete=models.CASCADE)),
+                ('user', models.ForeignKey(to=settings.AUTH_USER_MODEL, on_delete=models.CASCADE)),
             ],
             options={
                 'ordering': ['-created_at'],
@@ -101,7 +101,7 @@ class Migration(migrations.Migration):
             name='VerificationCheckpoint',
             fields=[
                 ('id', models.AutoField(verbose_name='ID', serialize=False, auto_created=True, primary_key=True)),
-                ('course_id', xmodule_django.models.CourseKeyField(max_length=255, db_index=True)),
+                ('course_id', CourseKeyField(max_length=255, db_index=True)),
                 ('checkpoint_location', models.CharField(max_length=255)),
                 ('photo_verification', models.ManyToManyField(to='verify_student.SoftwareSecurePhotoVerification')),
             ],
@@ -112,7 +112,7 @@ class Migration(migrations.Migration):
                 ('id', models.AutoField(verbose_name='ID', serialize=False, auto_created=True, primary_key=True)),
                 ('created', model_utils.fields.AutoCreatedField(default=django.utils.timezone.now, verbose_name='created', editable=False)),
                 ('modified', model_utils.fields.AutoLastModifiedField(default=django.utils.timezone.now, verbose_name='modified', editable=False)),
-                ('course_key', xmodule_django.models.CourseKeyField(help_text='The course for which this deadline applies', unique=True, max_length=255, db_index=True)),
+                ('course_key', CourseKeyField(help_text='The course for which this deadline applies', unique=True, max_length=255, db_index=True)),
                 ('deadline', models.DateTimeField(help_text='The datetime after which users are no longer allowed to submit photos for verification.')),
             ],
             options={
@@ -127,8 +127,8 @@ class Migration(migrations.Migration):
                 ('timestamp', models.DateTimeField(auto_now_add=True)),
                 ('response', models.TextField(null=True, blank=True)),
                 ('error', models.TextField(null=True, blank=True)),
-                ('checkpoint', models.ForeignKey(related_name='checkpoint_status', to='verify_student.VerificationCheckpoint')),
-                ('user', models.ForeignKey(to=settings.AUTH_USER_MODEL)),
+                ('checkpoint', models.ForeignKey(related_name='checkpoint_status', to='verify_student.VerificationCheckpoint', on_delete=models.CASCADE)),
+                ('user', models.ForeignKey(to=settings.AUTH_USER_MODEL, on_delete=models.CASCADE)),
             ],
             options={
                 'get_latest_by': 'timestamp',
@@ -139,12 +139,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='skippedreverification',
             name='checkpoint',
-            field=models.ForeignKey(related_name='skipped_checkpoint', to='verify_student.VerificationCheckpoint'),
+            field=models.ForeignKey(related_name='skipped_checkpoint', to='verify_student.VerificationCheckpoint', on_delete=models.CASCADE),
         ),
         migrations.AddField(
             model_name='skippedreverification',
             name='user',
-            field=models.ForeignKey(to=settings.AUTH_USER_MODEL),
+            field=models.ForeignKey(to=settings.AUTH_USER_MODEL, on_delete=models.CASCADE),
         ),
         migrations.AlterUniqueTogether(
             name='verificationcheckpoint',

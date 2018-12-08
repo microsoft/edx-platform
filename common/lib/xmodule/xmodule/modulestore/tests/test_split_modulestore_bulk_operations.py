@@ -1,3 +1,7 @@
+"""
+Tests for bulk operations in Split Modulestore.
+"""
+# pylint: disable=protected-access
 import copy
 import ddt
 import unittest
@@ -10,6 +14,8 @@ from opaque_keys.edx.locator import CourseLocator
 
 
 class TestBulkWriteMixin(unittest.TestCase):
+    shard = 2
+
     def setUp(self):
         super(TestBulkWriteMixin, self).setUp()
         self.bulk = SplitBulkWriteMixin()
@@ -50,6 +56,8 @@ class TestBulkWriteMixinClosed(TestBulkWriteMixin):
     """
     Tests of the bulk write mixin when bulk operations aren't active.
     """
+    shard = 2
+
     @ddt.data('deadbeef1234' * 2, u'deadbeef1234' * 2, ObjectId())
     def test_no_bulk_read_structure(self, version_guid):
         # Reading a structure when no bulk operation is active should just call
@@ -292,13 +300,21 @@ class TestBulkWriteMixinFindMethods(TestBulkWriteMixin):
     """
     Tests of BulkWriteMixin methods for finding many structures or indexes
     """
+    shard = 2
+
     def test_no_bulk_find_matching_course_indexes(self):
         branch = Mock(name='branch')
         search_targets = MagicMock(name='search_targets')
         org_targets = None
         self.conn.find_matching_course_indexes.return_value = [Mock(name='result')]
         result = self.bulk.find_matching_course_indexes(branch, search_targets)
-        self.assertConnCalls(call.find_matching_course_indexes(branch, search_targets, org_targets))
+        self.assertConnCalls(call.find_matching_course_indexes(
+            branch,
+            search_targets,
+            org_targets,
+            course_keys=None
+        )
+        )
         self.assertEqual(result, self.conn.find_matching_course_indexes.return_value)
         self.assertCacheNotCleared()
 
@@ -422,7 +438,7 @@ class TestBulkWriteMixinFindMethods(TestBulkWriteMixin):
 
         db_definitions = [db_definition(_id) for _id in db_ids if _id not in active_ids]
         self.bulk._begin_bulk_operation(self.course_key)
-        for n, _id in enumerate(active_ids):
+        for _id in active_ids:
             self.bulk.update_definition(self.course_key, active_definition(_id))
 
         self.conn.get_definitions.return_value = db_definitions
@@ -443,6 +459,17 @@ class TestBulkWriteMixinFindMethods(TestBulkWriteMixin):
                 self.assertIn(db_definition(_id), results)
             else:
                 self.assertNotIn(db_definition(_id), results)
+
+    def test_get_definitions_doesnt_update_db(self):
+        test_ids = [1, 2]
+        db_definition = lambda _id: {'db': 'definition', '_id': _id}
+
+        db_definitions = [db_definition(_id) for _id in test_ids]
+        self.conn.get_definitions.return_value = db_definitions
+        self.bulk._begin_bulk_operation(self.course_key)
+        self.bulk.get_definitions(self.course_key, test_ids)
+        self.bulk._end_bulk_operation(self.course_key)
+        self.assertFalse(self.conn.insert_definition.called)
 
     def test_no_bulk_find_structures_derived_from(self):
         ids = [Mock(name='id')]
@@ -551,6 +578,8 @@ class TestBulkWriteMixinOpen(TestBulkWriteMixin):
     """
     Tests of the bulk write mixin when bulk write operations are open
     """
+    shard = 2
+
     def setUp(self):
         super(TestBulkWriteMixinOpen, self).setUp()
         self.bulk._begin_bulk_operation(self.course_key)
@@ -704,7 +733,7 @@ class TestBulkWriteMixinOpen(TestBulkWriteMixin):
             from_index=self.conn.get_course_index.return_value,
             course_context=self.course_key,
         )
-        self.conn.get_course_index.assert_called_once_with(self.course_key)
+        self.conn.get_course_index.assert_called_once_with(self.course_key, ignore_case=False)
 
 
 class TestBulkWriteMixinOpenAfterPrevTransaction(TestBulkWriteMixinOpen, TestBulkWriteMixinPreviousTransaction):

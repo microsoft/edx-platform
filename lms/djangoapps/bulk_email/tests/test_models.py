@@ -1,39 +1,53 @@
 """
 Unit tests for bulk-email-related models.
 """
-from django.test import TestCase
+import datetime
+
+import ddt
 from django.core.management import call_command
-from django.conf import settings
-
-from student.tests.factories import UserFactory
-
-from mock import patch, Mock
+from django.test import TestCase
+from mock import Mock, patch
 from nose.plugins.attrib import attr
+from opaque_keys.edx.keys import CourseKey
+from pytz import UTC
 
-from bulk_email.models import CourseEmail, SEND_TO_STAFF, CourseEmailTemplate, CourseAuthorization
-from opaque_keys.edx.locations import SlashSeparatedCourseKey
+from bulk_email.models import (
+    SEND_TO_COHORT,
+    SEND_TO_STAFF,
+    SEND_TO_TRACK,
+    BulkEmailFlag,
+    CourseAuthorization,
+    CourseEmail,
+    CourseEmailTemplate
+)
+from course_modes.models import CourseMode
+from openedx.core.djangoapps.course_groups.models import CourseCohort
+from student.tests.factories import UserFactory
+from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
+from xmodule.modulestore.tests.factories import CourseFactory
 
 
-@attr('shard_1')
+@ddt.ddt
+@attr(shard=1)
 @patch('bulk_email.models.html_to_text', Mock(return_value='Mocking CourseEmail.text_message', autospec=True))
-class CourseEmailTest(TestCase):
+class CourseEmailTest(ModuleStoreTestCase):
     """Test the CourseEmail model."""
 
     def test_creation(self):
-        course_id = SlashSeparatedCourseKey('abc', '123', 'doremi')
+        course_id = CourseKey.from_string('abc/123/doremi')
         sender = UserFactory.create()
         to_option = SEND_TO_STAFF
         subject = "dummy subject"
         html_message = "<html>dummy message</html>"
-        email = CourseEmail.create(course_id, sender, to_option, subject, html_message)
-        self.assertEquals(email.course_id, course_id)
-        self.assertEquals(email.to_option, SEND_TO_STAFF)
-        self.assertEquals(email.subject, subject)
-        self.assertEquals(email.html_message, html_message)
-        self.assertEquals(email.sender, sender)
+        email = CourseEmail.create(course_id, sender, [to_option], subject, html_message)
+        self.assertEqual(email.course_id, course_id)
+        self.assertIn(SEND_TO_STAFF, [target.target_type for target in email.targets.all()])
+        self.assertEqual(email.subject, subject)
+        self.assertEqual(email.html_message, html_message)
+        self.assertEqual(email.sender, sender)
 
     def test_creation_with_optional_attributes(self):
-        course_id = SlashSeparatedCourseKey('abc', '123', 'doremi')
+        course_id = CourseKey.from_string('abc/123/doremi')
         sender = UserFactory.create()
         to_option = SEND_TO_STAFF
         subject = "dummy subject"
@@ -41,18 +55,18 @@ class CourseEmailTest(TestCase):
         template_name = "branded_template"
         from_addr = "branded@branding.com"
         email = CourseEmail.create(
-            course_id, sender, to_option, subject, html_message, template_name=template_name, from_addr=from_addr
+            course_id, sender, [to_option], subject, html_message, template_name=template_name, from_addr=from_addr
         )
-        self.assertEquals(email.course_id, course_id)
-        self.assertEquals(email.to_option, SEND_TO_STAFF)
-        self.assertEquals(email.subject, subject)
-        self.assertEquals(email.html_message, html_message)
-        self.assertEquals(email.sender, sender)
-        self.assertEquals(email.template_name, template_name)
-        self.assertEquals(email.from_addr, from_addr)
+        self.assertEqual(email.course_id, course_id)
+        self.assertEqual(email.targets.all()[0].target_type, SEND_TO_STAFF)
+        self.assertEqual(email.subject, subject)
+        self.assertEqual(email.html_message, html_message)
+        self.assertEqual(email.sender, sender)
+        self.assertEqual(email.template_name, template_name)
+        self.assertEqual(email.from_addr, from_addr)
 
     def test_bad_to_option(self):
-        course_id = SlashSeparatedCourseKey('abc', '123', 'doremi')
+        course_id = CourseKey.from_string('abc/123/doremi')
         sender = UserFactory.create()
         to_option = "fake"
         subject = "dummy subject"
@@ -60,8 +74,79 @@ class CourseEmailTest(TestCase):
         with self.assertRaises(ValueError):
             CourseEmail.create(course_id, sender, to_option, subject, html_message)
 
+    @ddt.data(
+        datetime.datetime(1999, 1, 1, tzinfo=UTC),
+        datetime.datetime(datetime.MAXYEAR, 1, 1, tzinfo=UTC),
+    )
+    def test_track_target(self, expiration_datetime):
+        """
+        Tests that emails can be sent to a specific track. Also checks that
+         emails can be sent to an expired track (EDUCATOR-364)
+        """
+        course = CourseFactory.create()
+        course_id = course.id
+        sender = UserFactory.create()
+        to_option = 'track:test'
+        subject = "dummy subject"
+        html_message = "<html>dummy message</html>"
+        CourseMode.objects.create(
+            mode_slug='test',
+            mode_display_name='Test',
+            course_id=course_id,
+            expiration_datetime=expiration_datetime,
+        )
+        email = CourseEmail.create(course_id, sender, [to_option], subject, html_message)
+        self.assertEqual(len(email.targets.all()), 1)
+        target = email.targets.all()[0]
+        self.assertEqual(target.target_type, SEND_TO_TRACK)
+        self.assertEqual(target.short_display(), 'track-test')
+        self.assertEqual(target.long_display(), 'Course mode: Test, Currency: usd')
 
-@attr('shard_1')
+    @ddt.data(
+        CourseMode.AUDIT,
+        CourseMode.HONOR,
+    )
+    def test_track_target_with_free_mode(self, free_mode):
+        """
+        Tests that when emails are sent to a free track the track display
+        should not contain currency.
+        """
+        course = CourseFactory.create()
+        mode_display_name = free_mode.capitalize
+        course_id = course.id
+        sender = UserFactory.create()
+        to_option = 'track:{}'.format(free_mode)
+        subject = "dummy subject"
+        html_message = "<html>dummy message</html>"
+        CourseMode.objects.create(
+            mode_slug=free_mode,
+            mode_display_name=mode_display_name,
+            course_id=course_id,
+        )
+
+        email = CourseEmail.create(course_id, sender, [to_option], subject, html_message)
+        self.assertEqual(len(email.targets.all()), 1)
+        target = email.targets.all()[0]
+        self.assertEqual(target.target_type, SEND_TO_TRACK)
+        self.assertEqual(target.short_display(), 'track-{}'.format(free_mode))
+        self.assertEqual(target.long_display(), 'Course mode: {}'.format(mode_display_name))
+
+    def test_cohort_target(self):
+        course_id = CourseKey.from_string('abc/123/doremi')
+        sender = UserFactory.create()
+        to_option = 'cohort:test cohort'
+        subject = "dummy subject"
+        html_message = "<html>dummy message</html>"
+        CourseCohort.create(cohort_name='test cohort', course_id=course_id)
+        email = CourseEmail.create(course_id, sender, [to_option], subject, html_message)
+        self.assertEqual(len(email.targets.all()), 1)
+        target = email.targets.all()[0]
+        self.assertEqual(target.target_type, SEND_TO_COHORT)
+        self.assertEqual(target.short_display(), 'cohort-test cohort')
+        self.assertEqual(target.long_display(), 'Cohort: test cohort')
+
+
+@attr(shard=1)
 class NoCourseEmailTemplateTest(TestCase):
     """Test the CourseEmailTemplate model without loading the template data."""
 
@@ -70,7 +155,7 @@ class NoCourseEmailTemplateTest(TestCase):
             CourseEmailTemplate.get_template()
 
 
-@attr('shard_1')
+@attr(shard=1)
 class CourseEmailTemplateTest(TestCase):
     """Test the CourseEmailTemplate model."""
 
@@ -95,6 +180,15 @@ class CourseEmailTemplateTest(TestCase):
         """Provide sample context sufficient for rendering HTML template"""
         context = self._get_sample_plain_context()
         context['course_image_url'] = "/location/of/course/image/url"
+        return context
+
+    def _add_xss_fields(self, context):
+        """ Add fields to the context for XSS testing. """
+        context['course_title'] = "<script>alert('Course Title!');</alert>"
+        context['name'] = "<script>alert('Profile Name!');</alert>"
+        # Must have user_id and course_id present in order to do keyword substitution
+        context['user_id'] = 12345
+        context['course_id'] = "course-v1:edx+100+1"
         return context
 
     def test_get_template(self):
@@ -134,28 +228,52 @@ class CourseEmailTemplateTest(TestCase):
         context = self._get_sample_html_context()
         template.render_htmltext("My new html text.", context)
 
+    def test_render_html_xss(self):
+        template = CourseEmailTemplate.get_template()
+        context = self._add_xss_fields(self._get_sample_html_context())
+        message = template.render_htmltext(
+            "Dear %%USER_FULLNAME%%, thanks for enrolling in %%COURSE_DISPLAY_NAME%%.", context
+        )
+        self.assertNotIn("<script>", message)
+        self.assertIn("&lt;script&gt;alert(&#39;Course Title!&#39;);&lt;/alert&gt;", message)
+        self.assertIn("&lt;script&gt;alert(&#39;Profile Name!&#39;);&lt;/alert&gt;", message)
+
     def test_render_plain(self):
         template = CourseEmailTemplate.get_template()
         context = self._get_sample_plain_context()
         template.render_plaintext("My new plain text.", context)
 
+    def test_render_plain_no_escaping(self):
+        template = CourseEmailTemplate.get_template()
+        context = self._add_xss_fields(self._get_sample_plain_context())
+        message = template.render_plaintext(
+            "Dear %%USER_FULLNAME%%, thanks for enrolling in %%COURSE_DISPLAY_NAME%%.", context
+        )
+        self.assertNotIn("&lt;script&gt;", message)
+        self.assertIn(context['course_title'], message)
+        self.assertIn(context['name'], message)
 
-@attr('shard_1')
+
+@attr(shard=1)
 class CourseAuthorizationTest(TestCase):
     """Test the CourseAuthorization model."""
 
-    @patch.dict(settings.FEATURES, {'REQUIRE_COURSE_EMAIL_AUTH': True})
+    def tearDown(self):
+        super(CourseAuthorizationTest, self).tearDown()
+        BulkEmailFlag.objects.all().delete()
+
     def test_creation_auth_on(self):
-        course_id = SlashSeparatedCourseKey('abc', '123', 'doremi')
+        BulkEmailFlag.objects.create(enabled=True, require_course_email_auth=True)
+        course_id = CourseKey.from_string('abc/123/doremi')
         # Test that course is not authorized by default
-        self.assertFalse(CourseAuthorization.instructor_email_enabled(course_id))
+        self.assertFalse(BulkEmailFlag.feature_enabled(course_id))
 
         # Authorize
         cauth = CourseAuthorization(course_id=course_id, email_enabled=True)
         cauth.save()
         # Now, course should be authorized
-        self.assertTrue(CourseAuthorization.instructor_email_enabled(course_id))
-        self.assertEquals(
+        self.assertTrue(BulkEmailFlag.feature_enabled(course_id))
+        self.assertEqual(
             cauth.__unicode__(),
             "Course 'abc/123/doremi': Instructor Email Enabled"
         )
@@ -164,21 +282,21 @@ class CourseAuthorizationTest(TestCase):
         cauth.email_enabled = False
         cauth.save()
         # Test that course is now unauthorized
-        self.assertFalse(CourseAuthorization.instructor_email_enabled(course_id))
-        self.assertEquals(
+        self.assertFalse(BulkEmailFlag.feature_enabled(course_id))
+        self.assertEqual(
             cauth.__unicode__(),
             "Course 'abc/123/doremi': Instructor Email Not Enabled"
         )
 
-    @patch.dict(settings.FEATURES, {'REQUIRE_COURSE_EMAIL_AUTH': False})
     def test_creation_auth_off(self):
-        course_id = SlashSeparatedCourseKey('blahx', 'blah101', 'ehhhhhhh')
+        BulkEmailFlag.objects.create(enabled=True, require_course_email_auth=False)
+        course_id = CourseKey.from_string('blahx/blah101/ehhhhhhh')
         # Test that course is authorized by default, since auth is turned off
-        self.assertTrue(CourseAuthorization.instructor_email_enabled(course_id))
+        self.assertTrue(BulkEmailFlag.feature_enabled(course_id))
 
         # Use the admin interface to unauthorize the course
         cauth = CourseAuthorization(course_id=course_id, email_enabled=False)
         cauth.save()
 
         # Now, course should STILL be authorized!
-        self.assertTrue(CourseAuthorization.instructor_email_enabled(course_id))
+        self.assertTrue(BulkEmailFlag.feature_enabled(course_id))

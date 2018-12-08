@@ -5,7 +5,6 @@ from django.test.utils import override_settings
 import track.tracker as tracker
 from track.backends import BaseBackend
 
-
 SIMPLE_SETTINGS = {
     'default': {
         'ENGINE': 'track.tests.test_tracker.DummyBackend',
@@ -61,7 +60,7 @@ class TestTrackerInstantiation(TestCase):
 class TestTrackerDjangoInstantiation(TestCase):
     """Test if backends are initialized properly from Django settings."""
 
-    @override_settings(TRACKING_BACKENDS=SIMPLE_SETTINGS)
+    @override_settings(TRACKING_BACKENDS=SIMPLE_SETTINGS.copy())
     def test_django_simple_settings(self):
         """Test configuration of a simple backend"""
 
@@ -73,7 +72,7 @@ class TestTrackerDjangoInstantiation(TestCase):
 
         self.assertEqual(backends.values()[0].count, 1)
 
-    @override_settings(TRACKING_BACKENDS=MULTI_SETTINGS)
+    @override_settings(TRACKING_BACKENDS=MULTI_SETTINGS.copy())
     def test_django_multi_settings(self):
         """Test if multiple backends can be configured properly."""
 
@@ -88,7 +87,7 @@ class TestTrackerDjangoInstantiation(TestCase):
         self.assertEqual(backends[0].count, event_count)
         self.assertEqual(backends[1].count, event_count)
 
-    @override_settings(TRACKING_BACKENDS=MULTI_SETTINGS)
+    @override_settings(TRACKING_BACKENDS=MULTI_SETTINGS.copy())
     def test_django_remove_settings(self):
         """Test if a backend can be remove by setting it to None."""
 

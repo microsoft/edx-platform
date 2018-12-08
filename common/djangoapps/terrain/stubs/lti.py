@@ -9,16 +9,18 @@ not possible to have this LTI multiple times on a single page in LMS.
 
 """
 
-from uuid import uuid4
+import base64
+import hashlib
 import textwrap
 import urllib
-from oauthlib.oauth1.rfc5849 import signature, parameters
-import oauthlib.oauth1
-import hashlib
-import base64
+from uuid import uuid4
+
 import mock
+import oauthlib.oauth1
 import requests
+from django.conf import settings
 from http import StubHttpRequestHandler, StubHttpService
+from oauthlib.oauth1.rfc5849 import parameters, signature
 
 
 class StubLtiHandler(StubHttpRequestHandler):
@@ -28,7 +30,7 @@ class StubLtiHandler(StubHttpRequestHandler):
     DEFAULT_CLIENT_KEY = 'test_client_key'
     DEFAULT_CLIENT_SECRET = 'test_client_secret'
     DEFAULT_LTI_ENDPOINT = 'correct_lti_endpoint'
-    DEFAULT_LTI_ADDRESS = 'http://127.0.0.1:{port}/'
+    DEFAULT_LTI_ADDRESS = 'http://{host}:{port}/'
 
     def do_GET(self):
         """
@@ -70,7 +72,8 @@ class StubLtiHandler(StubHttpRequestHandler):
                         'sourcedId': self.post_dict.get('lis_result_sourcedid')
                     }
 
-                submit_url = '//{}:{}'.format(*self.server.server_address)
+                host = getattr(settings, 'LETTUCE_HOST', self.server.server_address[0])
+                submit_url = '//{}:{}'.format(host, self.server.server_address[1])
                 content = self._create_content(status_message, submit_url)
                 self.send_response(200, content)
 
@@ -191,13 +194,13 @@ class StubLtiHandler(StubHttpRequestHandler):
         if submit_url:
             submit_form = textwrap.dedent("""
                 <form action="{submit_url}/grade" method="post">
-                    <input type="submit" name="submit-button" value="Submit">
+                    <input type="submit" name="submit-button" value="Submit" id="submit-button">
                 </form>
                 <form action="{submit_url}/lti2_outcome" method="post">
-                    <input type="submit" name="submit-lti2-button" value="Submit">
+                    <input type="submit" name="submit-lti2-button" value="Submit" id="submit-lti2-button">
                 </form>
                 <form action="{submit_url}/lti2_delete" method="post">
-                    <input type="submit" name="submit-lti2-delete-button" value="Submit">
+                    <input type="submit" name="submit-lti2-delete-button" value="Submit" id="submit-lti-delete-button">
                 </form>
             """).format(submit_url=submit_url)
         else:
@@ -256,16 +259,16 @@ class StubLtiHandler(StubHttpRequestHandler):
         sha1 = hashlib.sha1()
         sha1.update(body)
         oauth_body_hash = unicode(base64.b64encode(sha1.digest()))
-        params = client.get_oauth_params(None)
-        params.append((u'oauth_body_hash', oauth_body_hash))
         mock_request = mock.Mock(
             uri=unicode(urllib.unquote(url)),
             headers=headers,
             body=u"",
             decoded_body=u"",
-            oauth_params=params,
             http_method=unicode(method),
         )
+        params = client.get_oauth_params(mock_request)
+        mock_request.oauth_params = params
+        mock_request.oauth_params.append((u'oauth_body_hash', oauth_body_hash))
         sig = client.get_oauth_signature(mock_request)
         mock_request.oauth_params.append((u'oauth_signature', sig))
         new_headers = parameters.prepare_headers(mock_request.oauth_params, headers, realm=None)
@@ -289,8 +292,9 @@ class StubLtiHandler(StubHttpRequestHandler):
         """
         client_secret = unicode(self.server.config.get('client_secret', self.DEFAULT_CLIENT_SECRET))
 
+        host = getattr(settings, 'LETTUCE_HOST', '127.0.0.1')
         port = self.server.server_address[1]
-        lti_base = self.DEFAULT_LTI_ADDRESS.format(port=port)
+        lti_base = self.DEFAULT_LTI_ADDRESS.format(host=host, port=port)
         lti_endpoint = self.server.config.get('lti_endpoint', self.DEFAULT_LTI_ENDPOINT)
         url = lti_base + lti_endpoint
 

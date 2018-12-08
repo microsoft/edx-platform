@@ -1,33 +1,29 @@
 """Interface for adding certificate generation tasks to the XQueue. """
 import json
-import random
 import logging
-import lxml.html
-from lxml.etree import XMLSyntaxError, ParserError
+import random
 from uuid import uuid4
 
-from django.test.client import RequestFactory
+import lxml.html
 from django.conf import settings
-from django.core.urlresolvers import reverse
+from django.urls import reverse
+from django.test.client import RequestFactory
+from lxml.etree import ParserError, XMLSyntaxError
 from requests.auth import HTTPBasicAuth
 
-from courseware import grades
-from xmodule.modulestore.django import modulestore
-from capa.xqueue_interface import XQueueInterface
-from capa.xqueue_interface import make_xheader, make_hashkey
-from course_modes.models import CourseMode
-from student.models import UserProfile, CourseEnrollment
-from lms.djangoapps.verify_student.models import SoftwareSecurePhotoVerification
-
-from certificates.models import (
-    CertificateStatuses,
-    GeneratedCertificate,
-    certificate_status_for_student,
-    CertificateStatuses as status,
+from capa.xqueue_interface import XQueueInterface, make_hashkey, make_xheader
+from lms.djangoapps.certificates.models import CertificateStatuses as status
+from lms.djangoapps.certificates.models import (
     CertificateWhitelist,
-    ExampleCertificate
+    ExampleCertificate,
+    GeneratedCertificate,
+    certificate_status_for_student
 )
-
+from course_modes.models import CourseMode
+from lms.djangoapps.grades.course_grade_factory import CourseGradeFactory
+from lms.djangoapps.verify_student.services import IDVerificationService
+from student.models import CourseEnrollment, UserProfile
+from xmodule.modulestore.django import modulestore
 
 LOGGER = logging.getLogger(__name__)
 
@@ -199,6 +195,8 @@ class XQueueCertInterface(object):
         Will change the certificate status to 'generating' or
         `downloadable` in case of web view certificates.
 
+        The course must not be a CCX.
+
         Certificate must be in the 'unavailable', 'error',
         'deleted' or 'generating' state.
 
@@ -214,6 +212,18 @@ class XQueueCertInterface(object):
         Returns the newly created certificate instance
         """
 
+        if hasattr(course_id, 'ccx'):
+            LOGGER.warning(
+                (
+                    u"Cannot create certificate generation task for user %s "
+                    u"in the course '%s'; "
+                    u"certificates are not allowed for CCX courses."
+                ),
+                student.id,
+                unicode(course_id)
+            )
+            return None
+
         valid_statuses = [
             status.generating,
             status.unavailable,
@@ -224,6 +234,7 @@ class XQueueCertInterface(object):
             status.auditing,
             status.audit_passing,
             status.audit_notpassing,
+            status.unverified,
         ]
 
         cert_status = certificate_status_for_student(student, course_id)['status']
@@ -257,13 +268,13 @@ class XQueueCertInterface(object):
         self.request.session = {}
 
         is_whitelisted = self.whitelist.filter(user=student, course_id=course_id, whitelist=True).exists()
-        grade = grades.grade(student, self.request, course)
+        course_grade = CourseGradeFactory().read(student, course)
         enrollment_mode, __ = CourseEnrollment.enrollment_mode_for_user(student, course_id)
         mode_is_verified = enrollment_mode in GeneratedCertificate.VERIFIED_CERTS_MODES
-        user_is_verified = SoftwareSecurePhotoVerification.user_is_verified(student)
+        user_is_verified = IDVerificationService.user_is_verified(student)
         cert_mode = enrollment_mode
         is_eligible_for_certificate = is_whitelisted or CourseMode.is_eligible_for_certificate(enrollment_mode)
-
+        unverified = False
         # For credit mode generate verified certificate
         if cert_mode == CourseMode.CREDIT_MODE:
             cert_mode = CourseMode.VERIFIED
@@ -274,24 +285,42 @@ class XQueueCertInterface(object):
             template_pdf = "certificate-template-{id.org}-{id.course}-verified.pdf".format(id=course_id)
         elif mode_is_verified and not user_is_verified:
             template_pdf = "certificate-template-{id.org}-{id.course}.pdf".format(id=course_id)
-            cert_mode = GeneratedCertificate.MODES.honor
+            if CourseMode.mode_for_course(course_id, CourseMode.HONOR):
+                cert_mode = GeneratedCertificate.MODES.honor
+            else:
+                unverified = True
         else:
             # honor code and audit students
             template_pdf = "certificate-template-{id.org}-{id.course}.pdf".format(id=course_id)
-        if forced_grade:
-            grade['grade'] = forced_grade
 
-        cert, created = GeneratedCertificate.objects.get_or_create(user=student, course_id=course_id)  # pylint: disable=no-member
+        LOGGER.info(
+            (
+                u"Certificate generated for student %s in the course: %s with template: %s. "
+                u"given template: %s, "
+                u"user is verified: %s, "
+                u"mode is verified: %s,"
+                u"generate_pdf is: %s"
+            ),
+            student.username,
+            unicode(course_id),
+            template_pdf,
+            template_file,
+            user_is_verified,
+            mode_is_verified,
+            generate_pdf
+        )
+
+        cert, created = GeneratedCertificate.objects.get_or_create(user=student, course_id=course_id)
 
         cert.mode = cert_mode
         cert.user = student
-        cert.grade = grade['percent']
+        cert.grade = course_grade.percent
         cert.course_id = course_id
         cert.name = profile_name
         cert.download_url = ''
 
         # Strip HTML from grade range label
-        grade_contents = grade.get('grade', None)
+        grade_contents = forced_grade or course_grade.letter_grade
         try:
             grade_contents = lxml.html.fromstring(grade_contents).text_content()
             passing = True
@@ -328,7 +357,7 @@ class XQueueCertInterface(object):
         # existing audit certs as ineligible.
         cutoff = settings.AUDIT_CERT_CUTOFF_DATE
         if (cutoff and cert.created_date >= cutoff) and not is_eligible_for_certificate:
-            cert.status = CertificateStatuses.audit_passing if passing else CertificateStatuses.audit_notpassing
+            cert.status = status.audit_passing if passing else status.audit_notpassing
             cert.save()
             LOGGER.info(
                 u"Student %s with enrollment mode %s is not eligible for a certificate.",
@@ -373,6 +402,20 @@ class XQueueCertInterface(object):
             )
             return cert
 
+        if unverified:
+            cert.status = status.unverified
+            cert.save()
+            LOGGER.info(
+                (
+                    u"User %s has a verified enrollment in course %s "
+                    u"but is missing ID verification. "
+                    u"Certificate status has been set to unverified"
+                ),
+                student.id,
+                unicode(course_id),
+            )
+            return cert
+
         # Finally, generate the certificate and send it off.
         return self._generate_cert(cert, course, student, grade_contents, template_pdf, generate_pdf)
 
@@ -401,6 +444,8 @@ class XQueueCertInterface(object):
             cert.verify_uuid = uuid4().hex
 
         cert.save()
+        logging.info(u'certificate generated for user: %s with generate_pdf status: %s',
+                     student.username, generate_pdf)
 
         if generate_pdf:
             try:
@@ -468,7 +513,7 @@ class XQueueCertInterface(object):
         # for other certificates.  Although both tasks use the same queue,
         # we can distinguish whether the certificate was an example cert based
         # on which end-point XQueue uses once the task completes.
-        callback_url_path = reverse('certificates.views.update_example_certificate')
+        callback_url_path = reverse('update_example_certificate')
 
         try:
             self._send_to_xqueue(

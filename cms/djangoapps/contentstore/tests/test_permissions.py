@@ -5,11 +5,11 @@ import copy
 
 from django.contrib.auth.models import User
 
-from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from contentstore.tests.utils import AjaxEnabledTestClient
-from contentstore.utils import reverse_url, reverse_course_url
-from student.roles import CourseInstructorRole, CourseStaffRole, OrgStaffRole, OrgInstructorRole
+from contentstore.utils import reverse_course_url, reverse_url
 from student import auth
+from student.roles import CourseInstructorRole, CourseStaffRole, OrgInstructorRole, OrgStaffRole
+from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 
 
 class TestCourseAccess(ModuleStoreTestCase):
@@ -22,10 +22,10 @@ class TestCourseAccess(ModuleStoreTestCase):
 
         Create a pool of users w/o granting them any permissions
         """
-        user_password = super(TestCourseAccess, self).setUp()
+        super(TestCourseAccess, self).setUp()
 
         self.client = AjaxEnabledTestClient()
-        self.client.login(username=self.user.username, password=user_password)
+        self.client.login(username=self.user.username, password=self.user_password)
 
         # create a course via the view handler which has a different strategy for permissions than the factory
         self.course_key = self.store.make_course_key('myu', 'mydept.mycourse', 'myrun')

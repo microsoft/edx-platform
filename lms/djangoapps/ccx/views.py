@@ -6,60 +6,54 @@ import datetime
 import functools
 import json
 import logging
-import pytz
-
 from copy import deepcopy
 from cStringIO import StringIO
 
+import pytz
+from ccx_keys.locator import CCXLocator
 from django.conf import settings
-from django.core.urlresolvers import reverse
-from django.http import (
-    HttpResponse,
-    HttpResponseForbidden,
-)
 from django.contrib import messages
+from django.contrib.auth.models import User
+from django.urls import reverse
 from django.db import transaction
-from django.http import Http404
+from django.http import Http404, HttpResponse, HttpResponseForbidden
 from django.shortcuts import redirect
 from django.utils.translation import ugettext as _
 from django.views.decorators.cache import cache_control
 from django.views.decorators.csrf import ensure_csrf_cookie
-from django.contrib.auth.models import User
-
-from courseware.courses import get_course_by_id
-
-from courseware.field_overrides import disable_overrides
-from courseware.grades import iterate_grades_for
-from edxmako.shortcuts import render_to_response
 from opaque_keys.edx.keys import CourseKey
-from ccx_keys.locator import CCXLocator
-from student.roles import CourseCcxCoachRole
-from student.models import CourseEnrollment
 
-from instructor.views.api import _split_input_list
-from instructor.views.gradebook_api import get_grade_book_page
-from instructor.enrollment import (
-    enroll_email,
-    unenroll_email,
-    get_email_params,
-)
-
+from courseware.access import has_access
+from courseware.courses import get_course_by_id
+from courseware.field_overrides import disable_overrides
+from django_comment_common.models import FORUM_ROLE_ADMINISTRATOR, assign_role
+from django_comment_common.utils import seed_permissions_roles
+from edxmako.shortcuts import render_to_response
 from lms.djangoapps.ccx.models import CustomCourseForEdX
 from lms.djangoapps.ccx.overrides import (
-    get_override_for_ccx,
-    override_field_for_ccx,
-    clear_ccx_field_info_from_ccx_map,
     bulk_delete_ccx_override_fields,
+    clear_ccx_field_info_from_ccx_map,
+    get_override_for_ccx,
+    override_field_for_ccx
 )
 from lms.djangoapps.ccx.utils import (
-    assign_coach_role_to_ccx,
+    add_master_course_staff_to_ccx,
+    assign_staff_role_to_ccx,
     ccx_course,
     ccx_students_enrolling_center,
+    get_ccx_by_ccx_id,
+    get_ccx_creation_dict,
     get_ccx_for_coach,
     get_date,
+    get_enrollment_action_and_identifiers,
     parse_date,
-    prep_course_for_grading,
 )
+from lms.djangoapps.grades.course_grade_factory import CourseGradeFactory
+from lms.djangoapps.instructor.enrollment import enroll_email, get_email_params
+from lms.djangoapps.instructor.views.gradebook_api import get_grade_book_page
+from student.models import CourseEnrollment
+from student.roles import CourseCcxCoachRole
+from xmodule.modulestore.django import SignalHandler
 
 log = logging.getLogger(__name__)
 TODAY = datetime.datetime.today  # for patching in tests
@@ -81,23 +75,35 @@ def coach_dashboard(view):
         ccx = None
         if isinstance(course_key, CCXLocator):
             ccx_id = course_key.ccx
-            ccx = CustomCourseForEdX.objects.get(pk=ccx_id)
+            try:
+                ccx = CustomCourseForEdX.objects.get(pk=ccx_id)
+            except CustomCourseForEdX.DoesNotExist:
+                raise Http404
+
+        if ccx:
             course_key = ccx.course_id
-
-        role = CourseCcxCoachRole(course_key)
-        if not role.has_user(request.user):
-            return HttpResponseForbidden(
-                _('You must be a CCX Coach to access this view.'))
-
         course = get_course_by_id(course_key, depth=None)
 
-        # if there is a ccx, we must validate that it is the ccx for this coach
-        if ccx is not None:
-            coach_ccx = get_ccx_for_coach(course, request.user)
-            if coach_ccx is None or coach_ccx.id != ccx.id:
-                return HttpResponseForbidden(
-                    _('You must be the coach for this ccx to access this view')
-                )
+        if not course.enable_ccx:
+            raise Http404
+        else:
+            is_staff = has_access(request.user, 'staff', course)
+            is_instructor = has_access(request.user, 'instructor', course)
+
+            if is_staff or is_instructor:
+                # if user is staff or instructor then he can view ccx coach dashboard.
+                return view(request, course, ccx)
+            else:
+                # if there is a ccx, we must validate that it is the ccx for this coach
+                role = CourseCcxCoachRole(course_key)
+                if not role.has_user(request.user):
+                    return HttpResponseForbidden(_('You must be a CCX Coach to access this view.'))
+                elif ccx is not None:
+                    coach_ccx = get_ccx_by_ccx_id(course, request.user, ccx.id)
+                    if coach_ccx is None:
+                        return HttpResponseForbidden(
+                            _('You must be the coach for this ccx to access this view')
+                        )
 
         return view(request, course, ccx)
     return wrapper
@@ -117,7 +123,7 @@ def dashboard(request, course, ccx=None):
         if ccx:
             url = reverse(
                 'ccx_coach_dashboard',
-                kwargs={'course_id': CCXLocator.from_course_locator(course.id, ccx.id)}
+                kwargs={'course_id': CCXLocator.from_course_locator(course.id, unicode(ccx.id))}
             )
             return redirect(url)
 
@@ -125,12 +131,12 @@ def dashboard(request, course, ccx=None):
         'course': course,
         'ccx': ccx,
     }
+    context.update(get_ccx_creation_dict(course))
 
     if ccx:
         ccx_locator = CCXLocator.from_course_locator(course.id, unicode(ccx.id))
         # At this point we are done with verification that current user is ccx coach.
-        assign_coach_role_to_ccx(ccx_locator, request.user, course.id)
-
+        assign_staff_role_to_ccx(ccx_locator, request.user, course.id)
         schedule = get_ccx_schedule(course, ccx)
         grading_policy = get_override_for_ccx(
             ccx, course, 'grading_policy', course.grading_policy)
@@ -146,6 +152,9 @@ def dashboard(request, course, ccx=None):
         context['grading_policy_url'] = reverse(
             'ccx_set_grading_policy', kwargs={'course_id': ccx_locator})
 
+        with ccx_course(ccx_locator) as course:
+            context['course'] = course
+
     else:
         context['create_ccx_url'] = reverse(
             'create_ccx', kwargs={'course_id': course.id})
@@ -160,6 +169,13 @@ def create_ccx(request, course, ccx=None):
     Create a new CCX
     """
     name = request.POST.get('name')
+
+    if hasattr(course, 'ccx_connector') and course.ccx_connector:
+        # if ccx connector url is set in course settings then inform user that he can
+        # only create ccx by using ccx connector url.
+        context = get_ccx_creation_dict(course)
+        messages.error(request, context['use_ccx_con_error_message'])
+        return render_to_response('ccx/coach_dashboard.html', context)
 
     # prevent CCX objects from being created for deprecated course ids.
     if course.id.deprecated:
@@ -193,7 +209,12 @@ def create_ccx(request, course, ccx=None):
             for vertical in sequential.get_children():
                 override_field_for_ccx(ccx, vertical, hidden, True)
 
-    ccx_id = CCXLocator.from_course_locator(course.id, ccx.id)
+    ccx_id = CCXLocator.from_course_locator(course.id, unicode(ccx.id))
+
+    # Create forum roles
+    seed_permissions_roles(ccx_id)
+    # Assign administrator forum role to CCX coach
+    assign_role(ccx_id, request.user, FORUM_ROLE_ADMINISTRATOR)
 
     url = reverse('ccx_coach_dashboard', kwargs={'course_id': ccx_id})
 
@@ -207,7 +228,16 @@ def create_ccx(request, course, ccx=None):
         email_params=email_params,
     )
 
-    assign_coach_role_to_ccx(ccx_id, request.user, course.id)
+    assign_staff_role_to_ccx(ccx_id, request.user, course.id)
+    add_master_course_staff_to_ccx(course, ccx_id, ccx.display_name)
+
+    # using CCX object as sender here.
+    responses = SignalHandler.course_published.send(
+        sender=ccx,
+        course_key=CCXLocator.from_course_locator(course.id, unicode(ccx.id))
+    )
+    for rec, response in responses:
+        log.info('Signal fired when course is published. Receiver: %s. Response: %s', rec, response)
 
     return redirect(url)
 
@@ -300,6 +330,14 @@ def save_ccx(request, course, ccx=None):
     if changed:
         override_field_for_ccx(ccx, course, 'grading_policy', policy)
 
+    # using CCX object as sender here.
+    responses = SignalHandler.course_published.send(
+        sender=ccx,
+        course_key=CCXLocator.from_course_locator(course.id, unicode(ccx.id))
+    )
+    for rec, response in responses:
+        log.info('Signal fired when course is published. Receiver: %s. Response: %s', rec, response)
+
     return HttpResponse(
         json.dumps({
             'schedule': get_ccx_schedule(course, ccx),
@@ -321,9 +359,17 @@ def set_grading_policy(request, course, ccx=None):
     override_field_for_ccx(
         ccx, course, 'grading_policy', json.loads(request.POST['policy']))
 
+    # using CCX object as sender here.
+    responses = SignalHandler.course_published.send(
+        sender=ccx,
+        course_key=CCXLocator.from_course_locator(course.id, unicode(ccx.id))
+    )
+    for rec, response in responses:
+        log.info('Signal fired when course is published. Receiver: %s. Response: %s', rec, response)
+
     url = reverse(
         'ccx_coach_dashboard',
-        kwargs={'course_id': CCXLocator.from_course_locator(course.id, ccx.id)}
+        kwargs={'course_id': CCXLocator.from_course_locator(course.id, unicode(ccx.id))}
     )
     return redirect(url)
 
@@ -413,44 +459,19 @@ def ccx_schedule(request, course, ccx=None):  # pylint: disable=unused-argument
 @ensure_csrf_cookie
 @cache_control(no_cache=True, no_store=True, must_revalidate=True)
 @coach_dashboard
-def ccx_invite(request, course, ccx=None):
+def ccx_students_management(request, course, ccx=None):
     """
-    Invite users to new ccx
-    """
-    if not ccx:
-        raise Http404
-
-    action = request.POST.get('enrollment-button')
-    identifiers_raw = request.POST.get('student-ids')
-    identifiers = _split_input_list(identifiers_raw)
-    email_students = 'email-students' in request.POST
-    course_key = CCXLocator.from_course_locator(course.id, ccx.id)
-    email_params = get_email_params(course, auto_enroll=True, course_key=course_key, display_name=ccx.display_name)
-
-    ccx_students_enrolling_center(action, identifiers, email_students, course_key, email_params)
-
-    url = reverse('ccx_coach_dashboard', kwargs={'course_id': course_key})
-    return redirect(url)
-
-
-@ensure_csrf_cookie
-@cache_control(no_cache=True, no_store=True, must_revalidate=True)
-@coach_dashboard
-def ccx_student_management(request, course, ccx=None):
-    """
-    Manage the enrollment of individual students in a CCX
+    Manage the enrollment of the students in a CCX
     """
     if not ccx:
         raise Http404
 
-    action = request.POST.get('student-action', None)
-    student_id = request.POST.get('student-id', '')
+    action, identifiers = get_enrollment_action_and_identifiers(request)
     email_students = 'email-students' in request.POST
-    identifiers = [student_id]
-    course_key = CCXLocator.from_course_locator(course.id, ccx.id)
+    course_key = CCXLocator.from_course_locator(course.id, unicode(ccx.id))
     email_params = get_email_params(course, auto_enroll=True, course_key=course_key, display_name=ccx.display_name)
 
-    errors = ccx_students_enrolling_center(action, identifiers, email_students, course_key, email_params)
+    errors = ccx_students_enrolling_center(action, identifiers, email_students, course_key, email_params, ccx.coach)
 
     for error_message in errors:
         messages.error(request, error_message)
@@ -470,9 +491,8 @@ def ccx_gradebook(request, course, ccx=None):
     if not ccx:
         raise Http404
 
-    ccx_key = CCXLocator.from_course_locator(course.id, ccx.id)
+    ccx_key = CCXLocator.from_course_locator(course.id, unicode(ccx.id))
     with ccx_course(ccx_key) as course:
-        prep_course_for_grading(course, request)
         student_info, page = get_grade_book_page(request, course, course_key=ccx_key)
 
         return render_to_response('courseware/gradebook.html', {
@@ -498,38 +518,37 @@ def ccx_grades_csv(request, course, ccx=None):
     if not ccx:
         raise Http404
 
-    ccx_key = CCXLocator.from_course_locator(course.id, ccx.id)
+    ccx_key = CCXLocator.from_course_locator(course.id, unicode(ccx.id))
     with ccx_course(ccx_key) as course:
-        prep_course_for_grading(course, request)
 
         enrolled_students = User.objects.filter(
             courseenrollment__course_id=ccx_key,
             courseenrollment__is_active=1
         ).order_by('username').select_related("profile")
-        grades = iterate_grades_for(course, enrolled_students)
+        grades = CourseGradeFactory().iter(enrolled_students, course)
 
         header = None
         rows = []
-        for student, gradeset, __ in grades:
-            if gradeset:
+        for student, course_grade, __ in grades:
+            if course_grade:
                 # We were able to successfully grade this student for this
                 # course.
                 if not header:
                     # Encode the header row in utf-8 encoding in case there are
                     # unicode characters
                     header = [section['label'].encode('utf-8')
-                              for section in gradeset[u'section_breakdown']]
+                              for section in course_grade.summary[u'section_breakdown']]
                     rows.append(["id", "email", "username", "grade"] + header)
 
                 percents = {
                     section['label']: section.get('percent', 0.0)
-                    for section in gradeset[u'section_breakdown']
+                    for section in course_grade.summary[u'section_breakdown']
                     if 'label' in section
                 }
 
                 row_percents = [percents.get(label, 0.0) for label in header]
                 rows.append([student.id, student.email, student.username,
-                             gradeset['percent']] + row_percents)
+                             course_grade.percent] + row_percents)
 
         buf = StringIO()
         writer = csv.writer(buf)

@@ -2,18 +2,11 @@
 Discussion API forms
 """
 from django.core.exceptions import ValidationError
-from django.forms import (
-    BooleanField,
-    CharField,
-    ChoiceField,
-    Form,
-    IntegerField,
-    NullBooleanField,
-    Select)
-
+from django.forms import BooleanField, CharField, ChoiceField, Form, IntegerField
 from opaque_keys import InvalidKeyError
 from opaque_keys.edx.locator import CourseLocator
-from openedx.core.djangoapps.util.forms import MultiValueField, ExtendedNullBooleanField
+
+from openedx.core.djangoapps.util.forms import ExtendedNullBooleanField, MultiValueField
 
 
 class _PaginationForm(Form):
@@ -49,9 +42,10 @@ class ThreadListGetForm(_PaginationForm):
         required=False
     )
     order_direction = ChoiceField(
-        choices=[(choice, choice) for choice in ["asc", "desc"]],
+        choices=[(choice, choice) for choice in ["desc"]],
         required=False
     )
+    requested_fields = MultiValueField(required=False)
 
     def clean_order_by(self):
         """Return a default choice"""
@@ -99,6 +93,7 @@ class ThreadActionsForm(Form):
     following = BooleanField(required=False)
     voted = BooleanField(required=False)
     abuse_flagged = BooleanField(required=False)
+    read = BooleanField(required=False)
 
 
 class CommentListGetForm(_PaginationForm):
@@ -107,6 +102,7 @@ class CommentListGetForm(_PaginationForm):
     """
     thread_id = CharField()
     endorsed = ExtendedNullBooleanField(required=False)
+    requested_fields = MultiValueField(required=False)
 
 
 class CommentActionsForm(Form):
@@ -116,3 +112,10 @@ class CommentActionsForm(Form):
     """
     voted = BooleanField(required=False)
     abuse_flagged = BooleanField(required=False)
+
+
+class CommentGetForm(_PaginationForm):
+    """
+    A form to validate query parameters in the comment retrieval endpoint
+    """
+    requested_fields = MultiValueField(required=False)

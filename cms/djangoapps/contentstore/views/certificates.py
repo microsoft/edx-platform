@@ -22,32 +22,36 @@ course.certificates: {
 }
 """
 import json
+import logging
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.views.decorators.csrf import ensure_csrf_cookie
+from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse
 from django.utils.translation import ugettext as _
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
+from opaque_keys import InvalidKeyError
+from opaque_keys.edx.keys import AssetKey, CourseKey
+from six import text_type
 
-from contentstore.utils import reverse_course_url
+from contentstore.utils import get_lms_link_for_certificate_web_view, reverse_course_url
+from contentstore.views.assets import delete_asset
+from contentstore.views.exception import AssetNotFoundException
+from course_modes.models import CourseMode
 from edxmako.shortcuts import render_to_response
-from opaque_keys.edx.keys import CourseKey, AssetKey
 from eventtracking import tracker
 from student.auth import has_studio_write_access
 from student.roles import GlobalStaff
-from util.db import generate_int_id, MYSQL_MAX_INT
+from util.db import MYSQL_MAX_INT, generate_int_id
 from util.json_request import JsonResponse
 from xmodule.modulestore import EdxJSONEncoder
 from xmodule.modulestore.django import modulestore
-from contentstore.views.assets import delete_asset
-from contentstore.views.exception import AssetNotFoundException
-from django.core.exceptions import PermissionDenied
-from course_modes.models import CourseMode
-from contentstore.utils import get_lms_link_for_certificate_web_view
 
 CERTIFICATE_SCHEMA_VERSION = 1
 CERTIFICATE_MINIMUM_ID = 100
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _get_course_and_check_access(course_key, user, depth=0):
@@ -67,11 +71,32 @@ def _delete_asset(course_key, asset_key_string):
     remove asset by calling delete_asset method of assets module.
     """
     if asset_key_string:
-        # remove first slash in asset path
-        # otherwise it generates InvalidKeyError in case of split modulestore
-        if '/' == asset_key_string[0]:
-            asset_key_string = asset_key_string[1:]
-        asset_key = AssetKey.from_string(asset_key_string)
+        try:
+            asset_key = AssetKey.from_string(asset_key_string)
+        except InvalidKeyError:
+            # remove first slash in asset path
+            # otherwise it generates InvalidKeyError in case of split modulestore
+            if '/' == asset_key_string[0]:
+                asset_key_string = asset_key_string[1:]
+                try:
+                    asset_key = AssetKey.from_string(asset_key_string)
+                except InvalidKeyError:
+                    # Unable to parse the asset key, log and return
+                    LOGGER.info(
+                        "In course %r, unable to parse asset key %r, not attempting to delete signatory.",
+                        course_key,
+                        asset_key_string,
+                    )
+                    return
+            else:
+                # Unable to parse the asset key, log and return
+                LOGGER.info(
+                    "In course %r, unable to parse asset key %r, not attempting to delete signatory.",
+                    course_key,
+                    asset_key_string,
+                )
+                return
+
         try:
             delete_asset(course_key, asset_key)
         # If the asset was not found, it doesn't have to be deleted...
@@ -131,6 +156,22 @@ class CertificateManager(object):
             )
         if not certificate_data.get("name"):
             raise CertificateValidationError(_("must have name of the certificate"))
+
+    @staticmethod
+    def is_activated(course):
+        """
+        Returns whether certificates are activated for the given course,
+        along with the certificates.
+        """
+        is_active = False
+        certificates = None
+        if settings.FEATURES.get('CERTIFICATES_HTML_VIEW', False):
+            certificates = CertificateManager.get_certificates(course)
+            # we are assuming only one certificate in certificates collection.
+            for certificate in certificates:
+                is_active = certificate.get('is_active', False)
+                break
+        return is_active, certificates
 
     @staticmethod
     def get_used_ids(course):
@@ -297,9 +338,6 @@ def certificate_activation_handler(request, course_key_string):
     POST
         json: is_active. update the activation state of certificate
     """
-    # Only global staff (PMs) are able to activate/deactivate certificate configuration
-    if not GlobalStaff().has_user(request.user):
-        raise PermissionDenied()
     course_key = CourseKey.from_string(course_key_string)
     store = modulestore()
     try:
@@ -347,11 +385,11 @@ def certificates_list_handler(request, course_key_string):
             return JsonResponse({"error": msg}, status=403)
 
         if 'text/html' in request.META.get('HTTP_ACCEPT', 'text/html'):
-            certificate_url = reverse_course_url('certificates.certificates_list_handler', course_key)
+            certificate_url = reverse_course_url('certificates_list_handler', course_key)
             course_outline_url = reverse_course_url('course_handler', course_key)
             upload_asset_url = reverse_course_url('assets_handler', course_key)
             activation_handler_url = reverse_course_url(
-                handler_name='certificates.certificate_activation_handler',
+                handler_name='certificate_activation_handler',
                 course_key=course_key
             )
             course_modes = [
@@ -370,14 +408,8 @@ def certificates_list_handler(request, course_key_string):
                 )
             else:
                 certificate_web_view_url = None
-            certificates = None
-            is_active = False
-            if settings.FEATURES.get('CERTIFICATES_HTML_VIEW', False):
-                certificates = CertificateManager.get_certificates(course)
-                # we are assuming only one certificate in certificates collection.
-                for certificate in certificates:
-                    is_active = certificate.get('is_active', False)
-                    break
+
+            is_active, certificates = CertificateManager.is_activated(course)
 
             return render_to_response('certificates.html', {
                 'context_course': course,
@@ -402,13 +434,13 @@ def certificates_list_handler(request, course_key_string):
                 try:
                     new_certificate = CertificateManager.deserialize_certificate(course, request.body)
                 except CertificateValidationError as err:
-                    return JsonResponse({"error": err.message}, status=400)
+                    return JsonResponse({"error": text_type(err)}, status=400)
                 if course.certificates.get('certificates') is None:
                     course.certificates['certificates'] = []
                 course.certificates['certificates'].append(new_certificate.certificate_data)
                 response = JsonResponse(CertificateManager.serialize_certificate(new_certificate), status=201)
                 response["Location"] = reverse_course_url(
-                    'certificates.certificates_detail_handler',
+                    'certificates_detail_handler',
                     course.id,
                     kwargs={'certificate_id': new_certificate.id}
                 )
@@ -459,7 +491,7 @@ def certificates_detail_handler(request, course_key_string, certificate_id):
         try:
             new_certificate = CertificateManager.deserialize_certificate(course, request.body)
         except CertificateValidationError as err:
-            return JsonResponse({"error": err.message}, status=400)
+            return JsonResponse({"error": text_type(err)}, status=400)
 
         serialized_certificate = CertificateManager.serialize_certificate(new_certificate)
         cert_event_type = 'created'

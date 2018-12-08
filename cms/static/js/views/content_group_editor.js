@@ -12,7 +12,7 @@ function(ListItemEditorView, _) {
         tagName: 'div',
         className: 'content-group-edit collection-edit',
         events: {
-            'submit': 'setAndClose',
+            submit: 'setAndClose',
             'click .action-cancel': 'cancel'
         },
 
@@ -23,8 +23,8 @@ function(ListItemEditorView, _) {
 
         getTemplateOptions: function() {
             return {
-                id: this.model.escape('id'),
-                name: this.model.escape('name'),
+                id: this.model.get('id'),
+                name: this.model.get('name'),
                 index: this.model.collection.indexOf(this.model),
                 isNew: this.model.isNew(),
                 usage: this.model.get('usage'),
