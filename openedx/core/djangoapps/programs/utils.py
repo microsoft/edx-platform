@@ -48,6 +48,7 @@ def get_programs(user, program_id=None):
     # Bypass caching for staff users, who may be creating Programs and want
     # to see them displayed immediately.
     cache_key = programs_config.CACHE_KEY if programs_config.is_cache_enabled and not user.is_staff else None
+
     return get_edx_api_data(programs_config, user, 'programs', resource_id=program_id, cache_key=cache_key)
 
 
@@ -141,7 +142,7 @@ def get_program_detail_url(program, marketing_root):
 
     Arguments:
         program (dict): Representation of a program.
-        marketing_root (str): Root URL used to build links to XSeries marketing pages.
+        marketing_root (str): Root URL used to build links to program marketing pages.
 
     Returns:
         str, a link to program details
@@ -154,24 +155,6 @@ def get_program_detail_url(program, marketing_root):
         slug = program['marketing_slug']
 
     return '{base}/{slug}'.format(base=base, slug=slug)
-
-
-def get_display_category(program):
-    """ Given the program, return the category of the program for display
-    Arguments:
-        program (Program): The program to get the display category string from
-
-    Returns:
-        string, the category for display to the user.
-        Empty string if the program has no category or is null.
-    """
-    display_candidate = ''
-    if program and program.get('category'):
-        if program.get('category') == 'xseries':
-            display_candidate = 'XSeries'
-        else:
-            display_candidate = program.get('category', '').capitalize()
-    return display_candidate
 
 
 def get_completed_courses(student):

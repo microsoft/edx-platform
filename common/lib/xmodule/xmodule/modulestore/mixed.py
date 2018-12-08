@@ -185,25 +185,6 @@ class MixedModuleStore(ModuleStoreDraftAndPublished, ModuleStoreWriteBase):
                     self.mappings[course_key] = store
             self.modulestores.append(store)
 
-    @property
-    def disabled_xblock_types(self):
-        """
-        Returns the list of disabled xblock types.
-        """
-        return None if not hasattr(self, "_disabled_xblock_types") else self._disabled_xblock_types
-
-    @disabled_xblock_types.setter
-    def disabled_xblock_types(self, value):
-        """
-        Sets the list of disabled xblock types, and propagates down
-        to child modulestores if available.
-        """
-        self._disabled_xblock_types = value  # pylint: disable=attribute-defined-outside-init
-
-        if hasattr(self, 'modulestores'):
-            for store in self.modulestores:
-                store.disabled_xblock_types = value
-
     def _clean_locator_for_mapping(self, locator):
         """
         In order for mapping to work, the locator must be minimal--no version, no branch--
@@ -1003,13 +984,13 @@ class MixedModuleStore(ModuleStoreDraftAndPublished, ModuleStoreWriteBase):
             yield
 
     @contextmanager
-    def bulk_operations(self, course_id, emit_signals=True):
+    def bulk_operations(self, course_id, emit_signals=True, ignore_case=False):
         """
         A context manager for notifying the store of bulk operations.
         If course_id is None, the default store is used.
         """
         store = self._get_modulestore_for_courselike(course_id)
-        with store.bulk_operations(course_id, emit_signals):
+        with store.bulk_operations(course_id, emit_signals, ignore_case):
             yield
 
     def ensure_indexes(self):

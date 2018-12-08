@@ -55,6 +55,9 @@ urlpatterns = patterns(
 
     # Update session view
     url(r'^lang_pref/session_language', 'lang_pref.views.update_session_language', name='session_language'),
+
+    # Darklang View to change the preview language (or dark language)
+    url(r'^update_lang/', include('dark_lang.urls', namespace='darklang')),
 )
 
 # User creation and updating views
@@ -180,6 +183,12 @@ if settings.FEATURES.get('CERTIFICATES_HTML_VIEW'):
         url(r'^certificates/{}$'.format(settings.COURSE_KEY_PATTERN),
             'contentstore.views.certificates.certificates_list_handler')
     )
+
+# Maintenance Dashboard
+urlpatterns += patterns(
+    '',
+    url(r'^maintenance/', include('maintenance.urls', namespace='maintenance')),
+)
 
 urlpatterns += (
     # These views use a configuration model to determine whether or not to

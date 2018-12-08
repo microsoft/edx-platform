@@ -4,22 +4,25 @@ import sys
 from functools import wraps
 
 from django.conf import settings
+from django.contrib.auth.decorators import login_required
 from django.core.cache import caches
 from django.core.validators import ValidationError, validate_email
 from django.views.decorators.csrf import requires_csrf_token
 from django.views.defaults import server_error
 from django.http import (Http404, HttpResponse, HttpResponseNotAllowed,
-                         HttpResponseServerError)
+                         HttpResponseServerError, HttpResponseForbidden)
 import dogstats_wrapper as dog_stats_api
 from edxmako.shortcuts import render_to_response
 import zendesk
-from openedx.core.djangoapps.theming.helpers import get_value as get_themed_value
+from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 
 import calc
 import track.views
 
 from opaque_keys import InvalidKeyError
 from opaque_keys.edx.keys import CourseKey
+
+from student.roles import GlobalStaff
 
 log = logging.getLogger(__name__)
 
@@ -42,6 +45,21 @@ def ensure_valid_course_key(view_func):
         return response
 
     return inner
+
+
+def require_global_staff(func):
+    """View decorator that requires that the user have global staff permissions. """
+    @wraps(func)
+    def wrapped(request, *args, **kwargs):  # pylint: disable=missing-docstring
+        if GlobalStaff().has_user(request.user):
+            return func(request, *args, **kwargs)
+        else:
+            return HttpResponseForbidden(
+                u"Must be {platform_name} staff to perform this action.".format(
+                    platform_name=settings.PLATFORM_NAME
+                )
+            )
+    return login_required(wrapped)
 
 
 @requires_csrf_token
@@ -215,7 +233,7 @@ def _record_feedback_in_zendesk(
 
     # Per edX support, we would like to be able to route white label feedback items
     # via tagging
-    white_label_org = get_themed_value('course_org_filter')
+    white_label_org = configuration_helpers.get_value('course_org_filter')
     if white_label_org:
         zendesk_tags = zendesk_tags + ["whitelabel_{org}".format(org=white_label_org)]
 
@@ -350,7 +368,7 @@ def submit_feedback(request):
         details,
         tags,
         additional_info,
-        support_email=get_themed_value('email_from_address', settings.DEFAULT_FROM_EMAIL)
+        support_email=configuration_helpers.get_value('email_from_address', settings.DEFAULT_FROM_EMAIL)
     )
     _record_feedback_in_datadog(tags)
 

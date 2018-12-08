@@ -633,6 +633,13 @@ During acceptance test execution, Django log files are written to
 
 **Note**: The acceptance tests can *not* currently run in parallel.
 
+Running Tests on Paver Scripts
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To run tests on the scripts that power the various Paver commands, use the following command::
+
+  nosetests paver
+
 
 Testing internationalization with dummy translations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -795,13 +802,13 @@ To view JavaScript code style quality run this command.
 
 ::
 
-    paver run_jshint
+    paver run_eslint
 
 -  This command also comes with a ``--limit`` switch, this is an example of that switch.
 
 ::
 
-	paver run_jshint --limit=700
+	paver run_eslint --limit=50000
 
 
 
@@ -822,7 +829,7 @@ Two tools are available for evaluating complexity of edx-platform code:
 
 ::
 
-       plato -q -x common/static/js/vendor/ -t common -l .jshintrc -r -d jscomplexity common/static/js/
+       plato -q -x common/static/js/vendor/ -t common -e .eslintrc.json -r -d jscomplexity common/static/js/
 
 
 
