@@ -28,9 +28,6 @@ XMODULES = [
     "custom_tag_template = xmodule.raw_module:RawDescriptor",
     "about = xmodule.html_module:AboutDescriptor",
     "annotatable = xmodule.annotatable_module:AnnotatableDescriptor",
-    "textannotation = xmodule.textannotation_module:TextAnnotationDescriptor",
-    "videoannotation = xmodule.videoannotation_module:VideoAnnotationDescriptor",
-    "imageannotation = xmodule.imageannotation_module:ImageAnnotationDescriptor",
     "word_cloud = xmodule.word_cloud_module:WordCloudDescriptor",
     "hidden = xmodule.hidden_module:HiddenDescriptor",
     "raw = xmodule.raw_module:RawDescriptor",
@@ -61,7 +58,7 @@ setup(
         'xmodule': ['js/module/*'],
     },
 
-    # See http://guide.python-distribute.org/creation.html#entry-points
+    # See https://setuptools.readthedocs.io/en/latest/setuptools.html#dynamic-discovery-of-services-and-plugins
     # for a description of entry_points
     entry_points={
         'xblock.v1': XMODULES + XBLOCKS,

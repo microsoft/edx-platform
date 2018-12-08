@@ -11,6 +11,8 @@
             oldOTBD = window.onTouchBasedDevice;
             window.onTouchBasedDevice = jasmine
                 .createSpy('onTouchBasedDevice').and.returnValue(null);
+
+            state = jasmine.initializePlayer('video_html5.html');
         });
 
         afterEach(function() {
@@ -46,14 +48,6 @@
                         it('player state was changed', function(done) {
                             jasmine.waitUntil(function() {
                                 return state.videoPlayer.player.getPlayerState() === STATUS.PLAYING;
-                            }).always(done);
-                        });
-
-                        it('callback was called', function(done) {
-                            jasmine.waitUntil(function() {
-                                return state.videoPlayer.player.getPlayerState() !== STATUS.PAUSED;
-                            }).then(function() {
-                                expect(state.videoPlayer.player.callStateChangeCallback).toHaveBeenCalled();
                             }).always(done);
                         });
                     });

@@ -1,21 +1,22 @@
 ## mako
 
-<%page expression_filter="h" args="online_help_token"/>
+<%page expression_filter="h" args="online_help_token, use_cookie_banner=False"/>
 
 <%namespace name='static' file='../static_content.html'/>
 <%namespace file='../main.html' import="login_query"/>
 <%!
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.utils.translation import ugettext as _
+import waffle
 
 from lms.djangoapps.ccx.overrides import get_current_ccx
 from openedx.core.djangolib.markup import HTML, Text
 
 # App that handles subdomain specific branding
 from branding import api as branding_api
-# app that handles site status messages
-from status.status import get_site_status_msg
 from openedx.core.djangoapps.lang_pref.api import header_language_selector_is_enabled, released_languages
+from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
+
 %>
 
 ## Provide a hook for themes to inject branding on top.
@@ -30,22 +31,34 @@ from openedx.core.djangoapps.lang_pref.api import header_language_selector_is_en
     </%block>
 % endif
 
-<%block>
 <%
-course_id = course.id if course else None
-site_status_msg = get_site_status_msg(course_id)
+  unsupported_browser_alert_versions = configuration_helpers.get_value('UNSUPPORTED_BROWSER_ALERT_VERSIONS', settings.FEATURES.get('UNSUPPORTED_BROWSER_ALERT_VERSIONS'))
 %>
-% if site_status_msg:
-  <div class="site-status">
-    <div class="inner-wrapper">
-      <span class="icon fa fa-warning" aria-hidden="true"></span>
-      <p>${site_status_msg}</p>
-    </div>
-  </div>
+% if waffle.switch_is_active('enable_unsupported_browser_alert'):
+  <script>
+    var $buoop = {
+        notify:${unsupported_browser_alert_versions | n, decode.utf8},
+        api:5,
+        reminder:0
+    };
+    function $buo_f() {
+        var e = document.createElement("script");
+        e.src = "//browser-update.org/update.min.js";
+        document.body.appendChild(e);
+    };
+    try {document.addEventListener("DOMContentLoaded", $buo_f,false)}
+    catch(e){window.attachEvent("onload", $buo_f)}
+  </script>
 % endif
-</%block>
 
 <header class="global-header ${'slim' if course else ''}">
+    % if use_cookie_banner:
+        ${static.renderReact(
+            component="CookiePolicyBanner",
+            id="cookie-policy-banner",
+            props={}
+        )}
+    % endif
     <div class="main-header">
         <%include file="navbar-logo-header.html" args="online_help_token=online_help_token"/>
         <div class="hamburger-menu" role="button" aria-label=${_("Options Menu")} aria-expanded="false" aria-controls="mobile-menu" tabindex="0">
@@ -54,7 +67,7 @@ site_status_msg = get_site_status_msg(course_id)
             <span class="line"></span>
             <span class="line"></span>
         </div>
-        % if user.is_authenticated():
+        % if user.is_authenticated:
             <%include file="navbar-authenticated.html" args="online_help_token=online_help_token"/>
         % else:
             <%include file="navbar-not-authenticated.html" args="online_help_token=online_help_token"/>
@@ -74,7 +87,6 @@ site_status_msg = get_site_status_msg(course_id)
 <![endif]-->
 % endif
 
-<%include file="../help_modal.html"/>
 % if settings.FEATURES.get('ENABLE_COOKIE_CONSENT', False):
   <%include file="../widgets/cookie-consent.html" />
 % endif
@@ -84,7 +96,7 @@ site_status_msg = get_site_status_msg(course_id)
     % if len(languages) > 1:
         <form action="/i18n/setlang/" method="post" class="settings-language-form" id="language-settings-form">
             <input type="hidden" id="csrf_token" name="csrfmiddlewaretoken" value="${csrf_token}">
-            % if user.is_authenticated():
+            % if user.is_authenticated:
                 <input title="preference api" type="hidden" class="url-endpoint" value="${reverse('preferences_api', kwargs={'username': user.username})}" data-user-is-authenticated="true">
             % else:
                 <input title="session update url" type="hidden" class="url-endpoint" value="${reverse('session_language')}" data-user-is-authenticated="false">

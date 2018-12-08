@@ -6,15 +6,12 @@ import mock
 from contextlib import contextmanager
 
 import ddt
-import pytest
 from django.contrib.auth.models import User
 from django.core.management import call_command
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.test.client import RequestFactory
 from eventtracking.processors.exceptions import EventEmissionExit
 from mock import ANY, Mock, patch
-from nose.plugins.attrib import attr
-from nose.tools import assert_equal, assert_true
 from opaque_keys.edx.keys import CourseKey
 from six import text_type
 
@@ -41,6 +38,7 @@ from lms.lib.comment_client import Thread
 from openedx.core.djangoapps.course_groups.cohorts import set_course_cohorted
 from openedx.core.djangoapps.course_groups.tests.helpers import CohortFactory
 from openedx.core.djangoapps.waffle_utils.testutils import WAFFLE_TABLES
+from openedx.core.lib.tests import attr
 from student.roles import CourseStaffRole, UserBasedRole
 from student.tests.factories import CourseAccessRoleFactory, CourseEnrollmentFactory, UserFactory
 from util.testing import UrlResetMixin
@@ -77,7 +75,6 @@ class MockRequestSetupMixin(object):
 
 @attr(shard=2)
 @patch('lms.lib.comment_client.utils.requests.request', autospec=True)
-@pytest.mark.django111_expected_failure
 class CreateThreadGroupIdTestCase(
         MockRequestSetupMixin,
         CohortedTestCase,
@@ -240,15 +237,15 @@ class ViewsTestCaseMixin(object):
         with patch('student.models.cc.User.save'):
             uname = 'student'
             email = 'student@edx.org'
-            self.password = 'test'  # pylint: disable=attribute-defined-outside-init
+            self.password = 'test'
 
             # Create the user and make them active so we can log them in.
-            self.student = User.objects.create_user(uname, email, self.password)  # pylint: disable=attribute-defined-outside-init
+            self.student = User.objects.create_user(uname, email, self.password)
             self.student.is_active = True
             self.student.save()
 
             # Add a discussion moderator
-            self.moderator = UserFactory.create(password=self.password)  # pylint: disable=attribute-defined-outside-init
+            self.moderator = UserFactory.create(password=self.password)
 
             # Enroll the student in the course
             CourseEnrollmentFactory(user=self.student,
@@ -258,7 +255,7 @@ class ViewsTestCaseMixin(object):
             CourseEnrollmentFactory(user=self.moderator, course_id=self.course.id)
             self.moderator.roles.add(Role.objects.get(name="Moderator", course_id=self.course.id))
 
-            assert_true(self.client.login(username='student', password=self.password))
+            assert self.client.login(username='student', password=self.password)
 
     def _setup_mock_request(self, mock_request, include_depth=False):
         """
@@ -323,7 +320,7 @@ class ViewsTestCaseMixin(object):
         url = reverse('create_thread', kwargs={'commentable_id': 'i4x-MITx-999-course-Robot_Super_Course',
                                                'course_id': unicode(self.course_id)})
         response = self.client.post(url, data=thread)
-        assert_true(mock_request.called)
+        assert mock_request.called
         expected_data = {
             'thread_type': 'discussion',
             'body': u'this is a post',
@@ -344,7 +341,7 @@ class ViewsTestCaseMixin(object):
             headers=ANY,
             timeout=5
         )
-        assert_equal(response.status_code, 200)
+        assert response.status_code == 200
 
     def update_thread_helper(self, mock_request):
         """
@@ -406,8 +403,8 @@ class ViewsQueryCountTestCase(
         return inner
 
     @ddt.data(
-        (ModuleStoreEnum.Type.mongo, 3, 4, 32),
-        (ModuleStoreEnum.Type.split, 3, 13, 32),
+        (ModuleStoreEnum.Type.mongo, 3, 4, 35),
+        (ModuleStoreEnum.Type.split, 3, 13, 35),
     )
     @ddt.unpack
     @count_queries
@@ -415,8 +412,8 @@ class ViewsQueryCountTestCase(
         self.create_thread_helper(mock_request)
 
     @ddt.data(
-        (ModuleStoreEnum.Type.mongo, 3, 3, 28),
-        (ModuleStoreEnum.Type.split, 3, 10, 28),
+        (ModuleStoreEnum.Type.mongo, 3, 3, 31),
+        (ModuleStoreEnum.Type.split, 3, 10, 31),
     )
     @ddt.unpack
     @count_queries
@@ -438,7 +435,6 @@ class ViewsTestCase(
 
     @classmethod
     def setUpClass(cls):
-        # pylint: disable=super-method-not-called
         with super(ViewsTestCase, cls).setUpClassAndTestData():
             cls.course = CourseFactory.create(
                 org='MITx', course='999',
@@ -467,15 +463,15 @@ class ViewsTestCase(
         with patch('student.models.cc.User.save'):
             uname = 'student'
             email = 'student@edx.org'
-            self.password = 'test'  # pylint: disable=attribute-defined-outside-init
+            self.password = 'test'
 
             # Create the user and make them active so we can log them in.
-            self.student = User.objects.create_user(uname, email, self.password)  # pylint: disable=attribute-defined-outside-init
+            self.student = User.objects.create_user(uname, email, self.password)
             self.student.is_active = True
             self.student.save()
 
             # Add a discussion moderator
-            self.moderator = UserFactory.create(password=self.password)  # pylint: disable=attribute-defined-outside-init
+            self.moderator = UserFactory.create(password=self.password)
 
             # Enroll the student in the course
             CourseEnrollmentFactory(user=self.student,
@@ -485,7 +481,7 @@ class ViewsTestCase(
             CourseEnrollmentFactory(user=self.moderator, course_id=self.course.id)
             self.moderator.roles.add(Role.objects.get(name="Moderator", course_id=self.course.id))
 
-            assert_true(self.client.login(username='student', password=self.password))
+            assert self.client.login(username='student', password=self.password)
 
     @contextmanager
     def assert_discussion_signals(self, signal, user=None):
@@ -498,7 +494,6 @@ class ViewsTestCase(
         with self.assert_discussion_signals('thread_created'):
             self.create_thread_helper(mock_request)
 
-    @pytest.mark.django111_expected_failure
     def test_create_thread_standalone(self, mock_request):
         team = CourseTeamFactory.create(
             name="A Team",
@@ -782,7 +777,7 @@ class ViewsTestCase(
             'course_id': unicode(self.course_id)
         })
         response = self.client.post(url)
-        assert_true(mock_request.called)
+        assert mock_request.called
 
         call_list = [
             (
@@ -816,7 +811,7 @@ class ViewsTestCase(
 
         assert mock_request.call_args_list == call_list
 
-        assert_equal(response.status_code, 200)
+        assert response.status_code == 200
 
     def test_un_flag_thread_open(self, mock_request):
         self.un_flag_thread(mock_request, False)
@@ -860,7 +855,7 @@ class ViewsTestCase(
             'course_id': unicode(self.course_id)
         })
         response = self.client.post(url)
-        assert_true(mock_request.called)
+        assert mock_request.called
 
         call_list = [
             (
@@ -894,7 +889,7 @@ class ViewsTestCase(
 
         assert mock_request.call_args_list == call_list
 
-        assert_equal(response.status_code, 200)
+        assert response.status_code == 200
 
     def test_flag_comment_open(self, mock_request):
         self.flag_comment(mock_request, False)
@@ -932,7 +927,7 @@ class ViewsTestCase(
             'course_id': unicode(self.course_id)
         })
         response = self.client.post(url)
-        assert_true(mock_request.called)
+        assert mock_request.called
 
         call_list = [
             (
@@ -966,7 +961,7 @@ class ViewsTestCase(
 
         assert mock_request.call_args_list == call_list
 
-        assert_equal(response.status_code, 200)
+        assert response.status_code == 200
 
     def test_un_flag_comment_open(self, mock_request):
         self.un_flag_comment(mock_request, False)
@@ -1004,7 +999,7 @@ class ViewsTestCase(
             'course_id': unicode(self.course_id)
         })
         response = self.client.post(url)
-        assert_true(mock_request.called)
+        assert mock_request.called
 
         call_list = [
             (
@@ -1038,7 +1033,7 @@ class ViewsTestCase(
 
         assert mock_request.call_args_list == call_list
 
-        assert_equal(response.status_code, 200)
+        assert response.status_code == 200
 
     @ddt.data(
         ('upvote_thread', 'thread_id', 'thread_voted'),
@@ -1078,7 +1073,6 @@ class ViewPermissionsTestCase(ForumsEnableMixin, UrlResetMixin, SharedModuleStor
 
     @classmethod
     def setUpClass(cls):
-        # pylint: disable=super-method-not-called
         with super(ViewPermissionsTestCase, cls).setUpClassAndTestData():
             cls.course = CourseFactory.create()
 
@@ -1190,7 +1184,6 @@ class CreateThreadUnicodeTestCase(
 
     @classmethod
     def setUpClass(cls):
-        # pylint: disable=super-method-not-called
         with super(CreateThreadUnicodeTestCase, cls).setUpClassAndTestData():
             cls.course = CourseFactory.create()
 
@@ -1233,7 +1226,6 @@ class UpdateThreadUnicodeTestCase(
 
     @classmethod
     def setUpClass(cls):
-        # pylint: disable=super-method-not-called
         with super(UpdateThreadUnicodeTestCase, cls).setUpClassAndTestData():
             cls.course = CourseFactory.create()
 
@@ -1276,7 +1268,6 @@ class CreateCommentUnicodeTestCase(
 
     @classmethod
     def setUpClass(cls):
-        # pylint: disable=super-method-not-called
         with super(CreateCommentUnicodeTestCase, cls).setUpClassAndTestData():
             cls.course = CourseFactory.create()
 
@@ -1324,7 +1315,6 @@ class UpdateCommentUnicodeTestCase(
 
     @classmethod
     def setUpClass(cls):
-        # pylint: disable=super-method-not-called
         with super(UpdateCommentUnicodeTestCase, cls).setUpClassAndTestData():
             cls.course = CourseFactory.create()
 
@@ -1365,7 +1355,6 @@ class CreateSubCommentUnicodeTestCase(
     """
     @classmethod
     def setUpClass(cls):
-        # pylint: disable=super-method-not-called
         with super(CreateSubCommentUnicodeTestCase, cls).setUpClassAndTestData():
             cls.course = CourseFactory.create()
 
@@ -1412,7 +1401,6 @@ class CreateSubCommentUnicodeTestCase(
 @disable_signal(views, 'comment_created')
 @disable_signal(views, 'comment_voted')
 @disable_signal(views, 'comment_deleted')
-@pytest.mark.django111_expected_failure
 class TeamsPermissionsTestCase(ForumsEnableMixin, UrlResetMixin, SharedModuleStoreTestCase, MockRequestSetupMixin):
     # Most of the test points use the same ddt data.
     # args: user, commentable_id, status_code
@@ -1448,7 +1436,6 @@ class TeamsPermissionsTestCase(ForumsEnableMixin, UrlResetMixin, SharedModuleSto
 
     @classmethod
     def setUpClass(cls):
-        # pylint: disable=super-method-not-called
         with super(TeamsPermissionsTestCase, cls).setUpClassAndTestData():
             teams_configuration = {
                 'topics': [{'id': "topic_id", 'name': 'Solar Power', 'description': 'Solar power is hot'}]
@@ -1759,7 +1746,6 @@ class ForumEventTestCase(ForumsEnableMixin, SharedModuleStoreTestCase, MockReque
     """
     @classmethod
     def setUpClass(cls):
-        # pylint: disable=super-method-not-called
         with super(ForumEventTestCase, cls).setUpClassAndTestData():
             cls.course = CourseFactory.create()
 
@@ -1879,7 +1865,6 @@ class ForumEventTestCase(ForumsEnableMixin, SharedModuleStoreTestCase, MockReque
         {'comment_id': 'dummy_comment_id'}
     ))
     @ddt.unpack
-    @pytest.mark.django111_expected_failure
     def test_team_events(self, view_name, event_name, view_data, view_kwargs, mock_request, mock_emit):
         user = self.student
         team = CourseTeamFactory.create(discussion_topic_id=TEAM_COMMENTABLE_ID)
@@ -1942,7 +1927,6 @@ class UsersEndpointTestCase(ForumsEnableMixin, SharedModuleStoreTestCase, MockRe
 
     @classmethod
     def setUpClass(cls):
-        # pylint: disable=super-method-not-called
         with super(UsersEndpointTestCase, cls).setUpClassAndTestData():
             cls.course = CourseFactory.create()
 

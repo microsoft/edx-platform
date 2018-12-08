@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django_filters.rest_framework import DjangoFilterBackend
-from edx_rest_framework_extensions.authentication import JwtAuthentication
+from edx_rest_framework_extensions.authentication import JwtAuthentication, SessionAuthenticationAllowInactiveUser
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import list_route
 from rest_framework.response import Response
@@ -9,13 +9,18 @@ from rest_framework.response import Response
 from experiments import filters, serializers
 from experiments.models import ExperimentData, ExperimentKeyValue
 from experiments.permissions import IsStaffOrOwner, IsStaffOrReadOnly
-from openedx.core.lib.api.authentication import SessionAuthenticationAllowInactiveUser
+from openedx.core.djangoapps.cors_csrf.authentication import SessionAuthenticationCrossDomainCsrf
 
 User = get_user_model()  # pylint: disable=invalid-name
 
 
+class ExperimentCrossDomainSessionAuth(SessionAuthenticationAllowInactiveUser, SessionAuthenticationCrossDomainCsrf):
+    """Session authentication that allows inactive users and cross-domain requests. """
+    pass
+
+
 class ExperimentDataViewSet(viewsets.ModelViewSet):
-    authentication_classes = (JwtAuthentication, SessionAuthenticationAllowInactiveUser,)
+    authentication_classes = (JwtAuthentication, ExperimentCrossDomainSessionAuth,)
     filter_backends = (DjangoFilterBackend,)
     filter_class = filters.ExperimentDataFilter
     permission_classes = (permissions.IsAuthenticated, IsStaffOrOwner,)
@@ -46,7 +51,6 @@ class ExperimentDataViewSet(viewsets.ModelViewSet):
             try:
                 obj = self.get_queryset().get(user=self.request.user, experiment_id=experiment_id, key=key)
                 self.kwargs['pk'] = obj.pk
-                self.request.data['id'] = obj.pk
                 return self.update(request, *args, **kwargs)
             except ExperimentData.DoesNotExist:
                 pass
@@ -84,7 +88,7 @@ class ExperimentDataViewSet(viewsets.ModelViewSet):
 
 
 class ExperimentKeyValueViewSet(viewsets.ModelViewSet):
-    authentication_classes = (JwtAuthentication, SessionAuthenticationAllowInactiveUser,)
+    authentication_classes = (JwtAuthentication, ExperimentCrossDomainSessionAuth,)
     filter_backends = (DjangoFilterBackend,)
     filter_class = filters.ExperimentKeyValueFilter
     permission_classes = (IsStaffOrReadOnly,)

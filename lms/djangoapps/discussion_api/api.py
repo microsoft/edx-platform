@@ -7,7 +7,7 @@ from urllib import urlencode
 from urlparse import urlunparse
 
 from django.core.exceptions import ValidationError
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.http import Http404
 from enum import Enum
 from opaque_keys import InvalidKeyError
@@ -680,7 +680,7 @@ def _check_fields(allowed_fields, data, message):
         raise ValidationError(non_allowed_fields)
 
 
-def _check_initializable_thread_fields(data, context):  # pylint: disable=invalid-name
+def _check_initializable_thread_fields(data, context):
     """
     Checks if the given data contains a thread field that is not initializable
     by the requesting user
@@ -701,7 +701,7 @@ def _check_initializable_thread_fields(data, context):  # pylint: disable=invali
     )
 
 
-def _check_initializable_comment_fields(data, context):  # pylint: disable=invalid-name
+def _check_initializable_comment_fields(data, context):
     """
     Checks if the given data contains a comment field that is not initializable
     by the requesting user

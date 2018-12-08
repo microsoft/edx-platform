@@ -177,7 +177,7 @@ def has_staff_access_to_preview_mode(user, course_key):
     return has_admin_access_to_course or is_masquerading_as_student(user, course_key)
 
 
-def _can_view_courseware_with_prerequisites(user, course):  # pylint: disable=invalid-name
+def _can_view_courseware_with_prerequisites(user, course):
     """
     Checks if a user has access to a course based on its prerequisites.
 
@@ -201,7 +201,7 @@ def _can_view_courseware_with_prerequisites(user, course):  # pylint: disable=in
     return (
         _is_prerequisites_disabled()
         or _has_staff_access_to_descriptor(user, course, course.id)
-        or user.is_anonymous()
+        or user.is_anonymous
         or _has_fulfilled_prerequisites(user, [course.id])
     )
 
@@ -250,7 +250,7 @@ def _can_enroll_courselike(user, courselike):
 
     # If using a registration method to restrict enrollment (e.g., Shibboleth)
     if settings.FEATURES.get('RESTRICT_ENROLL_BY_REG_METHOD') and enrollment_domain:
-        if user is not None and user.is_authenticated() and \
+        if user is not None and user.is_authenticated and \
                 ExternalAuthMap.objects.filter(user=user, external_domain=enrollment_domain):
             debug("Allow: external_auth of " + enrollment_domain)
             reg_method_ok = True
@@ -260,11 +260,19 @@ def _can_enroll_courselike(user, courselike):
         reg_method_ok = True
 
     # If the user appears in CourseEnrollmentAllowed paired with the given course key,
-    # they may enroll. Note that as dictated by the legacy database schema, the filter
-    # call includes a `course_id` kwarg which requires a CourseKey.
-    if user is not None and user.is_authenticated():
-        if CourseEnrollmentAllowed.objects.filter(email=user.email, course_id=course_key):
+    # they may enroll, except if the CEA has already been used by a different user.
+    # Note that as dictated by the legacy database schema, the filter call includes
+    # a `course_id` kwarg which requires a CourseKey.
+    if user is not None and user.is_authenticated:
+        cea = CourseEnrollmentAllowed.objects.filter(email=user.email, course_id=course_key).first()
+        if cea and cea.valid_for_user(user):
             return ACCESS_GRANTED
+        elif cea:
+            debug("Deny: CEA was already consumed by a different user {} and can't be used again by {}".format(
+                cea.user.id,
+                user.id,
+            ))
+            return ACCESS_DENIED
 
     if _has_staff_access_to_descriptor(user, courselike, course_key):
         return ACCESS_GRANTED
@@ -494,7 +502,6 @@ def _has_access_descriptor(user, action, descriptor, course_key=None):
 
         return (
             _visible_to_nonstaff_users(descriptor) and
-            _can_access_descriptor_with_milestones(user, descriptor, course_key) and
             (
                 _has_detached_class_tag(descriptor) or
                 check_start_date(user, descriptor.days_early_for_beta, descriptor.start, course_key)
@@ -616,7 +623,7 @@ def _dispatch(table, action, user, obj):
         type(obj), action))
 
 
-def _adjust_start_date_for_beta_testers(user, descriptor, course_key):  # pylint: disable=invalid-name
+def _adjust_start_date_for_beta_testers(user, descriptor, course_key):
     """
     If user is in a beta test group, adjust the start date by the appropriate number of
     days.
@@ -660,7 +667,7 @@ def _has_access_to_course(user, access_level, course_key):
 
     access_level = string, either "staff" or "instructor"
     """
-    if user is None or (not user.is_authenticated()):
+    if user is None or (not user.is_authenticated):
         debug("Deny: no user or anon user")
         return ACCESS_DENIED
 
@@ -709,7 +716,7 @@ def administrative_accesses_to_course_for_user(user, course_key):
     return global_staff, staff_access, instructor_access
 
 
-def _has_instructor_access_to_descriptor(user, descriptor, course_key):  # pylint: disable=invalid-name
+def _has_instructor_access_to_descriptor(user, descriptor, course_key):
     """Helper method that checks whether the user has staff access to
     the course of the location.
 

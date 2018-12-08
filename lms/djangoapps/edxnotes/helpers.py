@@ -13,7 +13,7 @@ import requests
 from dateutil.parser import parse as dateutil_parse
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.utils.translation import ugettext as _
 from opaque_keys.edx.keys import UsageKey
 from provider.oauth2.models import Client
@@ -116,6 +116,37 @@ def send_request(user, course_id, page, page_size, path="", text=None):
         )
     except RequestException:
         log.error("Failed to connect to edx-notes-api: url=%s, params=%s", url, str(params))
+        raise EdxNotesServiceUnavailable(_("EdxNotes Service is unavailable. Please try again in a few minutes."))
+
+    return response
+
+
+def delete_all_notes_for_user(user):
+    """
+    helper method to delete all notes for a user, as part of GDPR compliance
+
+    :param user: The user object associated with the deleted notes
+    :return: response (requests) object
+
+    Raises:
+        EdxNotesServiceUnavailable - when notes api is not found/misconfigured.
+    """
+    url = get_internal_endpoint('annotations')
+    headers = {
+        "x-annotator-auth-token": get_edxnotes_id_token(user),
+    }
+    data = {
+        "user": anonymous_id_for_user(user, None)
+    }
+    try:
+        response = requests.delete(
+            url=url,
+            headers=headers,
+            data=data,
+            timeout=(settings.EDXNOTES_CONNECT_TIMEOUT, settings.EDXNOTES_READ_TIMEOUT)
+        )
+    except RequestException:
+        log.error("Failed to connect to edx-notes-api: url=%s, params=%s", url, str(headers))
         raise EdxNotesServiceUnavailable(_("EdxNotes Service is unavailable. Please try again in a few minutes."))
 
     return response

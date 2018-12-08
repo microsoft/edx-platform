@@ -5,13 +5,15 @@ import datetime
 import ddt
 import mock
 
-from certificates.tests.factories import GeneratedCertificateFactory  # pylint: disable=import-error
+from lms.djangoapps.certificates.tests.factories import GeneratedCertificateFactory
+from lms.djangoapps.certificates.api import is_passing_status
+from lms.envs.test import CREDENTIALS_PUBLIC_SERVICE_URL
 from course_modes.models import CourseMode
 from django.conf import settings
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.test.client import RequestFactory
-from lms.djangoapps.certificates.api import is_passing_status
 from opaque_keys.edx.locator import CourseLocator
+from openedx.core.djangoapps.waffle_utils.testutils import override_waffle_flag
 from openedx.features.learner_profile.views.learner_profile import learner_profile_context
 from student.tests.factories import CourseEnrollmentFactory, UserFactory
 from util.testing import UrlResetMixin
@@ -109,6 +111,11 @@ class LearnerProfileViewTest(UrlResetMixin, ModuleStoreTestCase):
 
         for attribute in self.CONTEXT_DATA:
             self.assertIn(attribute, response.content)
+
+    def test_records_link(self):
+        profile_path = reverse('learner_profile', kwargs={'username': self.USERNAME})
+        response = self.client.get(path=profile_path)
+        self.assertContains(response, '<a href="{}/records/">'.format(CREDENTIALS_PUBLIC_SERVICE_URL))
 
     def test_undefined_profile_page(self):
         """

@@ -55,7 +55,6 @@ codekit-config.json
 !djangojs.po
 !djangojs.mo
 conf/locale/en/LC_MESSAGES/*.mo
-!conf/locale/en/LC_MESSAGES/*.po
 conf/locale/fake*/LC_MESSAGES/*.po
 conf/locale/fake*/LC_MESSAGES/*.mo
 # this was a mistake in i18n_tools, now fixed.
@@ -74,6 +73,8 @@ cover_html/
 reports/
 jscover.log
 jscover.log.*
+.pytest_cache/
+pytest_task*.txt
 .tddium*
 common/test/data/test_unicode/static/
 test_root/courses/
@@ -135,6 +136,7 @@ lms/lib/comment_client/python
 autodeploy.properties
 .ws_migrations_complete
 dist
+*.bak
 
 # Visual Studio Code
 .vscode

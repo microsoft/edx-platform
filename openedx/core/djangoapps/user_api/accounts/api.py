@@ -2,7 +2,6 @@
 """
 Programmatic integration point for User API Accounts sub-application
 """
-import re
 import datetime
 from pytz import UTC
 
@@ -12,23 +11,30 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.conf import settings
 from django.core.validators import validate_email, ValidationError
 from django.http import HttpResponseForbidden
-from openedx.core.djangoapps.user_api.preferences.api import update_user_preferences
-from openedx.core.djangoapps.user_api.errors import PreferenceValidationError, AccountValidationError
+from openedx.core.djangoapps.theming.helpers import get_current_request
+from six import text_type
 
-from student.models import User, UserProfile, Registration
+from student.models import User, UserProfile, Registration, email_exists_or_retired, username_exists_or_retired
 from student import forms as student_forms
 from student import views as student_views
 from util.model_utils import emit_setting_changed_event
+from util.password_policy_validators import validate_password
 
+from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
+from openedx.core.djangoapps.user_api import errors, accounts, forms, helpers
+from openedx.core.djangoapps.user_api.config.waffle import PREVENT_AUTH_USER_WRITES, SYSTEM_MAINTENANCE_MSG, waffle
+from openedx.core.djangoapps.user_api.errors import (
+    AccountUpdateError,
+    AccountValidationError,
+    PreferenceValidationError,
+)
+from openedx.core.djangoapps.user_api.preferences.api import update_user_preferences
 from openedx.core.lib.api.view_utils import add_serializer_errors
 
 from .serializers import (
     AccountLegacyProfileSerializer, AccountUserSerializer,
     UserReadOnlySerializer, _visible_fields  # pylint: disable=invalid-name
 )
-from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
-from openedx.core.djangoapps.user_api import errors, accounts, forms, helpers
-
 
 # Public access point for this function.
 visible_fields = _visible_fields
@@ -169,9 +175,14 @@ def update_account_settings(requesting_user, update, username=None):
             student_views.validate_new_email(existing_user, new_email)
         except ValueError as err:
             field_errors["email"] = {
-                "developer_message": u"Error thrown from validate_new_email: '{}'".format(err.message),
-                "user_message": err.message
+                "developer_message": u"Error thrown from validate_new_email: '{}'".format(text_type(err)),
+                "user_message": text_type(err)
             }
+
+        # Don't process with sending email to given new email, if it is already associated with
+        # an account. User must see same success message with no error.
+        # This is so that this endpoint cannot be used to determine if an email is valid or not.
+        changing_email = new_email and not email_exists_or_retired(new_email)
 
     # If the user asked to change full name, validate it
     if changing_full_name:
@@ -242,23 +253,23 @@ def update_account_settings(requesting_user, update, username=None):
 
     except PreferenceValidationError as err:
         raise AccountValidationError(err.preference_errors)
-    except AccountValidationError as err:
+    except (AccountUpdateError, AccountValidationError) as err:
         raise err
     except Exception as err:
-        raise errors.AccountUpdateError(
-            u"Error thrown when saving account updates: '{}'".format(err.message)
+        raise AccountUpdateError(
+            u"Error thrown when saving account updates: '{}'".format(text_type(err))
         )
 
     # And try to send the email change request if necessary.
     if changing_email:
         if not settings.FEATURES['ALLOW_EMAIL_ADDRESS_CHANGE']:
-            raise errors.AccountUpdateError(u"Email address changes have been disabled by the site operators.")
+            raise AccountUpdateError(u"Email address changes have been disabled by the site operators.")
         try:
             student_views.do_email_change_request(existing_user, new_email)
         except ValueError as err:
-            raise errors.AccountUpdateError(
-                u"Error thrown from do_email_change_request: '{}'".format(err.message),
-                user_message=err.message
+            raise AccountUpdateError(
+                u"Error thrown from do_email_change_request: '{}'".format(text_type(err)),
+                user_message=text_type(err)
             )
 
 
@@ -276,7 +287,6 @@ def create_account(username, password, email):
 
     * 3rd party auth
     * External auth (shibboleth)
-    * Complex password policies (ENFORCE_PASSWORD_POLICY)
 
     In addition, we assume that some functionality is handled
     at higher layers:
@@ -310,10 +320,13 @@ def create_account(username, password, email):
     ):
         return HttpResponseForbidden(_("Account creation not allowed."))
 
+    if waffle().is_enabled(PREVENT_AUTH_USER_WRITES):
+        raise errors.UserAPIInternalError(SYSTEM_MAINTENANCE_MSG)
+
     # Validate the username, password, and email
     # This will raise an exception if any of these are not in a valid format.
     _validate_username(username)
-    _validate_password(password, username)
+    _validate_password(password, username, email)
     _validate_email(email)
 
     # Create the user account, setting them to "inactive" until they activate their account.
@@ -383,6 +396,8 @@ def activate_account(activation_key):
         errors.UserAPIInternalError: the operation failed due to an unexpected error.
 
     """
+    if waffle().is_enabled(PREVENT_AUTH_USER_WRITES):
+        raise errors.UserAPIInternalError(SYSTEM_MAINTENANCE_MSG)
     try:
         registration = Registration.objects.get(activation_key=activation_key)
     except Registration.DoesNotExist:
@@ -422,7 +437,8 @@ def request_password_change(email, is_secure):
         # and email it to the user.
         form.save(
             from_email=configuration_helpers.get_value('email_from_address', settings.DEFAULT_FROM_EMAIL),
-            use_https=is_secure
+            use_https=is_secure,
+            request=get_current_request(),
         )
     else:
         # No user with the provided email address exists.
@@ -477,17 +493,17 @@ def get_confirm_email_validation_error(confirm_email, email):
     return _validate(_validate_confirm_email, errors.AccountEmailInvalid, confirm_email, email)
 
 
-def get_password_validation_error(password, username=None):
+def get_password_validation_error(password, username=None, email=None):
     """Get the built-in validation error message for when
     the password is invalid in some way.
 
     :param password: The proposed password (unicode).
     :param username: The username associated with the user's account (unicode).
-    :param default: The message to default to in case of no error.
+    :param email: The email associated with the user's account (unicode).
     :return: Validation error message.
 
     """
-    return _validate(_validate_password, errors.AccountPasswordInvalid, password, username)
+    return _validate(_validate_password, errors.AccountPasswordInvalid, password, username, email)
 
 
 def get_country_validation_error(country):
@@ -539,14 +555,6 @@ def _get_user_and_profile(username):
     return existing_user, existing_user_profile
 
 
-def contains_html(value):
-    """
-    Validator method to check whether name contains html tags
-    """
-    regex = re.compile('(<|>)', re.UNICODE)
-    return bool(regex.search(value))
-
-
 def _validate(validation_func, err, *args):
     """Generic validation function that returns default on
     no errors, but the message associated with the err class
@@ -561,7 +569,7 @@ def _validate(validation_func, err, *args):
     try:
         validation_func(*args)
     except err as validation_err:
-        return validation_err.message
+        return text_type(validation_err)
     return ''
 
 
@@ -591,8 +599,10 @@ def _validate_username(username):
             # `validate_username` provides a proper localized message, however the API needs only the English
             # message by convention.
             student_forms.validate_username(username)
-    except (UnicodeError, errors.AccountDataBadType, errors.AccountDataBadLength, ValidationError) as username_err:
-        raise errors.AccountUsernameInvalid(username_err.message)
+    except (UnicodeError, errors.AccountDataBadType, errors.AccountDataBadLength) as username_err:
+        raise errors.AccountUsernameInvalid(text_type(username_err))
+    except ValidationError as validation_err:
+        raise errors.AccountUsernameInvalid(validation_err.message)
 
 
 def _validate_email(email):
@@ -614,8 +624,10 @@ def _validate_email(email):
         _validate_length(email, accounts.EMAIL_MIN_LENGTH, accounts.EMAIL_MAX_LENGTH, accounts.EMAIL_BAD_LENGTH_MSG)
         validate_email.message = accounts.EMAIL_INVALID_MSG.format(email=email)
         validate_email(email)
-    except (UnicodeError, errors.AccountDataBadType, errors.AccountDataBadLength, ValidationError) as invalid_email_err:
-        raise errors.AccountEmailInvalid(invalid_email_err.message)
+    except (UnicodeError, errors.AccountDataBadType, errors.AccountDataBadLength) as invalid_email_err:
+        raise errors.AccountEmailInvalid(text_type(invalid_email_err))
+    except ValidationError as validation_err:
+        raise errors.AccountEmailInvalid(validation_err.message)
 
 
 def _validate_confirm_email(confirm_email, email):
@@ -630,15 +642,17 @@ def _validate_confirm_email(confirm_email, email):
         raise errors.AccountEmailInvalid(accounts.REQUIRED_FIELD_CONFIRM_EMAIL_MSG)
 
 
-def _validate_password(password, username=None):
+def _validate_password(password, username=None, email=None):
     """Validate the format of the user's password.
 
     Passwords cannot be the same as the username of the account,
-    so we take `username` as an argument.
+    so we create a temp_user using the username and email to test the password against.
+    This user is never saved.
 
     Arguments:
         password (unicode): The proposed password.
         username (unicode): The username associated with the user's account.
+        email (unicode): The email associated with the user's account.
 
     Returns:
         None
@@ -649,17 +663,12 @@ def _validate_password(password, username=None):
     """
     try:
         _validate_type(password, basestring, accounts.PASSWORD_BAD_TYPE_MSG)
-
-        if len(password) == 0:
-            raise errors.AccountPasswordInvalid(accounts.PASSWORD_EMPTY_MSG)
-        elif len(password) < accounts.PASSWORD_MIN_LENGTH:
-            raise errors.AccountPasswordInvalid(accounts.PASSWORD_BAD_MIN_LENGTH_MSG)
-        elif len(password) > accounts.PASSWORD_MAX_LENGTH:
-            raise errors.AccountPasswordInvalid(accounts.PASSWORD_BAD_MAX_LENGTH_MSG)
-
-        _validate_password_works_with_username(password, username)
-    except (errors.AccountDataBadType, errors.AccountDataBadLength) as invalid_password_err:
-        raise errors.AccountPasswordInvalid(invalid_password_err.message)
+        temp_user = User(username=username, email=email) if username else None
+        validate_password(password, user=temp_user)
+    except errors.AccountDataBadType as invalid_password_err:
+        raise errors.AccountPasswordInvalid(text_type(invalid_password_err))
+    except ValidationError as validation_err:
+        raise errors.AccountPasswordInvalid(' '.join(validation_err.messages))
 
 
 def _validate_country(country):
@@ -680,7 +689,7 @@ def _validate_username_doesnt_exist(username):
     :return: None
     :raises: errors.AccountUsernameAlreadyExists
     """
-    if username is not None and User.objects.filter(username=username).exists():
+    if username is not None and username_exists_or_retired(username):
         raise errors.AccountUsernameAlreadyExists(_(accounts.USERNAME_CONFLICT_MSG).format(username=username))
 
 
@@ -691,7 +700,7 @@ def _validate_email_doesnt_exist(email):
     :return: None
     :raises: errors.AccountEmailAlreadyExists
     """
-    if email is not None and User.objects.filter(email=email).exists():
+    if email is not None and email_exists_or_retired(email):
         raise errors.AccountEmailAlreadyExists(_(accounts.EMAIL_CONFLICT_MSG).format(email_address=email))
 
 

@@ -12,12 +12,11 @@ from textwrap import dedent
 import ddt
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.test import TestCase
 from django.test.client import RequestFactory
 from django.utils.timezone import now
 from mock import patch
-from nose.plugins.attrib import attr
 from six import text_type
 
 from capa.tests.response_xml_factory import (
@@ -34,6 +33,7 @@ from lms.djangoapps.grades.tasks import compute_all_grades_for_course
 from openedx.core.djangoapps.credit.api import get_credit_requirement_status, set_credit_requirements
 from openedx.core.djangoapps.credit.models import CreditCourse, CreditProvider
 from openedx.core.djangoapps.user_api.tests.factories import UserCourseTagFactory
+from openedx.core.lib.tests import attr
 from openedx.core.lib.url_utils import quote_slashes
 from student.models import CourseEnrollment, anonymous_id_for_user
 from submissions import api as submissions_api
@@ -335,7 +335,7 @@ class TestCourseGrades(TestSubmittingProblems):
         self._verify_grade(expected_problem_score=(0.0, 1.0), expected_hw_grade=(0.0, 1.0))
 
 
-@attr(shard=3)
+@attr(shard=9)
 @ddt.ddt
 class TestCourseGrader(TestSubmittingProblems):
     """
@@ -752,7 +752,7 @@ class TestCourseGrader(TestSubmittingProblems):
         self.assertEqual(req_status[0]["status"], 'satisfied')
 
 
-@attr(shard=1)
+@attr(shard=9)
 class ProblemWithUploadedFilesTest(TestSubmittingProblems):
     """Tests of problems with uploaded files."""
     # Tell Django to clean out all databases, not just default
@@ -807,7 +807,7 @@ class ProblemWithUploadedFilesTest(TestSubmittingProblems):
         self.assertItemsEqual(kwargs['files'].keys(), filenames.split())
 
 
-@attr(shard=1)
+@attr(shard=9)
 class TestPythonGradedResponse(TestSubmittingProblems):
     """
     Check that we can submit a schematic and custom response, and it answers properly.
@@ -1058,7 +1058,7 @@ class TestPythonGradedResponse(TestSubmittingProblems):
         self._check_ireset(name)
 
 
-@attr(shard=1)
+@attr(shard=9)
 class TestConditionalContent(TestSubmittingProblems):
     """
     Check that conditional content works correctly with grading.
@@ -1123,7 +1123,7 @@ class TestConditionalContent(TestSubmittingProblems):
             parent_location=self.homework_conditional.location,
             category="split_test",
             display_name="Split test",
-            user_partition_id='0',
+            user_partition_id=0,
             group_id_to_child=group_id_to_child,
         )
 

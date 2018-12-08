@@ -3,6 +3,7 @@
 <%def name="online_help_token()"><% return "learnerdashboard" %></%def>
 <%namespace name='static' file='static_content.html'/>
 <%!
+import json
 import pytz
 from courseware.context_processor import user_timezone_locale_prefs
 from datetime import datetime, timedelta
@@ -10,7 +11,7 @@ from django.utils import timezone
 from django.utils.translation import ugettext as _
 from django.template import RequestContext
 from third_party_auth import pipeline
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from util.date_utils import strftime_localized
 from opaque_keys.edx.keys import CourseKey
 from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
@@ -18,7 +19,8 @@ from openedx.core.djangoapps.theming import helpers as theming_helpers
 from openedx.core.djangolib.js_utils import dump_js_escaped_json, js_escaped_string
 from openedx.core.djangolib.markup import HTML, Text
 
-from openedx.features.learner_analytics import ENABLE_DASHBOARD_TAB
+from openedx.features.learner_analytics import INCLUDE_UPSELL_MODAL
+from openedx.features.portfolio_project import INCLUDE_PORTFOLIO_UPSELL_MODAL
 
 from entitlements.models import CourseEntitlement
 from student.models import CourseEnrollment
@@ -54,7 +56,7 @@ from student.models import CourseEnrollment
       });
     });
   </script>
-  <%static:require_module module_name="js/learner_dashboard/unenrollment_factory" class_name="UnenrollmentFactory">
+  <%static:webpack entry="UnenrollmentFactory">
     UnenrollmentFactory({
       urls: {
         dashboard: "${reverse('dashboard') | n, js_escaped_string}",
@@ -64,17 +66,19 @@ from student.models import CourseEnrollment
       },
       isEdx: true
     });
-  </%static:require_module>
-  <%static:require_module module_name="js/learner_dashboard/entitlement_unenrollment_factory" class_name="EntitlementUnenrollmentFactory">
+  </%static:webpack>
+  <%static:webpack entry="EntitlementUnenrollmentFactory">
     ## Wait until the document is fully loaded before initializing the EntitlementUnenrollmentView
     ## to ensure events are setup correctly.
     $(document).ready(function() {
       EntitlementUnenrollmentFactory({
         dashboardPath: "${reverse('dashboard') | n, js_escaped_string}",
-        signInPath: "${reverse('signin_user') | n, js_escaped_string}"
+        signInPath: "${reverse('signin_user') | n, js_escaped_string}",
+        browseCourses: "${marketing_link('COURSES') | n, js_escaped_string}",
+        isEdx: true
       });
     });
-  </%static:require_module>
+  </%static:webpack>
   % if settings.FEATURES.get('ENABLE_DASHBOARD_SEARCH'):
     <%static:require_module module_name="course_search/js/dashboard_search_factory" class_name="DashboardSearchFactory">
         DashboardSearchFactory();
@@ -125,20 +129,27 @@ from student.models import CourseEnrollment
 
 <section class="dashboard" id="dashboard-main">
 <main class="main-container" id="main" aria-label="Content" tabindex="-1">
-  <% course_key = CourseKey.from_string('course-v1:Fake+Course+Key') %>
-  % if ENABLE_DASHBOARD_TAB.is_enabled(course_key):
+  % if INCLUDE_UPSELL_MODAL.is_enabled():
       ${static.renderReact(
         component="UpsellExperimentModal",
         id="upsell-modal",
         props={},
       )}
   % endif
+
+  % if INCLUDE_PORTFOLIO_UPSELL_MODAL.is_enabled():
+    ${static.renderReact(
+      component="PortfolioExperimentUpsellModal",
+      id="portfolio-experiment-upsell-modal",
+      props={},
+    )}
+  % endif
   <section class="my-courses" id="my-courses">
     <header class="wrapper-header-courses">
       <h2 class="header-courses">${_("My Courses")}</h2>
     </header>
     % if len(course_entitlements + course_enrollments) > 0:
-        <ul class="listing-courses">
+        <ul class="listing-courses" data-programs='${json.dumps(programs_data)}'>
         <% share_settings = getattr(settings, 'SOCIAL_SHARING_SETTINGS', {}) %>
         % for dashboard_index, enrollment in enumerate(course_entitlements + course_enrollments):
           <%
@@ -192,8 +203,9 @@ from student.models import CourseEnrollment
             related_programs = inverted_programs.get(unicode(entitlement.course_uuid if is_unfulfilled_entitlement else session_id))
             show_consent_link = (session_id in consent_required_courses)
             course_overview = enrollment.course_overview
+            resume_button_url = resume_button_urls[dashboard_index]
           %>
-          <%include file='dashboard/_dashboard_course_listing.html' args='course_overview=course_overview, course_card_index=dashboard_index, enrollment=enrollment, is_unfulfilled_entitlement=is_unfulfilled_entitlement, is_fulfilled_entitlement=is_fulfilled_entitlement, entitlement=entitlement, entitlement_session=entitlement_session, entitlement_available_sessions=entitlement_available_sessions, entitlement_expiration_date=entitlement_expiration_date, entitlement_expired_at=entitlement_expired_at, show_courseware_link=show_courseware_link, cert_status=cert_status, can_refund_entitlement=can_refund_entitlement, can_unenroll=can_unenroll, credit_status=credit_status, show_email_settings=show_email_settings, course_mode_info=course_mode_info, is_paid_course=is_paid_course, is_course_blocked=is_course_blocked, verification_status=course_verification_status, course_requirements=course_requirements, dashboard_index=dashboard_index, share_settings=share_settings, user=user, related_programs=related_programs, display_course_modes_on_dashboard=display_course_modes_on_dashboard, show_consent_link=show_consent_link, enterprise_customer_name=enterprise_customer_name' />
+          <%include file='dashboard/_dashboard_course_listing.html' args='course_overview=course_overview, course_card_index=dashboard_index, enrollment=enrollment, is_unfulfilled_entitlement=is_unfulfilled_entitlement, is_fulfilled_entitlement=is_fulfilled_entitlement, entitlement=entitlement, entitlement_session=entitlement_session, entitlement_available_sessions=entitlement_available_sessions, entitlement_expiration_date=entitlement_expiration_date, entitlement_expired_at=entitlement_expired_at, show_courseware_link=show_courseware_link, cert_status=cert_status, can_refund_entitlement=can_refund_entitlement, can_unenroll=can_unenroll, credit_status=credit_status, show_email_settings=show_email_settings, course_mode_info=course_mode_info, is_paid_course=is_paid_course, is_course_blocked=is_course_blocked, verification_status=course_verification_status, course_requirements=course_requirements, dashboard_index=dashboard_index, share_settings=share_settings, user=user, related_programs=related_programs, display_course_modes_on_dashboard=display_course_modes_on_dashboard, show_consent_link=show_consent_link, enterprise_customer_name=enterprise_customer_name, resume_button_url=resume_button_url' />
         % endfor
         </ul>
     % else:
@@ -325,7 +337,7 @@ from student.models import CourseEnrollment
 </section>
 
 <section id="unenroll-modal" class="modal unenroll-modal" aria-hidden="true">
-  <div class="inner-wrapper" role="dialog" aria-labelledby="unenrollment-modal-title">
+  <div class="inner-wrapper" role="dialog" aria-labelledby="unenrollment-modal-title" aria-live="polite">
     <button class="close-modal">
       <span class="icon fa fa-remove" aria-hidden="true"></span>
       <span class="sr">
@@ -350,7 +362,7 @@ from student.models import CourseEnrollment
       <input name="course_id" id="unenroll_course_id" type="hidden" />
       <input name="enrollment_action" type="hidden" value="unenroll" />
       <div class="submit">
-        <input name="submit" type="submit" value="${_("Unenroll")}" />
+        <input class="submit-button" name="submit" type="submit" value="${_("Unenroll")}" />
       </div>
     </form>
     <%include file='dashboard/_reason_survey.html' />

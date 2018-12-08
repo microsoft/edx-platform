@@ -2,8 +2,6 @@
 Tests for credit app views.
 """
 
-# pylint: disable=no-member
-
 from __future__ import unicode_literals
 
 import datetime
@@ -12,11 +10,10 @@ import json
 import ddt
 import pytz
 from django.conf import settings
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.test import TestCase, Client
 from django.test.utils import override_settings
 from edx_oauth2_provider.tests.factories import AccessTokenFactory, ClientFactory
-from nose.plugins.attrib import attr
 from opaque_keys.edx.keys import CourseKey
 
 from openedx.core.djangoapps.credit.models import (
@@ -28,6 +25,7 @@ from openedx.core.djangoapps.credit.tests.factories import (
     CreditProviderFactory, CreditEligibilityFactory, CreditCourseFactory, CreditRequestFactory,
 )
 from openedx.core.djangolib.testing.utils import skip_unless_lms
+from openedx.core.lib.tests import attr
 from openedx.core.lib.token_utils import JwtBuilder
 from student.tests.factories import UserFactory, AdminFactory
 from util.date_utils import to_timestamp
@@ -141,7 +139,7 @@ class CreditCourseViewSetTests(AuthMixin, UserMixin, TestCase):
 
         # Staff users should have access to the API
         user.is_staff = True
-        user.save()  # pylint: disable=no-member
+        user.save()
         response = self.client.get(self.path)
         self.assertEqual(response.status_code, 200)
 
@@ -163,7 +161,7 @@ class CreditCourseViewSetTests(AuthMixin, UserMixin, TestCase):
 
         # Retrieve a CSRF token
         response = client.get('/')
-        csrf_token = response.cookies[settings.CSRF_COOKIE_NAME].value  # pylint: disable=no-member
+        csrf_token = response.cookies[settings.CSRF_COOKIE_NAME].value
         self.assertGreater(len(csrf_token), 0)
 
         # Ensure POSTs made with the token succeed.
@@ -185,7 +183,7 @@ class CreditCourseViewSetTests(AuthMixin, UserMixin, TestCase):
 
         # Staff users should have access to the API
         user.is_staff = True
-        user.save()  # pylint: disable=no-member
+        user.save()
         response = self.client.get(self.path, **headers)
         self.assertEqual(response.status_code, 200)
 

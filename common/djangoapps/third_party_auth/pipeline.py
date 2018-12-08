@@ -54,15 +54,13 @@ This is surprising but important behavior, since it allows a single function in
 the pipeline to consolidate all the operations needed to establish invariants
 rather than spreading them across two functions in the pipeline.
 
-See http://python-social-auth.readthedocs.io/en/latest/pipeline.html for more docs.
+See https://python-social-auth.readthedocs.io/en/latest/pipeline.html for more docs.
 """
 
 import base64
 import hashlib
 import hmac
 import json
-import random
-import string
 import urllib
 from collections import OrderedDict
 from logging import getLogger
@@ -72,7 +70,7 @@ import analytics
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.mail.message import EmailMessage
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.http import HttpResponseBadRequest
 from django.shortcuts import redirect
 import social_django
@@ -80,10 +78,12 @@ from social_core.exceptions import AuthException
 from social_core.pipeline import partial
 from social_core.pipeline.social_auth import associate_by_email
 
-import student
 from edxmako.shortcuts import render_to_string
 from eventtracking import tracker
 from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
+from openedx.core.djangoapps.user_authn import cookies as user_authn_cookies
+from lms.djangoapps.verify_student.models import SSOVerification
+from lms.djangoapps.verify_student.utils import earliest_allowed_verification_date
 from third_party_auth.utils import user_exists
 
 from . import provider
@@ -148,8 +148,6 @@ _AUTH_ENTRY_CHOICES = frozenset([
     AUTH_ENTRY_REGISTER_API,
 ] + AUTH_ENTRY_CUSTOM.keys())
 
-_DEFAULT_RANDOM_PASSWORD_LENGTH = 12
-_PASSWORD_CHARSET = string.letters + string.digits
 
 logger = getLogger(__name__)
 
@@ -430,27 +428,6 @@ def get_provider_user_states(user):
     return states
 
 
-def make_random_password(length=None, choice_fn=random.SystemRandom().choice):
-    """Makes a random password.
-
-    When a user creates an account via a social provider, we need to create a
-    placeholder password for them to satisfy the ORM's consistency and
-    validation requirements. Users don't know (and hence cannot sign in with)
-    this password; that's OK because they can always use the reset password
-    flow to set it to a known value.
-
-    Args:
-        choice_fn: function or method. Takes an iterable and returns a random
-            element.
-        length: int. Number of chars in the returned value. None to use default.
-
-    Returns:
-        String. The resulting password.
-    """
-    length = length if length is not None else _DEFAULT_RANDOM_PASSWORD_LENGTH
-    return ''.join(choice_fn(_PASSWORD_CHARSET) for _ in xrange(length))
-
-
 def running(request):
     """Returns True iff request is running a third-party auth pipeline."""
     return get(request) is not None  # Avoid False for {}.
@@ -649,14 +626,14 @@ def set_logged_in_cookies(backend=None, user=None, strategy=None, auth_entry=Non
     to the next pipeline step.
 
     """
-    if not is_api(auth_entry) and user is not None and user.is_authenticated():
+    if not is_api(auth_entry) and user is not None and user.is_authenticated:
         request = strategy.request if strategy else None
         # n.b. for new users, user.is_active may be False at this point; set the cookie anyways.
         if request is not None:
             # Check that the cookie isn't already set.
             # This ensures that we allow the user to continue to the next
             # pipeline step once he/she has the cookie set by this step.
-            has_cookie = student.cookies.is_logged_in_cookie_set(request)
+            has_cookie = user_authn_cookies.is_logged_in_cookie_set(request)
             if not has_cookie:
                 try:
                     redirect_url = get_complete_url(current_partial.backend)
@@ -667,7 +644,7 @@ def set_logged_in_cookies(backend=None, user=None, strategy=None, auth_entry=Non
                     pass
                 else:
                     response = redirect(redirect_url)
-                    return student.cookies.set_logged_in_cookies(request, response, user)
+                    return user_authn_cookies.set_logged_in_cookies(request, response, user)
 
 
 @partial.partial
@@ -799,3 +776,29 @@ def user_details_force_sync(auth_entry, strategy, details, user=None, *args, **k
                 except SMTPException:
                     logger.exception('Error sending IdP learner data sync-initiated email change '
                                      'notification email for user [%s].', user.username)
+
+
+def set_id_verification_status(auth_entry, strategy, details, user=None, *args, **kwargs):
+    """
+    Use the user's authentication with the provider, if configured, as evidence of their identity being verified.
+    """
+    current_provider = provider.Registry.get_from_pipeline({'backend': strategy.request.backend.name, 'kwargs': kwargs})
+    if user and current_provider.enable_sso_id_verification:
+        # Get previous valid, non expired verification attempts for this SSO Provider and user
+        verifications = SSOVerification.objects.filter(
+            user=user,
+            status="approved",
+            created_at__gte=earliest_allowed_verification_date(),
+            identity_provider_type=current_provider.full_class_name,
+            identity_provider_slug=current_provider.slug,
+        )
+
+        # If there is none, create a new approved verification for the user.
+        if not verifications:
+            SSOVerification.objects.create(
+                user=user,
+                status="approved",
+                name=user.profile.name,
+                identity_provider_type=current_provider.full_class_name,
+                identity_provider_slug=current_provider.slug,
+            )

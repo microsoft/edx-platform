@@ -33,6 +33,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
 from opaque_keys import InvalidKeyError
 from opaque_keys.edx.keys import AssetKey, CourseKey
+from six import text_type
 
 from contentstore.utils import get_lms_link_for_certificate_web_view, reverse_course_url
 from contentstore.views.assets import delete_asset
@@ -155,6 +156,22 @@ class CertificateManager(object):
             )
         if not certificate_data.get("name"):
             raise CertificateValidationError(_("must have name of the certificate"))
+
+    @staticmethod
+    def is_activated(course):
+        """
+        Returns whether certificates are activated for the given course,
+        along with the certificates.
+        """
+        is_active = False
+        certificates = None
+        if settings.FEATURES.get('CERTIFICATES_HTML_VIEW', False):
+            certificates = CertificateManager.get_certificates(course)
+            # we are assuming only one certificate in certificates collection.
+            for certificate in certificates:
+                is_active = certificate.get('is_active', False)
+                break
+        return is_active, certificates
 
     @staticmethod
     def get_used_ids(course):
@@ -391,14 +408,8 @@ def certificates_list_handler(request, course_key_string):
                 )
             else:
                 certificate_web_view_url = None
-            certificates = None
-            is_active = False
-            if settings.FEATURES.get('CERTIFICATES_HTML_VIEW', False):
-                certificates = CertificateManager.get_certificates(course)
-                # we are assuming only one certificate in certificates collection.
-                for certificate in certificates:
-                    is_active = certificate.get('is_active', False)
-                    break
+
+            is_active, certificates = CertificateManager.is_activated(course)
 
             return render_to_response('certificates.html', {
                 'context_course': course,
@@ -423,7 +434,7 @@ def certificates_list_handler(request, course_key_string):
                 try:
                     new_certificate = CertificateManager.deserialize_certificate(course, request.body)
                 except CertificateValidationError as err:
-                    return JsonResponse({"error": err.message}, status=400)
+                    return JsonResponse({"error": text_type(err)}, status=400)
                 if course.certificates.get('certificates') is None:
                     course.certificates['certificates'] = []
                 course.certificates['certificates'].append(new_certificate.certificate_data)
@@ -480,7 +491,7 @@ def certificates_detail_handler(request, course_key_string, certificate_id):
         try:
             new_certificate = CertificateManager.deserialize_certificate(course, request.body)
         except CertificateValidationError as err:
-            return JsonResponse({"error": err.message}, status=400)
+            return JsonResponse({"error": text_type(err)}, status=400)
 
         serialized_certificate = CertificateManager.serialize_certificate(new_certificate)
         cert_event_type = 'created'

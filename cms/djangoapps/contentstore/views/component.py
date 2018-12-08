@@ -150,6 +150,7 @@ def container_handler(request, usage_key_string):
                 index += 1
 
             return render_to_response('container.html', {
+                'language_code': request.LANGUAGE_CODE,
                 'context_course': course,  # Needed only for display of menus at top of page.
                 'action': action,
                 'xblock': xblock,
@@ -293,7 +294,7 @@ def get_component_templates(courselike, library=False):
 
                         templates_for_category.append(
                             create_template_dict(
-                                _(template['metadata'].get('display_name')),    # pylint: disable=translation-of-non-string
+                                _(template['metadata'].get('display_name')),
                                 category,
                                 support_level_with_template,
                                 template_id,

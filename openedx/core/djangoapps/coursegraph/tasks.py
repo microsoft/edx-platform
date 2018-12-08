@@ -9,10 +9,10 @@ import logging
 from celery import task
 from django.conf import settings
 from django.utils import six, timezone
+from edx_django_utils.cache import RequestCache
 from opaque_keys.edx.keys import CourseKey
 from py2neo import Graph, Node, Relationship, authenticate, NodeSelector
 from py2neo.compat import integer, string, unicode as neo4j_unicode
-from request_cache.middleware import RequestCache
 
 
 log = logging.getLogger(__name__)
@@ -135,11 +135,16 @@ def get_course_last_published(course_key):
         was published.
     """
     # Import is placed here to avoid model import at project startup.
-    from openedx.core.djangoapps.content.course_structures.models import CourseStructure
+    from xmodule.modulestore.django import modulestore
+    from openedx.core.djangoapps.content.block_structure.models import BlockStructureModel
+    from openedx.core.djangoapps.content.block_structure.exceptions import BlockStructureNotFound
+
+    store = modulestore()
+    course_usage_key = store.make_course_usage_key(course_key)
     try:
-        structure = CourseStructure.objects.get(course_id=course_key)
+        structure = BlockStructureModel.get(course_usage_key)
         course_last_published_date = six.text_type(structure.modified)
-    except CourseStructure.DoesNotExist:
+    except BlockStructureNotFound:
         course_last_published_date = None
 
     return course_last_published_date
@@ -343,7 +348,7 @@ class ModuleStoreSerializer(object):
 
         for index, course_key in enumerate(self.course_keys):
             # first, clear the request cache to prevent memory leaks
-            RequestCache.clear_request_cache()
+            RequestCache.clear_all_namespaces()
 
             log.info(
                 "Now submitting %s for export to neo4j: course %d of %d total courses",

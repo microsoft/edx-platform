@@ -2,6 +2,7 @@ import json
 import logging
 import math
 from functools import partial
+import re
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
@@ -12,13 +13,13 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_POST, require_http_methods
 from opaque_keys.edx.keys import AssetKey, CourseKey
 from pymongo import ASCENDING, DESCENDING
+from six import text_type
 from xmodule.contentstore.content import StaticContent
 from xmodule.contentstore.django import contentstore
 from xmodule.exceptions import NotFoundError
 from xmodule.modulestore.django import modulestore
 from xmodule.modulestore.exceptions import ItemNotFoundError
 
-from contentstore.config.models import NewAssetsPageFlag
 from contentstore.utils import reverse_course_url
 from contentstore.views.exception import AssetNotFoundException, AssetSizeTooLargeException
 from edxmako.shortcuts import render_to_response
@@ -34,7 +35,8 @@ REQUEST_DEFAULTS = {
     'page_size': 50,
     'sort': 'date_added',
     'direction': '',
-    'asset_type': ''
+    'asset_type': '',
+    'text_search': '',
 }
 
 
@@ -54,6 +56,8 @@ def assets_handler(request, course_key_string=None, asset_key_string=None):
             page_size: the number of items per page (defaults to 50)
             sort: the asset field to sort by (defaults to 'date_added')
             direction: the sort direction (defaults to 'descending')
+            asset_type: the file type to filter items to (defaults to All)
+            text_search: string to filter results by file name (defaults to '')
     POST
         json: create (or update?) an asset. The only updating that can be done is changing the lock state.
     PUT
@@ -74,7 +78,7 @@ def assets_handler(request, course_key_string=None, asset_key_string=None):
         return _update_asset(request, course_key, asset_key)
 
     elif request.method == 'GET':  # assume html
-        return _asset_index(course_key)
+        return _asset_index(request, course_key)
 
     return HttpResponseNotFound()
 
@@ -87,7 +91,7 @@ def _request_response_format_is_json(request, response_format):
     return response_format == 'json' or 'application/json' in request.META.get('HTTP_ACCEPT', 'application/json')
 
 
-def _asset_index(course_key):
+def _asset_index(request, course_key):
     '''
     Display an editable asset library.
 
@@ -96,7 +100,7 @@ def _asset_index(course_key):
     course_module = modulestore().get_course(course_key)
 
     return render_to_response('asset_index.html', {
-        'waffle_flag_enabled': NewAssetsPageFlag.feature_enabled(course_key),
+        'language_code': request.LANGUAGE_CODE,
         'context_course': course_module,
         'max_file_size_in_mbs': settings.MAX_ASSET_UPLOAD_FILE_SIZE_IN_MB,
         'chunk_size_in_mbs': settings.UPLOAD_CHUNK_SIZE_IN_MB,
@@ -113,7 +117,7 @@ def _assets_json(request, course_key):
     '''
     request_options = _parse_request_to_dictionary(request)
 
-    filter_parameters = None
+    filter_parameters = {}
 
     if request_options['requested_asset_type']:
         filters_are_invalid_error = _get_error_if_invalid_parameters(request_options['requested_asset_type'])
@@ -121,7 +125,10 @@ def _assets_json(request, course_key):
         if filters_are_invalid_error is not None:
             return filters_are_invalid_error
 
-        filter_parameters = _get_filter_parameters_for_mongo(request_options['requested_asset_type'])
+        filter_parameters.update(_get_content_type_filter_for_mongo(request_options['requested_asset_type']))
+
+    if request_options['requested_text_search']:
+        filter_parameters.update(_get_displayname_search_filter_for_mongo(request_options['requested_text_search']))
 
     sort_type_and_direction = _get_sort_type_and_direction(request_options)
 
@@ -138,7 +145,7 @@ def _assets_json(request, course_key):
 
     assets, total_count = _get_assets_for_page(course_key, query_options)
 
-    if request_options['requested_page'] > 0 and first_asset_to_display_index >= total_count:
+    if request_options['requested_page'] > 0 and first_asset_to_display_index >= total_count and total_count > 0:
         _update_options_to_requery_final_page(query_options, total_count)
         current_page = query_options['current_page']
         first_asset_to_display_index = _get_first_asset_index(current_page, requested_page_size)
@@ -157,6 +164,7 @@ def _assets_json(request, course_key):
         'sort': request_options['requested_sort'],
         'direction': request_options['requested_sort_direction'],
         'assetTypes': _get_requested_file_types_from_requested_filter(request_options['requested_asset_type']),
+        'textSearch': request_options['requested_text_search'],
     }
 
     return JsonResponse(response_payload)
@@ -169,6 +177,7 @@ def _parse_request_to_dictionary(request):
         'requested_sort': _get_requested_attribute(request, 'sort'),
         'requested_sort_direction': _get_requested_attribute(request, 'direction'),
         'requested_asset_type': _get_requested_attribute(request, 'asset_type'),
+        'requested_text_search': _get_requested_attribute(request, 'text_search'),
     }
 
 
@@ -198,57 +207,77 @@ def _get_error_if_invalid_parameters(requested_filter):
         return JsonResponse({'error': error_message}, status=400)
 
 
-def _get_filter_parameters_for_mongo(requested_filter):
+def _get_content_type_filter_for_mongo(requested_filter):
+    """
+    Construct and return pymongo query dict for the given content type categories.
+    """
     requested_file_types = _get_requested_file_types_from_requested_filter(requested_filter)
-    mongo_where_operator_parameters = _get_mongo_where_operator_parameters_for_filters(requested_file_types)
+    type_filter = {
+        "$or": []
+    }
 
-    return mongo_where_operator_parameters
+    if 'OTHER' in requested_file_types:
+        type_filter["$or"].append(_get_mongo_expression_for_type_other())
+        requested_file_types.remove('OTHER')
 
+    type_filter["$or"].append(_get_mongo_expression_for_type_filter(requested_file_types))
 
-def _get_mongo_where_operator_parameters_for_filters(requested_file_types):
-    javascript_filters = []
-
-    for requested_file_type in requested_file_types:
-        if requested_file_type == 'OTHER':
-            javascript_filters_for_file_types = _get_javascript_expressions_for_other_()
-            javascript_filters.append(javascript_filters_for_file_types)
-        else:
-            javascript_filters_for_file_types = _get_javascript_expressions_for_filter(requested_file_type)
-            javascript_filters.append(javascript_filters_for_file_types)
-
-    javascript_filters = _join_javascript_expressions_for_filters_with_separator(javascript_filters, '||')
-
-    return _format_javascript_filters_for_mongo_where(javascript_filters)
+    return type_filter
 
 
-def _format_javascript_filters_for_mongo_where(javascript_filters):
+def _get_mongo_expression_for_type_other():
+    """
+    Construct and return pymongo expression dict for the 'OTHER' content type category.
+    """
+    content_types = [ext for extensions in _get_files_and_upload_type_filters().values() for ext in extensions]
     return {
-        '$where': javascript_filters,
+        'contentType': {
+            '$nin': content_types
+        }
     }
 
 
-def _get_javascript_expressions_for_other_():
-    file_extensions_for_requested_file_types = _get_files_and_upload_type_filters().values()
-    file_extensions_for_requested_file_types_flattened = [extension for extensions in
-                                                          file_extensions_for_requested_file_types for extension in
-                                                          extensions]
+def _get_mongo_expression_for_type_filter(requested_file_types):
+    """
+    Construct and return pymongo expression dict for the named content type categories.
 
-    javascript_expression_to_filter_extensions = _get_javascript_expressions_to_filter_extensions_with_operator(
-        file_extensions_for_requested_file_types_flattened, '!=')
-    joined_javascript_expressions_to_filter_extensions = _join_javascript_expressions_for_filters_with_separator(
-        javascript_expression_to_filter_extensions, ' && ')
+    The named content categories are the keys of the FILES_AND_UPLOAD_TYPE_FILTERS setting that are not 'OTHER':
+    'Images', 'Documents', 'Audio', and 'Code'.
+    """
+    content_types = []
+    files_and_upload_type_filters = _get_files_and_upload_type_filters()
 
-    return joined_javascript_expressions_to_filter_extensions
+    for requested_file_type in requested_file_types:
+        content_types.extend(files_and_upload_type_filters[requested_file_type])
+
+    return {
+        'contentType': {
+            '$in': content_types
+        }
+    }
 
 
-def _get_javascript_expressions_for_filter(requested_file_type):
-    file_extensions_for_requested_file_type = _get_extensions_for_file_type(requested_file_type)
-    javascript_expressions_to_filter_extensions = _get_javascript_expressions_to_filter_extensions_with_operator(
-        file_extensions_for_requested_file_type, '==')
-    joined_javascript_expressions_to_filter_extensions = _join_javascript_expressions_for_filters_with_separator(
-        javascript_expressions_to_filter_extensions, ' || ')
+def _get_displayname_search_filter_for_mongo(text_search):
+    """
+    Return a pymongo query dict for the given search string, using case insensitivity.
+    """
+    filters = []
 
-    return joined_javascript_expressions_to_filter_extensions
+    text_search_tokens = text_search.split()
+
+    for token in text_search_tokens:
+        escaped_token = re.escape(token)
+
+        filters.append({
+            'displayname': {
+                '$regex': escaped_token,
+                '$options': 'i',
+            },
+        })
+
+    return {
+        '$and': filters,
+    }
 
 
 def _get_files_and_upload_type_filters():
@@ -257,19 +286,6 @@ def _get_files_and_upload_type_filters():
 
 def _get_requested_file_types_from_requested_filter(requested_filter):
     return requested_filter.split(',') if requested_filter else []
-
-
-def _get_extensions_for_file_type(requested_file_type):
-    return _get_files_and_upload_type_filters().get(requested_file_type)
-
-
-def _get_javascript_expressions_to_filter_extensions_with_operator(file_extensions, operator):
-    return ["JSON.stringify(this.contentType).toUpperCase() " + operator + " JSON.stringify('{}').toUpperCase()".format(
-        file_extension) for file_extension in file_extensions]
-
-
-def _join_javascript_expressions_for_filters_with_separator(javascript_expressions_for_filtering, separator):
-    return separator.join(javascript_expressions_for_filtering)
 
 
 def _get_sort_type_and_direction(request_options):
@@ -309,7 +325,6 @@ def _get_assets_for_page(course_key, options):
     sort = options['sort']
     filter_params = options['filter_params'] if options['filter_params'] else None
     start = current_page * page_size
-
     return contentstore().get_all_content_for_course(
         course_key, start=start, maxresults=page_size, sort=sort, filter_params=filter_params
     )
@@ -387,7 +402,7 @@ def _upload_asset(request, course_key):
     try:
         content = update_course_run_asset(course_key, upload_file)
     except AssetSizeTooLargeException as exception:
-        return JsonResponse({'error': exception.message}, status=413)
+        return JsonResponse({'error': text_type(exception)}, status=413)
 
     # readback the saved content - we need the database timestamp
     readback = contentstore().find(content.location)

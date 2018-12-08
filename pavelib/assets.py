@@ -28,7 +28,6 @@ from .utils.timer import timed
 # setup baseline paths
 
 ALL_SYSTEMS = ['lms', 'studio']
-COFFEE_DIRS = ['lms', 'cms', 'common']
 
 LMS = 'lms'
 CMS = 'cms'
@@ -50,6 +49,7 @@ COMMON_LOOKUP_PATHS = [
 
 # A list of NPM installed libraries that should be copied into the common
 # static directory.
+# If string ends with '/' then all file in the directory will be copied.
 NPM_INSTALLED_LIBRARIES = [
     'backbone.paginator/lib/backbone.paginator.js',
     'backbone/backbone.js',
@@ -64,6 +64,7 @@ NPM_INSTALLED_LIBRARIES = [
     'requirejs/require.js',
     'underscore.string/dist/underscore.string.js',
     'underscore/underscore.js',
+    '@edx/studio-frontend/dist/',
     'which-country/index.js'
 ]
 
@@ -287,7 +288,7 @@ def debounce(seconds=1):
 
         @wraps(func)
         def wrapper(*args, **kwargs):  # pylint: disable=missing-docstring
-            def call():  # pylint: disable=missing-docstring
+            def call():
                 func(*args, **kwargs)
                 func.timer = None
             if func.timer:
@@ -297,32 +298,6 @@ def debounce(seconds=1):
 
         return wrapper
     return decorator
-
-
-class CoffeeScriptWatcher(PatternMatchingEventHandler):
-    """
-    Watches for coffeescript changes
-    """
-    ignore_directories = True
-    patterns = ['*.coffee']
-
-    def register(self, observer):
-        """
-        register files with observer
-        """
-        dirnames = set()
-        for filename in sh(coffeescript_files(), capture=True).splitlines():
-            dirnames.add(path(filename).dirname())
-        for dirname in dirnames:
-            observer.schedule(self, dirname)
-
-    @debounce()
-    def on_any_event(self, event):
-        print('\tCHANGED:', event.src_path)
-        try:
-            compile_coffeescript(event.src_path)
-        except Exception:  # pylint: disable=broad-except
-            traceback.print_exc()
 
 
 class SassWatcher(PatternMatchingEventHandler):
@@ -347,8 +322,9 @@ class SassWatcher(PatternMatchingEventHandler):
                 paths.extend(glob.glob(dirname))
             else:
                 paths.append(dirname)
-            for dirname in paths:
-                observer.schedule(self, dirname, recursive=True)
+
+            for obs_dirname in paths:
+                observer.schedule(self, obs_dirname, recursive=True)
 
     @debounce()
     def on_any_event(self, event):
@@ -398,28 +374,6 @@ class XModuleAssetsWatcher(PatternMatchingEventHandler):
 
         # To refresh the hash values of static xmodule content
         restart_django_servers()
-
-
-def coffeescript_files():
-    """
-    return find command for paths containing coffee files
-    """
-    dirs = " ".join(Env.REPO_ROOT / coffee_dir for coffee_dir in COFFEE_DIRS)
-    return cmd('find', dirs, '-type f', '-name \"*.coffee\"')
-
-
-@task
-@no_help
-@timed
-def compile_coffeescript(*files):
-    """
-    Compile CoffeeScript to JavaScript.
-    """
-    if not files:
-        files = ["`{}`".format(coffeescript_files())]
-    sh(cmd(
-        "node_modules/.bin/coffee", "--compile", *files
-    ))
 
 
 @task
@@ -640,7 +594,11 @@ def process_npm_assets():
         """
         Copies a vendor library to the shared vendor directory.
         """
-        library_path = 'node_modules/{library}'.format(library=library)
+        if library.startswith('node_modules/'):
+            library_path = library
+        else:
+            library_path = 'node_modules/{library}'.format(library=library)
+
         if library.endswith('.css') or library.endswith('.css.map'):
             vendor_dir = NPM_CSS_VENDOR_DIRECTORY
         else:
@@ -652,6 +610,17 @@ def process_npm_assets():
             ))
         elif not skip_if_missing:
             raise Exception('Missing vendor file {library_path}'.format(library_path=library_path))
+
+    def copy_vendor_library_dir(library_dir, skip_if_missing=False):
+        """
+        Copies all vendor libraries in directory to the shared vendor directory.
+        """
+        library_dir_path = 'node_modules/{library_dir}'.format(library_dir=library_dir)
+        print('Copying vendor library dir: {}'.format(library_dir_path))
+        if os.path.exists(library_dir_path):
+            for dirpath, _, filenames in os.walk(library_dir_path):
+                for filename in filenames:
+                    copy_vendor_library(os.path.join(dirpath, filename), skip_if_missing=skip_if_missing)
 
     # Skip processing of the libraries if this is just a dry run
     if tasks.environment.dry_run:
@@ -666,7 +635,10 @@ def process_npm_assets():
     # Copy each file to the vendor directory, overwriting any existing file.
     print("Copying vendor files into static directory")
     for library in NPM_INSTALLED_LIBRARIES:
-        copy_vendor_library(library)
+        if library.endswith('/'):
+            copy_vendor_library_dir(library)
+        else:
+            copy_vendor_library(library)
 
     # Copy over each developer library too if they have been installed
     print("Copying developer vendor files into static directory")
@@ -674,6 +646,11 @@ def process_npm_assets():
         copy_vendor_library(library, skip_if_missing=True)
 
 
+@task
+@needs(
+    'pavelib.prereqs.install_python_prereqs',
+)
+@no_help
 def process_xmodule_assets():
     """
     Process XModule static assets.
@@ -715,7 +692,6 @@ def collect_assets(systems, settings, **kwargs):
 
         # We compile these out, don't need the source files in staticfiles
         "sass",
-        "*.coffee",
     ]
 
     ignore_args = " ".join(
@@ -790,7 +766,7 @@ def webpack(options):
     static_root_cms = Env.get_django_setting("STATIC_ROOT", "cms", settings=settings)
     config_path = Env.get_django_setting("WEBPACK_CONFIG_PATH", "lms", settings=settings)
     environment = 'NODE_ENV={node_env} STATIC_ROOT_LMS={static_root_lms} STATIC_ROOT_CMS={static_root_cms}'.format(
-        node_env="production" if settings != Env.DEVSTACK_SETTINGS else "development",
+        node_env="development" if config_path == 'webpack.dev.config.js' else "production",
         static_root_lms=static_root_lms,
         static_root_cms=static_root_cms
     )
@@ -857,6 +833,7 @@ def listfy(data):
 @task
 @cmdopts([
     ('background', 'b', 'Background mode'),
+    ('settings=', 's', "Django settings (defaults to devstack)"),
     ('theme-dirs=', '-td', 'The themes dir containing all themes (defaults to None)'),
     ('themes=', '-t', 'The themes to add sass watchers for (defaults to None)'),
     ('wait=', '-w', 'How long to pause between filesystem scans.')
@@ -869,6 +846,8 @@ def watch_assets(options):
     # Don't watch assets when performing a dry run
     if tasks.environment.dry_run:
         return
+
+    settings = getattr(options, 'settings', Env.DEVSTACK_SETTINGS)
 
     themes = get_parsed_option(options, 'themes')
     theme_dirs = get_parsed_option(options, 'theme_dirs', [])
@@ -885,7 +864,6 @@ def watch_assets(options):
     sass_directories = get_watcher_dirs(theme_dirs, themes)
     observer = Observer(timeout=wait)
 
-    CoffeeScriptWatcher().register(observer)
     SassWatcher().register(observer, sass_directories)
     XModuleSassWatcher().register(observer, ['common/lib/xmodule/'])
     XModuleAssetsWatcher().register(observer)
@@ -894,7 +872,7 @@ def watch_assets(options):
     observer.start()
 
     # Run the Webpack file system watcher too
-    execute_webpack_watch(settings=Env.DEVSTACK_SETTINGS)
+    execute_webpack_watch(settings=settings)
 
     if not getattr(options, 'background', False):
         # when running as a separate process, the main thread needs to loop
@@ -915,7 +893,7 @@ def watch_assets(options):
 @timed
 def update_assets(args):
     """
-    Compile CoffeeScript and Sass, then collect static assets.
+    Compile Sass, then collect static assets.
     """
     parser = argparse.ArgumentParser(prog='paver update_assets')
     parser.add_argument(
@@ -959,7 +937,6 @@ def update_assets(args):
 
     process_xmodule_assets()
     process_npm_assets()
-    compile_coffeescript()
 
     # Build Webpack
     call_task('pavelib.assets.webpack', options={'settings': args.settings})
@@ -981,6 +958,7 @@ def update_assets(args):
             'pavelib.assets.watch_assets',
             options={
                 'background': not args.debug,
+                'settings': args.settings,
                 'theme_dirs': args.theme_dirs,
                 'themes': args.themes,
                 'wait': [float(args.wait)]

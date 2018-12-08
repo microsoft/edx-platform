@@ -5,7 +5,7 @@ set -e
 #
 #   xss-commit-linter.sh
 #
-#   Executes xss_linter.py on the set of files in a particular git commit.
+#   Executes xsslint/xss_linter.py on the set of files in a particular git commit.
 #
 ###############################################################################
 
@@ -26,7 +26,7 @@ show_help() {
     echo "For more help using the xss linter, including details on how to"
     echo "understand and fix any violations, read the docs here:"
     echo ""
-    echo "  http://edx.readthedocs.org/projects/edx-developer-guide/en/latest/conventions/preventing_xss.html#xss-linter"
+    echo "  https://edx.readthedocs.org/projects/edx-developer-guide/en/latest/conventions/preventing_xss.html#xss-linter"
 
 }
 
@@ -82,6 +82,6 @@ else
     for f in $diff_files; do
         echo ""
         echo "Linting $f:"
-        ./scripts/xss_linter.py $f
+        ./scripts/xsslint/xss_linter.py --config=scripts.xsslint_config $f
     done
 fi

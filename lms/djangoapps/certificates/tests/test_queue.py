@@ -10,7 +10,6 @@ import pytz
 from django.test import TestCase
 from django.test.utils import override_settings
 from mock import Mock, patch
-from nose.plugins.attrib import attr
 from opaque_keys.edx.locator import CourseLocator
 
 # It is really unfortunate that we are using the XQueue client
@@ -19,9 +18,9 @@ from opaque_keys.edx.locator import CourseLocator
 # and verify that items are being correctly added to the queue
 # in our `XQueueCertInterface` implementation.
 from capa.xqueue_interface import XQueueInterface
-from certificates.models import CertificateStatuses, ExampleCertificate, ExampleCertificateSet, GeneratedCertificate
-from certificates.queue import XQueueCertInterface
-from certificates.tests.factories import CertificateWhitelistFactory, GeneratedCertificateFactory
+from lms.djangoapps.certificates.models import CertificateStatuses, ExampleCertificate, ExampleCertificateSet, GeneratedCertificate
+from lms.djangoapps.certificates.queue import XQueueCertInterface
+from lms.djangoapps.certificates.tests.factories import CertificateWhitelistFactory, GeneratedCertificateFactory
 from course_modes.models import CourseMode
 from lms.djangoapps.grades.tests.utils import mock_passing_grade
 from lms.djangoapps.verify_student.tests.factories import SoftwareSecurePhotoVerificationFactory
@@ -31,10 +30,10 @@ from xmodule.modulestore.tests.factories import CourseFactory
 
 
 @ddt.ddt
-@attr(shard=1)
 @override_settings(CERT_QUEUE='certificates')
 class XQueueCertInterfaceAddCertificateTest(ModuleStoreTestCase):
     """Test the "add to queue" operation of the XQueue interface. """
+    shard = 1
 
     def setUp(self):
         super(XQueueCertInterfaceAddCertificateTest, self).setUp()
@@ -171,7 +170,7 @@ class XQueueCertInterfaceAddCertificateTest(ModuleStoreTestCase):
         # Ensure the certificate was not generated
         self.assertFalse(mock_send.called)
 
-        certificate = GeneratedCertificate.objects.get(  # pylint: disable=no-member
+        certificate = GeneratedCertificate.objects.get(
             user=self.user_2,
             course_id=self.course.id
         )
@@ -196,7 +195,10 @@ class XQueueCertInterfaceAddCertificateTest(ModuleStoreTestCase):
         Test that certificates can or cannot be generated with the given
         certificate status.
         """
-        with patch('certificates.queue.certificate_status_for_student', Mock(return_value={'status': status})):
+        with patch(
+            'lms.djangoapps.certificates.queue.certificate_status_for_student',
+            Mock(return_value={'status': status})
+        ):
             mock_send = self.add_cert_to_queue('verified')
             if should_generate:
                 self.assertTrue(mock_send.called)
@@ -271,15 +273,15 @@ class XQueueCertInterfaceAddCertificateTest(ModuleStoreTestCase):
                 self.xqueue.add_cert(self.user_2, self.course.id)
 
         self.assertEqual(
-            GeneratedCertificate.objects.get(user=self.user_2, course_id=self.course.id).status,  # pylint: disable=no-member
+            GeneratedCertificate.objects.get(user=self.user_2, course_id=self.course.id).status,
             expected_status
         )
 
 
-@attr(shard=1)
 @override_settings(CERT_QUEUE='certificates')
 class XQueueCertInterfaceExampleCertificateTest(TestCase):
     """Tests for the XQueue interface for certificate generation. """
+    shard = 1
 
     COURSE_KEY = CourseLocator(org='test', course='test', run='test')
 

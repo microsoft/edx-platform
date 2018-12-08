@@ -8,16 +8,18 @@ from openedx.core.djangolib.js_utils import (
 )
 %>
 
+<div class="js-program-details-wrapper program-details-wrapper"></div>
+
 <%block name="js_extra">
-<%static:require_module module_name="js/learner_dashboard/program_details_factory" class_name="ProgramDetailsFactory">
+<%static:webpack entry="ProgramDetailsFactory">
 ProgramDetailsFactory({
     programData: ${program_data | n, dump_js_escaped_json},
     courseData: ${course_data | n, dump_js_escaped_json},
     certificateData: ${certificate_data | n, dump_js_escaped_json},
     urls: ${urls | n, dump_js_escaped_json},
     userPreferences: ${user_preferences | n, dump_js_escaped_json},
+    industryPathways: ${industry_pathways | n, dump_js_escaped_json},
+    creditPathways: ${credit_pathways | n, dump_js_escaped_json},
 });
-</%static:require_module>
+</%static:webpack>
 </%block>
-
-<div class="js-program-details-wrapper program-details-wrapper"></div>

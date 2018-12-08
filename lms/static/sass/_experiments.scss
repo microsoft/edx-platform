@@ -27,6 +27,10 @@
   background: #009b00 !important;
 }
 
+.complete-program-dashboard-button .list-price {
+  text-decoration: line-through;
+}
+
 .complete-program-dashboard-span {
   display: block;
   float: right;
@@ -44,7 +48,7 @@
 
 /* modal-specific */
 
-#upsell-modal {
+#upsell-modal, #portfolio-experiment-upsell-modal {
   display: none;
 
   /* slick modal from https://cdnjs.cloudflare.com/ajax/libs/slick-carousel/1.6.0/slick.min.css */
@@ -408,8 +412,12 @@
       width: 33%;
       display: block;
 
+      li {
+        margin: 0;
+      }
+
       li > button::before {
-        font-size: 15px;
+        font-size: 32px;
       }
     }
 
@@ -426,17 +434,26 @@
   .upsell-certificate {
     height: 43px;
     position: absolute;
-    left: 40%;
-    margin-top: 29px;
+    margin: 0;
+    bottom: -58px;
+    left: 220px;
   }
 
   .upsell-modal-checkmark-group {
     list-style: none;
-    margin-left: 0;
+    padding-left: 30px;
+    margin-bottom: 15px;
+
+    li {
+      margin-bottom: 15px;
+    }
   }
 
-  .upsell-modal-checkmark::before {
-    content: '✔️\00a0\00a0\00a0\00a0';
+  .upsell-modal-checkmark {
+    left: 10px;
+    position: absolute;
+    color: black;
+    line-height: 24px;
   }
 
   .js-carousel-nav {
@@ -473,5 +490,24 @@
 
   .my-stats-slide-header {
     padding-bottom: 10px;
+  }
+
+  .checkmark-group-header {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .feature-screenshot {
+    width: 250px;
+    margin-top: 15px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-bottom: 15px;
+  }
+
+  @media only screen and (max-width: 600px){
+    .slick-slide.carousel-item {
+      min-width: 0;
+    }
   }
 }

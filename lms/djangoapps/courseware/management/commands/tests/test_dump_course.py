@@ -7,7 +7,6 @@ Tests for Django management commands
 import json
 from StringIO import StringIO
 
-from nose.plugins.attrib import attr
 from six import text_type
 
 import factory
@@ -27,7 +26,6 @@ DATA_DIR = settings.COMMON_TEST_DATA_ROOT
 XML_COURSE_DIRS = ['simple']
 
 
-@attr(shard=1)
 class CommandsTestBase(SharedModuleStoreTestCase):
     """
     Base class for testing different django commands.
@@ -39,6 +37,7 @@ class CommandsTestBase(SharedModuleStoreTestCase):
     __test__ = False
     url_name = '2012_Fall'
     ENABLED_SIGNALS = ['course_published']
+    shard = 1
 
     @classmethod
     def setUpClass(cls):
@@ -132,8 +131,10 @@ class CommandsTestBase(SharedModuleStoreTestCase):
 
         video_id = text_type(test_course_key.make_usage_key('video', 'Welcome'))
         self.assertEqual(dump[video_id]['category'], 'video')
+        course_metadata = dump[video_id]['metadata']
+        course_metadata.pop('edx_video_id', None)
         self.assertItemsEqual(
-            dump[video_id]['metadata'].keys(),
+            course_metadata.keys(),
             ['download_video', 'youtube_id_0_75', 'youtube_id_1_0', 'youtube_id_1_25', 'youtube_id_1_5']
         )
         self.assertIn('youtube_id_1_0', dump[video_id]['metadata'])

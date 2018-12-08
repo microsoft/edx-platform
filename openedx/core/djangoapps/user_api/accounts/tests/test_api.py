@@ -15,10 +15,10 @@ from django.core import mail
 from django.test import TestCase
 from django.test.client import RequestFactory
 from mock import Mock, patch
-from nose.plugins.attrib import attr
-from nose.tools import raises
 from six import iteritems
 
+from openedx.core.djangoapps.ace_common.tests.mixins import EmailTemplateTagMixin
+from openedx.core.djangoapps.site_configuration.tests.factories import SiteFactory
 from openedx.core.djangoapps.user_api.accounts import PRIVATE_VISIBILITY, USERNAME_MAX_LENGTH
 from openedx.core.djangoapps.user_api.accounts.api import (
     activate_account,
@@ -33,6 +33,12 @@ from openedx.core.djangoapps.user_api.accounts.tests.testutils import (
     INVALID_USERNAMES,
     VALID_USERNAMES_UNICODE
 )
+from openedx.core.djangoapps.user_api.accounts.tests.retirement_helpers import (  # pylint: disable=unused-import
+    RetirementTestCase,
+    fake_requested_retirement,
+    setup_retirement_states
+)
+from openedx.core.djangoapps.user_api.config.waffle import PREVENT_AUTH_USER_WRITES, SYSTEM_MAINTENANCE_MSG, waffle
 from openedx.core.djangoapps.user_api.errors import (
     AccountEmailInvalid,
     AccountPasswordInvalid,
@@ -41,10 +47,12 @@ from openedx.core.djangoapps.user_api.errors import (
     AccountUserAlreadyExists,
     AccountUsernameInvalid,
     AccountValidationError,
+    UserAPIInternalError,
     UserNotAuthorized,
     UserNotFound
 )
 from openedx.core.djangolib.testing.utils import skip_unless_lms
+from openedx.core.lib.tests import attr
 from student.models import PendingEmailChange
 from student.tests.factories import UserFactory
 from student.tests.tests import UserSettingsEventTestMixin
@@ -57,7 +65,7 @@ def mock_render_to_string(template_name, context):
 
 @attr(shard=2)
 @skip_unless_lms
-class TestAccountApi(UserSettingsEventTestMixin, TestCase):
+class TestAccountApi(UserSettingsEventTestMixin, EmailTemplateTagMixin, RetirementTestCase):
     """
     These tests specifically cover the parts of the API methods that are not covered by test_views.py.
     This includes the specific types of error raised, and default behavior when optional arguments
@@ -200,7 +208,7 @@ class TestAccountApi(UserSettingsEventTestMixin, TestCase):
         self.assertIn("Full Name cannot contain the following characters: < >", field_errors["name"]["user_message"])
 
     @patch('django.core.mail.send_mail')
-    @patch('student.views.render_to_string', Mock(side_effect=mock_render_to_string, autospec=True))
+    @patch('student.views.management.render_to_string', Mock(side_effect=mock_render_to_string, autospec=True))
     def test_update_sending_email_fails(self, send_mail):
         """Test what happens if all validation checks pass, but sending the email for email change fails."""
         send_mail.side_effect = [Exception, None]
@@ -208,8 +216,10 @@ class TestAccountApi(UserSettingsEventTestMixin, TestCase):
             "name": "Mickey Mouse",
             "email": "seems_ok@sample.com"
         }
-        with self.assertRaises(AccountUpdateError) as context_manager:
-            update_account_settings(self.user, less_naughty_update)
+
+        with patch('crum.get_current_request', return_value=self.fake_request):
+            with self.assertRaises(AccountUpdateError) as context_manager:
+                update_account_settings(self.user, less_naughty_update)
         self.assertIn("Error thrown from do_email_change_request", context_manager.exception.developer_message)
 
         # Verify that the name change happened, even though the attempt to send the email failed.
@@ -222,9 +232,32 @@ class TestAccountApi(UserSettingsEventTestMixin, TestCase):
         Test that email address changes are rejected when ALLOW_EMAIL_ADDRESS_CHANGE is not set.
         """
         disabled_update = {"email": "valid@example.com"}
+
         with self.assertRaises(AccountUpdateError) as context_manager:
             update_account_settings(self.user, disabled_update)
         self.assertIn("Email address changes have been disabled", context_manager.exception.developer_message)
+
+    @patch.dict(settings.FEATURES, dict(ALLOW_EMAIL_ADDRESS_CHANGE=True))
+    def test_email_changes_blocked_on_retired_email(self):
+        """
+        Test that email address changes are rejected when an email associated with a *partially* retired account is
+        specified.
+        """
+        # First, record the original email addres of the primary user (the one seeking to update their email).
+        original_email = self.user.email
+
+        # Setup a partially retired user.  This user recently submitted a deletion request, but it has not been
+        # processed yet.
+        partially_retired_email = 'partially_retired@example.com'
+        partially_retired_user = UserFactory(email=partially_retired_email)
+        fake_requested_retirement(partially_retired_user)
+
+        # Attempt to change email to the one of the partially retired user.
+        rejected_update = {'email': partially_retired_email}
+        update_account_settings(self.user, rejected_update)
+
+        # No error should be thrown, and we need to check that the email update was skipped.
+        assert self.user.email == original_email
 
     @patch('openedx.core.djangoapps.user_api.accounts.serializers.AccountUserSerializer.save')
     def test_serializer_save_fails(self, serializer_save):
@@ -354,9 +387,9 @@ class AccountCreationActivationAndPasswordChangeTest(TestCase):
     """
     Test cases to cover the account initialization workflow
     """
-    USERNAME = u'frank-underwood'
+    USERNAME = u'claire-underwood'
     PASSWORD = u'ṕáśśẃőŕd'
-    EMAIL = u'frank+underwood@example.com'
+    EMAIL = u'claire+underwood@example.com'
 
     IS_SECURE = False
 
@@ -388,29 +421,40 @@ class AccountCreationActivationAndPasswordChangeTest(TestCase):
         with self.assertRaises(AccountUsernameInvalid):
             create_account(long_username, self.PASSWORD, self.EMAIL)
 
-    @raises(AccountEmailInvalid)
     @ddt.data(*INVALID_EMAILS)
     def test_create_account_invalid_email(self, invalid_email):
-        create_account(self.USERNAME, self.PASSWORD, invalid_email)
+        with pytest.raises(AccountEmailInvalid):
+            create_account(self.USERNAME, self.PASSWORD, invalid_email)
 
-    @raises(AccountPasswordInvalid)
     @ddt.data(*INVALID_PASSWORDS)
     def test_create_account_invalid_password(self, invalid_password):
-        create_account(self.USERNAME, invalid_password, self.EMAIL)
+        with pytest.raises(AccountPasswordInvalid):
+            create_account(self.USERNAME, invalid_password, self.EMAIL)
 
-    @raises(AccountPasswordInvalid)
     def test_create_account_username_password_equal(self):
         # Username and password cannot be the same
-        create_account(self.USERNAME, self.USERNAME, self.EMAIL)
+        with pytest.raises(AccountPasswordInvalid):
+            create_account(self.USERNAME, self.USERNAME, self.EMAIL)
 
-    @raises(AccountRequestError)
     @ddt.data(*INVALID_USERNAMES)
     def test_create_account_invalid_username(self, invalid_username):
-        create_account(invalid_username, self.PASSWORD, self.EMAIL)
+        with pytest.raises(AccountRequestError):
+            create_account(invalid_username, self.PASSWORD, self.EMAIL)
 
-    @raises(UserNotAuthorized)
+    def test_create_account_prevent_auth_user_writes(self):
+        with pytest.raises(UserAPIInternalError, message=SYSTEM_MAINTENANCE_MSG):
+            with waffle().override(PREVENT_AUTH_USER_WRITES, True):
+                create_account(self.USERNAME, self.PASSWORD, self.EMAIL)
+
     def test_activate_account_invalid_key(self):
-        activate_account(u'invalid')
+        with pytest.raises(UserNotAuthorized):
+            activate_account(u'invalid')
+
+    def test_activate_account_prevent_auth_user_writes(self):
+        activation_key = create_account(self.USERNAME, self.PASSWORD, self.EMAIL)
+        with pytest.raises(UserAPIInternalError, message=SYSTEM_MAINTENANCE_MSG):
+            with waffle().override(PREVENT_AUTH_USER_WRITES, True):
+                activate_account(activation_key)
 
     @skip_unless_lms
     def test_request_password_change(self):
@@ -418,8 +462,13 @@ class AccountCreationActivationAndPasswordChangeTest(TestCase):
         activation_key = create_account(self.USERNAME, self.PASSWORD, self.EMAIL)
         activate_account(activation_key)
 
-        # Request a password change
-        request_password_change(self.EMAIL, self.IS_SECURE)
+        request = RequestFactory().post('/password')
+        request.user = Mock()
+        request.site = SiteFactory()
+
+        with patch('crum.get_current_request', return_value=request):
+            # Request a password change
+            request_password_change(self.EMAIL, self.IS_SECURE)
 
         # Verify that one email message has been sent
         self.assertEqual(len(mail.outbox), 1)
@@ -443,7 +492,12 @@ class AccountCreationActivationAndPasswordChangeTest(TestCase):
         # Create an account, but do not activate it
         create_account(self.USERNAME, self.PASSWORD, self.EMAIL)
 
-        request_password_change(self.EMAIL, self.IS_SECURE)
+        request = RequestFactory().post('/password')
+        request.user = Mock()
+        request.site = SiteFactory()
+
+        with patch('crum.get_current_request', return_value=request):
+            request_password_change(self.EMAIL, self.IS_SECURE)
 
         # Verify that the activation email was still sent
         self.assertEqual(len(mail.outbox), 1)

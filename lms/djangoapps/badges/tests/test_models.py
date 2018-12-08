@@ -1,7 +1,6 @@
 """
 Tests for the Badges app models.
 """
-import pytest
 from path import Path
 from django.core.exceptions import ValidationError
 from django.core.files.images import ImageFile
@@ -10,7 +9,6 @@ from django.db.utils import IntegrityError
 from django.test import TestCase
 from django.test.utils import override_settings
 from mock import Mock, patch
-from nose.plugins.attrib import attr
 
 from badges.models import (
     BadgeAssertion,
@@ -20,7 +18,7 @@ from badges.models import (
     validate_badge_image
 )
 from badges.tests.factories import BadgeAssertionFactory, BadgeClassFactory, RandomBadgeClassFactory
-from certificates.tests.test_models import TEST_DATA_ROOT
+from lms.djangoapps.certificates.tests.test_models import TEST_DATA_ROOT
 from student.tests.factories import UserFactory
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
@@ -33,17 +31,17 @@ def get_image(name):
     return ImageFile(open(TEST_DATA_ROOT / 'badges' / name + '.png'))
 
 
-@attr(shard=1)
 @override_settings(MEDIA_ROOT=TEST_DATA_ROOT)
 class BadgeImageConfigurationTest(TestCase):
     """
     Test the validation features of BadgeImageConfiguration.
     """
+    shard = 1
+
     def tearDown(self):
         tmp_path = Path(TEST_DATA_ROOT / 'course_complete_badges')
         Path.rmtree_p(tmp_path)
 
-    @pytest.mark.django111_expected_failure
     def test_no_double_default(self):
         """
         Verify that creating two configurations as default is not permitted.
@@ -85,7 +83,7 @@ class BadgeClassTest(ModuleStoreTestCase):
         """
         Remove all files uploaded as badges.
         """
-        upload_to = BadgeClass._meta.get_field('image').upload_to  # pylint: disable=protected-access
+        upload_to = BadgeClass._meta.get_field('image').upload_to
         if default_storage.exists(upload_to):
             (_, files) = default_storage.listdir(upload_to)
             for uploaded_file in files:

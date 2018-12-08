@@ -5,10 +5,9 @@ import urllib
 
 import ddt
 import mock
-from config_models.models import cache
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.test import TestCase
 
 from branding.models import BrandingApiConfig
@@ -16,17 +15,14 @@ from openedx.core.djangoapps.dark_lang.models import DarkLangConfig
 from openedx.core.djangoapps.lang_pref.api import released_languages
 from openedx.core.djangoapps.site_configuration.tests.mixins import SiteMixin
 from openedx.core.djangoapps.theming.tests.test_util import with_comprehensive_theme_context
+from openedx.core.djangolib.testing.utils import CacheIsolationTestCase
 from student.tests.factories import UserFactory
 
 
 @ddt.ddt
-class TestFooter(TestCase):
+class TestFooter(CacheIsolationTestCase):
     """Test API end-point for retrieving the footer. """
-
-    def setUp(self):
-        """Clear the configuration cache. """
-        super(TestFooter, self).setUp()
-        cache.clear()
+    shard = 4
 
     @ddt.data("*/*", "text/html", "application/json")
     def test_feature_flag(self, accepts):
@@ -185,9 +181,9 @@ class TestFooter(TestCase):
         self.assertEqual(resp.status_code, 200)
 
         if show_logo:
-            self.assertIn(settings.FOOTER_OPENEDX_URL, resp.content)
+            self.assertIn('alt="Powered by Open edX"', resp.content)
         else:
-            self.assertNotIn(settings.FOOTER_OPENEDX_URL, resp.content)
+            self.assertNotIn('alt="Powered by Open edX"', resp.content)
 
     @ddt.data(
         # OpenEdX
@@ -283,6 +279,7 @@ class TestFooter(TestCase):
 
 class TestIndex(SiteMixin, TestCase):
     """ Test the index view """
+    shard = 4
 
     def setUp(self):
         """ Set up a user """

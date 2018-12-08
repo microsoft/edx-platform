@@ -7,7 +7,7 @@
 
 <%!
 import json
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.utils.translation import ugettext as _
 from openedx.core.djangolib.js_utils import dump_js_escaped_json
 from openedx.core.djangolib.markup import HTML
@@ -25,10 +25,18 @@ from openedx.core.djangolib.markup import HTML
 <main id="main" aria-label="Content" tabindex="-1">
     <div class="wrapper-profile">
         <div class="profile ${'profile-self' if own_profile else 'profile-other'}">
-            <div class="wrapper-profile-field-account-privacy"></div>
+            <div class="wrapper-profile-field-account-privacy">
+                % if own_profile and records_url:
+                    <div class="wrapper-profile-records">
+                        <a href="${records_url}">
+                            <button class="btn profile-records-button">${_("View My Records")}</button>
+                        </a>
+                    </div>
+                % endif
+            </div>
             % if own_profile:
                 <div class="profile-header">
-                    <div class="header">${_("My Profile")}</div>
+                    <h2 class="header">${_("My Profile")}</h2>
                     <div class="subheader">
                         ${_('Build out your profile to personalize your identity on {platform_name}.').format(
                             platform_name=platform_name,

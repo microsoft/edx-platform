@@ -12,7 +12,6 @@ from contentstore.views.item import _duplicate_item
 from contentstore.views.preview import _load_preview_module
 from contentstore.views.tests.test_library import LIBRARY_REST_URL
 from course_creators.views import add_user_with_status_granted
-from openedx.core.djangoapps.content.course_structures.tests import SignalDisconnectTestMixin
 from student import auth
 from student.auth import has_studio_read_access, has_studio_write_access
 from student.roles import (
@@ -36,6 +35,8 @@ class LibraryTestCase(ModuleStoreTestCase):
     """
     Common functionality for content libraries tests
     """
+    shard = 1
+
     def setUp(self):
         super(LibraryTestCase, self).setUp()
 
@@ -148,6 +149,8 @@ class TestLibraries(LibraryTestCase):
     """
     High-level tests for libraries
     """
+    shard = 1
+
     @ddt.data(
         (2, 1, 1),
         (2, 2, 2),
@@ -476,10 +479,12 @@ class TestLibraries(LibraryTestCase):
 
 @ddt.ddt
 @patch('django.conf.settings.SEARCH_ENGINE', None)
-class TestLibraryAccess(SignalDisconnectTestMixin, LibraryTestCase):
+class TestLibraryAccess(LibraryTestCase):
     """
     Test Roles and Permissions related to Content Libraries
     """
+    shard = 1
+
     def setUp(self):
         """ Create a library, staff user, and non-staff user """
         super(TestLibraryAccess, self).setUp()
@@ -813,6 +818,8 @@ class TestOverrides(LibraryTestCase):
     """
     Test that overriding block Scope.settings fields from a library in a specific course works
     """
+    shard = 1
+
     def setUp(self):
         super(TestOverrides, self).setUp()
         self.original_display_name = "A Problem Block"
@@ -997,6 +1004,8 @@ class TestIncompatibleModuleStore(LibraryTestCase):
     """
     Tests for proper validation errors with an incompatible course modulestore.
     """
+    shard = 1
+
     def setUp(self):
         super(TestIncompatibleModuleStore, self).setUp()
         # Create a course in an incompatible modulestore.

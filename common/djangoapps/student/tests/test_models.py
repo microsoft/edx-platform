@@ -10,15 +10,24 @@ from django.contrib.auth.models import AnonymousUser
 from django.core.cache import cache
 from django.db.models import signals
 from django.db.models.functions import Lower
+from django.test import TestCase
 
 from course_modes.models import CourseMode
 from course_modes.tests.factories import CourseModeFactory
 from courseware.models import DynamicUpgradeDeadlineConfiguration
+from opaque_keys.edx.keys import CourseKey
 from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
 from openedx.core.djangoapps.schedules.models import Schedule
 from openedx.core.djangoapps.schedules.tests.factories import ScheduleFactory
 from openedx.core.djangolib.testing.utils import skip_unless_lms
-from student.models import CourseEnrollment
+from student.models import (
+    CourseEnrollment,
+    CourseEnrollmentAllowed,
+    PendingEmailChange,
+    ManualEnrollmentAudit,
+    ALLOWEDTOENROLL_TO_ENROLLED,
+    PendingNameChange
+)
 from student.tests.factories import CourseEnrollmentFactory, UserFactory
 from xmodule.modulestore.tests.django_utils import SharedModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
@@ -179,3 +188,199 @@ class CourseEnrollmentTests(SharedModuleStoreTestCase):
         ScheduleFactory(enrollment=enrollment)
         self.assertIsNotNone(enrollment.schedule)
         self.assertEqual(enrollment.upgrade_deadline, course_upgrade_deadline)
+
+    @skip_unless_lms
+    def test_upgrade_deadline_with_schedule_and_professional_mode(self):
+        """
+        Deadline should be None for courses with professional mode.
+
+        Regression test for EDUCATOR-2419.
+        """
+        course = CourseFactory(self_paced=True)
+        CourseModeFactory(
+            course_id=course.id,
+            mode_slug=CourseMode.PROFESSIONAL,
+        )
+        enrollment = CourseEnrollmentFactory(course_id=course.id, mode=CourseMode.AUDIT)
+        DynamicUpgradeDeadlineConfiguration.objects.create(enabled=True)
+        ScheduleFactory(enrollment=enrollment)
+        self.assertIsNotNone(enrollment.schedule)
+        self.assertIsNone(enrollment.upgrade_deadline)
+
+    @skip_unless_lms
+    # NOTE: We mute the post_save signal to prevent Schedules from being created for new enrollments
+    @factory.django.mute_signals(signals.post_save)
+    def test_enrollments_not_deleted(self):
+        """ Recreating a CourseOverview with an outdated version should not delete the associated enrollment. """
+        course = CourseFactory(self_paced=True)
+        CourseModeFactory(
+            course_id=course.id,
+            mode_slug=CourseMode.VERIFIED,
+            # This must be in the future to ensure it is returned by downstream code.
+            expiration_datetime=datetime.datetime.now(pytz.UTC) + datetime.timedelta(days=30),
+        )
+
+        # Create a CourseOverview with an outdated version
+        course_overview = CourseOverview.load_from_module_store(course.id)
+        course_overview.version = CourseOverview.VERSION - 1
+        course_overview.save()
+
+        # Create an inactive enrollment with this course overview
+        enrollment = CourseEnrollmentFactory(
+            user=self.user,
+            course_id=course.id,
+            mode=CourseMode.AUDIT,
+            course=course_overview,
+        )
+
+        # Re-fetch the CourseOverview record.
+        # As a side effect, this will recreate the record, and update the version.
+        course_overview_new = CourseOverview.get_from_id(course.id)
+        self.assertEqual(course_overview_new.version, CourseOverview.VERSION)
+
+        # Ensure that the enrollment record was unchanged during this re-creation
+        enrollment_refetched = CourseEnrollment.objects.filter(id=enrollment.id)
+        self.assertTrue(enrollment_refetched.exists())
+        self.assertEqual(enrollment_refetched.all()[0], enrollment)
+
+
+class PendingNameChangeTests(SharedModuleStoreTestCase):
+    """
+    Tests the deletion of PendingNameChange records
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(PendingNameChangeTests, cls).setUpClass()
+        cls.user = UserFactory()
+        cls.user2 = UserFactory()
+
+    def setUp(self):
+        self.name_change, _ = PendingNameChange.objects.get_or_create(
+            user=self.user,
+            new_name='New Name PII',
+            rationale='for testing!'
+        )
+        self.assertEqual(1, len(PendingNameChange.objects.all()))
+
+    def test_delete_by_user_removes_pending_name_change(self):
+        record_was_deleted = PendingNameChange.delete_by_user_value(self.user, field='user')
+        self.assertTrue(record_was_deleted)
+        self.assertEqual(0, len(PendingNameChange.objects.all()))
+
+    def test_delete_by_user_no_effect_for_user_with_no_name_change(self):
+        record_was_deleted = PendingNameChange.delete_by_user_value(self.user2, field='user')
+        self.assertFalse(record_was_deleted)
+        self.assertEqual(1, len(PendingNameChange.objects.all()))
+
+
+class PendingEmailChangeTests(SharedModuleStoreTestCase):
+    """
+    Tests the deletion of PendingEmailChange records.
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(PendingEmailChangeTests, cls).setUpClass()
+        cls.user = UserFactory()
+        cls.user2 = UserFactory()
+
+    def setUp(self):
+        self.email_change, _ = PendingEmailChange.objects.get_or_create(
+            user=self.user,
+            new_email='new@example.com',
+            activation_key='a' * 32
+        )
+
+    def test_delete_by_user_removes_pending_email_change(self):
+        record_was_deleted = PendingEmailChange.delete_by_user_value(self.user, field='user')
+        self.assertTrue(record_was_deleted)
+        self.assertEqual(0, len(PendingEmailChange.objects.all()))
+
+    def test_delete_by_user_no_effect_for_user_with_no_email_change(self):
+        record_was_deleted = PendingEmailChange.delete_by_user_value(self.user2, field='user')
+        self.assertFalse(record_was_deleted)
+        self.assertEqual(1, len(PendingEmailChange.objects.all()))
+
+
+class TestCourseEnrollmentAllowed(TestCase):
+
+    def setUp(self):
+        super(TestCourseEnrollmentAllowed, self).setUp()
+        self.email = 'learner@example.com'
+        self.course_key = CourseKey.from_string("course-v1:edX+DemoX+Demo_Course")
+        self.user = UserFactory.create()
+        self.allowed_enrollment = CourseEnrollmentAllowed.objects.create(
+            email=self.email,
+            course_id=self.course_key,
+            user=self.user
+        )
+
+    def test_retiring_user_deletes_record(self):
+        is_successful = CourseEnrollmentAllowed.delete_by_user_value(
+            value=self.email,
+            field='email'
+        )
+        self.assertTrue(is_successful)
+        user_search_results = CourseEnrollmentAllowed.objects.filter(
+            email=self.email
+        )
+        self.assertFalse(user_search_results)
+
+    def test_retiring_nonexistent_user_doesnt_modify_records(self):
+        is_successful = CourseEnrollmentAllowed.delete_by_user_value(
+            value='nonexistentlearner@example.com',
+            field='email'
+        )
+        self.assertFalse(is_successful)
+        user_search_results = CourseEnrollmentAllowed.objects.filter(
+            email=self.email
+        )
+        self.assertTrue(user_search_results.exists())
+
+
+class TestManualEnrollmentAudit(SharedModuleStoreTestCase):
+    """
+    Tests for the ManualEnrollmentAudit model.
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(TestManualEnrollmentAudit, cls).setUpClass()
+        cls.course = CourseFactory()
+        cls.other_course = CourseFactory()
+        cls.user = UserFactory()
+        cls.instructor = UserFactory(username='staff', is_staff=True)
+
+    def test_retirement(self):
+        """
+        Tests that calling the retirement method for a specific enrollment retires
+        the enrolled_email and reason columns of each row associated with that
+        enrollment.
+        """
+        enrollment = CourseEnrollment.enroll(self.user, self.course.id)
+        other_enrollment = CourseEnrollment.enroll(self.user, self.other_course.id)
+        ManualEnrollmentAudit.create_manual_enrollment_audit(
+            self.instructor, self.user.email, ALLOWEDTOENROLL_TO_ENROLLED,
+            'manually enrolling unenrolled user', enrollment
+        )
+        ManualEnrollmentAudit.create_manual_enrollment_audit(
+            self.instructor, self.user.email, ALLOWEDTOENROLL_TO_ENROLLED,
+            'manually enrolling unenrolled user again', enrollment
+        )
+        ManualEnrollmentAudit.create_manual_enrollment_audit(
+            self.instructor, self.user.email, ALLOWEDTOENROLL_TO_ENROLLED,
+            'manually enrolling unenrolled user', other_enrollment
+        )
+        ManualEnrollmentAudit.create_manual_enrollment_audit(
+            self.instructor, self.user.email, ALLOWEDTOENROLL_TO_ENROLLED,
+            'manually enrolling unenrolled user again', other_enrollment
+        )
+        self.assertTrue(ManualEnrollmentAudit.objects.filter(enrollment=enrollment).exists())
+        # retire the ManualEnrollmentAudit objects associated with the above enrollments
+        enrollments = CourseEnrollment.objects.filter(user=self.user)
+        ManualEnrollmentAudit.retire_manual_enrollments(enrollments=enrollments, retired_email="xxx")
+        self.assertTrue(ManualEnrollmentAudit.objects.filter(enrollment=enrollment).exists())
+        self.assertFalse(ManualEnrollmentAudit.objects.filter(enrollment=enrollment).exclude(
+            enrolled_email="xxx"
+        ))
+        self.assertFalse(ManualEnrollmentAudit.objects.filter(enrollment=enrollment).exclude(
+            reason=""
+        ))

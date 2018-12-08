@@ -6,8 +6,8 @@ from time import time
 from django.contrib.auth.models import User
 from django.db.models import Q
 
-from certificates.api import generate_user_certificates
-from certificates.models import CertificateStatuses, GeneratedCertificate
+from lms.djangoapps.certificates.api import generate_user_certificates
+from lms.djangoapps.certificates.models import CertificateStatuses, GeneratedCertificate
 from student.models import CourseEnrollment
 from xmodule.modulestore.django import modulestore
 
@@ -120,7 +120,7 @@ def students_require_certificate(course_id, enrolled_students, statuses_to_regen
         return list(set(enrolled_students) - set(students_already_have_certs))
 
 
-def invalidate_generated_certificates(course_id, enrolled_students, certificate_statuses):  # pylint: disable=invalid-name
+def invalidate_generated_certificates(course_id, enrolled_students, certificate_statuses):
     """
     Invalidate generated certificates for all enrolled students in the given course having status in
     'certificate_statuses'.

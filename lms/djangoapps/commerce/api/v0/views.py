@@ -1,6 +1,7 @@
 """ API v0 views. """
 import logging
 
+from django.urls import reverse
 from edx_rest_api_client import exceptions
 from opaque_keys import InvalidKeyError
 from opaque_keys.edx.keys import CourseKey
@@ -8,16 +9,19 @@ from rest_framework.authentication import SessionAuthentication
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.status import HTTP_406_NOT_ACCEPTABLE, HTTP_409_CONFLICT
 from rest_framework.views import APIView
+from six import text_type
 
 from course_modes.models import CourseMode
 from courseware import courses
 from enrollment.api import add_enrollment
 from enrollment.views import EnrollmentCrossDomainSessionAuth
+from entitlements.models import CourseEntitlement
 from openedx.core.djangoapps.commerce.utils import ecommerce_api_client
 from openedx.core.djangoapps.embargo import api as embargo_api
 from openedx.core.djangoapps.user_api.preferences.api import update_email_opt_in
 from openedx.core.lib.api.authentication import OAuth2AuthenticationAllowInactiveUser
 from student.models import CourseEnrollment
+from student.signals import SAILTHRU_AUDIT_PURCHASE
 from util.json_request import JsonResponse
 
 from ...constants import Messages
@@ -54,7 +58,7 @@ class BasketsView(APIView):
             courses.get_course(course_key)
         except (InvalidKeyError, ValueError)as ex:
             log.exception(u'Unable to locate course matching %s.', course_id)
-            return False, None, ex.message
+            return False, None, text_type(ex)
 
         return True, course_key, None
 
@@ -112,6 +116,14 @@ class BasketsView(APIView):
         honor_mode = CourseMode.mode_for_course(course_key, CourseMode.HONOR)
         audit_mode = CourseMode.mode_for_course(course_key, CourseMode.AUDIT)
 
+        # Check to see if the User has an entitlement and enroll them if they have one for this course
+        if CourseEntitlement.check_for_existing_entitlement_and_enroll(user=user, course_run_key=course_key):
+            return JsonResponse(
+                {
+                    'redirect_destination': reverse('courseware', args=[unicode(course_id)]),
+                },
+            )
+
         # Accept either honor or audit as an enrollment mode to
         # maintain backwards compatibility with existing courses
         default_enrollment_mode = audit_mode or honor_mode
@@ -129,6 +141,10 @@ class BasketsView(APIView):
                 )
             log.info(msg)
             self._enroll(course_key, user, default_enrollment_mode.slug)
+            mode = CourseMode.AUDIT if audit_mode else CourseMode.HONOR
+            SAILTHRU_AUDIT_PURCHASE.send(
+                sender=None, user=user, mode=mode, course_id=course_id
+            )
             self._handle_marketing_opt_in(request, course_key, user)
             return DetailResponse(msg)
         else:

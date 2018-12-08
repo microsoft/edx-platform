@@ -19,6 +19,7 @@ from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied
 from django.http import Http404, HttpResponse
 from django.views.decorators.http import require_GET, require_POST
+from six import text_type
 
 from edxmako.shortcuts import render_to_response
 from notification_prefs import NOTIFICATION_PREF_KEY
@@ -122,7 +123,7 @@ def ajax_enable(request):
     user, this has no effect. Otherwise, a preference is created with the
     unsubscribe token (an encryption of the username) as the value.username
     """
-    if not request.user.is_authenticated():
+    if not request.user.is_authenticated:
         raise PermissionDenied
 
     enable_notifications(request.user)
@@ -138,7 +139,7 @@ def ajax_disable(request):
     This view should be invoked by an AJAX POST call. It returns status 204
     (no content) or an error.
     """
-    if not request.user.is_authenticated():
+    if not request.user.is_authenticated:
         raise PermissionDenied
 
     delete_user_preference(request.user, NOTIFICATION_PREF_KEY)
@@ -154,7 +155,7 @@ def ajax_status(request):
     This view should be invoked by an AJAX GET call. It returns status 200,
     with a JSON-formatted payload, or an error.
     """
-    if not request.user.is_authenticated():
+    if not request.user.is_authenticated:
         raise PermissionDenied
 
     qs = UserPreference.objects.filter(
@@ -185,7 +186,7 @@ def set_subscription(request, token, subscribe):  # pylint: disable=unused-argum
     except UnicodeDecodeError:
         raise Http404("base64url")
     except UsernameDecryptionException as exn:
-        raise Http404(exn.message)
+        raise Http404(text_type(exn))
     except User.DoesNotExist:
         raise Http404("username")
 

@@ -5,20 +5,18 @@ and disabling for instructor-paced courses.
 import ddt
 import mock
 
-from certificates import api as certs_api
-from certificates.models import (
+from lms.djangoapps.certificates import api as certs_api
+from lms.djangoapps.certificates.models import (
     CertificateGenerationConfiguration,
     CertificateWhitelist,
     GeneratedCertificate,
     CertificateStatuses,
 )
-from certificates.signals import fire_ungenerated_certificate_task
+from lms.djangoapps.certificates.signals import fire_ungenerated_certificate_task, CERTIFICATE_DELAY_SECONDS
 from lms.djangoapps.grades.course_grade_factory import CourseGradeFactory
 from lms.djangoapps.grades.tests.utils import mock_passing_grade
-from lms.djangoapps.verify_student.models import SoftwareSecurePhotoVerification
+from lms.djangoapps.verify_student.models import IDVerificationAttempt, SoftwareSecurePhotoVerification
 from openedx.core.djangoapps.certificates.config import waffle
-from lms.djangoapps.certificates.signals import CERTIFICATE_DELAY_SECONDS
-from openedx.core.djangoapps.self_paced.models import SelfPacedConfiguration
 from student.tests.factories import CourseEnrollmentFactory, UserFactory
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
@@ -28,11 +26,11 @@ class SelfGeneratedCertsSignalTest(ModuleStoreTestCase):
     """
     Tests for enabling/disabling self-generated certificates according to course-pacing.
     """
+    shard = 4
     ENABLED_SIGNALS = ['course_published']
 
     def setUp(self):
         super(SelfGeneratedCertsSignalTest, self).setUp()
-        SelfPacedConfiguration(enabled=True).save()
         CertificateGenerationConfiguration.objects.create(enabled=True)
 
     def test_cert_generation_flag_on_pacing_toggle(self):
@@ -56,6 +54,8 @@ class WhitelistGeneratedCertificatesTest(ModuleStoreTestCase):
     """
     Tests for whitelisted student auto-certificate generation
     """
+    shard = 4
+
     def setUp(self):
         super(WhitelistGeneratedCertificatesTest, self).setUp()
         self.course = CourseFactory.create(self_paced=True)
@@ -135,6 +135,8 @@ class PassingGradeCertsTest(ModuleStoreTestCase):
     """
     Tests for certificate generation task firing on passing grade receipt
     """
+    shard = 4
+
     def setUp(self):
         super(PassingGradeCertsTest, self).setUp()
         self.course = CourseFactory.create(
@@ -224,6 +226,8 @@ class LearnerTrackChangeCertsTest(ModuleStoreTestCase):
     """
     Tests for certificate generation task firing on learner verification
     """
+    shard = 4
+
     def setUp(self):
         super(LearnerTrackChangeCertsTest, self).setUp()
         self.course_one = CourseFactory.create(self_paced=True)
@@ -264,7 +268,7 @@ class LearnerTrackChangeCertsTest(ModuleStoreTestCase):
                     kwargs={
                         'student': unicode(self.user_one.id),
                         'course_key': unicode(self.course_one.id),
-                        'expected_verification_status': SoftwareSecurePhotoVerification.STATUS.approved
+                        'expected_verification_status': IDVerificationAttempt.STATUS.approved,
                     }
                 )
 
@@ -285,7 +289,7 @@ class LearnerTrackChangeCertsTest(ModuleStoreTestCase):
                     kwargs={
                         'student': unicode(self.user_two.id),
                         'course_key': unicode(self.course_two.id),
-                        'expected_verification_status': SoftwareSecurePhotoVerification.STATUS.approved
+                        'expected_verification_status': IDVerificationAttempt.STATUS.approved,
                     }
                 )
 
@@ -295,6 +299,7 @@ class CertificateGenerationTaskTest(ModuleStoreTestCase):
     """
     Tests for certificate generation task.
     """
+    shard = 4
 
     def setUp(self):
         super(CertificateGenerationTaskTest, self).setUp()

@@ -13,7 +13,7 @@ set -e
 #   `TEST_SUITE` defines which kind of test to run.
 #   Possible values are:
 #
-#       - "quality": Run the quality (pep8/pylint) checks
+#       - "quality": Run the quality (pycodestyle/pylint) checks
 #       - "lms-unit": Run the LMS Python unit tests
 #       - "cms-unit": Run the CMS Python unit tests
 #       - "js-unit": Run the JavaScript tests
@@ -63,21 +63,24 @@ function emptyxunit {
     cat > reports/$1.xml <<END
 <?xml version="1.0" encoding="UTF-8"?>
 <testsuite name="$1" tests="1" errors="0" failures="0" skip="0">
-<testcase classname="$1" name="$1" time="0.604"></testcase>
+<testcase classname="pavelib.quality" name="$1" time="0.604"></testcase>
 </testsuite>
 END
 
 }
 
-if [[ $DJANGO_VERSION == '1.11' ]]; then
-    TOX="tox -e py27-django111 --"
-elif [[ $DJANGO_VERSION == '1.10' ]]; then
-    TOX="tox -e py27-django110 --"
-elif [[ $DJANGO_VERSION == '1.9' ]]; then
-    TOX="tox -e py27-django19 --"
-else
+# if specified tox environment is supported, prepend paver commands
+# with tox env invocation
+if [ -z ${TOX_ENV+x} ] || [[ ${TOX_ENV} == 'null' ]]; then
     TOX=""
+elif tox -l |grep -q "${TOX_ENV}"; then
+    TOX="tox -r -e ${TOX_ENV} --"
+else
+    echo "${TOX_ENV} is not currently supported. Please review the"
+    echo "tox.ini file to see which environments are supported"
+    exit 1
 fi
+
 PAVER_ARGS="-v"
 PARALLEL="--processes=-1"
 export SUBSET_JOB=$JOB_NAME
@@ -100,52 +103,51 @@ function run_paver_quality {
 case "$TEST_SUITE" in
 
     "quality")
-        echo "Finding fixme's and storing report..."
-        run_paver_quality find_fixme || EXIT=1
-        echo "Finding pep8 violations and storing report..."
-        run_paver_quality run_pep8 || EXIT=1
-        echo "Finding pylint violations and storing in report..."
-        run_paver_quality run_pylint -l $LOWER_PYLINT_THRESHOLD:$UPPER_PYLINT_THRESHOLD || EXIT=1
 
         mkdir -p reports
 
-        echo "Finding ESLint violations and storing report..."
-        run_paver_quality run_eslint -l $ESLINT_THRESHOLD || EXIT=1
-        echo "Finding Stylelint violations and storing report..."
-        run_paver_quality run_stylelint -l $STYLELINT_THRESHOLD || EXIT=1
-        echo "Running code complexity report (python)."
-        run_paver_quality run_complexity || echo "Unable to calculate code complexity. Ignoring error."
-        echo "Running xss linter report."
-        run_paver_quality run_xsslint -t $XSSLINT_THRESHOLDS || EXIT=1
-        echo "Running safe commit linter report."
-        run_paver_quality run_xsscommitlint || EXIT=1
-        # Run quality task. Pass in the 'fail-under' percentage to diff-quality
-        echo "Running diff quality."
-        run_paver_quality run_quality -p 100 -l $LOWER_PYLINT_THRESHOLD:$UPPER_PYLINT_THRESHOLD || EXIT=1
+        case "$SHARD" in
+            1)
+                echo "Finding pylint violations and storing in report..."
+                run_paver_quality run_pylint --system=common  || { EXIT=1; }
+                ;;
+
+            2)
+                echo "Finding pylint violations and storing in report..."
+                run_paver_quality run_pylint --system=lms || { EXIT=1; }
+                ;;
+
+            3)
+                echo "Finding pylint violations and storing in report..."
+                run_paver_quality run_pylint --system="cms,openedx,pavelib" || { EXIT=1; }
+                ;;
+
+            4)
+                echo "Finding fixme's and storing report..."
+                run_paver_quality find_fixme || { EXIT=1; }
+                echo "Finding pycodestyle violations and storing report..."
+                run_paver_quality run_pep8 || { EXIT=1; }
+                echo "Finding ESLint violations and storing report..."
+                run_paver_quality run_eslint -l $ESLINT_THRESHOLD || { EXIT=1; }
+                echo "Finding Stylelint violations and storing report..."
+                run_paver_quality run_stylelint -l $STYLELINT_THRESHOLD || { EXIT=1; }
+                echo "Running code complexity report (python)."
+                run_paver_quality run_complexity || echo "Unable to calculate code complexity. Ignoring error."
+                echo "Running xss linter report."
+                run_paver_quality run_xsslint -t $XSSLINT_THRESHOLDS || { EXIT=1; }
+                echo "Running safe commit linter report."
+                run_paver_quality run_xsscommitlint || { EXIT=1; }
+                ;;
+
+        esac
 
         # Need to create an empty test result so the post-build
         # action doesn't fail the build.
-        emptyxunit "quality"
+        emptyxunit "stub"
         exit $EXIT
         ;;
 
-    "lms-unit")
-        case "$SHARD" in
-            "all"|[1-4]|"noshard")
-                $TOX bash scripts/unit-tests.sh
-                ;;
-            *)
-                # If no shard is specified, rather than running all tests, create an empty xunit file. This is a
-                # backwards compatibility feature. If a new shard (e.g., shard n) is introduced in the build
-                # system, but the tests are called with the old code, then builds will not fail because the
-                # code is out of date. Instead, there will be an instantly-passing shard.
-                mkdir -p reports/lms
-                emptyxunit "lms/nosetests"
-                ;;
-        esac
-        ;;
-
-    "cms-unit"|"commonlib-unit")
+    "lms-unit"|"cms-unit"|"commonlib-unit")
         $TOX bash scripts/unit-tests.sh
         ;;
 
@@ -183,6 +185,7 @@ case "$TEST_SUITE" in
     "bok-choy")
 
         PAVER_ARGS="-n $NUMBER_OF_BOKCHOY_THREADS"
+        export BOKCHOY_HEADLESS=true
 
         case "$SHARD" in
 
@@ -190,11 +193,11 @@ case "$TEST_SUITE" in
                 $TOX paver test_bokchoy $PAVER_ARGS
                 ;;
 
-            [1-9]|10)
-                $TOX paver test_bokchoy --eval-attr="shard==$SHARD" $PAVER_ARGS
+            [1-9]|1[0-9]|2[0-1])
+                $TOX paver test_bokchoy --eval-attr="shard==$SHARD and not a11y" $PAVER_ARGS
                 ;;
 
-            11|"noshard")
+            22|"noshard")
                 $TOX paver test_bokchoy --eval-attr='not shard and not a11y' $PAVER_ARGS
                 ;;
 

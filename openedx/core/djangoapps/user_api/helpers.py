@@ -100,7 +100,7 @@ def require_post_params(required_params):
     """
     def _decorator(func):  # pylint: disable=missing-docstring
         @wraps(func)
-        def _wrapped(*args, **_kwargs):  # pylint: disable=missing-docstring
+        def _wrapped(*args, **_kwargs):
             request = args[0]
             missing_params = set(required_params) - set(request.POST.keys())
             if len(missing_params) > 0:
@@ -121,11 +121,12 @@ class InvalidFieldError(Exception):
 class FormDescription(object):
     """Generate a JSON representation of a form. """
 
-    ALLOWED_TYPES = ["text", "email", "select", "textarea", "checkbox", "password", "hidden"]
+    ALLOWED_TYPES = ["text", "email", "select", "textarea", "checkbox", "plaintext", "password", "hidden"]
 
     ALLOWED_RESTRICTIONS = {
         "text": ["min_length", "max_length"],
-        "password": ["min_length", "max_length"],
+        "password": ["min_length", "max_length", "min_upper", "min_lower",
+                     "min_punctuation", "min_symbol", "min_numeric", "min_alphabetic"],
         "email": ["min_length", "max_length", "readonly"],
     }
 
@@ -481,7 +482,7 @@ def shim_student_view(view_func, check_logged_in=False):
         # the request through authentication middleware.
         is_authenticated = (
             getattr(request, 'user', None) is not None
-            and request.user.is_authenticated()
+            and request.user.is_authenticated
         )
         if check_logged_in and not is_authenticated:
             # If we get a 403 status code from the student view

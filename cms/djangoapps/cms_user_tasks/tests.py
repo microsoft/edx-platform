@@ -12,7 +12,7 @@ from boto.exception import NoAuthHandlerFound
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.core import mail
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.test import override_settings
 from rest_framework.test import APITestCase
 from user_tasks.models import UserTaskArtifact, UserTaskStatus
@@ -53,14 +53,14 @@ def _context(response):
     """
     Get a context dictionary for a serializer appropriate for the given response.
     """
-    return {'request': response.wsgi_request}  # pylint: disable=no-member
+    return {'request': response.wsgi_request}
 
 
 def _data(response):
     """
     Get the serialized data dictionary from the given REST API test response.
     """
-    return response.data  # pylint: disable=no-member
+    return response.data
 
 
 @override_settings(BROKER_URL='memory://localhost/')

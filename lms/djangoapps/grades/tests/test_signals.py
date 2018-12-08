@@ -63,6 +63,7 @@ PROBLEM_RAW_SCORE_CHANGED_KWARGS = {
     'score_deleted': True,
     'modified': FROZEN_NOW_TIMESTAMP,
     'score_db_table': ScoreDatabaseTableEnum.courseware_student_module,
+    'grader_response': None
 }
 
 PROBLEM_WEIGHTED_SCORE_CHANGED_KWARGS = {
@@ -76,6 +77,7 @@ PROBLEM_WEIGHTED_SCORE_CHANGED_KWARGS = {
     'score_deleted': True,
     'modified': FROZEN_NOW_TIMESTAMP,
     'score_db_table': ScoreDatabaseTableEnum.courseware_student_module,
+    'grader_response': None
 }
 
 
@@ -90,6 +92,7 @@ class ScoreChangedSignalRelayTest(TestCase):
     This ensures that listeners in the LMS only have to handle one type
     of signal for all scoring events regardless of their origin.
     """
+    shard = 4
     SIGNALS = {
         'score_set': score_set,
         'score_reset': score_reset,

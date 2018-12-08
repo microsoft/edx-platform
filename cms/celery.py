@@ -2,7 +2,7 @@
 Import celery, load its settings from the django settings
 and auto discover tasks in all installed django apps.
 
-Taken from: http://celery.readthedocs.org/en/latest/django/first-steps-with-django.html
+Taken from: https://celery.readthedocs.org/en/latest/django/first-steps-with-django.html
 """
 from __future__ import absolute_import
 
@@ -36,6 +36,7 @@ class Router(AlternateEnvironmentRouter):
         """
         # The tasks below will be routed to the default lms queue.
         return {
+            'completion_aggregator.tasks.update_aggregators': 'lms',
             'openedx.core.djangoapps.content.block_structure.tasks.update_course_in_cache': 'lms',
             'openedx.core.djangoapps.content.block_structure.tasks.update_course_in_cache_v2': 'lms',
         }

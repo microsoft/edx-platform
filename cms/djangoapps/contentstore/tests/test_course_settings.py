@@ -20,7 +20,6 @@ from models.settings.course_grading import CourseGradingModel, GRADING_POLICY_CH
 from models.settings.course_metadata import CourseMetadata
 from models.settings.encoder import CourseSettingsEncoder
 from openedx.core.djangoapps.models.course_details import CourseDetails
-from openedx.core.djangoapps.self_paced.models import SelfPacedConfiguration
 from student.roles import CourseInstructorRole, CourseStaffRole
 from student.tests.factories import UserFactory
 from util import milestones_helpers
@@ -42,6 +41,8 @@ class CourseSettingsEncoderTest(CourseTestCase):
     """
     Tests for CourseSettingsEncoder.
     """
+    shard = 1
+
     def test_encoder(self):
         details = CourseDetails.fetch(self.course.id)
         jsondetails = json.dumps(details, cls=CourseSettingsEncoder)
@@ -88,6 +89,8 @@ class CourseDetailsViewTest(CourseTestCase, MilestonesTestCaseMixin):
     """
     Tests for modifying content on the first course settings page (course dates, overview, etc.).
     """
+    shard = 1
+
     def alter_field(self, url, details, field, val):
         """
         Change the one field to the given value and then invoke the update post to see if it worked.
@@ -113,7 +116,6 @@ class CourseDetailsViewTest(CourseTestCase, MilestonesTestCaseMixin):
         return Date().to_json(datetime_obj)
 
     def test_update_and_fetch(self):
-        SelfPacedConfiguration(enabled=True).save()
         details = CourseDetails.fetch(self.course.id)
 
         # resp s/b json from here on
@@ -128,6 +130,7 @@ class CourseDetailsViewTest(CourseTestCase, MilestonesTestCaseMixin):
 
         self.alter_field(url, details, 'enrollment_end', datetime.datetime(2012, 11, 15, 1, 30, tzinfo=UTC))
         self.alter_field(url, details, 'short_description', "Short Description")
+        self.alter_field(url, details, 'about_sidebar_html', "About Sidebar HTML")
         self.alter_field(url, details, 'overview', "Overview")
         self.alter_field(url, details, 'intro_video', "intro_video")
         self.alter_field(url, details, 'effort', "effort")
@@ -145,6 +148,9 @@ class CourseDetailsViewTest(CourseTestCase, MilestonesTestCaseMixin):
         self.compare_date_fields(details, encoded, context, 'enrollment_end')
         self.assertEqual(
             details['short_description'], encoded['short_description'], context + " short_description not =="
+        )
+        self.assertEqual(
+            details['about_sidebar_html'], encoded['about_sidebar_html'], context + " about_sidebar_html not =="
         )
         self.assertEqual(details['overview'], encoded['overview'], context + " overviews not ==")
         self.assertEqual(details['intro_video'], encoded.get('intro_video', None), context + " intro_video not ==")
@@ -264,11 +270,11 @@ class CourseDetailsViewTest(CourseTestCase, MilestonesTestCaseMixin):
             self.assertContains(response, "Course End Date")
             self.assertContains(response, "Enrollment Start Date")
             self.assertContains(response, "Enrollment End Date")
-            self.assertContains(response, "not the dates shown on your course summary page")
 
             self.assertContains(response, "Introducing Your Course")
             self.assertContains(response, "Course Card Image")
             self.assertContains(response, "Course Short Description")
+            self.assertNotContains(response, "Course About Sidebar HTML")
             self.assertNotContains(response, "Course Title")
             self.assertNotContains(response, "Course Subtitle")
             self.assertNotContains(response, "Course Duration")
@@ -297,7 +303,9 @@ class CourseDetailsViewTest(CourseTestCase, MilestonesTestCaseMixin):
             'short_description': 'empty',
             'overview': '',
             'effort': '',
-            'intro_video': ''
+            'intro_video': '',
+            'start_date': '2012-01-01',
+            'end_date': '2012-12-31',
         }
         response = self.client.post(settings_details_url, data=json.dumps(data), content_type='application/json',
                                     HTTP_ACCEPT='application/json')
@@ -352,7 +360,9 @@ class CourseDetailsViewTest(CourseTestCase, MilestonesTestCaseMixin):
             'short_description': 'empty',
             'overview': '',
             'effort': '',
-            'intro_video': ''
+            'intro_video': '',
+            'start_date': '2012-01-01',
+            'end_date': '2012-12-31',
         }
         response = self.client.post(
             settings_details_url,
@@ -375,7 +385,9 @@ class CourseDetailsViewTest(CourseTestCase, MilestonesTestCaseMixin):
             'short_description': 'empty',
             'overview': '',
             'effort': '',
-            'intro_video': ''
+            'intro_video': '',
+            'start_date': '2012-01-01',
+            'end_date': '2012-12-31',
         }
 
         response = self.client.post(
@@ -410,7 +422,6 @@ class CourseDetailsViewTest(CourseTestCase, MilestonesTestCaseMixin):
             self.assertContains(response, "Course End Date")
             self.assertContains(response, "Enrollment Start Date")
             self.assertContains(response, "Enrollment End Date")
-            self.assertNotContains(response, "not the dates shown on your course summary page")
 
             self.assertContains(response, "Introducing Your Course")
             self.assertContains(response, "Course Card Image")
@@ -419,6 +430,7 @@ class CourseDetailsViewTest(CourseTestCase, MilestonesTestCaseMixin):
             self.assertContains(response, "Course Duration")
             self.assertContains(response, "Course Description")
             self.assertContains(response, "Course Short Description")
+            self.assertNotContains(response, "Course About Sidebar HTML")
             self.assertContains(response, "Course Overview")
             self.assertContains(response, "Course Introduction Video")
             self.assertContains(response, "Requirements")
@@ -431,6 +443,8 @@ class CourseGradingTest(CourseTestCase):
     """
     Tests for the course settings grading page.
     """
+    shard = 1
+
     def test_initial_grader(self):
         test_grader = CourseGradingModel(self.course)
         self.assertIsNotNone(test_grader.graders)
@@ -765,6 +779,8 @@ class CourseMetadataEditingTest(CourseTestCase):
     """
     Tests for CourseMetadata.
     """
+    shard = 1
+
     def setUp(self):
         CourseTestCase.setUp(self)
         self.fullcourse = CourseFactory.create()
@@ -932,6 +948,22 @@ class CourseMetadataEditingTest(CourseTestCase):
             user=self.user
         )
         self.assertNotIn('edxnotes', test_model)
+
+    @patch.dict(settings.FEATURES, {'ENABLE_OTHER_COURSE_SETTINGS': True})
+    def test_othercoursesettings_present(self):
+        """
+        If feature flag ENABLE_OTHER_COURSE_SETTINGS is on, show the setting in Advanced Settings.
+        """
+        test_model = CourseMetadata.fetch(self.fullcourse)
+        self.assertIn('other_course_settings', test_model)
+
+    @patch.dict(settings.FEATURES, {'ENABLE_OTHER_COURSE_SETTINGS': False})
+    def test_othercoursesettings_not_present(self):
+        """
+        If feature flag ENABLE_OTHER_COURSE_SETTINGS is off, don't show the setting at all in Advanced Settings.
+        """
+        test_model = CourseMetadata.fetch(self.fullcourse)
+        self.assertNotIn('other_course_settings', test_model)
 
     def test_allow_unsupported_xblocks(self):
         """
@@ -1133,7 +1165,7 @@ class CourseMetadataEditingTest(CourseTestCase):
         self.assertEqual(tab_list, course.tabs)
 
     @patch.dict(settings.FEATURES, {'ENABLE_EDXNOTES': True})
-    @patch('xmodule.util.django.get_current_request')
+    @patch('xmodule.util.xmodule_django.get_current_request')
     def test_post_settings_with_staff_not_enrolled(self, mock_request):
         """
         Tests that we can post advance settings when course staff is not enrolled.
@@ -1154,6 +1186,8 @@ class CourseGraderUpdatesTest(CourseTestCase):
     """
     Test getting, deleting, adding, & updating graders
     """
+    shard = 1
+
     def setUp(self):
         """Compute the url to use in tests"""
         super(CourseGraderUpdatesTest, self).setUp()
@@ -1219,6 +1253,8 @@ class CourseEnrollmentEndFieldTest(CourseTestCase):
     Base class to test the enrollment end fields in the course settings details view in Studio
     when using marketing site flag and global vs non-global staff to access the page.
     """
+    shard = 1
+
     NOT_EDITABLE_HELPER_MESSAGE = "Contact your edX partner manager to update these settings."
     NOT_EDITABLE_DATE_WRAPPER = "<div class=\"field date is-not-editable\" id=\"field-enrollment-end-date\">"
     NOT_EDITABLE_TIME_WRAPPER = "<div class=\"field time is-not-editable\" id=\"field-enrollment-end-time\">"

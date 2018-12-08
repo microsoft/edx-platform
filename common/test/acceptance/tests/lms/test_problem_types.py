@@ -8,8 +8,7 @@ import textwrap
 from abc import ABCMeta, abstractmethod
 
 import ddt
-from nose import SkipTest
-from nose.plugins.attrib import attr
+import pytest
 from selenium.webdriver import ActionChains
 
 from capa.tests.response_xml_factory import (
@@ -31,6 +30,7 @@ from common.test.acceptance.fixtures.course import XBlockFixtureDesc
 from common.test.acceptance.pages.lms.problem import ProblemPage
 from common.test.acceptance.tests.helpers import EventsTestMixin, select_option_by_text
 from common.test.acceptance.tests.lms.test_lms_problems import ProblemsTest
+from openedx.core.lib.tests import attr
 
 
 class ProblemTypeTestBaseMeta(ABCMeta):
@@ -167,7 +167,7 @@ class ProblemTypeTestMixin(ProblemTypeA11yTestMixin):
     can_submit_blank = False
     can_update_save_notification = True
 
-    @attr(shard=7)
+    @attr(shard=11)
     def test_answer_correctly(self):
         """
         Scenario: I can answer a problem correctly
@@ -212,7 +212,7 @@ class ProblemTypeTestMixin(ProblemTypeA11yTestMixin):
         for event in expected_events:
             self.wait_for_events(event_filter=event, number_of_matches=1)
 
-    @attr(shard=7)
+    @attr(shard=11)
     def test_answer_incorrectly(self):
         """
         Scenario: I can answer a problem incorrectly
@@ -233,7 +233,7 @@ class ProblemTypeTestMixin(ProblemTypeA11yTestMixin):
         self.wait_for_status('incorrect')
         self.problem_page.wait_incorrect_notification()
 
-    @attr(shard=7)
+    @attr(shard=11)
     def test_submit_blank_answer(self):
         """
         Scenario: I can submit a blank answer
@@ -243,7 +243,7 @@ class ProblemTypeTestMixin(ProblemTypeA11yTestMixin):
         And The "<ProblemType>" problem displays a "blank" answer
         """
         if not self.can_submit_blank:
-            raise SkipTest("Test incompatible with the current problem type")
+            pytest.skip("Test incompatible with the current problem type")
 
         self.problem_page.wait_for(
             lambda: self.problem_page.problem_name == self.problem_name,
@@ -255,7 +255,7 @@ class ProblemTypeTestMixin(ProblemTypeA11yTestMixin):
         self.problem_page.click_submit()
         self.wait_for_status('incorrect')
 
-    @attr(shard=7)
+    @attr(shard=11)
     def test_cant_submit_blank_answer(self):
         """
         Scenario: I can't submit a blank answer
@@ -263,7 +263,7 @@ class ProblemTypeTestMixin(ProblemTypeA11yTestMixin):
         Then I can't submit a problem
         """
         if self.can_submit_blank:
-            raise SkipTest("Test incompatible with the current problem type")
+            pytest.skip("Test incompatible with the current problem type")
 
         self.problem_page.wait_for(
             lambda: self.problem_page.problem_name == self.problem_name,
@@ -271,7 +271,7 @@ class ProblemTypeTestMixin(ProblemTypeA11yTestMixin):
         )
         self.assertTrue(self.problem_page.is_submit_disabled())
 
-    @attr(shard=7)
+    @attr(shard=12)
     def test_can_show_answer(self):
         """
         Scenario: Verifies that show answer button is working as expected.
@@ -285,7 +285,7 @@ class ProblemTypeTestMixin(ProblemTypeA11yTestMixin):
         self.problem_page.click_show()
         self.problem_page.wait_for_show_answer_notification()
 
-    @attr(shard=7)
+    @attr(shard=12)
     def test_save_reaction(self):
         """
         Scenario: Verify that the save button performs as expected with problem types
@@ -319,7 +319,7 @@ class ProblemTypeTestMixin(ProblemTypeA11yTestMixin):
             self.answer_problem(correctness='incorrect')
             self.assertFalse(self.problem_page.is_save_notification_visible())
 
-    @attr(shard=7)
+    @attr(shard=12)
     def test_reset_clears_answer_and_focus(self):
         """
         Scenario: Reset will clear answers and focus on problem meta
@@ -344,7 +344,7 @@ class ProblemTypeTestMixin(ProblemTypeA11yTestMixin):
         # Answer should be reset
         self.wait_for_status('unanswered')
 
-    @attr(shard=7)
+    @attr(shard=12)
     def test_reset_shows_errors(self):
         """
         Scenario: Reset will show server errors
@@ -362,7 +362,7 @@ class ProblemTypeTestMixin(ProblemTypeA11yTestMixin):
         self.problem_page.click_reset()
         self.problem_page.wait_for_gentle_alert_notification()
 
-    @attr(shard=7)
+    @attr(shard=12)
     def test_partially_complete_notifications(self):
         """
         Scenario: If a partially correct problem is submitted the correct notification is shown
@@ -372,7 +372,7 @@ class ProblemTypeTestMixin(ProblemTypeA11yTestMixin):
 
         # Not all problems have partially correct solutions configured
         if not self.partially_correct:
-            raise SkipTest("Test incompatible with the current problem type")
+            pytest.skip("Test incompatible with the current problem type")
 
         self.problem_page.wait_for(
             lambda: self.problem_page.problem_name == self.problem_name,
@@ -412,7 +412,7 @@ class ProblemNeverShowCorrectnessMixin(object):
 
         # Not all problems have partially correct solutions configured
         if correctness == 'partially-correct' and not self.partially_correct:
-            raise SkipTest("Test incompatible with the current problem type")
+            pytest.skip("Test incompatible with the current problem type")
 
         # Problem progress text depends on points possible
         possible = 'possible (ungraded, results hidden)'
@@ -571,7 +571,6 @@ class CheckboxProblemTypeTest(CheckboxProblemTypeBase, ProblemTypeTestMixin):
     """
     Standard tests for the Checkbox Problem Type
     """
-    @attr(shard=7)
     def test_can_show_answer(self):
         """
         Scenario: Verifies that show answer button is working as expected.
@@ -632,7 +631,6 @@ class MultipleChoiceProblemTypeTest(MultipleChoiceProblemTypeBase, ProblemTypeTe
     """
     Standard tests for the Multiple Choice Problem Type
     """
-    @attr(shard=7)
     def test_can_show_answer(self):
         """
         Scenario: Verifies that show answer button is working as expected.
@@ -847,6 +845,7 @@ class NumericalProblemTypeTest(NumericalProblemTypeBase, ProblemTypeTestMixin):
     """
     Standard tests for the Numerical Problem Type
     """
+    @attr(shard=12)
     def test_error_input_gentle_alert(self):
         """
         Scenario: I can answer a problem with erroneous input and will see a gentle alert
@@ -1058,6 +1057,7 @@ class CodeProblemTypeTest(CodeProblemTypeBase, ProblemTypeTestMixin):
     """
     Standard tests for the Code Problem Type
     """
+    @attr(shard=12)
     def test_answer_incorrectly(self):
         """
         Overridden for script test because the testing grader always responds
@@ -1065,6 +1065,7 @@ class CodeProblemTypeTest(CodeProblemTypeBase, ProblemTypeTestMixin):
         """
         pass
 
+    @attr(shard=12)
     def test_submit_blank_answer(self):
         """
         Overridden for script test because the testing grader always responds
@@ -1072,6 +1073,7 @@ class CodeProblemTypeTest(CodeProblemTypeBase, ProblemTypeTestMixin):
         """
         pass
 
+    @attr(shard=12)
     def test_cant_submit_blank_answer(self):
         """
         Overridden for script test because the testing grader always responds
@@ -1079,6 +1081,7 @@ class CodeProblemTypeTest(CodeProblemTypeBase, ProblemTypeTestMixin):
         """
         pass
 
+    @attr(shard=12)
     def wait_for_status(self, status):
         """
         Overridden for script test because the testing grader always responds

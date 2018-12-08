@@ -7,12 +7,13 @@ rather than importing Django models directly.
 import logging
 
 from django.conf import settings
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.db.models import Q
+from opaque_keys.edx.django.models import CourseKeyField
 from opaque_keys.edx.keys import CourseKey
 
 from branding import api as branding_api
-from certificates.models import (
+from lms.djangoapps.certificates.models import (
     CertificateGenerationConfiguration,
     CertificateGenerationCourseSetting,
     CertificateInvalidation,
@@ -23,10 +24,9 @@ from certificates.models import (
     GeneratedCertificate,
     certificate_status_for_student
 )
-from certificates.queue import XQueueCertInterface
+from lms.djangoapps.certificates.queue import XQueueCertInterface
 from eventtracking import tracker
 from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
-from openedx.core.djangoapps.xmodule_django.models import CourseKeyField
 from util.organizations_helpers import get_course_organization_id
 from xmodule.modulestore.django import modulestore
 
@@ -207,6 +207,10 @@ def regenerate_user_certificates(student, course_key, course=None,
         course = modulestore().get_course(course_key, depth=0)
 
     generate_pdf = not has_html_certificates_enabled(course)
+    log.info(
+        "Started regenerating certificates for user %s in course %s with generate_pdf status: %s",
+        student.username, unicode(course_key), generate_pdf
+    )
 
     return xqueue.regen_cert(
         student,
@@ -377,7 +381,7 @@ def example_certificates_status(course_key):
 
     Example Usage:
 
-        >>> from certificates import api as certs_api
+        >>> from lms.djangoapps.certificates import api as certs_api
         >>> certs_api.example_certificate_status(course_key)
         [
             {
@@ -455,7 +459,7 @@ def get_active_web_certificate(course, is_preview_mode=None):
     """
     Retrieves the active web certificate configuration for the specified course
     """
-    certificates = getattr(course, 'certificates', '{}')
+    certificates = getattr(course, 'certificates', {})
     configurations = certificates.get('certificates', [])
     for config in configurations:
         if config.get('is_active') or is_preview_mode:

@@ -2,16 +2,20 @@
 import copy
 import datetime
 import logging
-import pycountry
+import uuid
 
-from dateutil.parser import parse as datetime_parse
+import pycountry
 from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist
 from edx_rest_api_client.client import EdxRestApiClient
+from opaque_keys.edx.keys import CourseKey
 from pytz import UTC
 
-from openedx.core.djangoapps.catalog.cache import (PROGRAM_CACHE_KEY_TPL,
+from entitlements.utils import is_course_run_entitlement_fulfillable
+from openedx.core.constants import COURSE_PUBLISHED
+from openedx.core.djangoapps.catalog.cache import (PATHWAY_CACHE_KEY_TPL, PROGRAM_CACHE_KEY_TPL,
+                                                   SITE_PATHWAY_IDS_CACHE_KEY_TPL,
                                                    SITE_PROGRAM_UUIDS_CACHE_KEY_TPL)
 from openedx.core.djangoapps.catalog.models import CatalogIntegration
 from openedx.core.lib.edx_api_utils import get_edx_api_data
@@ -60,7 +64,7 @@ def get_programs(site, uuid=None):
         return program
     uuids = cache.get(SITE_PROGRAM_UUIDS_CACHE_KEY_TPL.format(domain=site.domain), [])
     if not uuids:
-        logger.warning('Failed to get program UUIDs from the cache.')
+        logger.warning('Failed to get program UUIDs from the cache for site {}.'.format(site.domain))
 
     programs = cache.get_many([PROGRAM_CACHE_KEY_TPL.format(uuid=uuid) for uuid in uuids])
     programs = list(programs.values())
@@ -119,6 +123,62 @@ def get_program_types(name=None):
         return data
     else:
         return []
+
+
+def get_pathways(site, pathway_id=None):
+    """
+    Read pathways from the cache.
+    The cache is populated by a management command, cache_programs.
+
+    Arguments:
+        site (Site): django.contrib.sites.models object
+
+    Keyword Arguments:
+        pathway_id (string): id identifying a specific pathway to read from the cache.
+
+    Returns:
+        list of dict, representing pathways.
+        dict, if a specific pathway is requested.
+    """
+    missing_details_msg_tpl = 'Failed to get details for credit pathway {id} from the cache.'
+
+    if pathway_id:
+        pathway = cache.get(PATHWAY_CACHE_KEY_TPL.format(id=pathway_id))
+        if not pathway:
+            logger.warning(missing_details_msg_tpl.format(id=pathway_id))
+
+        return pathway
+    pathway_ids = cache.get(SITE_PATHWAY_IDS_CACHE_KEY_TPL.format(domain=site.domain), [])
+    if not pathway_ids:
+        logger.warning('Failed to get credit pathway ids from the cache.')
+
+    pathways = cache.get_many([PATHWAY_CACHE_KEY_TPL.format(id=pathway_id) for pathway_id in pathway_ids])
+    pathways = pathways.values()
+
+    # The get_many above sometimes fails to bring back details cached on one or
+    # more Memcached nodes. It doesn't look like these keys are being evicted.
+    # 99% of the time all keys come back, but 1% of the time all the keys stored
+    # on one or more nodes are missing from the result of the get_many. One
+    # get_many may fail to bring these keys back, but a get_many occurring
+    # immediately afterwards will succeed in bringing back all the keys. This
+    # behavior can be mitigated by trying again for the missing keys, which is
+    # what we do here. Splitting the get_many into smaller chunks may also help.
+    missing_ids = set(pathway_ids) - set(pathway['id'] for pathway in pathways)
+    if missing_ids:
+        logger.info(
+            'Failed to get details for {count} pathways. Retrying.'.format(count=len(missing_ids))
+        )
+
+        retried_pathways = cache.get_many(
+            [PATHWAY_CACHE_KEY_TPL.format(id=pathway_id) for pathway_id in missing_ids]
+        )
+        pathways += retried_pathways.values()
+
+        still_missing_ids = set(pathway_ids) - set(pathway['id'] for pathway in pathways)
+        for missing_id in still_missing_ids:
+            logger.warning(missing_details_msg_tpl.format(id=missing_id))
+
+    return pathways
 
 
 def get_currency_data():
@@ -280,10 +340,74 @@ def get_course_runs_for_course(course_uuid):
             api=api,
             cache_key=cache_key if catalog_integration.is_cache_enabled else None,
             long_term_cache=True,
+            many=False
         )
         return data.get('course_runs', [])
     else:
         return []
+
+
+def get_course_uuid_for_course(course_run_key):
+    """
+    Retrieve the Course UUID for a given course key
+
+    Arguments:
+        course_run_key (CourseKey): A Key for a Course run that will be pulled apart to get just the information
+        required for a Course (e.g. org+course)
+
+    Returns:
+        UUID: Course UUID and None if it was not retrieved.
+    """
+    catalog_integration = CatalogIntegration.current()
+
+    if catalog_integration.is_enabled():
+        try:
+            user = catalog_integration.get_service_user()
+        except ObjectDoesNotExist:
+            logger.error(
+                'Catalog service user with username [%s] does not exist. Course UUID will not be retrieved.',
+                catalog_integration.service_username,
+            )
+            return []
+
+        api = create_catalog_api_client(user)
+
+        run_cache_key = '{base}.course_run.{course_run_key}'.format(
+            base=catalog_integration.CACHE_KEY,
+            course_run_key=course_run_key
+        )
+
+        course_run_data = get_edx_api_data(
+            catalog_integration,
+            'course_runs',
+            resource_id=unicode(course_run_key),
+            api=api,
+            cache_key=run_cache_key if catalog_integration.is_cache_enabled else None,
+            long_term_cache=True,
+            many=False,
+        )
+
+        course_key_str = course_run_data.get('course', None)
+
+        if course_key_str:
+            run_cache_key = '{base}.course.{course_key}'.format(
+                base=catalog_integration.CACHE_KEY,
+                course_key=course_key_str
+            )
+
+            data = get_edx_api_data(
+                catalog_integration,
+                'courses',
+                resource_id=course_key_str,
+                api=api,
+                cache_key=run_cache_key if catalog_integration.is_cache_enabled else None,
+                long_term_cache=True,
+                many=False,
+            )
+            uuid_str = data.get('uuid', None)
+            if uuid_str:
+                return uuid.UUID(uuid_str)
+    return None
 
 
 def get_pseudo_session_for_entitlement(entitlement):
@@ -313,51 +437,39 @@ def get_visible_sessions_for_entitlement(entitlement):
 
 def get_fulfillable_course_runs_for_entitlement(entitlement, course_runs):
     """
-    Takes a list of course runs and returns only the course runs, sorted by start date, that:
+    Looks through the list of course runs and returns the course runs that can
+    be applied to the entitlement.
 
-    1) Are currently running or in the future
-    2) A user can enroll in
-    3) A user can upgrade in
-    4) Are published
-    5) Are not enrolled in already for an active session
+    Args:
+        entitlement (CourseEntitlement): The CourseEntitlement to which a
+        course run is to be applied.
+        course_runs (list): List of course run that we would like to apply
+        to the entitlement.
 
-    These are the only sessions that can be selected for an entitlement.
+    Return:
+        list: A list of sessions that a user can apply to the provided entitlement.
     """
-
     enrollable_sessions = []
 
-    enrollments_for_user = CourseEnrollment.enrollments_for_user(entitlement.user).filter(mode=entitlement.mode)
-    enrolled_sessions = frozenset([str(e.course_id) for e in enrollments_for_user])
-
-    # Only show published course runs that can still be enrolled and upgraded
-    now = datetime.datetime.now(UTC)
+    # Only retrieve list of published course runs that can still be enrolled and upgraded
+    search_time = datetime.datetime.now(UTC)
     for course_run in course_runs:
-
-        # Only courses that have not ended will be displayed
-        run_start = course_run.get('start')
-        run_end = course_run.get('end')
-        is_running = run_start and (not run_end or datetime_parse(run_end) > now)
-
-        # Only courses that can currently be enrolled in will be displayed
-        enrollment_start = course_run.get('enrollment_start')
-        enrollment_end = course_run.get('enrollment_end')
-        can_enroll = ((not enrollment_start or datetime_parse(enrollment_start) < now)
-                      and (not enrollment_end or datetime_parse(enrollment_end) > now)
-                      and course_run.get('key') not in enrolled_sessions)
-
-        # Only upgrade-able courses will be displayed
-        can_upgrade = False
-        for seat in course_run.get('seats', []):
-            if seat.get('type') == entitlement.mode:
-                upgrade_deadline = seat.get('upgrade_deadline', None)
-                can_upgrade = not upgrade_deadline or (datetime_parse(upgrade_deadline) > now)
-                break
-
-        # Only published courses will be displayed
-        is_published = course_run.get('status') == 'published'
-
-        if is_running and can_upgrade and can_enroll and is_published:
+        course_id = CourseKey.from_string(course_run.get('key'))
+        (user_enrollment_mode, is_active) = CourseEnrollment.enrollment_mode_for_user(
+            user=entitlement.user,
+            course_id=course_id
+        )
+        is_enrolled_in_mode = is_active and (user_enrollment_mode == entitlement.mode)
+        if (is_enrolled_in_mode and
+                entitlement.enrollment_course_run and
+                course_id == entitlement.enrollment_course_run.course_id):
+            # User is enrolled in the course so we should include it in the list of enrollable sessions always
+            # this will ensure it is available for the UI
             enrollable_sessions.append(course_run)
+        elif (course_run.get('status') == COURSE_PUBLISHED and not
+              is_enrolled_in_mode and
+              is_course_run_entitlement_fulfillable(course_id, entitlement, search_time)):
+                enrollable_sessions.append(course_run)
 
     enrollable_sessions.sort(key=lambda session: session.get('start'))
     return enrollable_sessions

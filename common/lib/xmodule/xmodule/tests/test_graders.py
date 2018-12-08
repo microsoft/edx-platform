@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import ddt
 from pytz import UTC
 from lms.djangoapps.grades.scores import compute_percent
+from six import text_type
 from xmodule import graders
 from xmodule.graders import (
     AggregatedScore, ProblemScore, ShowCorrectness, aggregate_scores
@@ -18,6 +19,7 @@ class GradesheetTest(unittest.TestCase):
     """
     Tests the aggregate_scores method
     """
+    shard = 1
 
     def test_weighted_grading(self):
         scores = []
@@ -80,6 +82,7 @@ class GraderTest(unittest.TestCase):
     """
     Tests grader implementations
     """
+    shard = 1
 
     empty_gradesheet = {
     }
@@ -321,7 +324,7 @@ class GraderTest(unittest.TestCase):
     def test_grader_with_invalid_conf(self, invalid_conf, expected_error_message):
         with self.assertRaises(ValueError) as error:
             graders.grader_from_conf([invalid_conf])
-        self.assertIn(expected_error_message, error.exception.message)
+        self.assertIn(expected_error_message, text_type(error.exception))
 
 
 @ddt.ddt
@@ -329,6 +332,8 @@ class ShowCorrectnessTest(unittest.TestCase):
     """
     Tests the correctness_available method
     """
+    shard = 1
+
     def setUp(self):
         super(ShowCorrectnessTest, self).setUp()
 

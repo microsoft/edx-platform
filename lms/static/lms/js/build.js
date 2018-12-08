@@ -32,11 +32,6 @@
             'js/groups/views/cohorts_dashboard_factory',
             'js/discussions_management/views/discussions_dashboard_factory',
             'js/header_factory',
-            'js/learner_dashboard/course_entitlement_factory',
-            'js/learner_dashboard/unenrollment_factory',
-            'js/learner_dashboard/entitlement_unenrollment_factory',
-            'js/learner_dashboard/program_details_factory',
-            'js/learner_dashboard/program_list_factory',
             'js/student_account/logistration_factory',
             'js/student_account/views/account_settings_factory',
             'js/student_account/views/finish_auth_factory',
@@ -45,6 +40,7 @@
             'lms/js/preview/preview_factory',
             'support/js/certificates_factory',
             'support/js/enrollment_factory',
+            'support/js/manage_user_factory',
             'teams/js/teams_tab_factory',
             'js/dateutil_factory'
         ]),
@@ -73,7 +69,7 @@
          */
         paths: {
             gettext: 'empty:',
-            'coffee/src/ajax_prefix': 'empty:',
+            'js/src/ajax_prefix': 'empty:',
             jquery: 'empty:',
             'jquery-migrate': 'empty:',
             'jquery.cookie': 'empty:',

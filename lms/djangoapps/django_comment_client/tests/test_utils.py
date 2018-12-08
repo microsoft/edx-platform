@@ -4,12 +4,11 @@ import json
 
 import ddt
 import mock
-import pytest
 
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.test import RequestFactory, TestCase
+from edx_django_utils.cache import RequestCache
 from mock import Mock, patch
-from nose.plugins.attrib import attr
 from pytz import UTC
 from six import text_type
 
@@ -25,7 +24,8 @@ from django_comment_client.tests.utils import config_course_discussions, topic_n
 from django_comment_common.models import (
     CourseDiscussionSettings,
     ForumsConfig,
-    assign_role
+    assign_role,
+    DiscussionsIdMapping,
 )
 from django_comment_common.utils import (
     get_course_discussion_settings,
@@ -34,11 +34,11 @@ from django_comment_common.utils import (
 )
 from lms.djangoapps.teams.tests.factories import CourseTeamFactory
 from lms.lib.comment_client.utils import CommentClientMaintenanceError, perform_request
-from openedx.core.djangoapps.content.course_structures.models import CourseStructure
 from openedx.core.djangoapps.course_groups import cohorts
 from openedx.core.djangoapps.course_groups.cohorts import set_course_cohorted
 from openedx.core.djangoapps.course_groups.tests.helpers import CohortFactory, config_course_cohorts
 from openedx.core.djangoapps.util.testing import ContentGroupTestCase
+from openedx.core.lib.tests import attr
 from student.roles import CourseStaffRole
 from student.tests.factories import AdminFactory, CourseEnrollmentFactory, UserFactory
 from xmodule.modulestore import ModuleStoreEnum
@@ -65,15 +65,8 @@ class DictionaryTestCase(TestCase):
         expected = {'cats': 'meow', 'dogs': 'woof'}
         self.assertEqual(utils.strip_blank(d), expected)
 
-    def test_merge_dict(self):
-        d1 = {'cats': 'meow', 'dogs': 'woof'}
-        d2 = {'lions': 'roar', 'ducks': 'quack'}
-        expected = {'cats': 'meow', 'dogs': 'woof', 'lions': 'roar', 'ducks': 'quack'}
-        self.assertEqual(utils.merge_dict(d1, d2), expected)
-
 
 @attr(shard=1)
-@pytest.mark.django111_expected_failure
 class AccessUtilsTestCase(ModuleStoreTestCase):
     """
     Base testcase class for access and roles for the
@@ -137,7 +130,6 @@ class CoursewareContextTestCase(ModuleStoreTestCase):
     """
     def setUp(self):
         super(CoursewareContextTestCase, self).setUp()
-
         self.course = CourseFactory.create(org="TestX", number="101", display_name="Test Course")
         self.discussion1 = ItemFactory.create(
             parent_location=self.course.location,
@@ -224,6 +216,8 @@ class CoursewareContextTestCase(ModuleStoreTestCase):
         # Assert that there is only one discussion xblock in the course at the moment.
         self.assertEqual(len(utils.get_accessible_discussion_xblocks(course, self.user)), 1)
 
+        # The above call is request cached, so we need to clear it for this test.
+        RequestCache.clear_all_namespaces()
         # Add an orphan discussion xblock to that course
         orphan = course.id.make_usage_key('discussion', 'orphan_discussion')
         self.store.create_item(self.user.id, orphan.course_key, orphan.block_type, block_id=orphan.block_id)
@@ -267,6 +261,7 @@ class CachedDiscussionIdMapTestCase(ModuleStoreTestCase):
             discussion_target='Beta Testing',
             visible_to_staff_only=True
         )
+        RequestCache.clear_all_namespaces()  # clear the cache before the last course publish
         self.bad_discussion = ItemFactory.create(
             parent_location=self.course.location,
             category='discussion',
@@ -283,14 +278,14 @@ class CachedDiscussionIdMapTestCase(ModuleStoreTestCase):
         usage_key = utils.get_cached_discussion_key(self.course.id, 'bogus_id')
         self.assertIsNone(usage_key)
 
-    def test_cache_raises_exception_if_course_structure_not_cached(self):
-        CourseStructure.objects.all().delete()
+    def test_cache_raises_exception_if_discussion_id_map_not_cached(self):
+        DiscussionsIdMapping.objects.all().delete()
         with self.assertRaises(utils.DiscussionIdMapIsNotCached):
             utils.get_cached_discussion_key(self.course.id, 'test_discussion_id')
 
     def test_cache_raises_exception_if_discussion_id_not_cached(self):
-        cache = CourseStructure.objects.get(course_id=self.course.id)
-        cache.discussion_id_map_json = None
+        cache = DiscussionsIdMapping.objects.get(course_id=self.course.id)
+        cache.mapping = None
         cache.save()
 
         with self.assertRaises(utils.DiscussionIdMapIsNotCached):
@@ -318,7 +313,7 @@ class CachedDiscussionIdMapTestCase(ModuleStoreTestCase):
         self.verify_discussion_metadata()
 
     def test_get_discussion_id_map_without_cache(self):
-        CourseStructure.objects.all().delete()
+        DiscussionsIdMapping.objects.all().delete()
         self.verify_discussion_metadata()
 
     def test_get_missing_discussion_id_map_from_cache(self):
@@ -424,7 +419,7 @@ class CategoryMapTestCase(CategoryMapTestMixin, ModuleStoreTestCase):
             "Topic C": {"id": "Topic_C"}
         }
 
-        def check_cohorted_topics(expected_ids):  # pylint: disable=missing-docstring
+        def check_cohorted_topics(expected_ids):
             self.assert_category_map_equals(
                 {
                     "entries": {
@@ -698,7 +693,7 @@ class CategoryMapTestCase(CategoryMapTestMixin, ModuleStoreTestCase):
     def test_start_date_filter(self):
         now = datetime.datetime.now()
         self.create_discussion("Chapter 1", "Discussion 1", start=now)
-        self.create_discussion("Chapter 1", "Discussion 2 обсуждение", start=self.later)
+        self.create_discussion("Chapter 1", u"Discussion 2 обсуждение", start=self.later)
         self.create_discussion("Chapter 2", "Discussion", start=now)
         self.create_discussion("Chapter 2 / Section 1 / Subsection 1", "Discussion", start=self.later)
         self.create_discussion("Chapter 2 / Section 1 / Subsection 2", "Discussion", start=self.later)
@@ -1332,7 +1327,7 @@ class IsCommentableDividedTestCase(ModuleStoreTestCase):
         course = modulestore().get_course(self.toy_course_key)
         self.assertFalse(cohorts.is_course_cohorted(course.id))
 
-        def to_id(name):  # pylint: disable=missing-docstring
+        def to_id(name):
             return topic_name_to_id(course, name)
 
         config_course_cohorts(
@@ -1785,6 +1780,7 @@ class GroupModeratorPermissionsTestCase(ModuleStoreTestCase):
             'can_vote': True,
             'can_report': True
         })
+        RequestCache.clear_all_namespaces()
 
         set_discussion_division_settings(self.course.id, division_scheme=CourseDiscussionSettings.ENROLLMENT_TRACK)
         content = {'user_id': self.verified_user.id, 'type': 'thread', 'username': self.verified_user.username}

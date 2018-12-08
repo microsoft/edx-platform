@@ -5,7 +5,7 @@
 <%namespace name='static' file='../../static_content.html'/>
 <%namespace file='../../main.html' import="login_query"/>
 <%!
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.utils.translation import ugettext as _
 %>
 
@@ -43,6 +43,13 @@ from django.utils.translation import ugettext as _
         <li class="nav-item mt-2 nav-item-open-collapsed">
           <a class="nav-link ${'active' if reverse('program_listing_view') in request.path else ''}" href="${reverse('program_listing_view')}">
             ${_("Programs")}
+          </a>
+        </li>
+      % endif
+      % if show_journal_listing:
+        <li class="nav-item mt-2 nav-item-open-collapsed">
+          <a class="nav-link active" href="${reverse('openedx.journals.dashboard')}">
+            ${_("Journals")}
           </a>
         </li>
       % endif

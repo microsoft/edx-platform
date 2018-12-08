@@ -12,12 +12,11 @@ import jwt
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ImproperlyConfigured
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.test.client import RequestFactory
 from django.test.utils import override_settings
 from edx_oauth2_provider.tests.factories import ClientFactory
 from mock import MagicMock, patch
-from nose.plugins.attrib import attr
 from provider.oauth2.models import Client
 
 from courseware.model_data import FieldDataCache
@@ -28,7 +27,10 @@ from edxnotes import helpers
 from edxnotes.decorators import edxnotes
 from edxnotes.exceptions import EdxNotesParseError, EdxNotesServiceUnavailable
 from edxnotes.plugins import EdxNotesTab
-from student.tests.factories import CourseEnrollmentFactory, UserFactory
+from openedx.core.djangoapps.user_api.models import RetirementState, UserRetirementStatus
+from openedx.core.lib.tests import attr
+from openedx.core.lib.token_utils import JwtBuilder
+from student.tests.factories import CourseEnrollmentFactory, SuperuserFactory, UserFactory
 from xmodule.modulestore import ModuleStoreEnum
 from xmodule.modulestore.django import modulestore
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
@@ -527,6 +529,29 @@ class EdxNotesHelpersTest(ModuleStoreTestCase):
             helpers.get_notes(self.request, self.course)
         )
 
+    @override_settings(EDXNOTES_PUBLIC_API="http://example.com")
+    @override_settings(EDXNOTES_INTERNAL_API="http://example.com")
+    @patch("edxnotes.helpers.anonymous_id_for_user", autospec=True)
+    @patch("edxnotes.helpers.get_edxnotes_id_token", autospec=True)
+    @patch("edxnotes.helpers.requests.delete")
+    def test_delete_all_notes_for_user(self, mock_delete, mock_get_id_token, mock_anonymous_id_for_user):
+        """
+        Test GDPR data deletion for Notes user_id
+        """
+        mock_anonymous_id_for_user.return_value = "anonymous_id"
+        mock_get_id_token.return_value = "test_token"
+        helpers.delete_all_notes_for_user(self.user)
+        mock_delete.assert_called_with(
+            url='http://example.com/annotations/',
+            headers={
+                'x-annotator-auth-token': 'test_token'
+            },
+            data={
+                'user': 'anonymous_id'
+            },
+            timeout=(settings.EDXNOTES_CONNECT_TIMEOUT, settings.EDXNOTES_READ_TIMEOUT)
+        )
+
     def test_preprocess_collection_no_item(self):
         """
         Tests the result if appropriate module is not found.
@@ -888,7 +913,6 @@ class EdxNotesHelpersTest(ModuleStoreTestCase):
         Verify that `construct_url` works correctly.
         """
         # make absolute url
-        # pylint: disable=no-member
         if self.request.is_secure():
             host = 'https://' + self.request.get_host()
         else:
@@ -1127,6 +1151,120 @@ class EdxNotesViewsTest(ModuleStoreTestCase):
 
 
 @attr(shard=3)
+class EdxNotesRetireAPITest(ModuleStoreTestCase):
+    """
+    Tests for EdxNotes retirement API.
+    """
+    def setUp(self):
+        ClientFactory(name="edx-notes")
+        super(EdxNotesRetireAPITest, self).setUp()
+
+        # setup relevant states
+        RetirementState.objects.create(state_name='PENDING', state_execution_order=1)
+        self.retire_notes_state = RetirementState.objects.create(state_name='RETIRING_NOTES', state_execution_order=11)
+        self.something_complete_state = RetirementState.objects.create(
+            state_name='SOMETHING_COMPLETE',
+            state_execution_order=22,
+        )
+
+        # setup retired user with retirement status
+        self.retired_user = UserFactory()
+        self.retirement = UserRetirementStatus.create_retirement(self.retired_user)
+        self.retirement.current_state = self.retire_notes_state
+        self.retirement.save()
+
+        # setup another normal user which should not be allowed to retire any notes
+        self.normal_user = UserFactory()
+
+        # setup superuser for making API calls
+        self.superuser = SuperuserFactory()
+
+        self.retire_user_url = reverse("edxnotes_retire_user")
+
+    def _build_jwt_headers(self, user):
+        """
+        Helper function for creating headers for the JWT authentication.
+        """
+        token = JwtBuilder(user).build_token([])
+        headers = {'HTTP_AUTHORIZATION': 'JWT ' + token}
+        return headers
+
+    @patch("edxnotes.helpers.requests.delete", autospec=True)
+    def test_retire_user_success(self, mock_get):
+        """
+        Tests that 204 response is received on success.
+        """
+        mock_get.return_value.content = ''
+        mock_get.return_value.status_code = 204
+        headers = self._build_jwt_headers(self.superuser)
+        response = self.client.post(
+            self.retire_user_url,
+            data=json.dumps({'username': self.retired_user.username}),
+            content_type='application/json',
+            **headers
+        )
+        self.assertEqual(response.status_code, 204)
+
+    def test_retire_user_normal_user_not_allowed(self):
+        """
+        Tests that 403 response is received when the requester is not allowed to call the retirement endpoint.
+        """
+        headers = self._build_jwt_headers(self.normal_user)
+        response = self.client.post(
+            self.retire_user_url,
+            data=json.dumps({'username': self.retired_user.username}),
+            content_type='application/json',
+            **headers
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_retire_user_status_not_found(self):
+        """
+        Tests that 404 response is received if the retirement user status is not found.
+        """
+        headers = self._build_jwt_headers(self.superuser)
+        response = self.client.post(
+            self.retire_user_url,
+            data=json.dumps({'username': 'username_does_not_exist'}),
+            content_type='application/json',
+            **headers
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_retire_user_wrong_state(self):
+        """
+        Tests that 405 response is received if the retirement user status is currently in a state which cannot be acted
+        on.
+        """
+        # Set state to the _COMPLETE version of an arbitrary "SOMETHING" state.
+        self.retirement.current_state = self.something_complete_state
+        self.retirement.save()
+        headers = self._build_jwt_headers(self.superuser)
+        response = self.client.post(
+            self.retire_user_url,
+            data=json.dumps({'username': self.retired_user.username}),
+            content_type='application/json',
+            **headers
+        )
+        self.assertEqual(response.status_code, 405)
+
+    @patch("edxnotes.helpers.delete_all_notes_for_user", autospec=True)
+    def test_retire_user_downstream_unavailable(self, mock_delete_all_notes_for_user):
+        """
+        Tests that 500 response is received if the downstream (i.e. the EdxNotes IDA) is unavailable.
+        """
+        mock_delete_all_notes_for_user.side_effect = EdxNotesServiceUnavailable
+        headers = self._build_jwt_headers(self.superuser)
+        response = self.client.post(
+            self.retire_user_url,
+            data=json.dumps({'username': self.retired_user.username}),
+            content_type='application/json',
+            **headers
+        )
+        self.assertEqual(response.status_code, 500)
+
+
+@attr(shard=3)
 @skipUnless(settings.FEATURES["ENABLE_EDXNOTES"], "EdxNotes feature needs to be enabled.")
 @ddt.ddt
 class EdxNotesPluginTest(ModuleStoreTestCase):
@@ -1152,12 +1290,3 @@ class EdxNotesPluginTest(ModuleStoreTestCase):
         FEATURES['ENABLE_EDXNOTES'] = enabled
         with override_settings(FEATURES=FEATURES):
             assert EdxNotesTab.is_enabled(self.course, self.user) == enabled
-
-    @ddt.data(True, False)
-    def test_edxnotes_tab_with_harvard_notes(self, harvard_notes_enabled):
-        """
-        Verify EdxNotesTab visibility when harvard notes feature is enabled/disabled.
-        """
-        with patch("edxnotes.plugins.is_harvard_notes_enabled") as mock_harvard_notes_enabled:
-            mock_harvard_notes_enabled.return_value = harvard_notes_enabled
-            assert EdxNotesTab.is_enabled(self.course, self.user) == (not harvard_notes_enabled)

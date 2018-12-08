@@ -4,11 +4,9 @@ Test the Studio help links.
 
 from unittest import skip
 
-from nose.plugins.attrib import attr
-
 from common.test.acceptance.fixtures.course import XBlockFixtureDesc
 from common.test.acceptance.pages.common.auto_auth import AutoAuthPage
-from common.test.acceptance.pages.studio.asset_index import AssetIndexPage
+from common.test.acceptance.pages.studio.asset_index import AssetIndexPageStudioFrontend
 from common.test.acceptance.pages.studio.course_info import CourseUpdatesPage
 from common.test.acceptance.pages.studio.edit_tabs import PagesPage
 from common.test.acceptance.pages.studio.import_export import (
@@ -35,6 +33,7 @@ from common.test.acceptance.tests.helpers import (
     url_for_help
 )
 from common.test.acceptance.tests.studio.base_studio_test import ContainerBase, StudioCourseTest, StudioLibraryTest
+from openedx.core.lib.tests import attr
 
 
 def _get_expected_documentation_url(path):
@@ -44,7 +43,7 @@ def _get_expected_documentation_url(path):
     return url_for_help('course_author', path)
 
 
-@attr(shard=10)
+@attr(shard=20)
 class StudioHelpTest(StudioCourseTest):
     """Tests for Studio help."""
 
@@ -84,7 +83,7 @@ class StudioHelpTest(StudioCourseTest):
             )
 
 
-@attr(shard=10)
+@attr(shard=20)
 class SignInHelpTest(AcceptanceTest):
     """
     Tests help links on 'Sign In' page
@@ -115,7 +114,7 @@ class SignInHelpTest(AcceptanceTest):
         )
 
 
-@attr(shard=10)
+@attr(shard=20)
 class SignUpHelpTest(AcceptanceTest):
     """
     Tests help links on 'Sign Up' page.
@@ -146,7 +145,7 @@ class SignUpHelpTest(AcceptanceTest):
         )
 
 
-@attr(shard=10)
+@attr(shard=20)
 class HomeHelpTest(StudioCourseTest):
     """
     Tests help links on 'Home'(Courses tab) page.
@@ -195,7 +194,7 @@ class HomeHelpTest(StudioCourseTest):
         )
 
 
-@attr(shard=10)
+@attr(shard=20)
 class NewCourseHelpTest(AcceptanceTest):
     """
     Test help links while creating a new course.
@@ -248,7 +247,7 @@ class NewCourseHelpTest(AcceptanceTest):
         )
 
 
-@attr(shard=10)
+@attr(shard=20)
 class NewLibraryHelpTest(AcceptanceTest):
     """
     Test help links while creating a new library
@@ -301,7 +300,7 @@ class NewLibraryHelpTest(AcceptanceTest):
         )
 
 
-@attr(shard=10)
+@attr(shard=20)
 class LibraryTabHelpTest(AcceptanceTest):
     """
     Test help links on the library tab present at dashboard.
@@ -334,7 +333,7 @@ class LibraryTabHelpTest(AcceptanceTest):
         )
 
 
-@attr(shard=10)
+@attr(shard=20)
 class LibraryHelpTest(StudioLibraryTest):
     """
     Test help links on a Library page.
@@ -343,47 +342,6 @@ class LibraryHelpTest(StudioLibraryTest):
         super(LibraryHelpTest, self).setUp()
         self.library_page = LibraryPage(self.browser, self.library_key)
         self.library_user_page = LibraryUsersPage(self.browser, self.library_key)
-
-    def test_library_content_nav_help(self):
-        """
-        Scenario: Help link in navigation bar is working on content
-        library page(click a library on the Library list page).
-        Given that I am on the content library page(click a library on the Library list page).
-        And I want help about the process
-        And I click the 'Help' in the navigation bar
-        Then Help link should open.
-        And help url should be correct
-        """
-        self.library_page.visit()
-        expected_url = _get_expected_documentation_url('/course_components/libraries.html')
-
-        # Assert that help link is correct.
-        assert_nav_help_link(
-            test=self,
-            page=self.library_page,
-            href=expected_url
-        )
-
-    def test_library_content_side_bar_help(self):
-        """
-        Scenario: Help link in sidebar links is working on
-        content library page(click a library on the Library list page).
-        Given that I am on the content library page(click a library on the Library list page).
-        And I want help about the process
-        And I click the 'Learn more about content libraries' in the sidebar links
-        Then Help link should open.
-        And help url should be correct
-        """
-        self.library_page.visit()
-        expected_url = _get_expected_documentation_url('/course_components/libraries.html')
-
-        # Assert that help link is correct.
-        assert_side_bar_help_link(
-            test=self,
-            page=self.library_page,
-            href=expected_url,
-            help_text='Learn more about content libraries'
-        )
 
     def test_library_user_access_setting_nav_help(self):
         """
@@ -408,7 +366,7 @@ class LibraryHelpTest(StudioLibraryTest):
         )
 
 
-@attr(shard=10)
+@attr(shard=20)
 class LibraryImportHelpTest(StudioLibraryTest):
     """
     Test help links on a Library import and export pages.
@@ -456,7 +414,7 @@ class LibraryImportHelpTest(StudioLibraryTest):
         )
 
 
-@attr(shard=10)
+@attr(shard=20)
 class LibraryExportHelpTest(StudioLibraryTest):
     """
     Test help links on a Library export pages.
@@ -504,7 +462,7 @@ class LibraryExportHelpTest(StudioLibraryTest):
         )
 
 
-@attr(shard=10)
+@attr(shard=20)
 class CourseOutlineHelpTest(StudioCourseTest):
     """
     Tests help links on course outline page.
@@ -559,7 +517,7 @@ class CourseOutlineHelpTest(StudioCourseTest):
         )
 
 
-@attr(shard=10)
+@attr(shard=20)
 class CourseUpdateHelpTest(StudioCourseTest):
     """
     Test help links on Course Update page
@@ -593,14 +551,14 @@ class CourseUpdateHelpTest(StudioCourseTest):
         )
 
 
-@attr(shard=10)
+@attr(shard=20)
 class AssetIndexHelpTest(StudioCourseTest):
     """
     Test help links on Course 'Files & Uploads' page
     """
     def setUp(self):  # pylint: disable=arguments-differ
         super(AssetIndexHelpTest, self).setUp()
-        self.course_asset_index_page = AssetIndexPage(
+        self.course_asset_index_page = AssetIndexPageStudioFrontend(
             self.browser,
             self.course_info['org'],
             self.course_info['number'],
@@ -626,27 +584,8 @@ class AssetIndexHelpTest(StudioCourseTest):
             href=expected_url,
         )
 
-    def test_asset_index_side_bar_help(self):
-        """
-        Scenario: Help link in sidebar links is working on 'Files & Uploads' page
-        Given that I am on the 'Files & Uploads' page.
-        And I want help about the process
-        And I click the 'Learn more about managing files' in the sidebar links
-        Then Help link should open.
-        And help url should be correct
-        """
-        expected_url = _get_expected_documentation_url('/course_assets/course_files.html')
 
-        # Assert that help link is correct.
-        assert_side_bar_help_link(
-            test=self,
-            page=self.course_asset_index_page,
-            href=expected_url,
-            help_text='Learn more about managing files'
-        )
-
-
-@attr(shard=10)
+@attr(shard=20)
 class CoursePagesHelpTest(StudioCourseTest):
     """
     Test help links on Course 'Pages' page
@@ -680,7 +619,7 @@ class CoursePagesHelpTest(StudioCourseTest):
         )
 
 
-@attr(shard=10)
+@attr(shard=20)
 class UploadTextbookHelpTest(StudioCourseTest):
     """
     Test help links on Course 'Textbooks' page
@@ -733,7 +672,7 @@ class UploadTextbookHelpTest(StudioCourseTest):
         )
 
 
-@attr(shard=10)
+@attr(shard=20)
 class StudioUnitHelpTest(ContainerBase):
     """
     Tests help links on Unit page.
@@ -782,7 +721,7 @@ class StudioUnitHelpTest(ContainerBase):
         )
 
 
-@attr(shard=10)
+@attr(shard=20)
 class SettingsHelpTest(StudioCourseTest):
     """
     Tests help links on Schedule and Details Settings page
@@ -818,7 +757,7 @@ class SettingsHelpTest(StudioCourseTest):
         )
 
 
-@attr(shard=10)
+@attr(shard=20)
 class GradingPageHelpTest(StudioCourseTest):
     """
     Tests help links on Grading page
@@ -854,7 +793,7 @@ class GradingPageHelpTest(StudioCourseTest):
         )
 
 
-@attr(shard=10)
+@attr(shard=20)
 class CourseTeamSettingsHelpTest(StudioCourseTest):
     """
     Tests help links on Course Team settings page
@@ -890,7 +829,7 @@ class CourseTeamSettingsHelpTest(StudioCourseTest):
         )
 
 
-@attr(shard=10)
+@attr(shard=20)
 class CourseGroupConfigurationHelpTest(StudioCourseTest):
     """
     Tests help links on course Group Configurations settings page
@@ -947,7 +886,7 @@ class CourseGroupConfigurationHelpTest(StudioCourseTest):
         )
 
 
-@attr(shard=10)
+@attr(shard=20)
 class AdvancedSettingHelpTest(StudioCourseTest):
     """
     Tests help links on course Advanced Settings page.
@@ -983,7 +922,7 @@ class AdvancedSettingHelpTest(StudioCourseTest):
         )
 
 
-@attr(shard=10)
+@attr(shard=20)
 class CertificatePageHelpTest(StudioCourseTest):
     """
     Tests help links on course Certificate settings page.
@@ -1038,7 +977,7 @@ class CertificatePageHelpTest(StudioCourseTest):
         )
 
 
-@attr(shard=10)
+@attr(shard=20)
 class GroupExperimentConfigurationHelpTest(ContainerBase):
     """
     Tests help links on course Group Configurations settings page
@@ -1091,7 +1030,7 @@ class GroupExperimentConfigurationHelpTest(ContainerBase):
         )
 
 
-@attr(shard=10)
+@attr(shard=20)
 class ToolsImportHelpTest(StudioCourseTest):
     """
     Tests help links on tools import pages.
@@ -1146,7 +1085,7 @@ class ToolsImportHelpTest(StudioCourseTest):
         )
 
 
-@attr(shard=10)
+@attr(shard=20)
 class ToolsExportHelpTest(StudioCourseTest):
     """
     Tests help links on tools export pages.
@@ -1201,7 +1140,7 @@ class ToolsExportHelpTest(StudioCourseTest):
         )
 
 
-@attr(shard=10)
+@attr(shard=20)
 class StudioWelcomeHelpTest(AcceptanceTest):
     """
     Tests help link on 'Welcome' page ( User not logged in)

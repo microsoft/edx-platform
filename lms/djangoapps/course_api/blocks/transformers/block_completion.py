@@ -3,8 +3,8 @@ Block Completion Transformer
 """
 
 from xblock.completable import XBlockCompletionMode as CompletionMode
+from completion.models import BlockCompletion
 
-from lms.djangoapps.completion.models import BlockCompletion
 from openedx.core.djangoapps.content.block_structure.transformer import BlockStructureTransformer
 
 
@@ -15,9 +15,6 @@ class BlockCompletionTransformer(BlockStructureTransformer):
     READ_VERSION = 1
     WRITE_VERSION = 1
     COMPLETION = 'completion'
-
-    def __init__(self):
-        super(BlockCompletionTransformer, self).__init__()
 
     @classmethod
     def name(cls):

@@ -6,7 +6,6 @@ import random
 
 import ddt
 from ccx_keys.locator import CCXLocator
-from chrono import Timer
 from django.conf import settings
 from django.test import RequestFactory
 from mock import Mock, patch
@@ -303,7 +302,7 @@ class TestCourseListing(ModuleStoreTestCase):
 
             course_location = self.store.make_course_key('testOrg', 'doomedCourse', 'RunBabyRun')
             self._create_course_with_access_groups(course_location, self.user, store)
-            self.store.delete_course(course_location, self.user.id)  # pylint: disable=no-member
+            self.store.delete_course(course_location, self.user.id)
 
         courses_list, __ = _accessible_courses_list_from_groups(self.request)
         self.assertEqual(len(courses_list), 1, courses_list)

@@ -4,17 +4,18 @@ Grades related signals.
 from contextlib import contextmanager
 from logging import getLogger
 
+import six
 from courseware.model_data import get_score, set_score
 from django.dispatch import receiver
+from submissions.models import score_reset, score_set
+from xblock.scorable import ScorableXBlockMixin, Score
+
 from openedx.core.djangoapps.course_groups.signals.signals import COHORT_MEMBERSHIP_UPDATED
 from openedx.core.lib.grade_utils import is_score_higher_or_equal
 from student.models import user_by_anonymous_id
 from student.signals import ENROLLMENT_TRACK_UPDATED
-from submissions.models import score_reset, score_set
 from track.event_transaction_utils import get_event_transaction_id, get_event_transaction_type
 from util.date_utils import to_timestamp
-from xblock.scorable import ScorableXBlockMixin, Score
-
 from .signals import (
     PROBLEM_RAW_SCORE_CHANGED,
     PROBLEM_WEIGHTED_SCORE_CHANGED,
@@ -22,11 +23,15 @@ from .signals import (
     SUBSECTION_SCORE_CHANGED,
     SUBSECTION_OVERRIDE_CHANGED,
 )
+from .. import events
 from ..constants import ScoreDatabaseTableEnum
 from ..course_grade_factory import CourseGradeFactory
-from .. import events
 from ..scores import weighted_score
-from ..tasks import RECALCULATE_GRADE_DELAY_SECONDS, recalculate_subsection_grade_v3
+from ..tasks import (
+    RECALCULATE_GRADE_DELAY_SECONDS,
+    recalculate_subsection_grade_v3,
+    recalculate_course_and_subsection_grades_for_user
+)
 
 log = getLogger(__name__)
 
@@ -167,6 +172,7 @@ def score_published_handler(sender, block, user, raw_earned, raw_possible, only_
             modified=score_modified_time,
             score_db_table=ScoreDatabaseTableEnum.courseware_student_module,
             score_deleted=kwargs.get('score_deleted', False),
+            grader_response=kwargs.get('grader_response', False)
         )
     return update_score
 
@@ -197,6 +203,7 @@ def problem_raw_score_changed_handler(sender, **kwargs):  # pylint: disable=unus
         score_deleted=kwargs.get('score_deleted', False),
         modified=kwargs['modified'],
         score_db_table=kwargs['score_db_table'],
+        grader_response=kwargs.get('grader_response', False)
     )
 
 
@@ -236,15 +243,15 @@ def recalculate_course_grade_only(sender, course, course_structure, user, **kwar
 
 @receiver(ENROLLMENT_TRACK_UPDATED)
 @receiver(COHORT_MEMBERSHIP_UPDATED)
-def recalculate_course_and_subsection_grades(sender, user, course_key, **kwargs):
+def recalculate_course_and_subsection_grades(sender, user, course_key, countdown=None, **kwargs):  # pylint: disable=unused-argument
     """
     Updates a saved course grade, forcing the subsection grades
     from which it is calculated to update along the way.
     """
-    previous_course_grade = CourseGradeFactory().read(user, course_key=course_key)
-    if previous_course_grade and previous_course_grade.attempted:
-        CourseGradeFactory().update(
-            user=user,
-            course_key=course_key,
-            force_update_subsections=True
+    recalculate_course_and_subsection_grades_for_user.apply_async(
+        countdown=countdown,
+        kwargs=dict(
+            user_id=user.id,
+            course_key=six.text_type(course_key)
         )
+    )

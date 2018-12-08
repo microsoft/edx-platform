@@ -3,8 +3,8 @@
 // VideoPlayer module.
     define(
 'video/03_video_player.js',
-['video/02_html5_video.js', 'video/02_html5_hls_video.js', 'video/00_resizer.js', 'hls', 'underscore'],
-function(HTML5Video, HTML5HLSVideo, Resizer, HLS, _) {
+['video/02_html5_video.js', 'video/02_html5_hls_video.js', 'video/00_resizer.js', 'hls', 'underscore', '../time.js'],
+function(HTML5Video, HTML5HLSVideo, Resizer, HLS, _, Time) {
     var dfd = $.Deferred(),
         VideoPlayer = function(state) {
             state.videoPlayer = {};
@@ -179,6 +179,8 @@ function(HTML5Video, HTML5HLSVideo, Resizer, HLS, _) {
                 state.videoPlayer.player = new HTML5HLSVideo.Player(
                     state.el,
                     _.extend({}, commonPlayerConfig, {
+                        state: state,
+                        onReadyHLS: function() { dfd.resolve(); },
                         videoSources: state.HLSVideoSources,
                         canPlayHLS: state.canPlayHLS,
                         HLSOnlySources: state.HLSOnlySources
@@ -447,7 +449,6 @@ function(HTML5Video, HTML5HLSVideo, Resizer, HLS, _) {
         this.videoPlayer.goToStartTime = false;
 
         this.videoPlayer.seekTo(time);
-        this.trigger('videoProgressSlider.focusSlider');
 
         this.el.trigger('seek', [time, oldTime, type]);
     }

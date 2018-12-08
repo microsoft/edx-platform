@@ -8,22 +8,22 @@ from datetime import datetime
 from functools import partial
 
 import ddt
-import pytest
 import pytz
 from bson import ObjectId
+from completion.models import BlockCompletion
+from completion import waffle as completion_waffle
 from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.http import Http404, HttpResponse
 from django.test.client import RequestFactory
 from django.test.utils import override_settings
 from edx_proctoring.api import create_exam, create_exam_attempt, update_attempt_status
 from edx_proctoring.runtime import set_runtime_service
-from edx_proctoring.tests.test_services import MockCreditService, MockGradesService
+from edx_proctoring.tests.test_services import MockCreditService, MockGradesService, MockCertificateService
 from freezegun import freeze_time
 from milestones.tests.utils import MilestonesTestCaseMixin
 from mock import MagicMock, Mock, patch
-from nose.plugins.attrib import attr
 from opaque_keys.edx.keys import CourseKey, UsageKey
 from pyquery import PyQuery
 from six import text_type
@@ -46,13 +46,12 @@ from courseware.module_render import get_module_for_descriptor, hash_resource
 from courseware.tests.factories import GlobalStaffFactory, StudentModuleFactory, UserFactory
 from courseware.tests.test_submitting_problems import TestSubmittingProblems
 from courseware.tests.tests import LoginEnrollmentTestCase
-from lms.djangoapps.completion.models import BlockCompletion
-from lms.djangoapps.completion import waffle as completion_waffle
 from lms.djangoapps.lms_xblock.field_data import LmsFieldData
 from openedx.core.djangoapps.credit.api import set_credit_requirement_status, set_credit_requirements
 from openedx.core.djangoapps.credit.models import CreditCourse
 from openedx.core.lib.courses import course_image_url
 from openedx.core.lib.gating import api as gating_api
+from openedx.core.lib.tests import attr
 from openedx.core.lib.url_utils import quote_slashes
 from student.models import anonymous_id_for_user
 from verify_student.tests.factories import SoftwareSecurePhotoVerificationFactory
@@ -241,7 +240,6 @@ class ModuleRenderTestCase(SharedModuleStoreTestCase, LoginEnrollmentTestCase):
         # note if the URL mapping changes then this assertion will break
         self.assertIn('/courses/' + text_type(self.course_key) + '/jump_to_id/vertical_test', html)
 
-    @pytest.mark.django111_expected_failure
     def test_xqueue_callback_success(self):
         """
         Test for happy-path xqueue_callback
@@ -395,7 +393,7 @@ class ModuleRenderTestCase(SharedModuleStoreTestCase, LoginEnrollmentTestCase):
         )
 
         # grab what _field_data was originally set to
-        original_field_data = descriptor._field_data  # pylint: disable=protected-access, no-member
+        original_field_data = descriptor._field_data  # pylint: disable=protected-access
 
         render.get_module_for_descriptor(
             self.mock_user, request, descriptor, field_data_cache, course.id, course=course
@@ -403,7 +401,7 @@ class ModuleRenderTestCase(SharedModuleStoreTestCase, LoginEnrollmentTestCase):
 
         # check that _unwrapped_field_data is the same as the original
         # _field_data, but now _field_data as been reset.
-        # pylint: disable=protected-access, no-member
+        # pylint: disable=protected-access
         self.assertIs(descriptor._unwrapped_field_data, original_field_data)
         self.assertIsNot(descriptor._unwrapped_field_data, descriptor._field_data)
 
@@ -419,19 +417,19 @@ class ModuleRenderTestCase(SharedModuleStoreTestCase, LoginEnrollmentTestCase):
             )
 
         # _field_data should now be wrapped by LmsFieldData
-        # pylint: disable=protected-access, no-member
+        # pylint: disable=protected-access
         self.assertIsInstance(descriptor._field_data, LmsFieldData)
 
         # the LmsFieldData should now wrap OverrideFieldData
         self.assertIsInstance(
-            # pylint: disable=protected-access, no-member
+            # pylint: disable=protected-access
             descriptor._field_data._authored_data._source,
             OverrideFieldData
         )
 
         # the OverrideFieldData should point to the original unwrapped field_data
         self.assertIs(
-            # pylint: disable=protected-access, no-member
+            # pylint: disable=protected-access
             descriptor._field_data._authored_data._source.fallback,
             descriptor._unwrapped_field_data
         )
@@ -664,7 +662,7 @@ class TestHandleXBlockCallback(SharedModuleStoreTestCase, LoginEnrollmentTestCas
                 content_type='application/json',
             )
             request.user = self.mock_user
-            with patch('lms.djangoapps.completion.models.BlockCompletionManager.submit_completion') as mock_complete:
+            with patch('completion.models.BlockCompletionManager.submit_completion') as mock_complete:
                 render.handle_xblock_callback(
                     request,
                     unicode(course.id),
@@ -1170,6 +1168,11 @@ class TestProctoringRendering(SharedModuleStoreTestCase):
             MockGradesService()
         )
 
+        set_runtime_service(
+            'certificates',
+            MockCertificateService()
+        )
+
         exam_id = create_exam(
             course_id=unicode(self.course_key),
             content_id=unicode(sequence.location),
@@ -1285,7 +1288,7 @@ class TestGatedSubsectionRendering(SharedModuleStoreTestCase, MilestonesTestCase
             self.field_data_cache
         )
         self.assertIsNotNone(self._find_sequential(actual['chapters'], 'Chapter', 'Open_Sequential'))
-        self.assertIsNone(self._find_sequential(actual['chapters'], 'Chapter', 'Gated_Sequential'))
+        self.assertIsNotNone(self._find_sequential(actual['chapters'], 'Chapter', 'Gated_Sequential'))
         self.assertIsNone(self._find_sequential(actual['chapters'], 'Non-existent_Chapter', 'Non-existent_Sequential'))
         self.assertIsNone(actual['previous_of_active_section'])
         self.assertIsNone(actual['next_of_active_section'])
@@ -1473,13 +1476,13 @@ class JsonInitDataTest(ModuleStoreTestCase):
         mock_request.user = mock_user
         course = CourseFactory()
         descriptor = ItemFactory(category='withjson', parent=course)
-        field_data_cache = FieldDataCache([course, descriptor], course.id, mock_user)   # pylint: disable=no-member
+        field_data_cache = FieldDataCache([course, descriptor], course.id, mock_user)
         module = render.get_module_for_descriptor(
             mock_user,
             mock_request,
             descriptor,
             field_data_cache,
-            course.id,                          # pylint: disable=no-member
+            course.id,
             course=course
         )
         html = module.render(STUDENT_VIEW).content
@@ -2015,6 +2018,7 @@ class TestXmoduleRuntimeEvent(TestSubmittingProblems):
                 'modified': datetime.now().replace(tzinfo=pytz.UTC),
                 'score_db_table': 'csm',
                 'score_deleted': None,
+                'grader_response': None
             }
             send_mock.assert_called_with(**expected_signal_kwargs)
 
@@ -2122,7 +2126,7 @@ class TestEventPublishing(ModuleStoreTestCase, LoginEnrollmentTestCase):
         request.user = self.mock_user
         course = CourseFactory()
         descriptor = ItemFactory(category=block_type, parent=course)
-        field_data_cache = FieldDataCache([course, descriptor], course.id, self.mock_user)  # pylint: disable=no-member
+        field_data_cache = FieldDataCache([course, descriptor], course.id, self.mock_user)
         block = render.get_module(self.mock_user, request, descriptor.location, field_data_cache)
 
         event_type = 'event_type'
@@ -2239,7 +2243,7 @@ class TestFilteredChildren(SharedModuleStoreTestCase):
         super(TestFilteredChildren, cls).setUpClass()
         cls.course = CourseFactory.create()
 
-    # pylint: disable=attribute-defined-outside-init, no-member
+    # pylint: disable=attribute-defined-outside-init
     def setUp(self):
         super(TestFilteredChildren, self).setUp()
         self.users = {number: UserFactory() for number in USER_NUMBERS}
@@ -2388,7 +2392,6 @@ class TestDisabledXBlockTypes(ModuleStoreTestCase):
     """
     Tests that verify disabled XBlock types are not loaded.
     """
-    # pylint: disable=no-member
     def setUp(self):
         super(TestDisabledXBlockTypes, self).setUp()
         XBlockConfiguration(name='video', enabled=False).save()
@@ -2411,7 +2414,7 @@ class TestDisabledXBlockTypes(ModuleStoreTestCase):
             self._verify_descriptor('problem', course, 'CapaDescriptorWithMixins', item_usage_id)
 
             # Now simulate a new request cache.
-            self.store.request_cache.data = {}
+            self.store.request_cache.data.clear()
             self._verify_descriptor('problem', course, 'RawDescriptorWithMixins', item_usage_id)
 
     def _verify_descriptor(self, category, course, descriptor, item_id=None):

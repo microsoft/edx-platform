@@ -5,8 +5,8 @@ End-to-end tests for the courseware unit bookmarks.
 import json
 from unittest import skip
 
+import pytest
 import requests
-from nose.plugins.attrib import attr
 
 from common.test.acceptance.fixtures.course import CourseFixture, XBlockFixtureDesc
 from common.test.acceptance.pages.common import BASE_URL
@@ -67,7 +67,7 @@ class BookmarksTestMixin(EventsTestMixin, UniqueCourseTest):
         Arguments:
             num_chapters: number of chapters to create
         """
-        self.course_fixture = CourseFixture(  # pylint: disable=attribute-defined-outside-init
+        self.course_fixture = CourseFixture(
             self.course_info['org'], self.course_info['number'],
             self.course_info['run'], self.course_info['display_name']
         )
@@ -127,11 +127,11 @@ class BookmarksTestMixin(EventsTestMixin, UniqueCourseTest):
             self._bookmark_unit(xblocks[index].locator)
 
 
-@attr(shard=8)
 class BookmarksTest(BookmarksTestMixin):
     """
     Tests to verify bookmarks functionality.
     """
+    shard = 8
 
     def _breadcrumb(self, num_units, modified_name=None):
         """
@@ -585,47 +585,8 @@ class BookmarksTest(BookmarksTestMixin):
             total_pages=2
         )
 
-    def test_bookmarked_unit_accessed_event(self):
-        """
-        Scenario: Bookmark events are emitted with correct data when we access/visit a bookmarked unit.
 
-        Given that I am a registered user
-        And I visit my courseware page
-        And I have bookmarked a unit
-        When I click on bookmarked unit
-        Then `edx.course.bookmark.accessed` event is emitted
-        """
-        self.setup_test(num_chapters=1)
-        self.reset_event_tracking()
-
-        # create expected event data
-        xblocks = self.course_fixture.get_nested_xblocks(category="vertical")
-        event_data = [
-            {
-                'event': {
-                    'bookmark_id': '{},{}'.format(self.USERNAME, xblocks[0].locator),
-                    'component_type': xblocks[0].category,
-                    'component_usage_id': xblocks[0].locator,
-                }
-            }
-        ]
-        self.bookmark_units(num_units=1)
-        self.bookmarks_page.visit()
-
-        self._verify_pagination_info(
-            bookmark_count_on_current_page=1,
-            header_text='Showing 1 out of 1 total',
-            previous_button_enabled=False,
-            next_button_enabled=False,
-            current_page_number=1,
-            total_pages=1
-        )
-
-        self.bookmarks_page.click_bookmarked_block(0)
-        self.verify_event_data('edx.bookmark.accessed', event_data)
-
-
-@attr('a11y')
+@pytest.mark.a11y
 class BookmarksA11yTests(BookmarksTestMixin):
     """
     Tests for checking the a11y of the bookmarks page.

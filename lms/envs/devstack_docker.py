@@ -28,9 +28,7 @@ CREDENTIALS_PUBLIC_SERVICE_URL = 'http://localhost:18150'
 OAUTH_OIDC_ISSUER = '{}/oauth2'.format(LMS_ROOT_URL)
 
 JWT_AUTH.update({
-    'JWT_SECRET_KEY': 'lms-secret',
     'JWT_ISSUER': OAUTH_OIDC_ISSUER,
-    'JWT_AUDIENCE': 'lms-key',
 })
 
 FEATURES.update({
@@ -49,10 +47,10 @@ MARKETING_SITE_ROOT = os.environ.get('MARKETING_SITE_ROOT', 'http://localhost:80
 MKTG_URLS = {
     'ABOUT': '/about',
     'ACCESSIBILITY': '/accessibility',
-    'AFFILIATES': '/affiliates',
+    'AFFILIATES': '/affiliate-program',
     'BLOG': '/blog',
     'CAREERS': '/careers',
-    'CONTACT': '/contact',
+    'CONTACT': '/support/contact_us',
     'COURSES': '/course',
     'DONATE': '/donate',
     'ENTERPRISE': '/enterprise',
@@ -66,6 +64,7 @@ MKTG_URLS = {
     'ROOT': MARKETING_SITE_ROOT,
     'SCHOOLS': '/schools-partners',
     'SITE_MAP': '/sitemap',
+    'TRADEMARKS': '/trademarks',
     'TOS': '/edx-terms-service',
     'TOS_AND_HONOR': '/edx-terms-service',
     'WHAT_IS_VERIFIED_CERT': '/verified-certificate',

@@ -4,7 +4,7 @@ Utilities related to API views
 from django.core.exceptions import NON_FIELD_ERRORS, ObjectDoesNotExist, ValidationError
 from django.http import Http404
 from django.utils.translation import ugettext as _
-from edx_rest_framework_extensions.authentication import JwtAuthentication
+from edx_rest_framework_extensions.authentication import JwtAuthentication, SessionAuthenticationAllowInactiveUser
 from rest_framework import status
 from rest_framework.exceptions import APIException
 from rest_framework.generics import GenericAPIView
@@ -12,12 +12,21 @@ from rest_framework.mixins import RetrieveModelMixin, UpdateModelMixin
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import clone_request
 from rest_framework.response import Response
+from six import text_type
 
-from openedx.core.lib.api.authentication import (
-    OAuth2AuthenticationAllowInactiveUser,
-    SessionAuthenticationAllowInactiveUser
-)
+from openedx.core.lib.api.authentication import OAuth2AuthenticationAllowInactiveUser
 from openedx.core.lib.api.permissions import IsUserInUrl
+
+
+class DeveloperErrorResponseException(Exception):
+    """
+    An exception class that wraps a DRF Response object so that
+    it does not need to be recreated when returning a response.
+    Intended to be used with and by DeveloperErrorViewMixin.
+    """
+    def __init__(self, response):
+        super(DeveloperErrorResponseException, self).__init__()
+        self.response = response
 
 
 class DeveloperErrorViewMixin(object):
@@ -26,7 +35,13 @@ class DeveloperErrorViewMixin(object):
     (auth failure, method not allowed, etc.) by generating an error response
     conforming to our API conventions with a developer message.
     """
-    def make_error_response(self, status_code, developer_message, error_code=None):
+    @classmethod
+    def api_error(cls, status_code, developer_message, error_code=None):
+        response = cls._make_error_response(status_code, developer_message, error_code)
+        return DeveloperErrorResponseException(response)
+
+    @classmethod
+    def _make_error_response(cls, status_code, developer_message, error_code=None):
         """
         Build an error response with the given status code and developer_message
         """
@@ -35,7 +50,8 @@ class DeveloperErrorViewMixin(object):
             error_data['error_code'] = error_code
         return Response(error_data, status=status_code)
 
-    def make_validation_error_response(self, validation_error):
+    @classmethod
+    def _make_validation_error_response(cls, validation_error):
         """
         Build a 400 error response from the given ValidationError
         """
@@ -56,19 +72,20 @@ class DeveloperErrorViewMixin(object):
                 }
             return Response(response_obj, status=400)
         else:
-            return self.make_error_response(400, validation_error.messages[0])
+            return cls._make_error_response(400, validation_error.messages[0])
 
     def handle_exception(self, exc):
         """
         Generalized helper method for managing specific API exception workflows
         """
-
-        if isinstance(exc, APIException):
-            return self.make_error_response(exc.status_code, exc.detail)
+        if isinstance(exc, DeveloperErrorResponseException):
+            return exc.response
+        elif isinstance(exc, APIException):
+            return self._make_error_response(exc.status_code, exc.detail)
         elif isinstance(exc, Http404) or isinstance(exc, ObjectDoesNotExist):
-            return self.make_error_response(404, exc.message or "Not found.")
+            return self._make_error_response(404, text_type(exc) or "Not found.")
         elif isinstance(exc, ValidationError):
-            return self.make_validation_error_response(exc)
+            return self._make_validation_error_response(exc)
         else:
             raise
 
@@ -131,7 +148,7 @@ def build_api_error(message, **kwargs):
     """
     return {
         'developer_message': message.format(**kwargs),
-        'user_message': _(message).format(**kwargs),  # pylint: disable=translation-of-non-string
+        'user_message': _(message).format(**kwargs),
     }
 
 

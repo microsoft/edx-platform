@@ -6,9 +6,9 @@ import datetime
 import unittest
 
 import ddt
+import pytest
 from django.conf import settings
 from mock import patch
-from nose.tools import raises
 from pytz import UTC
 
 from course_modes.models import CourseMode
@@ -20,6 +20,7 @@ from enrollment.errors import (
     CourseEnrollmentFullError,
     UserNotFoundError
 )
+from enrollment.serializers import CourseEnrollmentSerializer
 from openedx.core.lib.exceptions import CourseNotFoundError
 from student.models import AlreadyEnrolledError, CourseEnrollment, CourseFullError, EnrollmentClosedError
 from student.tests.factories import UserFactory
@@ -149,6 +150,42 @@ class EnrollmentDataTest(ModuleStoreTestCase):
         updated_results = data.get_course_enrollments(self.user.username)
         self.assertEqual(results, updated_results)
 
+    def test_get_enrollments_including_inactive(self):
+        """ Verify that if 'include_inactive' is True, all enrollments
+        are returned including inactive.
+        """
+        course_modes, course_numbers = ['honor', 'verified', 'audit'], ['1', '2', '3']
+        created_courses = []
+        for course_number in course_numbers:
+            created_courses.append(CourseFactory.create(number=course_number))
+
+        created_enrollments = []
+        for course in created_courses:
+            self._create_course_modes(course_modes, course=course)
+            # Create the original enrollment.
+            created_enrollments.append(data.create_course_enrollment(
+                self.user.username,
+                unicode(course.id),
+                'honor',
+                True
+            ))
+
+        # deactivate one enrollment
+        data.update_course_enrollment(
+            self.user.username,
+            unicode(created_courses[0].id),
+            'honor',
+            False
+        )
+
+        # by default in-active enrollment will be excluded.
+        results = data.get_course_enrollments(self.user.username)
+        self.assertNotEqual(len(results), len(created_enrollments))
+
+        # we can get all enrollments including inactive by passing "include_inactive"
+        results = data.get_course_enrollments(self.user.username, include_inactive=True)
+        self.assertEqual(len(results), len(created_enrollments))
+
     @ddt.data(
         # Default (no course modes in the database)
         # Expect that users are automatically enrolled as "honor".
@@ -178,6 +215,51 @@ class EnrollmentDataTest(ModuleStoreTestCase):
         result = data.get_course_enrollment(self.user.username, unicode(self.course.id))
         self.assertEqual(self.user.username, result['user'])
         self.assertEqual(enrollment, result)
+
+    @ddt.data(
+        # Default (no course modes in the database)
+        # Expect that users are automatically enrolled as "honor".
+        ([], 'honor'),
+
+        # Audit / Verified / Honor
+        # We should always go to the "choose your course" page.
+        # We should also be enrolled as "honor" by default.
+        (['honor', 'verified', 'audit'], 'verified'),
+    )
+    @ddt.unpack
+    def test_get_user_enrollments(self, course_modes, enrollment_mode):
+        self._create_course_modes(course_modes)
+
+        # Try to get enrollments before they exist.
+        result = data.get_user_enrollments(self.course.id)
+        self.assertFalse(result.exists())
+
+        # Create 10 test users to enroll in the course
+        users = []
+        for i in xrange(10):
+            users.append(UserFactory.create(
+                username=self.USERNAME + str(i),
+                email=self.EMAIL + str(i),
+                password=self.PASSWORD + str(i)
+            ))
+
+        # Create the original enrollments.
+        created_enrollments = []
+        for user in users:
+            created_enrollments.append(data.create_course_enrollment(
+                user.username,
+                unicode(self.course.id),
+                enrollment_mode,
+                True
+            ))
+
+        # Compare the created enrollments with the results
+        # from the get user enrollments request.
+        results = data.get_user_enrollments(
+            self.course.id
+        )
+        self.assertTrue(result.exists())
+        self.assertEqual(CourseEnrollmentSerializer(results, many=True).data, created_enrollments)
 
     @ddt.data(
         # Default (no course modes in the database)
@@ -218,9 +300,9 @@ class EnrollmentDataTest(ModuleStoreTestCase):
         enrollment_attr = data.get_enrollment_attributes(self.user.username, unicode(self.course.id))
         self.assertEqual(enrollment_attr[0], enrollment_attributes[0])
 
-    @raises(CourseNotFoundError)
     def test_non_existent_course(self):
-        data.get_course_enrollment_info("this/is/bananas")
+        with pytest.raises(CourseNotFoundError):
+            data.get_course_enrollment_info("this/is/bananas")
 
     def _create_course_modes(self, course_modes, course=None):
         """Create the course modes required for a test. """
@@ -232,35 +314,35 @@ class EnrollmentDataTest(ModuleStoreTestCase):
                 mode_display_name=mode_slug,
             )
 
-    @raises(UserNotFoundError)
     def test_enrollment_for_non_existent_user(self):
-        data.create_course_enrollment("some_fake_user", unicode(self.course.id), 'honor', True)
+        with pytest.raises(UserNotFoundError):
+            data.create_course_enrollment("some_fake_user", unicode(self.course.id), 'honor', True)
 
-    @raises(CourseNotFoundError)
     def test_enrollment_for_non_existent_course(self):
-        data.create_course_enrollment(self.user.username, "some/fake/course", 'honor', True)
+        with pytest.raises(CourseNotFoundError):
+            data.create_course_enrollment(self.user.username, "some/fake/course", 'honor', True)
 
-    @raises(CourseEnrollmentClosedError)
     @patch.object(CourseEnrollment, "enroll")
     def test_enrollment_for_closed_course(self, mock_enroll):
         mock_enroll.side_effect = EnrollmentClosedError("Bad things happened")
-        data.create_course_enrollment(self.user.username, unicode(self.course.id), 'honor', True)
+        with pytest.raises(CourseEnrollmentClosedError):
+            data.create_course_enrollment(self.user.username, unicode(self.course.id), 'honor', True)
 
-    @raises(CourseEnrollmentFullError)
     @patch.object(CourseEnrollment, "enroll")
     def test_enrollment_for_full_course(self, mock_enroll):
         mock_enroll.side_effect = CourseFullError("Bad things happened")
-        data.create_course_enrollment(self.user.username, unicode(self.course.id), 'honor', True)
+        with pytest.raises(CourseEnrollmentFullError):
+            data.create_course_enrollment(self.user.username, unicode(self.course.id), 'honor', True)
 
-    @raises(CourseEnrollmentExistsError)
     @patch.object(CourseEnrollment, "enroll")
     def test_enrollment_for_enrolled_course(self, mock_enroll):
         mock_enroll.side_effect = AlreadyEnrolledError("Bad things happened")
-        data.create_course_enrollment(self.user.username, unicode(self.course.id), 'honor', True)
+        with pytest.raises(CourseEnrollmentExistsError):
+            data.create_course_enrollment(self.user.username, unicode(self.course.id), 'honor', True)
 
-    @raises(UserNotFoundError)
     def test_update_for_non_existent_user(self):
-        data.update_course_enrollment("some_fake_user", unicode(self.course.id), is_active=False)
+        with pytest.raises(UserNotFoundError):
+            data.update_course_enrollment("some_fake_user", unicode(self.course.id), is_active=False)
 
     def test_update_for_non_existent_course(self):
         enrollment = data.update_course_enrollment(self.user.username, "some/fake/course", is_active=False)

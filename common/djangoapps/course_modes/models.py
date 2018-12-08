@@ -2,9 +2,8 @@
 Add and create new modes for running courses on this particular LMS
 """
 from collections import defaultdict, namedtuple
-from datetime import datetime, timedelta
+from datetime import timedelta
 
-import pytz
 from config_models.models import ConfigurationModel
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -12,12 +11,14 @@ from django.core.validators import validate_comma_separated_integer_list
 from django.db import models
 from django.db.models import Q
 from django.dispatch import receiver
+from django.utils.timezone import now
 from django.utils.translation import ugettext_lazy as _
-from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
-
+from edx_django_utils.cache import RequestCache
 from opaque_keys.edx.keys import CourseKey
-from openedx.core.djangoapps.xmodule_django.models import CourseKeyField
-from request_cache.middleware import RequestCache, ns_request_cached
+from opaque_keys.edx.django.models import CourseKeyField
+
+from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
+from openedx.core.lib.cache_utils import request_cached
 
 Mode = namedtuple('Mode',
                   [
@@ -46,6 +47,7 @@ class CourseMode(models.Model):
         db_constraint=False,
         db_index=True,
         related_name='modes',
+        on_delete=models.CASCADE,
     )
 
     # Django sets the `course_id` property in __init__ with the value from the database
@@ -202,6 +204,9 @@ class CourseMode(models.Model):
         # Ensure currency is always lowercase.
         self.clean()  # ensure object-level validation is performed before we save.
         self.currency = self.currency.lower()
+        if self.id is None:
+            # If this model has no primary key at save time, it needs to be force-inserted.
+            force_insert = True
         super(CourseMode, self).save(force_insert, force_update, using)
 
     @property
@@ -269,12 +274,12 @@ class CourseMode(models.Model):
             and the second is a list of only unexpired `Mode`s.
 
         """
-        now = datetime.now(pytz.UTC)
+        now_dt = now()
         all_modes = cls.all_modes_for_courses(course_id_list)
         unexpired_modes = {
             course_id: [
                 mode for mode in modes
-                if mode.expiration_datetime is None or mode.expiration_datetime >= now
+                if mode.expiration_datetime is None or mode.expiration_datetime >= now_dt
             ]
             for course_id, modes in all_modes.iteritems()
         }
@@ -295,19 +300,18 @@ class CourseMode(models.Model):
             A list of CourseModes with a minimum price.
 
         """
-        now = datetime.now(pytz.UTC)
         found_course_modes = cls.objects.filter(
             Q(course_id=course_id) &
             Q(min_price__gt=0) &
             (
                 Q(_expiration_datetime__isnull=True) |
-                Q(_expiration_datetime__gte=now)
+                Q(_expiration_datetime__gte=now())
             )
         )
         return [mode.to_tuple() for mode in found_course_modes]
 
     @classmethod
-    @ns_request_cached(CACHE_NAMESPACE)
+    @request_cached(CACHE_NAMESPACE)
     def modes_for_course(cls, course_id, include_expired=False, only_selectable=True):
         """
         Returns a list of the non-expired modes for a given course id
@@ -330,14 +334,12 @@ class CourseMode(models.Model):
             list of `Mode` tuples
 
         """
-        now = datetime.now(pytz.UTC)
-
         found_course_modes = cls.objects.filter(course_id=course_id)
 
         # Filter out expired course modes if include_expired is not set
         if not include_expired:
             found_course_modes = found_course_modes.filter(
-                Q(_expiration_datetime__isnull=True) | Q(_expiration_datetime__gte=now)
+                Q(_expiration_datetime__isnull=True) | Q(_expiration_datetime__gte=now())
             )
 
         # Credit course modes are currently not shown on the track selection page;
@@ -685,13 +687,16 @@ class CourseMode(models.Model):
     def is_eligible_for_certificate(cls, mode_slug):
         """
         Returns whether or not the given mode_slug is eligible for a
-        certificate. Currently all modes other than 'audit' grant a
-        certificate. Note that audit enrollments which existed prior
-        to December 2015 *were* given certificates, so there will be
-        GeneratedCertificate records with mode='audit' which are
+        certificate. Currently all modes other than 'audit' and `honor`
+        grant a certificate. Note that audit enrollments which existed
+        prior to December 2015 *were* given certificates, so there will
+        be GeneratedCertificate records with mode='audit' which are
         eligible.
         """
-        return mode_slug != cls.AUDIT
+        if mode_slug == cls.AUDIT or mode_slug == cls.HONOR:
+            return False
+
+        return True
 
     def to_tuple(self):
         """
@@ -723,7 +728,7 @@ class CourseMode(models.Model):
 @receiver(models.signals.post_delete, sender=CourseMode)
 def invalidate_course_mode_cache(sender, **kwargs):   # pylint: disable=unused-argument
     """Invalidate the cache of course modes. """
-    RequestCache.clear_request_cache(name=CourseMode.CACHE_NAMESPACE)
+    RequestCache(namespace=CourseMode.CACHE_NAMESPACE).clear()
 
 
 def get_cosmetic_verified_display_price(course):

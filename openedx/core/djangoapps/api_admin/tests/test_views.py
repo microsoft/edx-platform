@@ -5,7 +5,7 @@ import json
 import ddt
 import httpretty
 from django.conf import settings
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.test import TestCase
 from django.test.utils import override_settings
 from oauth2_provider.models import get_application_model
@@ -149,9 +149,9 @@ class ApiRequestStatusViewTest(ApiAdminTest):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
         unicode_content = response.content.decode('utf-8')
-        self.assertIn(application.client_secret, unicode_content)  # pylint: disable=no-member
-        self.assertIn(application.client_id, unicode_content)  # pylint: disable=no-member
-        self.assertIn(application.redirect_uris, unicode_content)  # pylint: disable=no-member
+        self.assertIn(application.client_secret, unicode_content)
+        self.assertIn(application.client_id, unicode_content)
+        self.assertIn(application.redirect_uris, unicode_content)
 
     def test_get_anonymous(self):
         """Verify that users must be logged in to see the page."""

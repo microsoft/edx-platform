@@ -6,12 +6,11 @@ import datetime
 import json
 
 import pytz
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.db.models import Q
 from edx_proctoring.api import create_exam
 from edx_proctoring.models import ProctoredExamStudentAttempt
 from mock import MagicMock, Mock, patch
-from nose.plugins.attrib import attr
 from opaque_keys.edx.locator import UsageKey
 from six import text_type
 
@@ -50,9 +49,9 @@ from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
 
 
-@attr(shard=3)
 class TestAnalyticsBasic(ModuleStoreTestCase):
     """ Test basic analytics functions. """
+    shard = 3
 
     def setUp(self):
         super(TestAnalyticsBasic, self).setUp()
@@ -184,7 +183,7 @@ class TestAnalyticsBasic(ModuleStoreTestCase):
         # is returned by verification and enrollment code
         with patch("student.models.CourseEnrollment.enrollment_mode_for_user") as enrollment_patch:
             with patch(
-                "lms.djangoapps.verify_student.models.SoftwareSecurePhotoVerification.verification_status_for_user"
+                "lms.djangoapps.verify_student.services.IDVerificationService.verification_status_for_user"
             ) as verify_patch:
                 enrollment_patch.return_value = ["verified"]
                 verify_patch.return_value = "dummy verification status"
@@ -255,15 +254,15 @@ class TestAnalyticsBasic(ModuleStoreTestCase):
 
         proctored_exam_id = create_exam(self.course_key, 'Test Content', 'Test Exam', 1)
         ProctoredExamStudentAttempt.create_exam_attempt(
-            proctored_exam_id, self.users[0].id, '', 1,
+            proctored_exam_id, self.users[0].id, '',
             'Test Code 1', True, False, 'ad13'
         )
         ProctoredExamStudentAttempt.create_exam_attempt(
-            proctored_exam_id, self.users[1].id, '', 2,
+            proctored_exam_id, self.users[1].id, '',
             'Test Code 2', True, False, 'ad13'
         )
         ProctoredExamStudentAttempt.create_exam_attempt(
-            proctored_exam_id, self.users[2].id, '', 3,
+            proctored_exam_id, self.users[2].id, '',
             'Test Code 3', True, False, 'asd'
         )
 
@@ -536,10 +535,7 @@ class TestCourseRegistrationCodeAnalyticsBasic(ModuleStoreTestCase):
         CourseSalesAdminRole(self.course.id).add_users(self.instructor)
 
         # Create a paid course mode.
-        mode = CourseModeFactory.create()
-        mode.course_id = self.course.id
-        mode.min_price = 1
-        mode.save()
+        mode = CourseModeFactory.create(course_id=self.course.id, min_price=1)
 
         url = reverse('generate_registration_codes',
                       kwargs={'course_id': text_type(self.course.id)})

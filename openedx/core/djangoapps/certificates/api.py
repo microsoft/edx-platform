@@ -6,7 +6,7 @@ from datetime import datetime
 
 from pytz import UTC
 
-from certificates.models import CertificateWhitelist
+from lms.djangoapps.certificates.models import CertificateWhitelist
 from openedx.core.djangoapps.certificates.config import waffle
 from student.models import CourseEnrollment
 
@@ -95,13 +95,17 @@ def can_show_certificate_available_date_field(course):
     return _enabled_and_instructor_paced(course)
 
 
-def display_date_for_certificate(course, certificate):
-    if (
-        auto_certificate_generation_enabled() and
-        not course.self_paced and
-        course.certificate_available_date and
-        course.certificate_available_date < datetime.now(UTC)
-    ):
-        return course.certificate_available_date
+def _course_uses_available_date(course):
+    return can_show_certificate_available_date_field(course) and course.certificate_available_date
 
+
+def available_date_for_certificate(course, certificate):
+    if _course_uses_available_date(course):
+        return course.certificate_available_date
+    return certificate.modified_date
+
+
+def display_date_for_certificate(course, certificate):
+    if _course_uses_available_date(course) and course.certificate_available_date < datetime.now(UTC):
+        return course.certificate_available_date
     return certificate.modified_date

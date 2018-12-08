@@ -20,7 +20,7 @@ from opaque_keys.edx.keys import CourseKey
 
 from badges.events.course_complete import get_completion_badge
 from badges.utils import badges_enabled
-from certificates.api import (
+from lms.djangoapps.certificates.api import (
     emit_certificate_event,
     get_active_web_certificate,
     get_certificate_footer_context,
@@ -28,7 +28,7 @@ from certificates.api import (
     get_certificate_template,
     get_certificate_url
 )
-from certificates.models import (
+from lms.djangoapps.certificates.models import (
     CertificateGenerationCourseSetting,
     CertificateHtmlViewConfiguration,
     CertificateSocialNetworks,
@@ -172,8 +172,7 @@ def _update_context_with_basic_info(context, course_id, platform_name, configura
     # in the browser title bar when a requested certificate is not found or recognized
     context['document_title'] = _("Invalid Certificate")
 
-    # Translators: The &amp; characters represent an ampersand character and can be ignored
-    context['company_tos_urltext'] = _("Terms of Service &amp; Honor Code")
+    context['company_tos_urltext'] = _("Terms of Service & Honor Code")
 
     # Translators: A 'Privacy Policy' is a legal document/statement describing a website's use of personal information
     context['company_privacy_urltext'] = _("Privacy Policy")

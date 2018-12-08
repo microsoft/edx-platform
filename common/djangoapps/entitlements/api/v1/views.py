@@ -1,25 +1,28 @@
 import logging
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
+from django.db.models import Q
+from django.http import HttpResponseBadRequest
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from edx_rest_framework_extensions.authentication import JwtAuthentication
+from edx_rest_framework_extensions.paginators import DefaultPagination
 from opaque_keys import InvalidKeyError
 from opaque_keys.edx.keys import CourseKey
-from rest_framework import permissions, viewsets, status
+from rest_framework import permissions, status, viewsets
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.response import Response
 
+from course_modes.models import CourseMode
 from entitlements.api.v1.filters import CourseEntitlementFilter
-from entitlements.api.v1.permissions import IsAdminOrAuthenticatedReadOnly
+from entitlements.api.v1.permissions import IsAdminOrSupportOrAuthenticatedReadOnly
 from entitlements.api.v1.serializers import CourseEntitlementSerializer
-from entitlements.models import CourseEntitlement
-from entitlements.signals import REFUND_ENTITLEMENT
+from entitlements.models import CourseEntitlement, CourseEntitlementPolicy, CourseEntitlementSupportDetail
+from entitlements.utils import is_course_run_entitlement_fulfillable
 from openedx.core.djangoapps.catalog.utils import get_course_runs_for_course
+from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
 from openedx.core.djangoapps.cors_csrf.authentication import SessionAuthenticationCrossDomainCsrf
-from openedx.core.lib.api.paginators import DefaultPagination
-from student.models import CourseEnrollment
-from student.models import CourseEnrollmentException, AlreadyEnrolledError
+from student.models import AlreadyEnrolledError, CourseEnrollment, CourseEnrollmentException
 
 log = logging.getLogger(__name__)
 
@@ -32,11 +35,75 @@ class EntitlementsPagination(DefaultPagination):
     max_page_size = 100
 
 
+@transaction.atomic
+def _unenroll_entitlement(course_entitlement, course_run_key):
+    """
+    Internal method to handle the details of Unenrolling a User in a Course Run.
+    """
+    CourseEnrollment.unenroll(course_entitlement.user, course_run_key, skip_refund=True)
+
+
+@transaction.atomic
+def _process_revoke_and_unenroll_entitlement(course_entitlement, is_refund=False):
+    """
+    Process the revoke of the Course Entitlement and refund if needed
+
+    Arguments:
+        course_entitlement: Course Entitlement Object
+
+        is_refund (bool): True if a refund should be processed
+
+    Exceptions:
+        IntegrityError if there is an issue that should reverse the database changes
+    """
+    if course_entitlement.expired_at is None:
+        course_entitlement.expire_entitlement()
+        log.info(
+            'Set expired_at to [%s] for course entitlement [%s]',
+            course_entitlement.expired_at,
+            course_entitlement.uuid
+        )
+
+    if course_entitlement.enrollment_course_run is not None:
+        course_id = course_entitlement.enrollment_course_run.course_id
+        _unenroll_entitlement(course_entitlement, course_id)
+        log.info(
+            'Unenrolled user [%s] from course run [%s] as part of revocation of course entitlement [%s]',
+            course_entitlement.user.username,
+            course_id,
+            course_entitlement.uuid
+        )
+
+    if is_refund:
+        course_entitlement.refund()
+
+
+def set_entitlement_policy(entitlement, site):
+    """
+    Assign the appropriate CourseEntitlementPolicy to the given CourseEntitlement based on its mode and site.
+
+    Arguments:
+        entitlement: Course Entitlement object
+        site: string representation of a Site object
+
+    Notes:
+        Site-specific, mode-agnostic policies take precedence over mode-specific, site-agnostic policies.
+        If no appropriate CourseEntitlementPolicy is found, the default CourseEntitlementPolicy is assigned.
+    """
+    policy_mode = entitlement.mode
+    if CourseMode.is_professional_slug(policy_mode):
+        policy_mode = CourseMode.PROFESSIONAL
+    filter_query = (Q(site=site) | Q(site__isnull=True)) & (Q(mode=policy_mode) | Q(mode__isnull=True))
+    policy = CourseEntitlementPolicy.objects.filter(filter_query).order_by('-site', '-mode').first()
+    entitlement.policy = policy if policy else None
+    entitlement.save()
+
+
 class EntitlementViewSet(viewsets.ModelViewSet):
     ENTITLEMENT_UUID4_REGEX = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}'
 
     authentication_classes = (JwtAuthentication, SessionAuthenticationCrossDomainCsrf,)
-    permission_classes = (permissions.IsAuthenticated, IsAdminOrAuthenticatedReadOnly,)
+    permission_classes = (permissions.IsAuthenticated, IsAdminOrSupportOrAuthenticatedReadOnly,)
     lookup_value_regex = ENTITLEMENT_UUID4_REGEX
     lookup_field = 'uuid'
     serializer_class = CourseEntitlementSerializer
@@ -63,59 +130,80 @@ class EntitlementViewSet(viewsets.ModelViewSet):
         # to Admin users
         return CourseEntitlement.objects.all().select_related('user').select_related('enrollment_course_run')
 
+    def get_upgradeable_enrollments_for_entitlement(self, entitlement):
+        """
+        Retrieve all the CourseEnrollments that are upgradeable for a given CourseEntitlement
+
+        Arguments:
+            entitlement: CourseEntitlement that we are requesting the CourseEnrollments for.
+
+        Returns:
+            list: List of upgradeable CourseEnrollments
+        """
+        # find all course_runs within the course
+        course_runs = get_course_runs_for_course(entitlement.course_uuid)
+
+        # check if the user has enrollments for any of the course_runs
+        upgradeable_enrollments = []
+        for course_run in course_runs:
+            course_run_id = CourseKey.from_string(course_run.get('key'))
+            enrollment = CourseEnrollment.get_enrollment(entitlement.user, course_run_id)
+
+            if (enrollment and
+                    enrollment.is_active and
+                    is_course_run_entitlement_fulfillable(course_run_id, entitlement)):
+                upgradeable_enrollments.append(enrollment)
+
+        return upgradeable_enrollments
+
     def create(self, request, *args, **kwargs):
+        support_details = request.data.pop('support_details', [])
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
 
         entitlement = serializer.instance
-        user = entitlement.user
+        set_entitlement_policy(entitlement, request.site)
 
-        # find all course_runs within the course
-        course_runs = get_course_runs_for_course(entitlement.course_uuid)
-
-        # check if the user has enrollments for any of the course_runs
-        user_run_enrollments = [
-            CourseEnrollment.get_enrollment(user, CourseKey.from_string(course_run.get('key')))
-            for course_run
-            in course_runs
-            if CourseEnrollment.get_enrollment(user, CourseKey.from_string(course_run.get('key')))
-        ]
-
-        # filter to just enrollments that can be upgraded.
-        upgradeable_enrollments = [
-            enrollment
-            for enrollment
-            in user_run_enrollments
-            if enrollment.is_active and enrollment.upgrade_deadline and enrollment.upgrade_deadline > timezone.now()
-        ]
-
-        # if there is only one upgradeable enrollment, convert it from audit to the entitlement.mode
-        # if there is any ambiguity about which enrollment to upgrade
-        # (i.e. multiple upgradeable enrollments or no available upgradeable enrollment), dont enroll
-        if len(upgradeable_enrollments) == 1:
-            enrollment = upgradeable_enrollments[0]
-            log.info(
-                'Upgrading enrollment [%s] from %s to %s while adding entitlement for user [%s] for course [%s]',
-                enrollment,
-                enrollment.mode,
-                serializer.data.get('mode'),
-                user.username,
-                serializer.data.get('course_uuid')
-            )
-            enrollment.update_enrollment(mode=entitlement.mode)
-            entitlement.set_enrollment(enrollment)
+        if support_details:
+            for support_detail in support_details:
+                support_detail['entitlement'] = entitlement
+                support_detail['support_user'] = request.user
+                CourseEntitlementSupportDetail.objects.create(**support_detail)
         else:
-            log.info(
-                'No enrollment upgraded while adding entitlement for user [%s] for course [%s] ',
-                user.username,
-                serializer.data.get('course_uuid')
-            )
+            user = entitlement.user
+            upgradeable_enrollments = self.get_upgradeable_enrollments_for_entitlement(entitlement)
+
+            # if there is only one upgradeable enrollment, update the mode to the paid entitlement.mode
+            # if there is any ambiguity about which enrollment to upgrade
+            # (i.e. multiple upgradeable enrollments or no available upgradeable enrollment), don't alter
+            # the enrollment
+            if len(upgradeable_enrollments) == 1:
+                enrollment = upgradeable_enrollments[0]
+                log.info(
+                    'Upgrading enrollment [%s] from %s to %s while adding entitlement for user [%s] for course [%s]',
+                    enrollment,
+                    enrollment.mode,
+                    serializer.data.get('mode'),
+                    user.username,
+                    serializer.data.get('course_uuid')
+                )
+                enrollment.update_enrollment(mode=entitlement.mode)
+                entitlement.set_enrollment(enrollment)
+            else:
+                log.info(
+                    'No enrollment upgraded while adding entitlement for user [%s] for course [%s] ',
+                    user.username,
+                    serializer.data.get('course_uuid')
+                )
 
         headers = self.get_success_headers(serializer.data)
         # Note, the entitlement is re-serialized before getting added to the Response,
         # so that the 'modified' date reflects changes that occur when upgrading enrollment.
-        return Response(CourseEntitlementSerializer(entitlement).data, status=status.HTTP_201_CREATED, headers=headers)
+        return Response(
+            CourseEntitlementSerializer(entitlement).data,
+            status=status.HTTP_201_CREATED, headers=headers
+        )
 
     def retrieve(self, request, *args, **kwargs):
         """
@@ -149,31 +237,55 @@ class EntitlementViewSet(viewsets.ModelViewSet):
 
     def perform_destroy(self, instance):
         """
-        This method is an override and is called by the DELETE method
-        """
-        save_model = False
-        if instance.expired_at is None:
-            instance.expired_at = timezone.now()
-            log.info('Set expired_at to [%s] for course entitlement [%s]', instance.expired_at, instance.uuid)
-            save_model = True
+        This method is an override and is called by the destroy method, which is called when a DELETE operation occurs
 
-        if instance.enrollment_course_run is not None:
-            CourseEnrollment.unenroll(
-                user=instance.user,
-                course_id=instance.enrollment_course_run.course_id,
-                skip_refund=True
+        This method will revoke the User's entitlement and unenroll the user if they are enrolled
+        in a Course Run
+
+        It is assumed the user has already been refunded.
+        """
+        log.info(
+            'Entitlement Revoke requested for Course Entitlement[%s]',
+            instance.uuid
+        )
+        # This is not called with is_refund=True here because it is assumed the user has already been refunded.
+        _process_revoke_and_unenroll_entitlement(instance)
+
+    def partial_update(self, request, *args, **kwargs):
+        entitlement_uuid = kwargs.get('uuid', None)
+
+        try:
+            entitlement = CourseEntitlement.objects.get(uuid=entitlement_uuid)
+        except CourseEntitlement.DoesNotExist:
+            return HttpResponseBadRequest(
+                u'Could not find entitlement {entitlement_uuid} to update'.format(
+                    entitlement_uuid=entitlement_uuid
+                )
             )
-            enrollment = instance.enrollment_course_run
-            instance.enrollment_course_run = None
-            save_model = True
-            log.info(
-                'Unenrolled user [%s] from course run [%s] as part of revocation of course entitlement [%s]',
-                instance.user.username,
-                enrollment.course_id,
-                instance.uuid
-            )
-        if save_model:
-            instance.save()
+        support_details = request.data.pop('support_details', [])
+
+        # If a patch request does not explicitly update an entitlement's refundability status, we want to ensure that
+        # changes made to other attributes of the entitlement do not implicitly change its ability to be refunded.
+        if request.data.get('refund_locked') is None:
+            request.data['refund_locked'] = not entitlement.is_entitlement_refundable()
+
+        for support_detail in support_details:
+            support_detail['entitlement'] = entitlement
+            support_detail['support_user'] = request.user
+            unenrolled_run_id = support_detail.get('unenrolled_run', None)
+            if unenrolled_run_id:
+                try:
+                    unenrolled_run_course_key = CourseKey.from_string(unenrolled_run_id)
+                    _unenroll_entitlement(entitlement, unenrolled_run_course_key)
+                    support_detail['unenrolled_run'] = CourseOverview.objects.get(id=unenrolled_run_course_key)
+                except (InvalidKeyError, CourseOverview.DoesNotExist) as error:
+                    return HttpResponseBadRequest(
+                        u'Error raised while trying to unenroll user {user} from course run {course_id}: {error}'
+                        .format(user=entitlement.user.username, course_id=unenrolled_run_id, error=error)
+                    )
+            CourseEntitlementSupportDetail.objects.create(**support_detail)
+
+        return super(EntitlementViewSet, self).partial_update(request, *args, **kwargs)
 
 
 class EntitlementEnrollmentViewSet(viewsets.GenericViewSet):
@@ -185,6 +297,10 @@ class EntitlementEnrollmentViewSet(viewsets.GenericViewSet):
         - Switch Enrollment
     """
     authentication_classes = (JwtAuthentication, SessionAuthentication,)
+    # TODO: ARCH-91
+    # This view is excluded from Swagger doc generation because it
+    # does not specify a serializer class.
+    exclude_from_schema = True
     permission_classes = (permissions.IsAuthenticated,)
     queryset = CourseEntitlement.objects.all()
 
@@ -198,6 +314,7 @@ class EntitlementEnrollmentViewSet(viewsets.GenericViewSet):
                 return True
         return False
 
+    @transaction.atomic
     def _enroll_entitlement(self, entitlement, course_run_key, user):
         """
         Internal method to handle the details of enrolling a User in a Course Run.
@@ -215,7 +332,10 @@ class EntitlementEnrollmentViewSet(viewsets.GenericViewSet):
             enrollment = CourseEnrollment.get_enrollment(user, course_run_key)
             if enrollment.mode == entitlement.mode:
                 entitlement.set_enrollment(enrollment)
-            # Else the User is already enrolled in another Mode and we should
+            elif enrollment.mode not in [mode.slug for mode in CourseMode.paid_modes_for_course(course_run_key)]:
+                enrollment.update_enrollment(mode=entitlement.mode)
+                entitlement.set_enrollment(enrollment)
+            # Else the User is already enrolled in another paid Mode and we should
             # not do anything else related to Entitlements.
         except CourseEnrollmentException:
             message = (
@@ -234,13 +354,6 @@ class EntitlementEnrollmentViewSet(viewsets.GenericViewSet):
 
         entitlement.set_enrollment(enrollment)
         return None
-
-    def _unenroll_entitlement(self, entitlement, course_run_key, user):
-        """
-        Internal method to handle the details of Unenrolling a User in a Course Run.
-        """
-        CourseEnrollment.unenroll(user, course_run_key, skip_refund=True)
-        entitlement.set_enrollment(None)
 
     def create(self, request, uuid):
         """
@@ -280,9 +393,8 @@ class EntitlementEnrollmentViewSet(viewsets.GenericViewSet):
                 }
             )
 
-        # Determine if this is a Switch session or a simple enroll and handle both.
         try:
-            course_run_string = CourseKey.from_string(course_run_id)
+            course_run_key = CourseKey.from_string(course_run_id)
         except InvalidKeyError:
             return Response(
                 status=status.HTTP_400_BAD_REQUEST,
@@ -290,23 +402,35 @@ class EntitlementEnrollmentViewSet(viewsets.GenericViewSet):
                     'message': 'Invalid {course_id}'.format(course_id=course_run_id)
                 }
             )
+
+        # Verify that the run is fullfillable
+        if not is_course_run_entitlement_fulfillable(course_run_key, entitlement):
+            return Response(
+                status=status.HTTP_400_BAD_REQUEST,
+                data={
+                    'message': 'The User is unable to enroll in Course Run {course_id}, it is not available.'.format(
+                        course_id=course_run_id
+                    )
+                }
+            )
+
+        # Determine if this is a Switch session or a simple enroll and handle both.
         if entitlement.enrollment_course_run is None:
             response = self._enroll_entitlement(
                 entitlement=entitlement,
-                course_run_key=course_run_string,
+                course_run_key=course_run_key,
                 user=request.user
             )
             if response:
                 return response
         elif entitlement.enrollment_course_run.course_id != course_run_id:
-            self._unenroll_entitlement(
-                entitlement=entitlement,
-                course_run_key=entitlement.enrollment_course_run.course_id,
-                user=request.user
+            _unenroll_entitlement(
+                course_entitlement=entitlement,
+                course_run_key=entitlement.enrollment_course_run.course_id
             )
             response = self._enroll_entitlement(
                 entitlement=entitlement,
-                course_run_key=course_run_string,
+                course_run_key=course_run_key,
                 user=request.user
             )
             if response:
@@ -338,41 +462,33 @@ class EntitlementEnrollmentViewSet(viewsets.GenericViewSet):
             )
 
         if is_refund and entitlement.is_entitlement_refundable():
-            with transaction.atomic():
-                # Revoke and refund the entitlement
-                if entitlement.enrollment_course_run is not None:
-                    self._unenroll_entitlement(
-                        entitlement=entitlement,
-                        course_run_key=entitlement.enrollment_course_run.course_id,
-                        user=request.user
-                    )
+            # Revoke the Course Entitlement and issue Refund
+            log.info(
+                'Entitlement Refund requested for Course Entitlement[%s]',
+                entitlement.uuid
+            )
 
-                # Revoke the Course Entitlement and issue Refund
-                log.info(
-                    'Entitlement Refund requested for Course Entitlement[%s]',
-                    str(entitlement.uuid)
-                )
+            try:
+                _process_revoke_and_unenroll_entitlement(course_entitlement=entitlement, is_refund=True)
+            except IntegrityError:
+                # This state is reached when there was a failure in revoke and refund process resulting
+                # in a reversion of DB changes
+                return Response(
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    data={
+                        'message': 'Entitlement revoke and refund failed due to refund internal process failure'
+                    })
 
-                REFUND_ENTITLEMENT.send(sender=None, course_entitlement=entitlement)
-                entitlement.expired_at_datetime = timezone.now()
-                entitlement.save()
-
-                log.info(
-                    'Set expired_at to [%s] for course entitlement [%s]',
-                    entitlement.expired_at,
-                    entitlement.uuid
-                )
         elif not is_refund:
             if entitlement.enrollment_course_run is not None:
-                self._unenroll_entitlement(
-                    entitlement=entitlement,
-                    course_run_key=entitlement.enrollment_course_run.course_id,
-                    user=request.user
+                _unenroll_entitlement(
+                    course_entitlement=entitlement,
+                    course_run_key=entitlement.enrollment_course_run.course_id
                 )
         else:
             log.info(
                 'Entitlement Refund failed for Course Entitlement [%s]. Entitlement is not refundable',
-                str(entitlement.uuid)
+                entitlement.uuid
             )
             return Response(
                 status=status.HTTP_400_BAD_REQUEST,

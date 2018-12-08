@@ -2,19 +2,22 @@
 Test the about xblock
 """
 import datetime
-
+import ddt
 import pytz
 from ccx_keys.locator import CCXLocator
 from django.conf import settings
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.test.utils import override_settings
 from milestones.tests.utils import MilestonesTestCaseMixin
 from mock import patch
-from nose.plugins.attrib import attr
 from six import text_type
+from waffle.testutils import override_switch
 
 from course_modes.models import CourseMode
 from lms.djangoapps.ccx.tests.factories import CcxFactory
+from openedx.core.lib.tests import attr
+from openedx.features.course_experience.waffle import WAFFLE_NAMESPACE as COURSE_EXPERIENCE_WAFFLE_NAMESPACE
+from openedx.features.course_experience.waffle import ENABLE_COURSE_ABOUT_SIDEBAR_HTML
 from shoppingcart.models import Order, PaidCourseRegistration
 from student.models import CourseEnrollment
 from student.tests.factories import AdminFactory, CourseEnrollmentAllowedFactory, UserFactory
@@ -131,11 +134,11 @@ class AboutTestCase(LoginEnrollmentTestCase, SharedModuleStoreTestCase, EventTra
         resp = self.client.get(url)
         # should be redirected
         self.assertEqual(resp.status_code, 302)
-        # follow this time, and check we're redirected to the course info page
+        # follow this time, and check we're redirected to the course home page
         resp = self.client.get(url, follow=True)
         target_url = resp.redirect_chain[-1][0]
-        info_url = reverse('info', args=[text_type(self.course.id)])
-        self.assertTrue(target_url.endswith(info_url))
+        course_home_url = reverse('openedx.course_experience.course_home', args=[text_type(self.course.id)])
+        self.assertTrue(target_url.endswith(course_home_url))
 
     @patch.dict(settings.FEATURES, {'ENABLE_PREREQUISITE_COURSES': True})
     def test_pre_requisite_course(self):
@@ -418,6 +421,50 @@ class AboutWithClosedEnrollment(ModuleStoreTestCase):
 
 
 @attr(shard=1)
+@ddt.ddt
+class AboutSidebarHTMLTestCase(SharedModuleStoreTestCase):
+    """
+    This test case will check the About page for the content in the HTML sidebar.
+    """
+    def setUp(self):
+        super(AboutSidebarHTMLTestCase, self).setUp()
+        self.course = CourseFactory.create()
+
+    @ddt.data(
+        ("", "", False),
+        ("about_sidebar_html", "About Sidebar HTML Heading", False),
+        ("about_sidebar_html", "", False),
+        ("", "", True),
+        ("about_sidebar_html", "About Sidebar HTML Heading", True),
+        ("about_sidebar_html", "", True),
+    )
+    @ddt.unpack
+    def test_html_sidebar_enabled(self, itemfactory_display_name, itemfactory_data, waffle_switch_value):
+        with override_switch(
+            '{}.{}'.format(
+                COURSE_EXPERIENCE_WAFFLE_NAMESPACE,
+                ENABLE_COURSE_ABOUT_SIDEBAR_HTML
+            ),
+            active=waffle_switch_value
+        ):
+            if itemfactory_display_name:
+                ItemFactory.create(
+                    category="about",
+                    parent_location=self.course.location,
+                    display_name=itemfactory_display_name,
+                    data=itemfactory_data,
+                )
+            url = reverse('about_course', args=[text_type(self.course.id)])
+            resp = self.client.get(url)
+            self.assertEqual(resp.status_code, 200)
+            if waffle_switch_value and itemfactory_display_name and itemfactory_data:
+                self.assertIn('<section class="about-sidebar-html">', resp.content)
+                self.assertIn(itemfactory_data, resp.content)
+            else:
+                self.assertNotIn('<section class="about-sidebar-html">', resp.content)
+
+
+@attr(shard=1)
 @patch.dict(settings.FEATURES, {'ENABLE_SHOPPING_CART': True})
 @patch.dict(settings.FEATURES, {'ENABLE_PAID_COURSE_REGISTRATION': True})
 class AboutPurchaseCourseTestCase(LoginEnrollmentTestCase, SharedModuleStoreTestCase):
@@ -627,7 +674,7 @@ class CourseAboutTestCaseCCX(SharedModuleStoreTestCase, LoginEnrollmentTestCase)
         ccx_locator = CCXLocator.from_course_locator(self.course.id, unicode(ccx.id))
 
         self.setup_user()
-        url = reverse('info', args=[ccx_locator])
+        url = reverse('openedx.course_experience.course_home', args=[ccx_locator])
         response = self.client.get(url)
         expected = reverse('dashboard')
         self.assertRedirects(response, expected, status_code=302, target_status_code=200)

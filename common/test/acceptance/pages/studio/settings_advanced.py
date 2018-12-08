@@ -18,6 +18,9 @@ MODAL_SELECTOR = ".validation-error-modal-content"
 ERROR_ITEM_NAME_SELECTOR = ".error-item-title strong"
 ERROR_ITEM_CONTENT_SELECTOR = ".error-item-message"
 SETTINGS_NAME_SELECTOR = ".is-not-editable"
+CONFIRMATION_MESSAGE_SELECTOR = "#alert-confirmation-title"
+DEPRECATED_SETTINGS_SELECTOR = ".field-group.course-advanced-policy-list-item.is-deprecated"
+DEPRECATED_SETTINGS_BUTTON_SELECTOR = ".deprecated-settings-label"
 
 
 class AdvancedSettingsPage(CoursePage):
@@ -33,6 +36,37 @@ class AdvancedSettingsPage(CoursePage):
 
         EmptyPromise(_is_finished_loading, 'Finished rendering the advanced policy items.').fulfill()
         return self.q(css='body.advanced').present
+
+    @property
+    def key_names(self):
+        """
+            Returns a list of key names of all settings.
+        """
+        return self.q(css=KEY_CSS).text
+
+    @property
+    def deprecated_settings_button_text(self):
+        """
+            Returns text for deprecated settings button
+        """
+        return self.q(css=DEPRECATED_SETTINGS_BUTTON_SELECTOR).text[0]
+
+    def is_deprecated_setting_visible(self):
+        """
+            Returns true if deprecated settings are visible
+        """
+        return self.q(css=DEPRECATED_SETTINGS_SELECTOR).visible
+
+    def toggle_deprecated_settings(self):
+        """
+        Show deprecated Settings
+        """
+        button_text = self.deprecated_settings_button_text
+        self.q(css=DEPRECATED_SETTINGS_BUTTON_SELECTOR).click()
+        if button_text == 'Show Deprecated Settings':
+            self.wait_for_element_presence(DEPRECATED_SETTINGS_SELECTOR, 'Deprecated Settings are present')
+        else:
+            self.wait_for_element_absence(DEPRECATED_SETTINGS_SELECTOR, 'Deprecated Settings are not present')
 
     def wait_for_modal_load(self):
         """
@@ -51,6 +85,14 @@ class AdvancedSettingsPage(CoursePage):
         """
         self.browser.refresh()
         self.wait_for_page()
+
+    @property
+    def confirmation_message(self):
+        """
+            Returns the text of confirmation message which appears after saving the settings
+        """
+        self.wait_for_element_visibility(CONFIRMATION_MESSAGE_SELECTOR, 'Confirmation message is visible')
+        return self.q(css=CONFIRMATION_MESSAGE_SELECTOR).text[0]
 
     def coordinates_for_scrolling(self, coordinates_for):
         """
@@ -103,6 +145,9 @@ class AdvancedSettingsPage(CoursePage):
         return self.q(css=ERROR_ITEM_CONTENT_SELECTOR).text
 
     def _get_index_of(self, expected_key):
+        """
+        Returns the index of expected key
+        """
         for i, element in enumerate(self.q(css=KEY_CSS)):
             # Sometimes get stale reference if I hold on to the array of elements
             key = self.q(css=KEY_CSS).nth(i).text[0]
@@ -208,16 +253,13 @@ class AdvancedSettingsPage(CoursePage):
             'mobile_available',
             'rerandomize',
             'remote_gradebook',
-            'annotation_token_secret',
             'showanswer',
             'show_calculator',
             'show_reset_button',
             'static_asset_path',
             'teams_configuration',
-            'annotation_storage_url',
             'social_sharing_url',
             'video_bumper',
-            'cert_html_view_enabled',
             'enable_proctored_exams',
             'allow_proctoring_opt_out',
             'enable_timed_exams',

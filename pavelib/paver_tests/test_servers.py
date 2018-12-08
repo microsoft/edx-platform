@@ -6,10 +6,6 @@ from paver.easy import call_task
 from ..utils.envs import Env
 from .utils import PaverTestCase
 
-EXPECTED_COFFEE_COMMAND = (
-    u"node_modules/.bin/coffee --compile `find {platform_root}/lms "
-    u"{platform_root}/cms {platform_root}/common -type f -name \"*.coffee\"`"
-)
 EXPECTED_SASS_COMMAND = (
     u"libsass {sass_directory}"
 )
@@ -33,7 +29,7 @@ EXPECTED_COLLECT_STATIC_COMMAND = (
     u'python manage.py {system} --settings={asset_settings} collectstatic '
     u'--ignore "fixtures" --ignore "karma_*.js" --ignore "spec" '
     u'--ignore "spec_helpers" --ignore "spec-helpers" --ignore "xmodule_js" '
-    u'--ignore "geoip" --ignore "sass" --ignore "*.coffee" '
+    u'--ignore "geoip" --ignore "sass" '
     u'--noinput {log_string}'
 )
 EXPECTED_CELERY_COMMAND = (
@@ -246,10 +242,11 @@ class TestPaverServerTasks(PaverTestCase):
         if not is_fast:
             expected_messages.append(u"xmodule_assets common/static/xmodule")
             expected_messages.append(u"install npm_assets")
-            expected_messages.append(EXPECTED_COFFEE_COMMAND.format(platform_root=self.platform_root))
-            expected_messages.extend([c.format(settings=expected_asset_settings) for c in EXPECTED_PRINT_SETTINGS_COMMAND])
+            expected_messages.extend(
+                [c.format(settings=expected_asset_settings) for c in EXPECTED_PRINT_SETTINGS_COMMAND]
+            )
             expected_messages.append(EXPECTED_WEBPACK_COMMAND.format(
-                node_env="production" if expected_asset_settings != Env.DEVSTACK_SETTINGS else "development",
+                node_env="production",
                 static_root_lms=None,
                 static_root_cms=None,
                 webpack_config_path=None
@@ -290,10 +287,11 @@ class TestPaverServerTasks(PaverTestCase):
         if not is_fast:
             expected_messages.append(u"xmodule_assets common/static/xmodule")
             expected_messages.append(u"install npm_assets")
-            expected_messages.append(EXPECTED_COFFEE_COMMAND.format(platform_root=self.platform_root))
-            expected_messages.extend([c.format(settings=expected_asset_settings) for c in EXPECTED_PRINT_SETTINGS_COMMAND])
+            expected_messages.extend(
+                [c.format(settings=expected_asset_settings) for c in EXPECTED_PRINT_SETTINGS_COMMAND]
+            )
             expected_messages.append(EXPECTED_WEBPACK_COMMAND.format(
-                node_env="production" if expected_asset_settings != Env.DEVSTACK_SETTINGS else "development",
+                node_env="production",
                 static_root_lms=None,
                 static_root_cms=None,
                 webpack_config_path=None

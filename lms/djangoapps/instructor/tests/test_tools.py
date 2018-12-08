@@ -8,15 +8,17 @@ import unittest
 
 import mock
 import six
+from django.contrib.auth.models import User
+from django.core.exceptions import MultipleObjectsReturned
 from django.test import TestCase
 from django.test.utils import override_settings
 from pytz import UTC
-from nose.plugins.attrib import attr
 from opaque_keys.edx.keys import CourseKey
 from six import text_type
 
 from courseware.field_overrides import OverrideFieldData
 from lms.djangoapps.ccx.tests.test_overrides import inject_field_overrides
+from openedx.core.lib.tests import attr
 from student.tests.factories import UserFactory
 from xmodule.fields import Date
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase, SharedModuleStoreTestCase
@@ -357,3 +359,55 @@ def msk_from_problem_urlname(course_id, urlname, block_type='problem'):
         urlname = urlname[:-4]
 
     return course_id.make_usage_key(block_type, urlname)
+
+
+@attr(shard=1)
+class TestStudentFromIdentifier(TestCase):
+    """
+    Test get_student_from_identifier()
+    """
+    @classmethod
+    def setUpClass(cls):
+        super(TestStudentFromIdentifier, cls).setUpClass()
+        cls.valid_student = UserFactory.create(username='baz@touchstone')
+        cls.student_conflicting_email = UserFactory.create(email='foo@touchstone.com')
+        cls.student_conflicting_username = UserFactory.create(username='foo@touchstone.com')
+
+    def test_valid_student_id(self):
+        """Test with valid username"""
+        assert self.valid_student == tools.get_student_from_identifier(self.valid_student.username)
+
+    def test_valid_student_email(self):
+        """Test with valid email"""
+        assert self.valid_student == tools.get_student_from_identifier(self.valid_student.email)
+
+    def test_student_username_has_conflict_with_others_email(self):
+        """
+        An edge case where there is a user A with username example: foo@touchstone.com and
+        there is user B with email example: foo@touchstone.com
+        """
+        with self.assertRaises(MultipleObjectsReturned):
+            tools.get_student_from_identifier(self.student_conflicting_username.username)
+
+        # can get student with alternative identifier, in this case email.
+        assert self.student_conflicting_username == tools.get_student_from_identifier(
+            self.student_conflicting_username.email
+        )
+
+    def test_student_email_has_conflict_with_others_username(self):
+        """
+        An edge case where there is a user A with email example: foo@touchstone.com and
+        there is user B with username example: foo@touchstone.com
+        """
+        with self.assertRaises(MultipleObjectsReturned):
+            tools.get_student_from_identifier(self.student_conflicting_email.email)
+
+        # can get student with alternative identifier, in this case username.
+        assert self.student_conflicting_email == tools.get_student_from_identifier(
+            self.student_conflicting_email.username
+        )
+
+    def test_invalid_student_id(self):
+        """Test with invalid identifier"""
+        with self.assertRaises(User.DoesNotExist):
+            assert tools.get_student_from_identifier("invalid")

@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
 
 import datetime
-import ddt
-import unittest
+from tempfile import mkdtemp
 
-from fs.memoryfs import MemoryFS
+import ddt
+
+from django.test import TestCase
+
+from fs.osfs import OSFS
 from lxml import etree
 from mock import Mock, patch
 
@@ -12,7 +15,7 @@ from pytz import UTC
 from six import text_type
 
 from xmodule.xml_module import is_pointer_tag
-from opaque_keys.edx.locations import Location
+from opaque_keys.edx.locator import BlockUsageLocator, CourseLocator
 from xmodule.modulestore import only_xmodules
 from xmodule.modulestore.xml import ImportSystem, XMLModuleStore, LibraryXMLModuleStore
 from xmodule.modulestore.inheritance import compute_inherited_metadata
@@ -29,18 +32,19 @@ from xblock.runtime import KvsFieldData, DictKeyValueStore
 
 ORG = 'test_org'
 COURSE = 'test_course'
+RUN = 'test_run'
 
 
 class DummySystem(ImportSystem):
 
-    @patch('xmodule.modulestore.xml.OSFS', lambda dir: MemoryFS())
+    @patch('xmodule.modulestore.xml.OSFS', lambda dir: OSFS(mkdtemp()))
     def __init__(self, load_error_modules, library=False):
 
         if library:
             xmlstore = LibraryXMLModuleStore("data_dir", source_dirs=[], load_error_modules=load_error_modules)
         else:
             xmlstore = XMLModuleStore("data_dir", source_dirs=[], load_error_modules=load_error_modules)
-        course_id = CourseKey.from_string('/'.join([ORG, COURSE, 'test_run']))
+        course_id = CourseKey.from_string('/'.join([ORG, COURSE, RUN]))
         course_dir = "test_dir"
         error_tracker = Mock()
 
@@ -58,8 +62,10 @@ class DummySystem(ImportSystem):
         raise Exception("Shouldn't be called")
 
 
-class BaseCourseTestCase(unittest.TestCase):
+class BaseCourseTestCase(TestCase):
     '''Make sure module imports work properly, including for malformed inputs'''
+    shard = 1
+
     @staticmethod
     def get_system(load_error_modules=True, library=False):
         '''Get a dummy system'''
@@ -92,6 +98,7 @@ class PureXBlockImportTest(BaseCourseTestCase):
     """
     Tests of import pure XBlocks (not XModules) from xml
     """
+    shard = 1
 
     def assert_xblocks_are_good(self, block):
         """Assert a number of conditions that must be true for `block` to be good."""
@@ -119,6 +126,7 @@ class PureXBlockImportTest(BaseCourseTestCase):
 
 
 class ImportTestCase(BaseCourseTestCase):
+    shard = 1
     date = Date()
 
     def test_fallback(self):
@@ -190,7 +198,7 @@ class ImportTestCase(BaseCourseTestCase):
         # Now make sure the exported xml is a sequential
         self.assertEqual(node.tag, 'sequential')
 
-    def course_descriptor_inheritance_check(self, descriptor, from_date_string, unicorn_color, url_name):
+    def course_descriptor_inheritance_check(self, descriptor, from_date_string, unicorn_color, course_run=RUN):
         """
         Checks to make sure that metadata inheritance on a course descriptor is respected.
         """
@@ -208,7 +216,8 @@ class ImportTestCase(BaseCourseTestCase):
         )
 
         # Now export and check things
-        descriptor.runtime.export_fs = MemoryFS()
+        file_system = OSFS(mkdtemp())
+        descriptor.runtime.export_fs = file_system.makedir(u'course', recreate=True)
         node = etree.Element('unknown')
         descriptor.add_xml_to_node(node)
 
@@ -220,7 +229,7 @@ class ImportTestCase(BaseCourseTestCase):
         self.assertEqual(node.attrib['org'], ORG)
 
         # Does the course still have unicorns?
-        with descriptor.runtime.export_fs.open(u'course/{url_name}.xml'.format(url_name=url_name)) as f:
+        with descriptor.runtime.export_fs.open(u'course/{course_run}.xml'.format(course_run=course_run)) as f:
             course_xml = etree.fromstring(f.read())
 
         self.assertEqual(course_xml.attrib['unicorn'], unicorn_color)
@@ -259,7 +268,7 @@ class ImportTestCase(BaseCourseTestCase):
         )
         descriptor = system.process_xml(start_xml)
         compute_inherited_metadata(descriptor)
-        self.course_descriptor_inheritance_check(descriptor, from_date_string, unicorn_color, url_name)
+        self.course_descriptor_inheritance_check(descriptor, from_date_string, unicorn_color)
 
     def test_library_metadata_import_export(self):
         """Two checks:
@@ -292,7 +301,7 @@ class ImportTestCase(BaseCourseTestCase):
         compute_inherited_metadata(descriptor)
         # Check the course module, since it has inheritance
         descriptor = descriptor.get_children()[0]
-        self.course_descriptor_inheritance_check(descriptor, from_date_string, unicorn_color, url_name)
+        self.course_descriptor_inheritance_check(descriptor, from_date_string, unicorn_color)
 
     def test_metadata_no_inheritance(self):
         """
@@ -482,12 +491,14 @@ class ImportTestCase(BaseCourseTestCase):
 
         modulestore = XMLModuleStore(DATA_DIR, source_dirs=['toy'])
 
-        location_tab_syllabus = Location("edX", "toy", "2012_Fall", "static_tab", "syllabus", None)
+        location_tab_syllabus = BlockUsageLocator(CourseLocator("edX", "toy", "2012_Fall", deprecated=True),
+                                                  "static_tab", "syllabus", deprecated=True)
         toy_tab_syllabus = modulestore.get_item(location_tab_syllabus)
         self.assertEqual(toy_tab_syllabus.display_name, 'Syllabus')
         self.assertEqual(toy_tab_syllabus.course_staff_only, False)
 
-        location_tab_resources = Location("edX", "toy", "2012_Fall", "static_tab", "resources", None)
+        location_tab_resources = BlockUsageLocator(CourseLocator("edX", "toy", "2012_Fall", deprecated=True),
+                                                   "static_tab", "resources", deprecated=True)
         toy_tab_resources = modulestore.get_item(location_tab_resources)
         self.assertEqual(toy_tab_resources.display_name, 'Resources')
         self.assertEqual(toy_tab_resources.course_staff_only, True)
@@ -502,9 +513,11 @@ class ImportTestCase(BaseCourseTestCase):
 
         modulestore = XMLModuleStore(DATA_DIR, source_dirs=['toy', 'two_toys'])
 
-        location = Location("edX", "toy", "2012_Fall", "video", "Welcome", None)
+        location = BlockUsageLocator(CourseLocator("edX", "toy", "2012_Fall", deprecated=True),
+                                     "video", "Welcome", deprecated=True)
         toy_video = modulestore.get_item(location)
-        location_two = Location("edX", "toy", "TT_2012_Fall", "video", "Welcome", None)
+        location_two = BlockUsageLocator(CourseLocator("edX", "toy", "TT_2012_Fall", deprecated=True),
+                                         "video", "Welcome", deprecated=True)
         two_toy_video = modulestore.get_item(location_two)
         self.assertEqual(toy_video.youtube_id_1_0, "p2Q6BrNhdh8")
         self.assertEqual(two_toy_video.youtube_id_1_0, "p2Q6BrNhdh9")
@@ -590,7 +603,6 @@ class ImportTestCase(BaseCourseTestCase):
             video = sections[i]
             # Name should be 'video_{hash}'
             print "video {0} url_name: {1}".format(i, video.url_name)
-
             self.assertEqual(len(video.url_name), len('video_') + 12)
 
     def test_poll_and_conditional_import(self):

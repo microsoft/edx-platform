@@ -12,13 +12,13 @@ log = logging.getLogger(__name__)
 
 COURSE_SHARING_UTM_PARAMETERS = {
     'facebook': {
-        'utm_medium': 'social-post',
-        'utm_campaign': 'social-sharing',
+        'utm_medium': 'social',
+        'utm_campaign': 'social-sharing-db',
         'utm_source': 'facebook',
     },
     'twitter': {
-        'utm_medium': 'social-post',
-        'utm_campaign': 'social-sharing',
+        'utm_medium': 'social',
+        'utm_campaign': 'social-sharing-db',
         'utm_source': 'twitter',
     },
 }
@@ -57,3 +57,14 @@ def get_link_for_about_page(course):
         )
 
     return course_about_url
+
+
+def has_certificates_enabled(course):
+    """
+    Arguments:
+        course: This can be either a course overview object or a course descriptor.
+    Returns a boolean if the course has enabled certificates
+    """
+    if not settings.FEATURES.get('CERTIFICATES_HTML_VIEW', False):
+        return False
+    return course.cert_html_view_enabled

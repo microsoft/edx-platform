@@ -4,8 +4,9 @@ Namespace that defines fields common to all blocks used in the LMS
 
 #from django.utils.translation import ugettext_noop as _
 from lazy import lazy
-from xblock.core import XBlock
-from xblock.fields import Boolean, Dict, Scope, String, XBlockMixin
+from xblock.core import XBlock, XBlockMixin
+from xblock.exceptions import JsonHandlerError
+from xblock.fields import Boolean, Dict, Scope, String
 from xblock.validation import ValidationMessage
 
 from lms.lib.utils import is_unit
@@ -30,18 +31,21 @@ NONSENSICAL_ACCESS_RESTRICTION = _(u"This component's access settings contradict
 
 
 class GroupAccessDict(Dict):
-    """Special Dict class for serializing the group_access field"""
-    def from_json(self, access_dict):
-        if access_dict is not None:
-            return {int(k): access_dict[k] for k in access_dict}
+    """
+    Special Dict class for serializing the group_access field.
+    """
+    def from_json(self, value):
+        if value is not None:
+            return {int(k): value[k] for k in value}
 
-    def to_json(self, access_dict):
-        if access_dict is not None:
-            return {unicode(k): access_dict[k] for k in access_dict}
+    def to_json(self, value):
+        if value is not None:
+            return {unicode(k): value[k] for k in value}
 
 
 @XBlock.needs('partitions')
 @XBlock.needs('i18n')
+@XBlock.wants('completion')
 class LmsBlockMixin(XBlockMixin):
     """
     Mixin that defines fields common to all blocks used in the LMS
@@ -118,7 +122,7 @@ class LmsBlockMixin(XBlockMixin):
 
         merged_access = parent.merged_group_access.copy()
         if self.group_access is not None:
-            for partition_id, group_ids in self.group_access.items():
+            for partition_id, group_ids in self.group_access.items():  # pylint: disable=no-member
                 if group_ids:  # skip if the "local" group_access for this partition is None or empty.
                     if partition_id in merged_access:
                         if merged_access[partition_id] is False:
@@ -179,13 +183,12 @@ class LmsBlockMixin(XBlockMixin):
         component_group_access = self.group_access
 
         for user_partition_id, parent_group_ids in parent_group_access.iteritems():
-            component_group_ids = component_group_access.get(user_partition_id)
+            component_group_ids = component_group_access.get(user_partition_id)  # pylint: disable=no-member
             if component_group_ids:
                 return parent_group_ids and not set(component_group_ids).issubset(set(parent_group_ids))
             else:
                 return not component_group_access
-        else:
-            return False
+        return False
 
     def validate(self):
         """
@@ -197,7 +200,7 @@ class LmsBlockMixin(XBlockMixin):
         has_invalid_groups = False
         block_is_unit = is_unit(self)
 
-        for user_partition_id, group_ids in self.group_access.iteritems():
+        for user_partition_id, group_ids in self.group_access.iteritems():  # pylint: disable=no-member
             try:
                 user_partition = self._get_user_partition(user_partition_id)
             except NoSuchUserPartitionError:
@@ -240,3 +243,18 @@ class LmsBlockMixin(XBlockMixin):
             )
 
         return validation
+
+    @XBlock.json_handler
+    def publish_completion(self, data, suffix=''):  # pylint: disable=unused-argument
+        """
+        Publish completion data from the front end.
+        """
+        completion_service = self.runtime.service(self, 'completion')
+        if completion_service is None:
+            raise JsonHandlerError(500, u"No completion service found")
+        elif not completion_service.completion_tracking_enabled():
+            raise JsonHandlerError(404, u"Completion tracking is not enabled and API calls are unexpected")
+        if not completion_service.can_mark_block_complete_on_view(self):
+            raise JsonHandlerError(400, u"Block not configured for completion on view.")
+        self.runtime.publish(self, "completion", data)
+        return {'result': 'ok'}

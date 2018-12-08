@@ -10,7 +10,10 @@ from paver.easy import cmdopts, sh, task
 from pavelib.utils.envs import Env
 from pavelib.utils.timer import timed
 
-from bok_choy.browser import browser
+try:
+    from bok_choy.browser import browser
+except ImportError:
+    browser = None
 
 MONGO_PORT_NUM = int(os.environ.get('EDXAPP_TEST_MONGO_PORT', '27017'))
 MINIMUM_FIREFOX_VERSION = 28.0
@@ -31,6 +34,18 @@ def clean_test_files():
     sh(r"find . -name '.git' -prune -o -name '*.pyc' -exec rm {} \;")
     sh("rm -rf test_root/log/auto_screenshots/*")
     sh("rm -rf /tmp/mako_[cl]ms")
+
+
+@task
+@timed
+def ensure_clean_package_lock():
+    """
+    Ensure no untracked changes have been made in the current git context.
+    """
+    sh("""
+      git diff --name-only --exit-code package-lock.json ||
+      (echo \"Dirty package-lock.json, run 'npm install' and commit the generated changes\" && exit 1)
+    """)
 
 
 def clean_dir(directory):

@@ -1,6 +1,7 @@
 """
 This file contains celery tasks for email marketing signal handler.
 """
+
 import logging
 import time
 from datetime import datetime, timedelta
@@ -15,9 +16,10 @@ from email_marketing.models import EmailMarketingConfiguration
 
 log = logging.getLogger(__name__)
 SAILTHRU_LIST_CACHE_KEY = "email.marketing.cache"
+ACE_ROUTING_KEY = getattr(settings, 'ACE_ROUTING_KEY', None)
 
 
-@task(bind=True)
+@task(bind=True, routing_key=ACE_ROUTING_KEY)
 def get_email_cookies_via_sailthru(self, user_email, post_parms):
     """
     Adds/updates Sailthru cookie information for a new user.
@@ -57,8 +59,7 @@ def get_email_cookies_via_sailthru(self, user_email, post_parms):
     return None
 
 
-# pylint: disable=not-callable
-@task(bind=True, default_retry_delay=3600, max_retries=24)
+@task(bind=True, default_retry_delay=3600, max_retries=24, routing_key=ACE_ROUTING_KEY)
 def update_user(self, sailthru_vars, email, site=None, new_user=False, activation=False):
     """
     Adds/updates Sailthru profile information for a user.
@@ -66,7 +67,7 @@ def update_user(self, sailthru_vars, email, site=None, new_user=False, activatio
         sailthru_vars(dict): User profile information to pass as 'vars' to Sailthru
         email(str): User email address
         new_user(boolean): True if new registration
-        activation(boolean): True if activation request
+        activation(boolean): True if a welcome email should be sent
     Returns:
         None
     """
@@ -95,7 +96,6 @@ def update_user(self, sailthru_vars, email, site=None, new_user=False, activatio
                              max_retries=email_config.sailthru_max_retries)
         return
 
-    # if activating user, send welcome email
     if activation and email_config.sailthru_welcome_template and is_default_site(site) and not \
             sailthru_vars.get('is_enterprise_learner'):
 
@@ -134,8 +134,7 @@ def is_default_site(site):
     return not site or site.get('id') == settings.SITE_ID
 
 
-# pylint: disable=not-callable
-@task(bind=True, default_retry_delay=3600, max_retries=24)
+@task(bind=True, default_retry_delay=3600, max_retries=24, routing_key=ACE_ROUTING_KEY)
 def update_user_email(self, new_email, old_email):
     """
     Adds/updates Sailthru when a user email address is changed
@@ -295,7 +294,7 @@ def _retryable_sailthru_error(error):
     return code == 9 or code == 43
 
 
-@task(bind=True)
+@task(bind=True, routing_key=ACE_ROUTING_KEY)
 def update_course_enrollment(self, email, course_key, mode):
     """Adds/updates Sailthru when a user adds to cart/purchases/upgrades a course
          Args:
@@ -320,7 +319,7 @@ def update_course_enrollment(self, email, course_key, mode):
 
     course_data = _get_course_content(course_key, course_url, sailthru_client, config)
 
-    item = _build_purchase_item(course_key, course_url, cost_in_cents, mode, course_data, None)
+    item = _build_purchase_item(course_key, course_url, cost_in_cents, mode, course_data)
     options = {}
 
     if send_template:
@@ -433,7 +432,7 @@ def _get_course_content(course_id, course_url, sailthru_client, config):
     return response
 
 
-def _build_purchase_item(course_id, course_url, cost_in_cents, mode, course_data, sku):
+def _build_purchase_item(course_id, course_url, cost_in_cents, mode, course_data):
     """Build and return Sailthru purchase item object"""
 
     # build item description
@@ -453,6 +452,9 @@ def _build_purchase_item(course_id, course_url, cost_in_cents, mode, course_data
 
     if 'tags' in course_data:
         item['tags'] = course_data['tags']
+
+    # add vars to item
+    item['vars'] = dict(course_data.get('vars', {}), mode=mode, course_run_id=unicode(course_id))
 
     return item
 

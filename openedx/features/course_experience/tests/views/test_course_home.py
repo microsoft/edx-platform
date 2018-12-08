@@ -7,9 +7,10 @@ from datetime import datetime, timedelta
 import ddt
 import mock
 from django.conf import settings
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.http import QueryDict
 from django.utils.http import urlquote_plus
+from django.utils.timezone import now
 from pytz import UTC
 from waffle.models import Flag
 from waffle.testutils import override_flag
@@ -88,15 +89,13 @@ class CourseHomePageTestCase(SharedModuleStoreTestCase):
         """
         Set up a course to be used for testing.
         """
-        # setUpClassAndTestData() already calls setUpClass on SharedModuleStoreTestCase
-        # pylint: disable=super-method-not-called
         with super(CourseHomePageTestCase, cls).setUpClassAndTestData():
             with cls.store.default_store(ModuleStoreEnum.Type.split):
                 cls.course = CourseFactory.create(
                     org='edX',
                     number='test',
                     display_name='Test Course',
-                    start=datetime.now(UTC) - timedelta(days=30),
+                    start=now() - timedelta(days=30),
                 )
                 with cls.store.bulk_operations(cls.course.id):
                     chapter = ItemFactory.create(
@@ -122,7 +121,7 @@ class CourseHomePageTestCase(SharedModuleStoreTestCase):
         """
         return CourseFactory.create(
             display_name='Test Future Course',
-            start=specific_date if specific_date else datetime.now(UTC) + timedelta(days=30),
+            start=specific_date if specific_date else now() + timedelta(days=30),
         )
 
 
@@ -135,7 +134,6 @@ class TestCourseHomePage(CourseHomePageTestCase):
         remove_course_updates(self.user, self.course)
         super(TestCourseHomePage, self).tearDown()
 
-    @override_waffle_flag(UNIFIED_COURSE_TAB_FLAG, active=True)
     def test_welcome_message_when_unified(self):
         # Create a welcome message
         create_course_update(self.course, self.user, TEST_WELCOME_MESSAGE)
@@ -153,7 +151,6 @@ class TestCourseHomePage(CourseHomePageTestCase):
         response = self.client.get(url)
         self.assertNotContains(response, TEST_WELCOME_MESSAGE, status_code=200)
 
-    @override_waffle_flag(UNIFIED_COURSE_TAB_FLAG, active=True)
     def test_updates_tool_visibility(self):
         """
         Verify that the updates course tool is visible only when the course
@@ -176,7 +173,7 @@ class TestCourseHomePage(CourseHomePageTestCase):
         course_home_url(self.course)
 
         # Fetch the view and verify the query counts
-        with self.assertNumQueries(49, table_blacklist=QUERY_COUNT_TABLE_BLACKLIST):
+        with self.assertNumQueries(54, table_blacklist=QUERY_COUNT_TABLE_BLACKLIST):
             with check_mongo_calls(4):
                 url = course_home_url(self.course)
                 self.client.get(url)
@@ -218,7 +215,6 @@ class TestCourseHomePageAccess(CourseHomePageTestCase):
         remove_course_updates(self.staff_user, self.course)
         super(TestCourseHomePageAccess, self).tearDown()
 
-    @override_waffle_flag(UNIFIED_COURSE_TAB_FLAG, active=True)
     @override_waffle_flag(SHOW_REVIEWS_TOOL_FLAG, active=True)
     @ddt.data(
         [CourseUserType.ANONYMOUS, 'To see course content'],
@@ -354,7 +350,6 @@ class TestCourseHomePageAccess(CourseHomePageTestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 404)
 
-    @override_waffle_flag(UNIFIED_COURSE_TAB_FLAG, active=True)
     @override_waffle_flag(COURSE_PRE_START_ACCESS_FLAG, active=True)
     def test_course_messaging(self):
         """
@@ -397,7 +392,6 @@ class TestCourseHomePageAccess(CourseHomePageTestCase):
         self.assertContains(response, TEST_COURSE_HOME_MESSAGE)
         self.assertContains(response, TEST_COURSE_HOME_MESSAGE_PRE_START)
 
-    @override_waffle_flag(UNIFIED_COURSE_TAB_FLAG, active=True)
     @override_waffle_flag(COURSE_PRE_START_ACCESS_FLAG, active=True)
     @override_waffle_flag(ENABLE_COURSE_GOALS, active=True)
     def test_course_goals(self):
@@ -441,7 +435,6 @@ class TestCourseHomePageAccess(CourseHomePageTestCase):
         response = self.client.get(course_home_url(audit_only_course))
         self.assertNotContains(response, TEST_COURSE_GOAL_OPTIONS)
 
-    @override_waffle_flag(UNIFIED_COURSE_TAB_FLAG, active=True)
     @override_waffle_flag(COURSE_PRE_START_ACCESS_FLAG, active=True)
     @override_waffle_flag(ENABLE_COURSE_GOALS, active=True)
     def test_course_goal_updates(self):
@@ -487,9 +480,9 @@ class CourseHomeFragmentViewTests(ModuleStoreTestCase):
         super(CourseHomeFragmentViewTests, self).setUp()
         CommerceConfiguration.objects.create(checkout_on_ecommerce_service=True)
 
-        end = datetime.now(UTC) + timedelta(days=30)
+        end = now() + timedelta(days=30)
         self.course = CourseFactory(
-            start=datetime.now(UTC) - timedelta(days=30),
+            start=now() - timedelta(days=30),
             end=end,
         )
         self.url = course_home_url(self.course)
@@ -535,7 +528,7 @@ class CourseHomeFragmentViewTests(ModuleStoreTestCase):
         self.assert_upgrade_message_not_displayed()
 
     def test_no_upgrade_message_if_upgrade_deadline_passed(self):
-        self.verified_mode.expiration_datetime = datetime.now(UTC) - timedelta(days=20)
+        self.verified_mode.expiration_datetime = now() - timedelta(days=20)
         self.verified_mode.save()
         self.assert_upgrade_message_not_displayed()
 

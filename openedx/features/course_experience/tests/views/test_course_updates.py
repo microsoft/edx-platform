@@ -2,7 +2,7 @@
 Tests for the course updates page.
 """
 from courseware.courses import get_course_info_usage_key
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from openedx.core.djangoapps.waffle_utils.testutils import WAFFLE_TABLES
 from openedx.features.course_experience.views.course_updates import STATUS_VISIBLE
 from student.models import CourseEnrollment
@@ -82,8 +82,6 @@ class TestCourseUpdatesPage(SharedModuleStoreTestCase):
     @classmethod
     def setUpClass(cls):
         """Set up the simplest course possible."""
-        # setUpClassAndTestData() already calls setUpClass on SharedModuleStoreTestCase
-        # pylint: disable=super-method-not-called
         with super(TestCourseUpdatesPage, cls).setUpClassAndTestData():
             with cls.store.default_store(ModuleStoreEnum.Type.split):
                 cls.course = CourseFactory.create()
@@ -126,7 +124,7 @@ class TestCourseUpdatesPage(SharedModuleStoreTestCase):
         course_updates_url(self.course)
 
         # Fetch the view and verify that the query counts haven't changed
-        with self.assertNumQueries(31, table_blacklist=QUERY_COUNT_TABLE_BLACKLIST):
+        with self.assertNumQueries(34, table_blacklist=QUERY_COUNT_TABLE_BLACKLIST):
             with check_mongo_calls(4):
                 url = course_updates_url(self.course)
                 self.client.get(url)

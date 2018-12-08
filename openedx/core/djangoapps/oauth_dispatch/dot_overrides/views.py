@@ -5,10 +5,12 @@ from __future__ import unicode_literals
 
 from oauth2_provider.exceptions import OAuthToolkitError
 from oauth2_provider.http import HttpResponseUriRedirect
-from oauth2_provider.models import get_application_model
+from oauth2_provider.models import get_access_token_model, get_application_model
 from oauth2_provider.scopes import get_scopes_backend
 from oauth2_provider.settings import oauth2_settings
 from oauth2_provider.views import AuthorizationView
+
+from openedx.core.djangoapps.oauth_dispatch.models import ApplicationOrganization
 
 
 # TODO (ARCH-83) remove once we have full support of OAuth Scopes
@@ -43,7 +45,12 @@ class EdxOAuth2AuthorizationView(AuthorizationView):
 
             # at this point we know an Application instance with such client_id exists in the database
             application = get_application_model().objects.get(client_id=credentials['client_id'])
+            content_orgs = ApplicationOrganization.get_related_org_names(
+                application,
+                relation_type=ApplicationOrganization.RELATION_TYPE_CONTENT_ORG
+            )
             kwargs['application'] = application
+            kwargs['content_orgs'] = content_orgs
             kwargs['client_id'] = credentials['client_id']
             kwargs['redirect_uri'] = credentials['redirect_uri']
             kwargs['response_type'] = credentials['response_type']
@@ -62,11 +69,12 @@ class EdxOAuth2AuthorizationView(AuthorizationView):
                 uri, headers, body, status = self.create_authorization_response(
                     request=self.request, scopes=" ".join(scopes),
                     credentials=credentials, allow=True)
-                return HttpResponseUriRedirect(uri)
+                return HttpResponseUriRedirect(uri, application.get_allowed_schemes())
 
             # *** Changed the if statement that checked for require_approval to an assert.
             assert require_approval == 'auto_even_if_expired'
-            tokens = request.user.accesstoken_set.filter(
+            tokens = get_access_token_model().objects.filter(
+                user=request.user,
                 application=kwargs['application'],
                 # *** Purposefully keeping this commented out code to highlight that
                 # our version of the implementation does NOT filter by expiration date.
@@ -79,7 +87,7 @@ class EdxOAuth2AuthorizationView(AuthorizationView):
                     uri, headers, body, status = self.create_authorization_response(
                         request=self.request, scopes=" ".join(scopes),
                         credentials=credentials, allow=True)
-                    return HttpResponseUriRedirect(uri)
+                    return HttpResponseUriRedirect(uri, application.get_allowed_schemes())
 
             # render an authorization prompt so the user can approve
             # the application's requested scopes

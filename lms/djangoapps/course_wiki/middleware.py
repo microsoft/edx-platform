@@ -10,9 +10,9 @@ from wiki.models import reverse
 
 from courseware.access import has_access
 from courseware.courses import get_course_overview_with_access, get_course_with_access
+from openedx.core.lib.request_utils import course_id_from_url
 from openedx.features.enterprise_support.api import get_enterprise_consent_url
 from student.models import CourseEnrollment
-from util.request import course_id_from_url
 
 
 class WikiAccessMiddleware(object):
@@ -48,7 +48,7 @@ class WikiAccessMiddleware(object):
             return
 
         # wiki pages are login required
-        if not request.user.is_authenticated():
+        if not request.user.is_authenticated:
             return redirect(reverse('signin_user'), next=request.path)
 
         course_id = course_id_from_url(request.path)

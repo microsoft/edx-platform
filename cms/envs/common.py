@@ -46,8 +46,6 @@ import os
 import sys
 from datetime import timedelta
 
-import django
-
 import lms.envs.common
 # Although this module itself may not use these imported variables, other dependent modules may.
 from lms.envs.common import (
@@ -76,6 +74,11 @@ from lms.envs.common import (
 
     STATICI18N_OUTPUT_DIR,
 
+    # Heartbeat
+    HEARTBEAT_CHECKS,
+    HEARTBEAT_EXTENDED_CHECKS,
+    HEARTBEAT_CELERY_TIMEOUT,
+
     # Theme to use when no site or site theme is defined,
     DEFAULT_SITE_THEME,
 
@@ -91,6 +94,12 @@ from lms.envs.common import (
     REDIRECT_CACHE_TIMEOUT,
     REDIRECT_CACHE_KEY_PREFIX,
 
+    # This is required for the migrations in oauth_dispatch.models
+    # otherwise it fails saying this attribute is not present in Settings
+    # Although Studio does not enable OAuth2 Provider capability, the new approach
+    # to generating test databases will discover and try to create all tables
+    # and this setting needs to be present
+    OAUTH2_PROVIDER_APPLICATION_MODEL,
     JWT_AUTH,
 
     USERNAME_REGEX_PARTIAL,
@@ -112,6 +121,7 @@ from lms.envs.common import (
     PASSWORD_RESET_SUPPORT_LINK,
     ACTIVATION_EMAIL_SUPPORT_LINK,
 
+    DEFAULT_COURSE_VISIBILITY_IN_CATALOG,
     DEFAULT_MOBILE_AVAILABLE,
 
     CONTACT_EMAIL,
@@ -121,12 +131,20 @@ from lms.envs.common import (
     VIDEO_IMAGE_SETTINGS,
     VIDEO_TRANSCRIPTS_SETTINGS,
 
+    RETIRED_USERNAME_PREFIX,
+    RETIRED_USERNAME_FMT,
+    RETIRED_EMAIL_PREFIX,
+    RETIRED_EMAIL_DOMAIN,
+    RETIRED_EMAIL_FMT,
+    RETIRED_USER_SALTS,
+    RETIREMENT_SERVICE_WORKER_USERNAME,
+    RETIREMENT_STATES,
+
     # Methods to derive settings
     _make_mako_template_dirs,
     _make_locale_paths,
 )
 from path import Path as path
-from warnings import simplefilter
 
 from lms.djangoapps.lms_xblock.mixin import LmsBlockMixin
 from cms.lib.xblock.authoring_mixin import AuthoringMixin
@@ -156,6 +174,10 @@ FEATURES = {
     'ENABLE_TEXTBOOK': True,
     'ENABLE_STUDENT_NOTES': True,
 
+    # DO NOT SET TO True IN THIS FILE
+    # Doing so will cause all courses to be released on production
+    'DISABLE_START_DATES': False,  # When True, all courses will be active, regardless of start date
+
     'AUTH_USE_CERTIFICATES': False,
 
     # email address for studio staff (eg to request course creation)
@@ -177,9 +199,6 @@ FEATURES = {
     # If set to True, new Studio users won't be able to author courses unless
     # an Open edX admin has added them to the course creator group.
     'ENABLE_CREATOR_GROUP': True,
-
-    # whether to use password policy enforcement or not
-    'ENFORCE_PASSWORD_POLICY': False,
 
     # Turn off account locking if failed login attempts exceeds a limit
     'ENABLE_MAX_FAILED_LOGIN_ATTEMPTS': False,
@@ -213,6 +232,10 @@ FEATURES = {
     # for consistency in user-experience, keep the value of this feature flag
     # in sync with the one in lms/envs/common.py
     'ENABLE_EDXNOTES': False,
+
+    # Show a new field in "Advanced settings" that can store custom data about a
+    # course and that can be read from themes
+    'ENABLE_OTHER_COURSE_SETTINGS': False,
 
     # Enable support for content libraries. Note that content libraries are
     # only supported in courses using split mongo.
@@ -257,9 +280,6 @@ FEATURES = {
     # Enable credit eligibility feature
     'ENABLE_CREDIT_ELIGIBILITY': ENABLE_CREDIT_ELIGIBILITY,
 
-    # Can the visibility of the discussion tab be configured on a per-course basis?
-    'ALLOW_HIDING_DISCUSSION_TAB': False,
-
     # Special Exams, aka Timed and Proctored Exams
     'ENABLE_SPECIAL_EXAMS': False,
 
@@ -282,9 +302,22 @@ FEATURES = {
     # Whether or not the dynamic EnrollmentTrackUserPartition should be registered.
     'ENABLE_ENROLLMENT_TRACK_USER_PARTITION': True,
 
+    # Whether to send an email for failed password reset attempts or not. This is mainly useful for notifying users
+    # that they don't have an account associated with email addresses they believe they've registered with.
+    'ENABLE_PASSWORD_RESET_FAILURE_EMAIL': False,
+
     # Whether archived courses (courses with end dates in the past) should be
     # shown in Studio in a separate list.
     'ENABLE_SEPARATE_ARCHIVED_COURSES': True,
+
+    # For acceptance and load testing
+    'AUTOMATIC_AUTH_FOR_TESTING': False,
+
+    # Prevent auto auth from creating superusers or modifying existing users
+    'RESTRICT_AUTOMATIC_AUTH': True,
+
+    # Set this to true to make API docs available at /api-docs/.
+    'ENABLE_API_DOCS': False,
 }
 
 ENABLE_JASMINE = False
@@ -431,31 +464,23 @@ XQUEUE_INTERFACE = {
     'basic_auth': None,
 }
 
-################################# Deprecation warnings #####################
-
-# Ignore deprecation warnings (so we don't clutter Jenkins builds/production)
-simplefilter('ignore')
-
 ################################# Middleware ###################################
-
-# TODO: Remove Django 1.11 upgrade shim
-# SHIM: Remove birdcage references post-1.11 upgrade as it is only in place to help during that deployment
-if django.VERSION < (1, 9):
-    _csrf_middleware = 'birdcage.v1_11.csrf.CsrfViewMiddleware'
-else:
-    _csrf_middleware = 'django.middleware.csrf.CsrfViewMiddleware'
 
 MIDDLEWARE_CLASSES = [
     'crum.CurrentRequestUserMiddleware',
-    'request_cache.middleware.RequestCache',
 
-    'openedx.core.djangoapps.monitoring_utils.middleware.MonitoringMemoryMiddleware',
+    # A newer and safer request cache.
+    'edx_django_utils.cache.middleware.RequestCacheMiddleware',
+    'edx_django_utils.monitoring.middleware.MonitoringMemoryMiddleware',
 
     'openedx.core.djangoapps.header_control.middleware.HeaderControlMiddleware',
     'django.middleware.cache.UpdateCacheMiddleware',
     'django.middleware.common.CommonMiddleware',
-    _csrf_middleware,
+    'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.sites.middleware.CurrentSiteMiddleware',
+
+    # Allows us to define redirects via Django admin
+    'django_sites_extensions.middleware.RedirectMiddleware',
 
     # Instead of SessionMiddleware, we use a more secure version
     # 'django.contrib.sessions.middleware.SessionMiddleware',
@@ -465,9 +490,6 @@ MIDDLEWARE_CLASSES = [
 
     # Instead of AuthenticationMiddleware, we use a cache-backed version
     'openedx.core.djangoapps.cache_toolbox.middleware.CacheBackedAuthenticationMiddleware',
-    # Enable SessionAuthenticationMiddleware in order to invalidate
-    # user sessions after a password change.
-    'django.contrib.auth.middleware.SessionAuthenticationMiddleware',
 
     'student.middleware.UserStandingMiddleware',
     'openedx.core.djangoapps.contentserver.middleware.StaticContentServer',
@@ -501,12 +523,21 @@ MIDDLEWARE_CLASSES = [
 
     'waffle.middleware.WaffleMiddleware',
 
+    # Enables force_django_cache_miss functionality for TieredCache.
+    'edx_django_utils.cache.middleware.TieredCacheMiddleware',
+
+    # Outputs monitoring metrics for a request.
+    'edx_rest_framework_extensions.middleware.RequestMetricsMiddleware',
+
+    'edx_rest_framework_extensions.auth.jwt.middleware.EnsureJWTAuthSettingsMiddleware',
+    'edx_rest_framework_extensions.auth.jwt.middleware.JwtAuthCookieMiddleware',
+
     # This must be last so that it runs first in the process_response chain
     'openedx.core.djangoapps.site_configuration.middleware.SessionCookieDomainOverrideMiddleware',
 ]
 
-# Clickjacking protection can be enabled by setting this to 'DENY'
-X_FRAME_OPTIONS = 'ALLOW'
+# Clickjacking protection can be disabled by setting this to 'ALLOW'
+X_FRAME_OPTIONS = 'DENY'
 
 # Platform for Privacy Preferences header
 P3P_HEADER = 'CP="Open EdX does not have a P3P policy."'
@@ -797,10 +828,7 @@ PIPELINE_JS = {
     },
 }
 
-PIPELINE_COMPILERS = (
-    'pipeline.compilers.coffee.CoffeeScriptCompiler',
-)
-
+PIPELINE_COMPILERS = ()
 PIPELINE_CSS_COMPRESSOR = None
 PIPELINE_JS_COMPRESSOR = None
 
@@ -816,10 +844,6 @@ STATICFILES_IGNORE_PATTERNS = (
     "sass/*/*.scss",
     "sass/*/*/*.scss",
     "sass/*/*/*/*.scss",
-    "coffee/*.coffee",
-    "coffee/*/*.coffee",
-    "coffee/*/*/*.coffee",
-    "coffee/*/*/*/*.coffee",
 
     # Ignore tests
     "spec",
@@ -862,6 +886,9 @@ WEBPACK_CONFIG_PATH = 'webpack.prod.config.js'
 
 ################################# CELERY ######################################
 
+# Auto discover tasks fails to detect contentstore tasks
+CELERY_IMPORTS = ('cms.djangoapps.contentstore.tasks')
+
 # Message configuration
 
 CELERY_TASK_SERIALIZER = 'json'
@@ -890,7 +917,6 @@ CELERY_DEFAULT_EXCHANGE_TYPE = 'direct'
 
 HIGH_PRIORITY_QUEUE = 'edx.core.high'
 DEFAULT_PRIORITY_QUEUE = 'edx.core.default'
-LOW_PRIORITY_QUEUE = 'edx.core.low'
 
 CELERY_QUEUE_HA_POLICY = 'all'
 
@@ -901,7 +927,6 @@ CELERY_DEFAULT_ROUTING_KEY = DEFAULT_PRIORITY_QUEUE
 
 CELERY_QUEUES = {
     HIGH_PRIORITY_QUEUE: {},
-    LOW_PRIORITY_QUEUE: {},
     DEFAULT_PRIORITY_QUEUE: {}
 }
 
@@ -947,6 +972,7 @@ INSTALLED_APPS = [
     # Standard apps
     'django.contrib.auth',
     'django.contrib.contenttypes',
+    'django.contrib.humanize',
     'django.contrib.redirects',
     'django.contrib.sessions',
     'django.contrib.sites',
@@ -961,6 +987,9 @@ INSTALLED_APPS = [
     # Common views
     'openedx.core.djangoapps.common_views',
 
+    # API access administration
+    'openedx.core.djangoapps.api_admin',
+
     # History tables
     'simple_history',
 
@@ -970,9 +999,6 @@ INSTALLED_APPS = [
 
     # Monitor the status of services
     'openedx.core.djangoapps.service_status',
-
-    # Bookmarks
-    'openedx.core.djangoapps.bookmarks.apps.BookmarksConfig',
 
     # Video module configs (This will be moved to Video once it becomes an XBlock)
     'openedx.core.djangoapps.video_config',
@@ -986,7 +1012,7 @@ INSTALLED_APPS = [
     'openedx.core.djangoapps.contentserver',
     'course_creators',
     'openedx.core.djangoapps.external_auth',
-    'student',  # misleading name due to sharing with lms
+    'student.apps.StudentConfig',  # misleading name due to sharing with lms
     'openedx.core.djangoapps.course_groups',  # not used in cms (yet), but tests run
     'xblock_config.apps.XBlockConfig',
 
@@ -1029,15 +1055,18 @@ INSTALLED_APPS = [
     # Dark-launching languages
     'openedx.core.djangoapps.dark_lang',
 
+    #
     # User preferences
+    'wiki',
+    'django_notify',
+    'course_wiki',  # Our customizations
+    'mptt',
+    'sekizai',
     'openedx.core.djangoapps.user_api',
     'django_openid_auth',
 
     # Country embargo support
     'openedx.core.djangoapps.embargo',
-
-    # Signals
-    'openedx.core.djangoapps.signals.apps.SignalConfig',
 
     # Course action state
     'course_action_state',
@@ -1046,7 +1075,6 @@ INSTALLED_APPS = [
     'edx_jsme',    # Molecular Structure
 
     'openedx.core.djangoapps.content.course_overviews.apps.CourseOverviewsConfig',
-    'openedx.core.djangoapps.content.course_structures.apps.CourseStructuresConfig',
     'openedx.core.djangoapps.content.block_structure.apps.BlockStructureConfig',
 
     # edx-milestones service
@@ -1080,11 +1108,12 @@ INSTALLED_APPS = [
     # These are apps that aren't strictly needed by Studio, but are imported by
     # other apps that are.  Django 1.8 wants to have imported models supported
     # by installed apps.
+    'openedx.core.djangoapps.oauth_dispatch.apps.OAuthDispatchAppConfig',
     'oauth_provider',
     'courseware',
-    'survey',
+    'survey.apps.SurveyConfig',
     'lms.djangoapps.verify_student.apps.VerifyStudentConfig',
-    'lms.djangoapps.completion.apps.CompletionAppConfig',
+    'completion',
 
     # Microsite configuration application
     'microsite_configuration',
@@ -1126,6 +1155,12 @@ INSTALLED_APPS = [
 
     # Entitlements, used in openedx tests
     'entitlements',
+
+    # Asset management for mako templates
+    'pipeline_mako',
+
+    # API Documentation
+    'rest_framework_swagger',
 ]
 
 
@@ -1202,12 +1237,23 @@ EVENT_TRACKING_BACKENDS = {
 EVENT_TRACKING_PROCESSORS = []
 
 #### PASSWORD POLICY SETTINGS #####
-
-PASSWORD_MIN_LENGTH = None
-PASSWORD_MAX_LENGTH = None
-PASSWORD_COMPLEXITY = {}
-PASSWORD_DICTIONARY_EDIT_DISTANCE_THRESHOLD = None
-PASSWORD_DICTIONARY = []
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+    },
+    {
+        "NAME": "util.password_policy_validators.MinimumLengthValidator",
+        "OPTIONS": {
+            "min_length": 2
+        }
+    },
+    {
+        "NAME": "util.password_policy_validators.MaximumLengthValidator",
+        "OPTIONS": {
+            "max_length": 75
+        }
+    },
+]
 
 ##### ACCOUNT LOCKOUT DEFAULT PARAMETERS #####
 MAX_FAILED_LOGIN_ATTEMPTS_ALLOWED = 5
@@ -1238,6 +1284,10 @@ OPTIONAL_APPS = (
     # Enterprise App (http://github.com/edx/edx-enterprise)
     ('enterprise', None),
     ('consent', None),
+    ('integrated_channels.integrated_channel', None),
+    ('integrated_channels.degreed', None),
+    ('integrated_channels.sap_success_factors', None),
+    ('integrated_channels.xapi', None),
 )
 
 
@@ -1334,7 +1384,7 @@ FILES_AND_UPLOAD_TYPE_FILTERS = {
         'text/csv',
         'text/pdf',
         'text/x-sh',
-        '\application/pdf\""',
+        '\"application/pdf\"',
     ],
     "Audio": ['audio/mpeg', 'audio/mp3', 'audio/x-wav', 'audio/ogg', 'audio/wav', 'audio/aac', 'audio/x-m4a',
               'audio/mp4', 'audio/x-ms-wma', ],
@@ -1361,6 +1411,8 @@ XBLOCK_SETTINGS = {
         'YOUTUBE_API_KEY': YOUTUBE_API_KEY
     }
 }
+
+STUDIO_FRONTEND_CONTAINER_URL = None
 
 ################################ Settings for Credit Course Requirements ################################
 # Initial delay used for retrying tasks.
@@ -1425,13 +1477,6 @@ HELP_TOKENS_LANGUAGE_CODE = lambda settings: settings.LANGUAGE_CODE
 HELP_TOKENS_VERSION = lambda settings: doc_version()
 derived('HELP_TOKENS_LANGUAGE_CODE', 'HELP_TOKENS_VERSION')
 
-# This is required for the migrations in oauth_dispatch.models
-# otherwise it fails saying this attribute is not present in Settings
-# Although Studio does not exable OAuth2 Provider capability, the new approach
-# to generating test databases will discover and try to create all tables
-# and this setting needs to be present
-OAUTH2_PROVIDER_APPLICATION_MODEL = 'oauth2_provider.Application'
-
 # Used with Email sending
 RETRY_ACTIVATION_EMAIL_MAX_ATTEMPTS = 5
 RETRY_ACTIVATION_EMAIL_TIMEOUT = 0.5
@@ -1446,6 +1491,9 @@ USER_TASKS_MAX_AGE = timedelta(days=7)
 ENTERPRISE_ENROLLMENT_API_URL = LMS_ROOT_URL + LMS_ENROLLMENT_API_PATH
 ENTERPRISE_SERVICE_WORKER_USERNAME = 'enterprise_worker'
 ENTERPRISE_API_CACHE_TIMEOUT = 3600  # Value is in seconds
+# The default value of this needs to be a 16 character string
+ENTERPRISE_REPORTING_SECRET = '0000000000000000'
+ENTERPRISE_CUSTOMER_CATALOG_DEFAULT_CONTENT_FILTER = {}
 
 ############## Settings for the Discovery App ######################
 
@@ -1454,13 +1502,22 @@ COURSE_CATALOG_API_URL = None
 ############################# Persistent Grades ####################################
 
 # Queue to use for updating persistent grades
-RECALCULATE_GRADES_ROUTING_KEY = LOW_PRIORITY_QUEUE
+RECALCULATE_GRADES_ROUTING_KEY = DEFAULT_PRIORITY_QUEUE
 
 # Queue to use for updating grades due to grading policy change
-POLICY_CHANGE_GRADES_ROUTING_KEY = LOW_PRIORITY_QUEUE
+POLICY_CHANGE_GRADES_ROUTING_KEY = DEFAULT_PRIORITY_QUEUE
+
+# Rate limit for regrading tasks that a grading policy change can kick off
+POLICY_CHANGE_TASK_RATE_LIMIT = '300/h'
 
 ############## Settings for CourseGraph ############################
-COURSEGRAPH_JOB_QUEUE = LOW_PRIORITY_QUEUE
+COURSEGRAPH_JOB_QUEUE = DEFAULT_PRIORITY_QUEUE
+
+########## Settings for video transcript migration tasks ############
+VIDEO_TRANSCRIPT_MIGRATIONS_JOB_QUEUE = DEFAULT_PRIORITY_QUEUE
+
+########## Settings youtube thumbnails scraper tasks ############
+SCRAPE_YOUTUBE_THUMBNAILS_JOB_QUEUE = DEFAULT_PRIORITY_QUEUE
 
 ###################### VIDEO IMAGE STORAGE ######################
 
@@ -1488,7 +1545,6 @@ VIDEO_IMAGE_ASPECT_RATIO_ERROR_MARGIN = 0.1
 ZENDESK_URL = None
 ZENDESK_USER = None
 ZENDESK_API_KEY = None
-ZENDESK_OAUTH_ACCESS_TOKEN = None
 ZENDESK_CUSTOM_FIELDS = {}
 
 
@@ -1504,3 +1560,8 @@ COMPLETION_VIDEO_COMPLETE_PERCENTAGE = 0.95
 from openedx.core.djangoapps.plugins import plugin_apps, plugin_settings, constants as plugin_constants
 INSTALLED_APPS.extend(plugin_apps.get_apps(plugin_constants.ProjectType.CMS))
 plugin_settings.add_plugins(__name__, plugin_constants.ProjectType.CMS, plugin_constants.SettingsType.COMMON)
+
+# Course exports streamed in blocks of this size. 8192 or 8kb is the default
+# setting for the FileWrapper class used to iterate over the export file data.
+# See: https://docs.python.org/2/library/wsgiref.html#wsgiref.util.FileWrapper
+COURSE_EXPORT_DOWNLOAD_CHUNK_SIZE = 8192

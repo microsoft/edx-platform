@@ -5,7 +5,7 @@ import unittest
 
 from django.contrib.admin.sites import AdminSite
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.forms import models
 
 from student.tests.factories import UserFactory
@@ -58,7 +58,6 @@ class Oauth2ProviderConfigAdminTest(testutil.TestCase):
 
         # Edit the provider via the admin edit link
         admin = OAuth2ProviderConfigAdmin(provider1, AdminSite())
-        # pylint: disable=protected-access
         update_url = reverse('admin:{}_{}_add'.format(admin.model._meta.app_label, admin.model._meta.model_name))
         update_url += "?source={}".format(provider1.pk)
 

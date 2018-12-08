@@ -1,7 +1,6 @@
 """
 Tests for send_course_update management command.
 """
-# pylint: disable=no-member
 import ddt
 from mock import patch, _is_started
 from unittest import skipUnless
@@ -32,6 +31,7 @@ from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
     "Can't test schedules if the app isn't installed",
 )
 class TestSendCourseUpdate(ScheduleUpsellTestMixin, ScheduleSendEmailTestMixin, ModuleStoreTestCase):
+    shard = 6
     __test__ = True
 
     # pylint: disable=protected-access
@@ -87,7 +87,7 @@ class TestSendCourseUpdate(ScheduleUpsellTestMixin, ScheduleSendEmailTestMixin, 
         enrollment.schedule.save()
 
         with patch.object(tasks, 'ace') as mock_ace:
-            self.task().apply(kwargs=dict(  # pylint: disable=no-value-for-parameter
+            self.task().apply(kwargs=dict(
                 site_id=self.site_config.site.id,
                 target_day_str=serialize(target_day),
                 day_offset=offset,

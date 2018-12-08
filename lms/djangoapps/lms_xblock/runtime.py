@@ -1,18 +1,18 @@
 """
 Module implementing `xblock.runtime.Runtime` functionality for the LMS
 """
-import xblock.reference.plugins
+from completion.services import CompletionService
 from django.conf import settings
-from django.core.urlresolvers import reverse
+from django.urls import reverse
+from edx_django_utils.cache import DEFAULT_REQUEST_CACHE
+import xblock.reference.plugins
 
 from badges.service import BadgingService
 from badges.utils import badges_enabled
 from lms.djangoapps.lms_xblock.models import XBlockAsidesConfig
-from lms.djangoapps.completion.services import CompletionService
 from openedx.core.djangoapps.user_api.course_tag import api as user_course_tag_api
 from openedx.core.lib.url_utils import quote_slashes
 from openedx.core.lib.xblock_utils import xblock_local_resource_url
-from request_cache.middleware import RequestCache
 from xmodule.library_tools import LibraryToolsService
 from xmodule.modulestore.django import ModuleI18nService, modulestore
 from xmodule.partitions.partitions_service import PartitionService
@@ -133,7 +133,7 @@ class LmsModuleSystem(ModuleSystem):  # pylint: disable=abstract-method
     ModuleSystem specialized to the LMS
     """
     def __init__(self, **kwargs):
-        request_cache_dict = RequestCache.get_request_cache().data
+        request_cache_dict = DEFAULT_REQUEST_CACHE.data
         store = modulestore()
 
         services = kwargs.setdefault('services', {})

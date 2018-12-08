@@ -1,6 +1,5 @@
 $mint-green: #92c9d3;
 $slices: #386f77, #1abc9c, $mint-green, #397d1c, #a39d3d, #0a5aaa;
-$border-color: #4a4a4a;
 $table-border: rgba(155, 155, 155, 0.2);
 $font-color: #636c72;
 $heading-color: #292b2c;
@@ -9,6 +8,20 @@ $grouping-border: #d8d8d8;
 $trophy-gold: #f39c12;
 
 .content-wrapper {
+  .learner-analytics-header {
+      border-bottom: none;
+
+    .title {
+      margin-bottom: 0;
+      font-size: 1.75em;
+      font-weight: 600;
+    }
+
+    .lock-icon {
+      margin-right: 5px;
+    }
+  }
+
   .page-content.learner-analytics-dashboard-wrapper {
     flex-direction: column;
     background: #fff;
@@ -78,7 +91,8 @@ $trophy-gold: #f39c12;
   .grading-weight-wrapper {
     display: flex;
     flex-flow: row wrap;
-    border-bottom: 1px solid $border-color;
+    border-bottom: 1px solid $table-border;
+    margin-bottom: 25px;
     .chart-wrapper {
       width: 90px;
       height: 90px;
@@ -193,6 +207,15 @@ $trophy-gold: #f39c12;
           font-weight: bold;
         }
       }
+
+      .totals {
+        font-size: 18px;
+        border-color: $table-border;
+
+        .footer-label {
+          color: black;
+        }
+      }
     }
 
     .footnote {
@@ -235,7 +258,7 @@ $trophy-gold: #f39c12;
     color: $font-color;
 
     .streak-icon-wrapper {
-      margin-bottom: 10px;
+      margin: 10px 0;
     }
 
     .fa-trophy {
@@ -246,6 +269,14 @@ $trophy-gold: #f39c12;
 
     .section-heading {
       margin-bottom: 0;
+    }
+
+    .streak-encouragement {
+      margin-bottom: 5px;
+    }
+
+    .streak-criteria {
+      margin-bottom: 20px;
     }
   }
 
@@ -337,6 +368,7 @@ $trophy-gold: #f39c12;
 
       .user-count {
         margin-top: -10px;
+        font-weight: 600;
       }
     }
   }

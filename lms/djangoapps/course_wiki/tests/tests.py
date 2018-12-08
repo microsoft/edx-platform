@@ -2,23 +2,21 @@
 Tests for course wiki
 """
 
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from mock import patch
-from nose.plugins.attrib import attr
 from six import text_type
 
 from courseware.tests.tests import LoginEnrollmentTestCase
 from openedx.features.enterprise_support.tests.mixins.enterprise import EnterpriseTestConsentRequired
-from openedx.tests.util import expected_redirect_url
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
 
 
-@attr(shard=1)
 class WikiRedirectTestCase(EnterpriseTestConsentRequired, LoginEnrollmentTestCase, ModuleStoreTestCase):
     """
     Tests for wiki course redirection.
     """
+    shard = 1
 
     def setUp(self):
         super(WikiRedirectTestCase, self).setUp()
@@ -58,7 +56,7 @@ class WikiRedirectTestCase(EnterpriseTestConsentRequired, LoginEnrollmentTestCas
         resp = self.client.get(destination, HTTP_REFERER=referer)
         self.assertEqual(resp.status_code, 302)
 
-        self.assertEqual(resp['Location'], expected_redirect_url(redirected_to))
+        self.assertEqual(resp['Location'], redirected_to)
 
         # Now we test that the student will be redirected away from that page if the course doesn't exist
         # We do this in the same test because we want to make sure the redirected_to is constructed correctly
@@ -67,7 +65,7 @@ class WikiRedirectTestCase(EnterpriseTestConsentRequired, LoginEnrollmentTestCas
 
         resp = self.client.get(bad_course_wiki_page, HTTP_REFERER=referer)
         self.assertEqual(resp.status_code, 302)
-        self.assertEqual(resp['Location'], expected_redirect_url(destination))
+        self.assertEqual(resp['Location'], destination)
 
     @patch.dict("django.conf.settings.FEATURES", {'ALLOW_WIKI_ROOT_ACCESS': False})
     def test_wiki_no_root_access(self):
@@ -100,7 +98,7 @@ class WikiRedirectTestCase(EnterpriseTestConsentRequired, LoginEnrollmentTestCas
 
         ending_location = resp.redirect_chain[-1][0]
 
-        self.assertEquals(ending_location, expected_redirect_url(course_wiki_page))
+        self.assertEquals(ending_location, course_wiki_page)
         self.assertEquals(resp.status_code, 200)
 
         self.has_course_navigator(resp)
@@ -205,10 +203,14 @@ class WikiRedirectTestCase(EnterpriseTestConsentRequired, LoginEnrollmentTestCas
         self.assertEqual(resp.status_code, 200)
 
     @patch.dict("django.conf.settings.FEATURES", {'ALLOW_WIKI_ROOT_ACCESS': True})
-    def test_consent_required(self):
+    @patch('openedx.features.enterprise_support.api.enterprise_customer_for_request')
+    def test_consent_required(self, mock_enterprise_customer_for_request):
         """
         Test that enterprise data sharing consent is required when enabled for the various courseware views.
         """
+        # ENT-924: Temporary solution to replace sensitive SSO usernames.
+        mock_enterprise_customer_for_request.return_value = None
+
         # Public wikis can be accessed by non-enrolled users, and so direct access is not gated by the consent page
         course = CourseFactory.create()
         course.allow_public_wiki_access = False

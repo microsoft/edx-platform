@@ -1,11 +1,13 @@
 # coding=utf-8
 
 """
-Check code quality using pep8, pylint, and diff_quality.
+Check code quality using pycodestyle, pylint, and diff_quality.
 """
 import json
 import os
 import re
+from datetime import datetime
+from xml.sax.saxutils import quoteattr
 
 from paver.easy import BuildFailure, cmdopts, needs, sh, task
 
@@ -15,6 +17,42 @@ from .utils.envs import Env
 from .utils.timer import timed
 
 ALL_SYSTEMS = 'lms,cms,common,openedx,pavelib'
+JUNIT_XML_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="{name}" tests="1" errors="0" failures="{failure_count}" skip="0">
+<testcase classname="pavelib.quality" name="{name}" time="{seconds}">{failure_element}</testcase>
+</testsuite>
+"""
+JUNIT_XML_FAILURE_TEMPLATE = '<failure message={message}/>'
+START_TIME = datetime.utcnow()
+
+
+def write_junit_xml(name, message=None):
+    """
+    Write a JUnit results XML file describing the outcome of a quality check.
+    """
+    if message:
+        failure_element = JUNIT_XML_FAILURE_TEMPLATE.format(message=quoteattr(message))
+    else:
+        failure_element = ''
+    data = {
+        'failure_count': 1 if message else 0,
+        'failure_element': failure_element,
+        'name': name,
+        'seconds': (datetime.utcnow() - START_TIME).total_seconds(),
+    }
+    Env.QUALITY_DIR.makedirs_p()
+    filename = Env.QUALITY_DIR / '{}.xml'.format(name)
+    with open(filename, 'w') as f:
+        f.write(JUNIT_XML_TEMPLATE.format(**data))
+
+
+def fail_quality(name, message):
+    """
+    Fail the specified quality check by generating the JUnit XML results file
+    and raising a ``BuildFailure``.
+    """
+    write_junit_xml(name, message)
+    raise BuildFailure(message)
 
 
 def top_python_dirs(dirname):
@@ -133,8 +171,9 @@ def run_pylint(options):
     lower_violations_limit, upper_violations_limit, errors, systems = _parse_pylint_options(options)
     errors = getattr(options, 'errors', False)
     systems = getattr(options, 'system', ALL_SYSTEMS).split(',')
+    result_name = 'pylint_{}'.format('_'.join(systems))
 
-    num_violations, violations_list = _get_pylint_violations(systems, errors)
+    num_violations, _ = _get_pylint_violations(systems, errors)
 
     # Print number of violations to log
     violations_count_str = "Number of pylint violations: " + str(num_violations)
@@ -148,7 +187,8 @@ def run_pylint(options):
     # which likely means that pylint did not run successfully.
     # If pylint *did* run successfully, then great! Modify the lower limit.
     if num_violations < lower_violations_limit > -1:
-        raise BuildFailure(
+        fail_quality(
+            result_name,
             "FAILURE: Too few pylint violations. "
             "Expected to see at least {lower_limit} pylint violations. "
             "Either pylint is not running correctly -or- "
@@ -159,10 +199,13 @@ def run_pylint(options):
 
     # Fail when number of violations is greater than the upper limit.
     if num_violations > upper_violations_limit > -1:
-        raise BuildFailure(
+        fail_quality(
+            result_name,
             "FAILURE: Too many pylint violations. "
             "The limit is {upper_limit}.".format(upper_limit=upper_violations_limit)
         )
+    else:
+        write_junit_xml(result_name)
 
 
 def _parse_pylint_options(options):
@@ -206,8 +249,8 @@ def _count_pylint_violations(report_file):
 
 def _get_pep8_violations(clean=True):
     """
-    Runs pep8. Returns a tuple of (number_of_violations, violations_string)
-    where violations_string is a string of all pep8 violations found, separated
+    Runs pycodestyle. Returns a tuple of (number_of_violations, violations_string)
+    where violations_string is a string of all PEP 8 violations found, separated
     by new lines.
     """
     report_dir = (Env.REPORT_DIR / 'pep8')
@@ -220,16 +263,16 @@ def _get_pep8_violations(clean=True):
     Env.METRICS_DIR.makedirs_p()
 
     if not report.exists():
-        sh('pep8 . | tee {} -a'.format(report))
+        sh('pycodestyle . | tee {} -a'.format(report))
 
     violations_list = _pep8_violations(report)
 
-    return (len(violations_list), violations_list)
+    return len(violations_list), violations_list
 
 
 def _pep8_violations(report_file):
     """
-    Returns the list of all pep8 violations in the given report_file.
+    Returns the list of all PEP 8 violations in the given report_file.
     """
     with open(report_file) as f:
         return f.readlines()
@@ -243,14 +286,14 @@ def _pep8_violations(report_file):
 @timed
 def run_pep8(options):  # pylint: disable=unused-argument
     """
-    Run pep8 on system code.
+    Run pycodestyle on system code.
     Fail the task if any violations are found.
     """
     (count, violations_list) = _get_pep8_violations()
     violations_list = ''.join(violations_list)
 
     # Print number of violations to log
-    violations_count_str = "Number of pep8 violations: {count}".format(count=count)
+    violations_count_str = "Number of PEP 8 violations: {count}".format(count=count)
     print violations_count_str
     print violations_list
 
@@ -261,9 +304,11 @@ def run_pep8(options):  # pylint: disable=unused-argument
 
     # Fail if any violations are found
     if count:
-        failure_string = "FAILURE: Too many pep8 violations. " + violations_count_str
+        failure_string = "FAILURE: Too many PEP 8 violations. " + violations_count_str
         failure_string += "\n\nViolations:\n{violations_list}".format(violations_list=violations_list)
-        raise BuildFailure(failure_string)
+        fail_quality('pep8', failure_string)
+    else:
+        write_junit_xml('pep8')
 
 
 @task
@@ -272,7 +317,7 @@ def run_pep8(options):  # pylint: disable=unused-argument
 def run_complexity():
     """
     Uses radon to examine cyclomatic complexity.
-    For additional details on radon, see http://radon.readthedocs.org/
+    For additional details on radon, see https://radon.readthedocs.org/
     """
     system_string = '/ '.join(ALL_SYSTEMS.split(',')) + '/'
     complexity_report_dir = (Env.REPORT_DIR / "complexity")
@@ -303,7 +348,10 @@ def run_complexity():
 
 
 @task
-@needs('pavelib.prereqs.install_node_prereqs')
+@needs(
+    'pavelib.prereqs.install_node_prereqs',
+    'pavelib.utils.test.utils.ensure_clean_package_lock',
+)
 @cmdopts([
     ("limit=", "l", "limit for number of acceptable violations"),
 ])
@@ -320,7 +368,8 @@ def run_eslint(options):
     violations_limit = int(getattr(options, 'limit', -1))
 
     sh(
-        "eslint --ext .js --ext .jsx --format=compact . | tee {eslint_report}".format(
+        "nodejs --max_old_space_size=4096 node_modules/.bin/eslint "
+        "--ext .js --ext .jsx --format=compact . | tee {eslint_report}".format(
             eslint_report=eslint_report
         ),
         ignore_error=True
@@ -329,7 +378,8 @@ def run_eslint(options):
     try:
         num_violations = int(_get_count_from_last_line(eslint_report, "eslint"))
     except TypeError:
-        raise BuildFailure(
+        fail_quality(
+            'eslint',
             "FAILURE: Number of eslint violations could not be found in {eslint_report}".format(
                 eslint_report=eslint_report
             )
@@ -340,11 +390,14 @@ def run_eslint(options):
 
     # Fail if number of violations is greater than the limit
     if num_violations > violations_limit > -1:
-        raise BuildFailure(
+        fail_quality(
+            'eslint',
             "FAILURE: Too many eslint violations ({count}).\nThe limit is {violations_limit}.".format(
                 count=num_violations, violations_limit=violations_limit
             )
         )
+    else:
+        write_junit_xml('eslint')
 
 
 def _get_stylelint_violations():
@@ -367,7 +420,8 @@ def _get_stylelint_violations():
     try:
         return int(_get_count_from_last_line(stylelint_report, "stylelint"))
     except TypeError:
-        raise BuildFailure(
+        fail_quality(
+            'stylelint',
             "FAILURE: Number of stylelint violations could not be found in {stylelint_report}".format(
                 stylelint_report=stylelint_report
             )
@@ -393,12 +447,15 @@ def run_stylelint(options):
 
     # Fail if number of violations is greater than the limit
     if num_violations > violations_limit > -1:
-        raise BuildFailure(
+        fail_quality(
+            'stylelint',
             "FAILURE: Stylelint failed with too many violations: ({count}).\nThe limit is {violations_limit}.".format(
                 count=num_violations,
                 violations_limit=violations_limit,
             )
         )
+    else:
+        write_junit_xml('stylelint')
 
 
 @task
@@ -409,7 +466,7 @@ def run_stylelint(options):
 @timed
 def run_xsslint(options):
     """
-    Runs xss_linter.py on the codebase
+    Runs xsslint/xss_linter.py on the codebase
     """
 
     thresholds_option = getattr(options, 'thresholds', '{}')
@@ -420,7 +477,8 @@ def run_xsslint(options):
     if isinstance(violation_thresholds, dict) is False or \
             any(key not in ("total", "rules") for key in violation_thresholds.keys()):
 
-        raise BuildFailure(
+        fail_quality(
+            'xsslint',
             """FAILURE: Thresholds option "{thresholds_option}" was not supplied using proper format.\n"""
             """Here is a properly formatted example, '{{"total":100,"rules":{{"javascript-escape":0}}}}' """
             """with property names in double-quotes.""".format(
@@ -434,10 +492,11 @@ def run_xsslint(options):
     _prepare_report_dir(xsslint_report_dir)
 
     sh(
-        "{repo_root}/scripts/{xsslint_script} --rule-totals >> {xsslint_report}".format(
+        "{repo_root}/scripts/xsslint/{xsslint_script} --rule-totals --config={cfg_module} >> {xsslint_report}".format(
             repo_root=Env.REPO_ROOT,
             xsslint_script=xsslint_script,
             xsslint_report=xsslint_report,
+            cfg_module='scripts.xsslint_config'
         ),
         ignore_error=True
     )
@@ -457,7 +516,8 @@ def run_xsslint(options):
                     count=int(xsslint_counts['rules'][rule])
                 )
     except TypeError:
-        raise BuildFailure(
+        fail_quality(
+            'xsslint',
             "FAILURE: Number of {xsslint_script} violations could not be found in {xsslint_report}".format(
                 xsslint_script=xsslint_script, xsslint_report=xsslint_report
             )
@@ -496,14 +556,17 @@ def run_xsslint(options):
                         violations_limit=violation_thresholds['rules'][threshold_key],
                     )
 
-    if error_message is not "":
-        raise BuildFailure(
+    if error_message:
+        fail_quality(
+            'xsslint',
             "FAILURE: XSSLinter Failed.\n{error_message}\n"
             "See {xsslint_report} or run the following command to hone in on the problem:\n"
             "  ./scripts/xss-commit-linter.sh -h".format(
                 error_message=error_message, xsslint_report=xsslint_report
             )
         )
+    else:
+        write_junit_xml('xsslint')
 
 
 @task
@@ -532,7 +595,8 @@ def run_xsscommitlint():
     try:
         num_violations = int(xsscommitlint_count)
     except TypeError:
-        raise BuildFailure(
+        fail_quality(
+            'xsscommitlint',
             "FAILURE: Number of {xsscommitlint_script} violations could not be found in {xsscommitlint_report}".format(
                 xsscommitlint_script=xsscommitlint_script, xsscommitlint_report=xsscommitlint_report
             )
@@ -548,6 +612,7 @@ def run_xsscommitlint():
     _write_metric(violations_count_str, metrics_report)
     # Output report to console.
     sh("cat {metrics_report}".format(metrics_report=metrics_report), ignore_error=True)
+    write_junit_xml("xsscommitlint")
 
 
 def _write_metric(metric, filename):
@@ -570,7 +635,7 @@ def _prepare_report_dir(dir_name):
     dir_name.mkdir_p()
 
 
-def _get_report_contents(filename, last_line_only=False):
+def _get_report_contents(filename, report_name, last_line_only=False):
     """
     Returns the contents of the given file. Use last_line_only to only return
     the last line, which can be used for getting output from quality output
@@ -595,7 +660,7 @@ def _get_report_contents(filename, last_line_only=False):
                 return report_file.read()
     else:
         file_not_found_message = "FAILURE: The following log file could not be found: {file}".format(file=filename)
-        raise BuildFailure(file_not_found_message)
+        fail_quality(report_name, file_not_found_message)
 
 
 def _get_count_from_last_line(filename, file_type):
@@ -603,8 +668,9 @@ def _get_count_from_last_line(filename, file_type):
     This will return the number in the last line of a file.
     It is returning only the value (as a floating number).
     """
-    last_line = _get_report_contents(filename, last_line_only=True).strip()
-    if file_type is "python_complexity":
+    last_line = _get_report_contents(filename, file_type, last_line_only=True).strip()
+
+    if file_type == "python_complexity":
         # Example of the last line of a complexity report: "Average complexity: A (1.93953443446)"
         regex = r'\d+.\d+'
     else:
@@ -633,7 +699,7 @@ def _get_xsslint_counts(filename):
             total: M, where M is the number of total violations
 
     """
-    report_contents = _get_report_contents(filename)
+    report_contents = _get_report_contents(filename, 'xsslint')
     rule_count_regex = re.compile(r"^(?P<rule_id>[a-z-]+):\s+(?P<count>\d+) violations", re.MULTILINE)
     total_count_regex = re.compile(r"^(?P<count>\d+) violations total", re.MULTILINE)
     violations = {'rules': {}}
@@ -662,7 +728,7 @@ def _get_xsscommitlint_count(filename):
         The count of xsscommitlint violations, or None if there is  a problem.
 
     """
-    report_contents = _get_report_contents(filename)
+    report_contents = _get_report_contents(filename, 'xsscommitlint')
 
     if 'No files linted' in report_contents:
         return 0
@@ -687,6 +753,7 @@ def _get_xsscommitlint_count(filename):
     ("limit=", "l", "Limits for number of acceptable violations - either <upper> or <lower>:<upper>"),
 ])
 @timed
+# pylint: disable=too-many-statements
 def run_quality(options):
     """
     Build the html diff quality reports, and print the reports to the console.
@@ -694,18 +761,18 @@ def run_quality(options):
     :param: p, diff-quality will fail if the quality percentage calculated is
         below this percentage. For example, if p is set to 80, and diff-quality finds
         quality of the branch vs the compare branch is less than 80%, then this task will fail.
-        This threshold would be applied to both pep8 and pylint.
     """
     # Directory to put the diff reports in.
     # This makes the folder if it doesn't already exist.
     dquality_dir = (Env.REPORT_DIR / "diff_quality").makedirs_p()
 
     # Save the pass variable. It will be set to false later if failures are detected.
-    diff_quality_percentage_pass = True
+    diff_quality_pass = True
+    failure_reasons = []
 
     def _lint_output(linter, count, violations_list, is_html=False, limit=0):
         """
-        Given a count & list of pep8 violations, pretty-print the pep8 output.
+        Given a count & list of pylint violations, pretty-print the output.
         If `is_html`, will print out with HTML markup.
         """
         if is_html:
@@ -738,36 +805,16 @@ def run_quality(options):
 
         return ''.join(lines)
 
-    # Run pep8 directly since we have 0 violations on master
-    (count, violations_list) = _get_pep8_violations(clean=False)
-
-    # Print number of violations to log
-    print _lint_output('pep8', count, violations_list)
-
-    # Also write the number of violations to a file
-    with open(dquality_dir / "diff_quality_pep8.html", "w") as f:
-        f.write(_lint_output('pep8', count, violations_list, is_html=True))
-
-    if count > 0:
-        diff_quality_percentage_pass = False
-
-    # Generate diff-quality html report for pylint, and print to console
     # If pylint reports exist, use those
     # Otherwise, `diff-quality` will call pylint itself
-
     (count, violations_list) = _get_pylint_violations(clean=False)
-
     _, upper_violations_limit, _, _ = _parse_pylint_options(options)
 
-    # Print number of violations to log
+    # Print total number of violations to log
     print _lint_output('pylint', count, violations_list, limit=upper_violations_limit)
-
-    # Also write the number of violations to a file
-    with open(dquality_dir / "diff_quality_pylint.html", "w") as f:
-        f.write(_lint_output('pylint', count, violations_list, is_html=True, limit=upper_violations_limit))
-
     if count > upper_violations_limit > -1:
-        diff_quality_percentage_pass = False
+        diff_quality_pass = False
+        failure_reasons.append('Too many total violations.')
 
     # ----- Set up for diff-quality pylint call -----
     # Set the string, if needed, to be used for the diff-quality --compare-branch switch.
@@ -782,10 +829,20 @@ def run_quality(options):
     if diff_threshold > -1:
         percentage_string = u'--fail-under={0}'.format(diff_threshold)
 
+    pylint_files = get_violations_reports("pylint")
+    pylint_reports = u' '.join(pylint_files)
+    if not run_diff_quality(
+        violations_type="pylint",
+        reports=pylint_reports,
+        percentage_string=percentage_string,
+        branch_string=compare_branch_string,
+        dquality_dir=dquality_dir
+    ):
+        diff_quality_pass = False
+        failure_reasons.append('Pylint violation(s) were found in the lines of code that were added or changed.')
+
     eslint_files = get_violations_reports("eslint")
     eslint_reports = u' '.join(eslint_files)
-
-    # run diff-quality for eslint.
     if not run_diff_quality(
             violations_type="eslint",
             reports=eslint_reports,
@@ -793,12 +850,15 @@ def run_quality(options):
             branch_string=compare_branch_string,
             dquality_dir=dquality_dir
     ):
-        diff_quality_percentage_pass = False
+        diff_quality_pass = False
+        failure_reasons.append('Eslint violation(s) were found in the lines of code that were added or changed.')
 
     # If one of the quality runs fails, then paver exits with an error when it is finished
-    if not diff_quality_percentage_pass:
-        msg = "FAILURE: Diff-quality failure(s). This means that violations were found in the current changeset."
-        raise BuildFailure(msg)
+    if not diff_quality_pass:
+        msg = "FAILURE: " + " ".join(failure_reasons)
+        fail_quality('diff_quality', msg)
+    else:
+        write_junit_xml('diff_quality')
 
 
 def run_diff_quality(
@@ -826,7 +886,7 @@ def run_diff_quality(
         if is_percentage_failure(error_message):
             return False
         else:
-            raise BuildFailure('FAILURE: {}'.format(error_message))
+            fail_quality('diff_quality', 'FAILURE: {}'.format(error_message))
 
 
 def is_percentage_failure(error_message):

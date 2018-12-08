@@ -49,16 +49,19 @@ function getStreakIcons(count) {
   ));
 }
 
+function getStreakEncouragement(count) {
+  const action = (count > 0) ? 'Maintain' : 'Start';
+
+  return `${action} your active streak by`;
+}
+
 function getStreakString(count) {
   const unit = (count ===1) ? 'week' : 'weeks';
-  return `Logged in ${count} ${unit} in a row`;
+  return (count > 0) ? `Active ${count} ${unit} in a row` : false;
 }
 
 export function LearnerAnalyticsDashboard(props) {
-  const {grading_policy, grades, schedule, week_streak, weekly_active_users, discussion_info, profile_images} = props;
-  // temp. for local dev
-  // const week_streak = 3;
-  // const weekly_active_users = 83400;
+  const {grading_policy, grades, schedule, schedule_raw, week_streak, weekly_active_users, discussion_info, profile_images, passing_grade, percent_grade} = props;
   const gradeBreakdown = grading_policy.GRADER.map(({type, weight}, index) => {
     return {
       value: weight,
@@ -71,6 +74,9 @@ export function LearnerAnalyticsDashboard(props) {
   const assignments = gradeBreakdown.map(value => value['label']);
   const assignmentTypes = [...new Set(assignments)];
   const assignmentCounts = getAssignmentCounts(assignmentTypes, schedule);
+
+  console.log(schedule_raw);
+  console.log(grades);
 
   return (
     <div className="learner-analytics-wrapper">
@@ -96,30 +102,35 @@ export function LearnerAnalyticsDashboard(props) {
             </div>
           }
 
-          <h3 className="section-heading">Graded Assessments</h3>
+          <h3 className="section-heading">Graded Assignments</h3>
+          {/* TODO: LEARNER-3854: If implementing Learner Analytics, rename to graded-assignments-wrapper. */}
           <div className="graded-assessments-wrapper">
-            <GradeTable assignmentTypes={assignmentTypes} grades={grades} />
+            <GradeTable assignmentTypes={assignmentTypes}
+                        grades={grades}
+                        passingGrade={passing_grade}
+                        percentGrade={percent_grade} />
+            <div className="footnote">* Your current grade is calculated based on all assignments, including those you have not yet completed.</div>
           </div>
         </div>
         <div className="analytics-group">
           <Discussions {...discussion_info} profileImages={profile_images} />
         </div>
       </div>
-      <div className={classNames(
-             'analytics-group',
-             'sidebar',
-             {'week-streak': week_streak > 0}
-           )}>
+      <div className="analytics-group sidebar week-streak">
         <h2 className="group-heading">Timing</h2>
-        <h3 className="section-heading">Course due dates</h3>
-        <DueDates dates={schedule} assignmentCounts={assignmentCounts} />
-        {week_streak > 0 && 
-          <div className="week-streak-wrapper">
+        <div className="week-streak-wrapper">
+          <h3 className="section-heading">Week streak</h3>
+          {week_streak > 0 && 
             <div className="streak-icon-wrapper" aria-hidden="true">{getStreakIcons(week_streak)}</div>
-            <h3 className="section-heading">Week streak</h3>
-            <p>{getStreakString(week_streak)}</p>
-          </div>
-        }
+          }
+          <p>{getStreakString(week_streak)}</p>
+          <p className="streak-encouragement">{getStreakEncouragement(week_streak)}</p>
+          <ul className="streak-criteria">
+            <li>Answering problems</li>
+            <li>Participating in discussions</li>
+            <li>Watching course videos</li>
+          </ul>
+        </div>
         <div className="active-users-wrapper">
           <span className="fa fa-user count-icon" aria-hidden="true"></span>
           <span className="user-count">{weekly_active_users.toLocaleString('en', {useGrouping:true})}</span>

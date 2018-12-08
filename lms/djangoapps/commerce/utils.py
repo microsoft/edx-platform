@@ -8,9 +8,11 @@ import requests
 import waffle
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.utils.translation import ugettext as _
+from opaque_keys.edx.keys import CourseKey
 
+from course_modes.models import CourseMode
 from openedx.core.djangoapps.commerce.utils import ecommerce_api_client, is_commerce_service_configured
 from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 from openedx.core.djangoapps.theming import helpers as theming_helpers
@@ -55,6 +57,14 @@ class EcommerceService(object):
         """
         return urljoin(self.ecommerce_url_root, ecommerce_page_url)
 
+    def get_order_dashboard_url(self):
+        """ Return the URL to the ecommerce dashboard orders page.
+
+        Returns:
+            String: order dashboard url.
+        """
+        return self.get_absolute_ecommerce_url(CommerceConfiguration.DEFAULT_ORDER_DASHBOARD_URL)
+
     def get_receipt_page_url(self, order_number):
         """
         Gets the URL for the Order Receipt page hosted by the ecommerce service.
@@ -77,33 +87,47 @@ class EcommerceService(object):
             Boolean
         """
         user_is_active = user.is_active or is_account_activation_requirement_disabled()
-        allow_user = user_is_active or user.is_anonymous()
+        allow_user = user_is_active or user.is_anonymous
         return allow_user and self.config.checkout_on_ecommerce_service
 
     def payment_page_url(self):
         """ Return the URL for the checkout page.
 
         Example:
-            http://localhost:8002/basket/single_item/
+            http://localhost:8002/basket/add/
         """
-        return self.get_absolute_ecommerce_url(self.config.single_course_checkout_page)
+        return self.get_absolute_ecommerce_url(self.config.basket_checkout_page)
 
-    def get_checkout_page_url(self, *skus):
+    def get_checkout_page_url(self, *skus, **kwargs):
         """ Construct the URL to the ecommerce checkout page and include products.
 
         Args:
             skus (list): List of SKUs associated with products to be added to basket
+            program_uuid (string): The UUID of the program, if applicable
 
         Returns:
             Absolute path to the ecommerce checkout page showing basket that contains specified products.
 
         Example:
             http://localhost:8002/basket/add/?sku=5H3HG5&sku=57FHHD
+            http://localhost:8002/basket/add/?sku=5H3HG5&sku=57FHHD&bundle=3bdf1dd1-49be-4a15-9145-38901f578c5a
         """
-        return '{checkout_page_path}?{skus}'.format(
-            checkout_page_path=self.get_absolute_ecommerce_url(self.config.MULTIPLE_ITEMS_BASKET_PAGE_URL),
-            skus=urlencode({'sku': skus}, doseq=True),
+        program_uuid = kwargs.get('program_uuid')
+        enterprise_catalog_uuid = kwargs.get('catalog')
+        query_params = {'sku': skus}
+        if enterprise_catalog_uuid:
+            query_params.update({'catalog': enterprise_catalog_uuid})
+
+        url = '{checkout_page_path}?{query_params}'.format(
+            checkout_page_path=self.get_absolute_ecommerce_url(self.config.basket_checkout_page),
+            query_params=urlencode(query_params, doseq=True),
         )
+        if program_uuid:
+            url = '{url}&bundle={program_uuid}'.format(
+                url=url,
+                program_uuid=program_uuid
+            )
+        return url
 
     def upgrade_url(self, user, course_key):
         """
@@ -186,13 +210,14 @@ def refund_entitlement(course_entitlement):
         return False
 
 
-def refund_seat(course_enrollment):
+def refund_seat(course_enrollment, change_mode=False):
     """
     Attempt to initiate a refund for any orders associated with the seat being unenrolled,
     using the commerce service.
 
     Arguments:
         course_enrollment (CourseEnrollment): a student enrollment
+        change_mode (Boolean): change the course mode to free mode or not
 
     Returns:
         A list of the external service's IDs for any refunds that were initiated
@@ -222,6 +247,10 @@ def refund_seat(course_enrollment):
             mode=course_enrollment.mode,
             user=enrollee,
         )
+        if change_mode and CourseMode.can_auto_enroll(course_id=CourseKey.from_string(course_key_str)):
+            course_enrollment.update_enrollment(mode=CourseMode.auto_enroll_mode(course_id=course_key_str),
+                                                is_active=False, skip_refund=True)
+            course_enrollment.save()
     else:
         log.info('No refund opened for user [%s], course [%s]', enrollee.id, course_key_str)
 
@@ -311,7 +340,7 @@ def _send_refund_notification(user, refund_ids):
     return create_zendesk_ticket(requester_name, student.email, subject, body, tags)
 
 
-def _generate_refund_notification_body(student, refund_ids):  # pylint: disable=invalid-name
+def _generate_refund_notification_body(student, refund_ids):
     """ Returns a refund notification message body. """
     msg = _(
         'A refund request has been initiated for {username} ({email}). '

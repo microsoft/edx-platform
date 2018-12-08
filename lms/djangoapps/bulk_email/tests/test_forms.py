@@ -3,7 +3,6 @@
 Unit tests for bulk-email-related forms.
 """
 
-from nose.plugins.attrib import attr
 from opaque_keys.edx.locator import CourseLocator
 from six import text_type
 
@@ -13,9 +12,9 @@ from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
 
 
-@attr(shard=1)
 class CourseAuthorizationFormTest(ModuleStoreTestCase):
     """Test the CourseAuthorizationAdminForm form for Mongo-backed courses."""
+    shard = 1
 
     def setUp(self):
         super(CourseAuthorizationFormTest, self).setUp()
@@ -78,9 +77,8 @@ class CourseAuthorizationFormTest(ModuleStoreTestCase):
         # Validation shouldn't work
         self.assertFalse(form.is_valid())
 
-        msg = u'COURSE NOT FOUND'
-        msg += u' --- Entered course id was: "{0}". '.format(text_type(bad_id))
-        msg += 'Please recheck that you have supplied a valid course id.'
+        msg = u'Course not found.'
+        msg += u' Entered course id was: "{0}".'.format(text_type(bad_id))
         self.assertEquals(msg, form._errors['course_id'][0])  # pylint: disable=protected-access
 
         with self.assertRaisesRegexp(
@@ -96,8 +94,7 @@ class CourseAuthorizationFormTest(ModuleStoreTestCase):
         self.assertFalse(form.is_valid())
 
         msg = u'Course id invalid.'
-        msg += u' --- Entered course id was: "asd::**!@#$%^&*())//foobar!!". '
-        msg += 'Please recheck that you have supplied a valid course id.'
+        msg += u' Entered course id was: "asd::**!@#$%^&*())//foobar!!".'
         self.assertEquals(msg, form._errors['course_id'][0])  # pylint: disable=protected-access
 
         with self.assertRaisesRegexp(
@@ -114,8 +111,7 @@ class CourseAuthorizationFormTest(ModuleStoreTestCase):
         self.assertFalse(form.is_valid())
 
         error_msg = form._errors['course_id'][0]  # pylint: disable=protected-access
-        self.assertIn(u'--- Entered course id was: "{0}". '.format(self.course.id.run), error_msg)
-        self.assertIn(u'Please recheck that you have supplied a valid course id.', error_msg)
+        self.assertIn(u'Entered course id was: "{0}".'.format(self.course.id.run), error_msg)
 
         with self.assertRaisesRegexp(
             ValueError,

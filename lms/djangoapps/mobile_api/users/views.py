@@ -2,6 +2,7 @@
 Views for user API
 """
 
+import json
 from django.shortcuts import redirect
 from django.utils import dateparse
 from opaque_keys import InvalidKeyError
@@ -17,6 +18,7 @@ from courseware.courses import get_current_child
 from courseware.model_data import FieldDataCache
 from courseware.module_render import get_module_for_descriptor
 from courseware.views.index import save_positions_recursively_up
+from experiments.models import ExperimentData, ExperimentKeyValue
 from student.models import CourseEnrollment, User
 from xmodule.modulestore.django import modulestore
 from xmodule.modulestore.exceptions import ItemNotFoundError
@@ -273,6 +275,44 @@ class UserCourseEnrollmentsList(generics.ListAPIView):
         """
         return check_org is None or (check_org.lower() == course_org.lower())
 
+    def hide_course_for_enrollment_fee_experiment(self, user, enrollment, experiment_id=9):
+        """
+        Hide enrolled courses from mobile app as part of REV-73/REV-19
+        """
+        course_key = enrollment.course_overview.id
+        try:
+            courses_excluded_from_mobile = ExperimentKeyValue.objects.get(
+                experiment_id=10,
+                key="mobile_app_exclusion"
+            ).value
+            courses_excluded_from_mobile = json.loads(courses_excluded_from_mobile.replace('\r', '').replace('\n', ''))
+            if enrollment.mode == 'audit' and str(course_key) in courses_excluded_from_mobile.keys():
+                activationTime = dateparse.parse_datetime(courses_excluded_from_mobile[str(course_key)])
+                if activationTime and enrollment.created and enrollment.created > activationTime:
+                    return True
+        except (ExperimentKeyValue.DoesNotExist, AttributeError):
+            pass
+
+        try:
+            ExperimentData.objects.get(
+                user=user,
+                experiment_id=experiment_id,
+                key='enrolled_{0}'.format(course_key),
+            )
+        except ExperimentData.DoesNotExist:
+            return False
+
+        try:
+            ExperimentData.objects.get(
+                user=user,
+                experiment_id=experiment_id,
+                key='paid_{0}'.format(course_key),
+            )
+        except ExperimentData.DoesNotExist:
+            return True
+
+        return False
+
     def get_queryset(self):
         enrollments = self.queryset.filter(
             user__username=self.kwargs['username'],
@@ -282,7 +322,8 @@ class UserCourseEnrollmentsList(generics.ListAPIView):
         return [
             enrollment for enrollment in enrollments
             if enrollment.course_overview and self.is_org(org, enrollment.course_overview.org) and
-            is_mobile_available_for_user(self.request.user, enrollment.course_overview)
+            is_mobile_available_for_user(self.request.user, enrollment.course_overview) and
+            not self.hide_course_for_enrollment_fee_experiment(self.request.user, enrollment)
         ]
 
 

@@ -44,6 +44,21 @@ To test WaffleSwitchNamespace, use the provided context managers.  For example:
     with WAFFLE_SWITCHES.override(waffle.ESTIMATE_FIRST_ATTEMPTED, active=True):
         ...
 
+For long-lived flags, you may want to change the default for the flag from "off"
+to "on", so that it is "on" by default in devstack, sandboxes, or new Open edX
+releases, more closely matching what is in Production. This is for flags that
+can't yet be deleted, for example if there are straggling course overrides.
+
+    * WaffleFlag has a DEPRECATED argument flag_undefined_default that we don't
+    recommend you use any more. Although this can work, it is proven not ideal to
+    have a value that isn't immediately obvious via Django admin.
+
+    * At this time, the proper alternative has not been fully designed. The
+    following food-for-thought could provide ideas for this design when needed:
+    using migrations, using app-level configuration, using management commands,
+    and/or creating records up front so all toggle defaults are explicit rather
+    than implicit.
+
 """
 import crum
 import logging
@@ -54,7 +69,7 @@ import six
 from opaque_keys.edx.keys import CourseKey
 from waffle import flag_is_active, switch_is_active
 
-from request_cache import get_cache as get_request_cache
+from openedx.core.lib.cache_utils import get_cache as get_request_cache
 
 log = logging.getLogger(__name__)
 
@@ -185,6 +200,13 @@ class WaffleSwitch(object):
         self.waffle_namespace = waffle_namespace
         self.switch_name = switch_name
 
+    @property
+    def namespaced_switch_name(self):
+        """
+        Returns the fully namespaced switch name.
+        """
+        return self.waffle_namespace._namespaced_name(self.switch_name)  # pylint: disable=protected-access
+
     def is_enabled(self):
         return self.waffle_namespace.is_enabled(self.switch_name)
 
@@ -230,8 +252,9 @@ class WaffleFlagNamespace(WaffleNamespace):
                 check_before_waffle_callback(namespaced_flag_name) returns True
                 or False, it is returned. If it returns None, then waffle is
                 used.
-            flag_undefined_default (Boolean): A default value to be returned if
-                the waffle flag is to be checked, but doesn't exist.
+            DEPRECATED flag_undefined_default (Boolean): A default value to be
+                returned if the waffle flag is to be checked, but doesn't exist.
+                See docs for alternatives.
         """
         # Import is placed here to avoid model import at project startup.
         from waffle.models import Flag
@@ -308,6 +331,14 @@ class WaffleFlag(object):
             flag_undefined_default=self.flag_undefined_default
         )
 
+    @contextmanager
+    def override(self, active=True):
+        # TODO We can move this import to the top of the file once this code is
+        # not all contained within the __init__ module.
+        from openedx.core.djangoapps.waffle_utils.testutils import override_waffle_flag
+        with override_waffle_flag(self, active):
+            yield
+
 
 class CourseWaffleFlag(WaffleFlag):
     """
@@ -352,9 +383,31 @@ class CourseWaffleFlag(WaffleFlag):
 
         return course_override_callback
 
+    def _is_enabled(self, course_key=None):
+        """
+        Returns whether or not the flag is enabled without error checking.
+
+        Arguments:
+            course_key (CourseKey): The course to check for override before
+            checking waffle.
+        """
+        return self.waffle_namespace.is_flag_active(
+            self.flag_name,
+            check_before_waffle_callback=self._get_course_override_callback(course_key),
+            flag_undefined_default=self.flag_undefined_default
+        )
+
+    def is_enabled_without_course_context(self):
+        """
+        Returns whether or not the flag is enabled outside the context of a given course.
+        This should only be used when a course waffle flag must be used outside of a course.
+        If this is intended for use with a simple global setting, use simple waffle flag instead.
+        """
+        return self._is_enabled()
+
     def is_enabled(self, course_key=None):
         """
-        Returns whether or not the flag is enabled.
+        Returns whether or not the flag is enabled within the context of a given course.
 
         Arguments:
             course_key (CourseKey): The course to check for override before
@@ -365,8 +418,4 @@ class CourseWaffleFlag(WaffleFlag):
             str(course_key)
         )
 
-        return self.waffle_namespace.is_flag_active(
-            self.flag_name,
-            check_before_waffle_callback=self._get_course_override_callback(course_key),
-            flag_undefined_default=self.flag_undefined_default
-        )
+        return self._is_enabled(course_key)

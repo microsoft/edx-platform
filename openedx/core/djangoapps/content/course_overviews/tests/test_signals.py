@@ -1,7 +1,6 @@
 import datetime
 import ddt
 from mock import patch
-from nose.plugins.attrib import attr
 
 from xmodule.modulestore import ModuleStoreEnum
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
@@ -11,7 +10,6 @@ from ..models import CourseOverview
 
 
 @ddt.ddt
-@attr(shard=3)
 class CourseOverviewSignalsTestCase(ModuleStoreTestCase):
     """
     Tests for CourseOverview signals.
@@ -19,6 +17,7 @@ class CourseOverviewSignalsTestCase(ModuleStoreTestCase):
     ENABLED_SIGNALS = ['course_deleted', 'course_published']
     TODAY = datetime.datetime.utcnow()
     NEXT_WEEK = TODAY + datetime.timedelta(days=7)
+    shard = 3
 
     @ddt.data(ModuleStoreEnum.Type.mongo, ModuleStoreEnum.Type.split)
     def test_caching(self, modulestore_type):
@@ -86,6 +85,6 @@ class CourseOverviewSignalsTestCase(ModuleStoreTestCase):
     def test_start_changed(self, mock_signal):
         self.assert_changed_signal_sent('start', self.TODAY, self.NEXT_WEEK, mock_signal)
 
-    @patch('openedx.core.djangoapps.signals.signals.COURSE_PACING_CHANGED.send')
+    @patch('openedx.core.djangoapps.content.course_overviews.signals.COURSE_PACING_CHANGED.send')
     def test_pacing_changed(self, mock_signal):
         self.assert_changed_signal_sent('self_paced', True, False, mock_signal)

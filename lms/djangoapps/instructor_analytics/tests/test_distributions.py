@@ -1,7 +1,7 @@
 """ Tests for analytics.distributions """
 
+import pytest
 from django.test import TestCase
-from nose.tools import raises
 from opaque_keys.edx.locator import CourseLocator
 
 from instructor_analytics.distributions import AVAILABLE_PROFILE_FEATURES, profile_distribution
@@ -11,6 +11,7 @@ from student.tests.factories import UserFactory
 
 class TestAnalyticsDistributions(TestCase):
     '''Test analytics distribution gathering.'''
+    shard = 4
 
     def setUp(self):
         super(TestAnalyticsDistributions, self).setUp()
@@ -25,11 +26,11 @@ class TestAnalyticsDistributions(TestCase):
         self.ces = [CourseEnrollment.enroll(user, self.course_id)
                     for user in self.users]
 
-    @raises(ValueError)
     def test_profile_distribution_bad_feature(self):
         feature = 'robot-not-a-real-feature'
         self.assertNotIn(feature, AVAILABLE_PROFILE_FEATURES)
-        profile_distribution(self.course_id, feature)
+        with pytest.raises(ValueError):
+            profile_distribution(self.course_id, feature)
 
     def test_profile_distribution_easy_choice(self):
         feature = 'gender'
@@ -74,6 +75,7 @@ class TestAnalyticsDistributions(TestCase):
 
 class TestAnalyticsDistributionsNoData(TestCase):
     '''Test analytics distribution gathering.'''
+    shard = 4
 
     def setUp(self):
         super(TestAnalyticsDistributionsNoData, self).setUp()

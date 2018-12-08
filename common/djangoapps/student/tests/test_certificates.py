@@ -6,14 +6,14 @@ import datetime
 import ddt
 import mock
 from django.conf import settings
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.test.utils import override_settings
 from mock import patch
 from pytz import UTC
 
-from certificates.api import get_certificate_url  # pylint: disable=import-error
-from certificates.models import CertificateStatuses  # pylint: disable=import-error
-from certificates.tests.factories import GeneratedCertificateFactory  # pylint: disable=import-error
+from lms.djangoapps.certificates.api import get_certificate_url  # pylint: disable=import-error
+from lms.djangoapps.certificates.models import CertificateStatuses  # pylint: disable=import-error
+from lms.djangoapps.certificates.tests.factories import GeneratedCertificateFactory  # pylint: disable=import-error
 from course_modes.models import CourseMode
 from student.models import LinkedInAddToProfileConfiguration
 from student.tests.factories import CourseEnrollmentFactory, UserFactory
@@ -167,7 +167,7 @@ class CertificateDisplayTest(CertificateDisplayTestBase):
 
     @patch.dict('django.conf.settings.FEATURES', {'CERTIFICATES_HTML_VIEW': False})
     def test_no_certificate_status_no_problem(self):
-        with patch('student.views.cert_info', return_value={}):
+        with patch('student.views.dashboard.cert_info', return_value={}):
             self._create_certificate('honor')
             self._check_can_not_download_certificate()
 

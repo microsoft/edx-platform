@@ -2,24 +2,32 @@
 Third_party_auth integration tests using a mock version of the TestShib provider
 """
 import datetime
-import ddt
-import unittest
-import httpretty
 import json
 import logging
-from mock import patch
-from freezegun import freeze_time
-from social_django.models import UserSocialAuth
-from testfixtures import LogCapture
+import unittest
 from unittest import skip
 
-from openedx.tests.util import expected_redirect_url
-from third_party_auth.saml import log as saml_log, SapSuccessFactorsIdentityProvider
+import ddt
+import httpretty
+from django.contrib import auth
+from freezegun import freeze_time
+from mock import MagicMock, patch
+from social_core import actions
+from social_django import views as social_views
+from social_django.models import UserSocialAuth
+from testfixtures import LogCapture
+
+from enterprise.models import EnterpriseCustomerIdentityProvider, EnterpriseCustomerUser
+from openedx.core.djangoapps.user_authn.views.deprecated import signin_user
+from openedx.core.djangoapps.user_authn.views.login import login_user
+from openedx.core.djangoapps.user_api.accounts.settings_views import account_settings_context
+from openedx.features.enterprise_support.tests.factories import EnterpriseCustomerFactory
+from third_party_auth import pipeline
+from third_party_auth.saml import SapSuccessFactorsIdentityProvider, log as saml_log
 from third_party_auth.tasks import fetch_saml_metadata
 from third_party_auth.tests import testutil
 
 from .base import IntegrationTestMixin
-
 
 TESTSHIB_ENTITY_ID = 'https://idp.testshib.org/idp/shibboleth'
 TESTSHIB_METADATA_URL = 'https://mock.testshib.org/metadata/testshib-providers.xml'
@@ -91,13 +99,14 @@ class SamlIntegrationTestUtilities(object):
         kwargs.setdefault('name', self.PROVIDER_NAME)
         kwargs.setdefault('enabled', True)
         kwargs.setdefault('visible', True)
-        kwargs.setdefault('idp_slug', self.PROVIDER_IDP_SLUG)
+        kwargs.setdefault("backend_name", "tpa-saml")
+        kwargs.setdefault('slug', self.PROVIDER_IDP_SLUG)
         kwargs.setdefault('entity_id', TESTSHIB_ENTITY_ID)
         kwargs.setdefault('metadata_source', TESTSHIB_METADATA_URL)
         kwargs.setdefault('icon_class', 'fa-university')
         kwargs.setdefault('attr_email', 'urn:oid:1.3.6.1.4.1.5923.1.1.1.6')  # eduPersonPrincipalName
         kwargs.setdefault('max_session_length', None)
-        self.configure_saml_provider(**kwargs)
+        saml_provider = self.configure_saml_provider(**kwargs)  # pylint: disable=no-member
 
         if fetch_metadata:
             self.assertTrue(httpretty.is_enabled())
@@ -109,6 +118,7 @@ class SamlIntegrationTestUtilities(object):
                 self.assertEqual(num_updated, 1)
                 self.assertEqual(num_failed, 0)
                 self.assertEqual(len(failure_messages), 0)
+        return saml_provider
 
     def do_provider_login(self, provider_redirect_url):
         """ Mocked: the user logs in to TestShib and then gets redirected back """
@@ -128,6 +138,100 @@ class TestShibIntegrationTest(SamlIntegrationTestUtilities, IntegrationTestMixin
     TestShib provider Integration Test, to test SAML functionality
     """
 
+    TOKEN_RESPONSE_DATA = {
+        'access_token': 'access_token_value',
+        'expires_in': 'expires_in_value',
+    }
+    USER_RESPONSE_DATA = {
+        'lastName': 'lastName_value',
+        'id': 'id_value',
+        'firstName': 'firstName_value',
+        'idp_name': 'testshib',
+        'attributes': {u'urn:oid:0.9.2342.19200300.100.1.1': [u'myself']}
+    }
+
+    def test_full_pipeline_succeeds_for_unlinking_testshib_account(self):
+
+        # First, create, the request and strategy that store pipeline state,
+        # configure the backend, and mock out wire traffic.
+        self.provider = self._configure_testshib_provider()
+        request, strategy = self.get_request_and_strategy(
+            auth_entry=pipeline.AUTH_ENTRY_LOGIN, redirect_uri='social:complete')
+        request.backend.auth_complete = MagicMock(return_value=self.fake_auth_complete(strategy))
+        user = self.create_user_models_for_existing_account(
+            strategy, 'user@example.com', 'password', self.get_username())
+        self.assert_social_auth_exists_for_user(user, strategy)
+
+        request.user = user
+
+        # We're already logged in, so simulate that the cookie is set correctly
+        self.set_logged_in_cookies(request)
+
+        # linking a learner with enterprise customer.
+        enterprise_customer = EnterpriseCustomerFactory()
+        assert EnterpriseCustomerUser.objects.count() == 0, "Precondition check: no link records should exist"
+        EnterpriseCustomerUser.objects.link_user(enterprise_customer, user.email)
+        self.assertTrue(
+            EnterpriseCustomerUser.objects.filter(enterprise_customer=enterprise_customer, user_id=user.id).count() == 1
+        )
+        EnterpriseCustomerIdentityProvider.objects.get_or_create(enterprise_customer=enterprise_customer,
+                                                                 provider_id=self.provider.provider_id)
+
+        # Instrument the pipeline to get to the dashboard with the full expected state.
+        self.client.get(
+            pipeline.get_login_url(self.provider.provider_id, pipeline.AUTH_ENTRY_LOGIN))
+        actions.do_complete(request.backend, social_views._do_login,  # pylint: disable=protected-access
+                            request=request)
+
+        with self._patch_edxmako_current_request(strategy.request):
+            signin_user(strategy.request)
+            login_user(strategy.request)
+            actions.do_complete(request.backend, social_views._do_login, user=user,  # pylint: disable=protected-access
+                                request=request)
+
+        # First we expect that we're in the linked state, with a backend entry.
+        self.assert_account_settings_context_looks_correct(account_settings_context(request), linked=True)
+        self.assert_social_auth_exists_for_user(request.user, strategy)
+
+        # Fire off the disconnect pipeline without the user information.
+        actions.do_disconnect(
+            request.backend,
+            None,
+            None,
+            redirect_field_name=auth.REDIRECT_FIELD_NAME,
+            request=request
+        )
+        self.assertFalse(
+            EnterpriseCustomerUser.objects.filter(enterprise_customer=enterprise_customer, user_id=user.id).count() == 0
+        )
+
+        # Fire off the disconnect pipeline to unlink.
+        self.assert_redirect_to_dashboard_looks_correct(
+            actions.do_disconnect(
+                request.backend,
+                user,
+                None,
+                redirect_field_name=auth.REDIRECT_FIELD_NAME,
+                request=request
+            )
+        )
+        # Now we expect to be in the unlinked state, with no backend entry.
+        self.assert_account_settings_context_looks_correct(account_settings_context(request), linked=False)
+        self.assert_social_auth_does_not_exist_for_user(user, strategy)
+        self.assertTrue(
+            EnterpriseCustomerUser.objects.filter(enterprise_customer=enterprise_customer, user_id=user.id).count() == 0
+        )
+
+    def get_response_data(self):
+        """Gets dict (string -> object) of merged data about the user."""
+        response_data = dict(self.TOKEN_RESPONSE_DATA)
+        response_data.update(self.USER_RESPONSE_DATA)
+        return response_data
+
+    def get_username(self):
+        response_data = self.get_response_data()
+        return response_data.get('idp_name')
+
     def test_login_before_metadata_fetched(self):
         self._configure_testshib_provider(fetch_metadata=False)
         # The user goes to the login page, and sees a button to login with TestShib:
@@ -136,7 +240,7 @@ class TestShibIntegrationTest(SamlIntegrationTestUtilities, IntegrationTestMixin
         try_login_response = self.client.get(testshib_login_url)
         # The user should be redirected to back to the login page:
         self.assertEqual(try_login_response.status_code, 302)
-        self.assertEqual(try_login_response['Location'], expected_redirect_url(self.login_page_url, hostname=self.hostname))
+        self.assertEqual(try_login_response['Location'], self.login_page_url)
         # When loading the login page, the user will see an error message:
         response = self.client.get(self.login_page_url)
         self.assertEqual(response.status_code, 200)
@@ -145,12 +249,12 @@ class TestShibIntegrationTest(SamlIntegrationTestUtilities, IntegrationTestMixin
     def test_login(self):
         """ Configure TestShib before running the login test """
         self._configure_testshib_provider()
-        super(TestShibIntegrationTest, self).test_login()
+        self._test_login()
 
     def test_register(self):
         """ Configure TestShib before running the register test """
         self._configure_testshib_provider()
-        super(TestShibIntegrationTest, self).test_register()
+        self._test_register()
 
     def test_login_records_attributes(self):
         """
@@ -173,7 +277,7 @@ class TestShibIntegrationTest(SamlIntegrationTestUtilities, IntegrationTestMixin
         """ Test SAML login logs with debug mode enabled or not """
         self._configure_testshib_provider(debug_mode=debug_mode_enabled)
         with patch.object(saml_log, 'info') as mock_log:
-            super(TestShibIntegrationTest, self).test_login()
+            self._test_login()
         if debug_mode_enabled:
             # We expect that test_login() does two full logins, and each attempt generates two
             # logs - one for the request and one for the response
@@ -199,7 +303,7 @@ class TestShibIntegrationTest(SamlIntegrationTestUtilities, IntegrationTestMixin
         kwargs.setdefault('name', self.PROVIDER_NAME)
         kwargs.setdefault('enabled', True)
         kwargs.setdefault('visible', True)
-        kwargs.setdefault('idp_slug', self.PROVIDER_IDP_SLUG)
+        kwargs.setdefault('slug', self.PROVIDER_IDP_SLUG)
         kwargs.setdefault('entity_id', TESTSHIB_ENTITY_ID)
         kwargs.setdefault('metadata_source', TESTSHIB_METADATA_URL_WITH_CACHE_DURATION)
         kwargs.setdefault('icon_class', 'fa-university')
@@ -226,7 +330,7 @@ class TestShibIntegrationTest(SamlIntegrationTestUtilities, IntegrationTestMixin
         now = datetime.datetime.utcnow()
         with freeze_time(now):
             # Test the login flow, adding the user in the process
-            super(TestShibIntegrationTest, self).test_login()
+            self._test_login()
 
         # Wait 30 seconds; longer than the manually-set 10-second timeout
         later = now + datetime.timedelta(seconds=30)
@@ -356,7 +460,7 @@ class SuccessFactorsIntegrationTest(SamlIntegrationTestUtilities, IntegrationTes
         self.USER_EMAIL = "myself@testshib.org"
         self.USER_NAME = "Me Myself And I"
         self.USER_USERNAME = "myself"
-        super(SuccessFactorsIntegrationTest, self).test_register()
+        self._test_register()
 
     @patch.dict('django.conf.settings.REGISTRATION_EXTRA_FIELDS', country='optional')
     def test_register_sapsf_metadata_present(self):
@@ -382,7 +486,7 @@ class SuccessFactorsIntegrationTest(SamlIntegrationTestUtilities, IntegrationTes
             metadata_source=TESTSHIB_METADATA_URL,
             other_settings=json.dumps(provider_settings)
         )
-        super(SuccessFactorsIntegrationTest, self).test_register(country=expected_country)
+        self._test_register(country=expected_country)
 
     @patch.dict('django.conf.settings.REGISTRATION_EXTRA_FIELDS', country='optional')
     def test_register_sapsf_metadata_present_override_relevant_value(self):
@@ -411,7 +515,7 @@ class SuccessFactorsIntegrationTest(SamlIntegrationTestUtilities, IntegrationTes
             metadata_source=TESTSHIB_METADATA_URL,
             other_settings=json.dumps(provider_settings)
         )
-        super(SuccessFactorsIntegrationTest, self).test_register(country=expected_country)
+        self._test_register(country=expected_country)
 
     @patch.dict('django.conf.settings.REGISTRATION_EXTRA_FIELDS', country='optional')
     def test_register_sapsf_metadata_present_override_other_value(self):
@@ -440,7 +544,7 @@ class SuccessFactorsIntegrationTest(SamlIntegrationTestUtilities, IntegrationTes
             metadata_source=TESTSHIB_METADATA_URL,
             other_settings=json.dumps(provider_settings)
         )
-        super(SuccessFactorsIntegrationTest, self).test_register(country=expected_country)
+        self._test_register(country=expected_country)
 
     @patch.dict('django.conf.settings.REGISTRATION_EXTRA_FIELDS', country='optional')
     def test_register_sapsf_metadata_present_empty_value_override(self):
@@ -470,7 +574,7 @@ class SuccessFactorsIntegrationTest(SamlIntegrationTestUtilities, IntegrationTes
             metadata_source=TESTSHIB_METADATA_URL,
             other_settings=json.dumps(provider_settings)
         )
-        super(SuccessFactorsIntegrationTest, self).test_register(country=expected_country)
+        self._test_register(country=expected_country)
 
     def test_register_http_failure(self):
         """
@@ -492,7 +596,7 @@ class SuccessFactorsIntegrationTest(SamlIntegrationTestUtilities, IntegrationTes
         self.USER_EMAIL = "myself@testshib.org"
         self.USER_NAME = "Me Myself And I"
         self.USER_USERNAME = "myself"
-        super(SuccessFactorsIntegrationTest, self).test_register()
+        self._test_register()
 
     def test_register_http_failure_in_odata(self):
         """
@@ -519,7 +623,7 @@ class SuccessFactorsIntegrationTest(SamlIntegrationTestUtilities, IntegrationTes
             })
         )
         with LogCapture(level=logging.WARNING) as log_capture:
-            super(SuccessFactorsIntegrationTest, self).test_register()
+            self._test_register()
             logging_messages = str([log_msg.getMessage() for log_msg in log_capture.records]).replace('\\', '')
             self.assertIn(odata_company_id, logging_messages)
             self.assertIn(mocked_odata_api_url, logging_messages)

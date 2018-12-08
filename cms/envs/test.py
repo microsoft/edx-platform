@@ -13,11 +13,6 @@ sessions. Assumes structure:
 # want to import all variables from base settings files
 # pylint: disable=wildcard-import, unused-wildcard-import
 
-# Pylint gets confused by path.py instances, which report themselves as class
-# objects. As a result, pylint applies the wrong regex in validating names,
-# and throws spurious errors. Therefore, we disable invalid-name checking.
-# pylint: disable=invalid-name
-
 from .common import *
 import os
 from path import Path as path
@@ -37,15 +32,12 @@ from lms.envs.test import (
     COMPREHENSIVE_THEME_DIRS,
     JWT_AUTH,
     REGISTRATION_EXTRA_FIELDS,
+    ECOMMERCE_API_URL,
 )
 
-# Add some host names used in assorted tests
+# Allow all hosts during tests, we use a lot of different ones all over the codebase.
 ALLOWED_HOSTS = [
-    'localhost',
-    'logistration.testserver',
-    '.testserver.fake',
-    'test-site.testserver',
-    'testserver.fakeother',
+    '*'
 ]
 
 # mongo connection settings
@@ -58,8 +50,6 @@ TEST_ROOT = path('test_root')
 
 # Want static files in the same dir for running on jenkins.
 STATIC_ROOT = TEST_ROOT / "staticfiles"
-INSTALLED_APPS = [app for app in INSTALLED_APPS if app != 'webpack_loader']
-INSTALLED_APPS.append('openedx.tests.util.webpack_loader')
 WEBPACK_LOADER['DEFAULT']['STATS_FILE'] = STATIC_ROOT / "webpack-stats.json"
 
 GITHUB_REPO_ROOT = TEST_ROOT / "data"
@@ -96,10 +86,10 @@ update_module_store_settings(
         'fs_root': TEST_ROOT / "data",
     },
     doc_store_settings={
-        'db': 'test_xmodule',
+        'db': 'test_xmodule_{}'.format(THIS_UUID),
         'host': MONGO_HOST,
         'port': MONGO_PORT_NUM,
-        'collection': 'test_modulestore{0}'.format(THIS_UUID),
+        'collection': 'test_modulestore',
     },
 )
 
@@ -207,6 +197,8 @@ FEATURES['ENABLE_SERVICE_STATUS'] = True
 # Toggles embargo on for testing
 FEATURES['EMBARGO'] = True
 
+FEATURES['ENABLE_COMBINED_LOGIN_REGISTRATION'] = True
+
 # set up some testing for microsites
 FEATURES['USE_MICROSITES'] = True
 MICROSITE_ROOT_DIR = COMMON_ROOT / 'test' / 'test_sites'
@@ -282,6 +274,9 @@ FEATURES['ENABLE_DISCUSSION_SERVICE'] = False
 # Enable a parental consent age limit for testing
 PARENTAL_CONSENT_AGE_LIMIT = 13
 
+# Enable certificates for the tests
+FEATURES['CERTIFICATES_HTML_VIEW'] = True
+
 # Enable content libraries code for the tests
 FEATURES['ENABLE_CONTENT_LIBRARIES'] = True
 
@@ -317,9 +312,6 @@ SECRET_KEY = '85920908f28904ed733fe576320db18cabd7b6cd'
 ######### custom courses #########
 INSTALLED_APPS.append('openedx.core.djangoapps.ccxcon.apps.CCXConnectorConfig')
 FEATURES['CUSTOM_COURSES_EDX'] = True
-
-# API access management -- needed for simple-history to run.
-INSTALLED_APPS.append('openedx.core.djangoapps.api_admin')
 
 ########################## VIDEO IMAGE STORAGE ############################
 VIDEO_IMAGE_SETTINGS = dict(

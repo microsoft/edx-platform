@@ -64,9 +64,18 @@ class CredentialsApiConfig(ConfigurationModel):
     @property
     def internal_api_url(self):
         """
-        Internally-accessible API URL root.
+        Internally-accessible API URL root, looked up based on the current request.
         """
         root = helpers.get_value('CREDENTIALS_INTERNAL_SERVICE_URL', settings.CREDENTIALS_INTERNAL_SERVICE_URL)
+        return urljoin(root, '/api/{}/'.format(API_VERSION))
+
+    @staticmethod
+    def get_internal_api_url_for_org(org):
+        """
+        Internally-accessible API URL root, looked up by org rather than the current request.
+        """
+        root = helpers.get_value_for_org(org, 'CREDENTIALS_INTERNAL_SERVICE_URL',
+                                         settings.CREDENTIALS_INTERNAL_SERVICE_URL)
         return urljoin(root, '/api/{}/'.format(API_VERSION))
 
     @property
@@ -76,6 +85,17 @@ class CredentialsApiConfig(ConfigurationModel):
         """
         root = helpers.get_value('CREDENTIALS_PUBLIC_SERVICE_URL', settings.CREDENTIALS_PUBLIC_SERVICE_URL)
         return urljoin(root, '/api/{}/'.format(API_VERSION))
+
+    @property
+    def public_records_url(self):
+        """
+        Publicly-accessible Records URL root.
+        """
+        # Not every site wants the Learner Records feature, so we allow opting out.
+        if not helpers.get_value('ENABLE_LEARNER_RECORDS', True):
+            return None
+        root = helpers.get_value('CREDENTIALS_PUBLIC_SERVICE_URL', settings.CREDENTIALS_PUBLIC_SERVICE_URL)
+        return urljoin(root, '/records/')
 
     @property
     def is_learner_issuance_enabled(self):
@@ -88,3 +108,22 @@ class CredentialsApiConfig(ConfigurationModel):
     def is_cache_enabled(self):
         """Whether responses from the Credentials API will be cached."""
         return self.cache_ttl > 0
+
+
+class NotifyCredentialsConfig(ConfigurationModel):
+    """
+    Manages configuration for a run of the notify_credentials management command.
+    """
+
+    class Meta(object):
+        app_label = 'credentials'
+        verbose_name = 'notify_credentials argument'
+
+    arguments = models.TextField(
+        blank=True,
+        help_text='Useful for manually running a Jenkins job. Specify like "--start-date=2018 --courses A B".',
+        default='',
+    )
+
+    def __unicode__(self):
+        return unicode(self.arguments)

@@ -1,9 +1,8 @@
 """
 Test for split test XModule
 """
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from mock import MagicMock
-from nose.plugins.attrib import attr
 from six import text_type
 
 from courseware.model_data import FieldDataCache
@@ -15,7 +14,6 @@ from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
 from xmodule.partitions.partitions import Group, UserPartition
 
 
-@attr(shard=1)
 class SplitTestBase(SharedModuleStoreTestCase):
     """
     Sets up a basic course and user for split test testing.
@@ -26,6 +24,7 @@ class SplitTestBase(SharedModuleStoreTestCase):
     ICON_CLASSES = None
     TOOLTIPS = None
     VISIBLE_CONTENT = None
+    shard = 1
 
     @classmethod
     def setUpClass(cls):
@@ -168,7 +167,6 @@ class TestSplitTestVert(SplitTestBase):
 
     def setUp(self):
         # We define problem compenents that we need but don't explicitly call elsewhere.
-        # pylint: disable=unused-variable
         super(TestSplitTestVert, self).setUp()
 
         c0_url = self.course.id.make_usage_key("vertical", "split_test_cond0")
@@ -178,7 +176,7 @@ class TestSplitTestVert(SplitTestBase):
             parent_location=self.sequential.location,
             category="split_test",
             display_name="Split test",
-            user_partition_id='0',
+            user_partition_id=0,
             group_id_to_child={"0": c0_url, "1": c1_url},
         )
 
@@ -237,7 +235,6 @@ class TestVertSplitTestVert(SplitTestBase):
 
     def setUp(self):
         # We define problem compenents that we need but don't explicitly call elsewhere.
-        # pylint: disable=unused-variable
         super(TestVertSplitTestVert, self).setUp()
 
         vert1 = ItemFactory.create(
@@ -252,7 +249,7 @@ class TestVertSplitTestVert(SplitTestBase):
             parent_location=vert1.location,
             category="split_test",
             display_name="Split test",
-            user_partition_id='0',
+            user_partition_id=0,
             group_id_to_child={"0": c0_url, "1": c1_url},
         )
 
@@ -285,11 +282,12 @@ class TestVertSplitTestVert(SplitTestBase):
         ]
 
 
-@attr(shard=1)
 class SplitTestPosition(SharedModuleStoreTestCase):
     """
     Check that we can change positions in a course with partitions defined
     """
+    shard = 1
+
     @classmethod
     def setUpClass(cls):
         super(SplitTestPosition, cls).setUpClass()

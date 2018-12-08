@@ -5,7 +5,8 @@ import copy
 import json
 import logging
 import random
-import string  # pylint: disable=deprecated-module
+import re
+import string
 
 import django.utils
 import six
@@ -13,7 +14,7 @@ from ccx_keys.locator import CCXLocator
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.http import Http404, HttpResponse, HttpResponseBadRequest, HttpResponseNotFound
 from django.shortcuts import redirect
 from django.utils.translation import ugettext as _
@@ -21,9 +22,12 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_http_methods
 from opaque_keys import InvalidKeyError
 from opaque_keys.edx.keys import CourseKey
-from opaque_keys.edx.locations import Location
+from opaque_keys.edx.locator import BlockUsageLocator
 from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
 from openedx.core.djangoapps.waffle_utils import WaffleSwitchNamespace
+from openedx.features.course_experience.waffle import waffle as course_experience_waffle
+from openedx.features.course_experience.waffle import ENABLE_COURSE_ABOUT_SIDEBAR_HTML
+from six import text_type
 
 from contentstore.course_group_config import (
     COHORT_SCHEME,
@@ -55,11 +59,9 @@ from milestones import api as milestones_api
 from models.settings.course_grading import CourseGradingModel
 from models.settings.course_metadata import CourseMetadata
 from models.settings.encoder import CourseSettingsEncoder
-from openedx.core.djangoapps.content.course_structures.api.v0 import api, errors
 from openedx.core.djangoapps.credit.api import get_credit_requirements, is_credit_course
 from openedx.core.djangoapps.credit.tasks import update_credit_course_requirements
 from openedx.core.djangoapps.models.course_details import CourseDetails
-from openedx.core.djangoapps.self_paced.models import SelfPacedConfiguration
 from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 from openedx.core.djangolib.js_utils import dump_js_escaped_json
 from openedx.core.lib.course_tabs import CourseTabPluginManager
@@ -219,7 +221,6 @@ def _dismiss_notification(request, course_action_state_id):  # pylint: disable=u
     return JsonResponse({'success': True})
 
 
-# pylint: disable=unused-argument
 @login_required
 def course_handler(request, course_key_string=None):
     """
@@ -586,13 +587,18 @@ def _deprecated_blocks_info(course_module, deprecated_block_types):
         'advance_settings_url': reverse_course_url('advanced_settings_handler', course_module.id)
     }
 
-    try:
-        structure_data = api.course_structure(course_module.id, block_types=deprecated_block_types)
-    except errors.CourseStructureNotAvailableError:
-        return data
+    deprecated_blocks = modulestore().get_items(
+        course_module.id,
+        qualifiers={
+            'category': re.compile('^' + '$|^'.join(deprecated_block_types) + '$')
+        }
+    )
 
-    for block in structure_data['blocks'].values():
-        data['blocks'].append([reverse_usage_url('container_handler', block['parent']), block['display_name']])
+    for block in deprecated_blocks:
+        data['blocks'].append([
+            reverse_usage_url('container_handler', block.parent),
+            block.display_name
+        ])
 
     return data
 
@@ -618,7 +624,13 @@ def course_index(request, course_key):
         sections = course_module.get_children()
         course_structure = _course_outline_json(request, course_module)
         locator_to_show = request.GET.get('show', None)
-        course_release_date = get_default_time_display(course_module.start) if course_module.start != DEFAULT_START_DATE else _("Unscheduled")
+
+        course_release_date = (
+            get_default_time_display(course_module.start)
+            if course_module.start != DEFAULT_START_DATE
+            else _("Set Date")
+        )
+
         settings_url = reverse_course_url('settings_handler', course_key)
 
         try:
@@ -630,6 +642,7 @@ def course_index(request, course_key):
         deprecated_blocks_info = _deprecated_blocks_info(course_module, deprecated_block_names)
 
         return render_to_response('course_outline.html', {
+            'language_code': request.LANGUAGE_CODE,
             'context_course': course_module,
             'lms_link': lms_link,
             'sections': sections,
@@ -812,7 +825,7 @@ def _create_or_rerun_course(request):
                     'course_key': unicode(new_course.id),
                 })
             except ValidationError as ex:
-                return JsonResponse({'error': ex.message}, status=400)
+                return JsonResponse({'error': text_type(ex)}, status=400)
     except DuplicateCourseError:
         return JsonResponse({
             'ErrMsg': _(
@@ -829,7 +842,7 @@ def _create_or_rerun_course(request):
         })
     except InvalidKeyError as error:
         return JsonResponse({
-            "ErrMsg": _("Unable to create course '{name}'.\n\n{err}").format(name=display_name, err=error.message)}
+            "ErrMsg": _("Unable to create course '{name}'.\n\n{err}").format(name=display_name, err=text_type(error))}
         )
 
 
@@ -906,6 +919,9 @@ def rerun_course(user, source_course_key, org, number, run, fields, async=True):
 
     # Clear the fields that must be reset for the rerun
     fields['advertised_start'] = None
+    fields['enrollment_start'] = None
+    fields['enrollment_end'] = None
+    fields['video_upload_pipeline'] = {}
 
     json_fields = json.dumps(fields, cls=EdxJSONEncoder)
     args = [unicode(source_course_key), unicode(destination_course_key), user.id, json_fields]
@@ -918,7 +934,6 @@ def rerun_course(user, source_course_key, org, number, run, fields, async=True):
     return destination_course_key
 
 
-# pylint: disable=unused-argument
 @login_required
 @ensure_csrf_cookie
 @require_http_methods(["GET"])
@@ -951,7 +966,6 @@ def course_info_handler(request, course_key_string):
             return HttpResponseBadRequest("Only supports html requests")
 
 
-# pylint: disable=unused-argument
 @login_required
 @ensure_csrf_cookie
 @require_http_methods(("GET", "POST", "PUT", "DELETE"))
@@ -1044,7 +1058,8 @@ def settings_handler(request, course_key_string):
                 'EDITABLE_SHORT_DESCRIPTION',
                 settings.FEATURES.get('EDITABLE_SHORT_DESCRIPTION', True)
             )
-            self_paced_enabled = SelfPacedConfiguration.current().enabled
+            sidebar_html_enabled = course_experience_waffle().is_enabled(ENABLE_COURSE_ABOUT_SIDEBAR_HTML)
+            # self_paced_enabled = SelfPacedConfiguration.current().enabled
 
             settings_context = {
                 'context_course': course_module,
@@ -1056,6 +1071,7 @@ def settings_handler(request, course_key_string):
                 'details_url': reverse_course_url('settings_handler', course_key),
                 'about_page_editable': about_page_editable,
                 'short_description_editable': short_description_editable,
+                'sidebar_html_enabled': sidebar_html_enabled,
                 'upload_asset_url': upload_asset_url,
                 'course_handler_url': reverse_course_url('course_handler', course_key),
                 'language_options': settings.ALL_LANGUAGES,
@@ -1065,7 +1081,6 @@ def settings_handler(request, course_key_string):
                 'enrollment_end_editable': enrollment_end_editable,
                 'is_prerequisite_courses_enabled': is_prerequisite_courses_enabled(),
                 'is_entrance_exams_enabled': is_entrance_exams_enabled(),
-                'self_paced_enabled': self_paced_enabled,
                 'enable_extended_course_details': enable_extended_course_details
             }
             if is_prerequisite_courses_enabled():
@@ -1137,7 +1152,6 @@ def settings_handler(request, course_key_string):
                             entrance_exam_minimum_score_pct = float(ee_min_score_pct)
                         if entrance_exam_minimum_score_pct.is_integer():
                             entrance_exam_minimum_score_pct = entrance_exam_minimum_score_pct / 100
-                        entrance_exam_minimum_score_pct = unicode(entrance_exam_minimum_score_pct)
                         # If there's already an entrance exam defined, we'll update the existing one
                         if course_entrance_exam_present:
                             exam_data = {
@@ -1298,7 +1312,7 @@ def advanced_settings_handler(request, course_key_string):
                             # update the course tabs if required by any setting changes
                             _refresh_course_tabs(request, course_module)
                         except InvalidTabsException as err:
-                            log.exception(err.message)
+                            log.exception(text_type(err))
                             response_message = [
                                 {
                                     'message': _('An error occurred while trying to save your tabs'),
@@ -1317,7 +1331,7 @@ def advanced_settings_handler(request, course_key_string):
                 # Handle all errors that validation doesn't catch
                 except (TypeError, ValueError, InvalidTabsException) as err:
                     return HttpResponseBadRequest(
-                        django.utils.html.escape(err.message),
+                        django.utils.html.escape(text_type(err)),
                         content_type="text/plain"
                     )
 
@@ -1371,7 +1385,7 @@ def assign_textbook_id(textbook, used_ids=()):
     Return an ID that can be assigned to a textbook
     and doesn't match the used_ids
     """
-    tid = Location.clean(textbook["tab_title"])
+    tid = BlockUsageLocator.clean(textbook["tab_title"])
     if not tid[0].isdigit():
         # stick a random digit in front
         tid = random.choice(string.digits) + tid
@@ -1419,7 +1433,7 @@ def textbooks_list_handler(request, course_key_string):
             try:
                 textbooks = validate_textbooks_json(request.body)
             except TextbookValidationError as err:
-                return JsonResponse({"error": err.message}, status=400)
+                return JsonResponse({"error": text_type(err)}, status=400)
 
             tids = set(t["id"] for t in textbooks if "id" in t)
             for textbook in textbooks:
@@ -1438,7 +1452,7 @@ def textbooks_list_handler(request, course_key_string):
             try:
                 textbook = validate_textbook_json(request.body)
             except TextbookValidationError as err:
-                return JsonResponse({"error": err.message}, status=400)
+                return JsonResponse({"error": text_type(err)}, status=400)
             if not textbook.get("id"):
                 tids = set(t["id"] for t in course.pdf_textbooks if "id" in t)
                 textbook["id"] = assign_textbook_id(textbook, tids)
@@ -1492,7 +1506,7 @@ def textbooks_detail_handler(request, course_key_string, textbook_id):
             try:
                 new_textbook = validate_textbook_json(request.body)
             except TextbookValidationError as err:
-                return JsonResponse({"error": err.message}, status=400)
+                return JsonResponse({"error": text_type(err)}, status=400)
             new_textbook["id"] = textbook_id
             if textbook:
                 i = course_module.pdf_textbooks.index(textbook)
@@ -1622,7 +1636,7 @@ def group_configurations_list_handler(request, course_key_string):
                 try:
                     new_configuration = GroupConfiguration(request.body, course).get_user_partition()
                 except GroupConfigurationsValidationError as err:
-                    return JsonResponse({"error": err.message}, status=400)
+                    return JsonResponse({"error": text_type(err)}, status=400)
 
                 course.user_partitions.append(new_configuration)
                 response = JsonResponse(new_configuration.to_json(), status=201)
@@ -1665,7 +1679,7 @@ def group_configurations_detail_handler(request, course_key_string, group_config
             try:
                 new_configuration = GroupConfiguration(request.body, course, group_configuration_id).get_user_partition()
             except GroupConfigurationsValidationError as err:
-                return JsonResponse({"error": err.message}, status=400)
+                return JsonResponse({"error": text_type(err)}, status=400)
 
             if configuration:
                 index = course.user_partitions.index(configuration)

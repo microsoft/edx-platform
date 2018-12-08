@@ -8,11 +8,15 @@ import unittest
 import ddt
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.core.urlresolvers import reverse
+from django.urls import reverse
+from django.test.utils import override_settings
+from six import text_type
 
 from openedx.core.djangoapps.user_api import accounts
 from openedx.core.djangoapps.user_api.accounts.tests import testutils
 from openedx.core.lib.api import test_utils
+from openedx.core.djangoapps.user_api.validation.views import RegistrationValidationThrottle
+from util.password_policy_validators import DEFAULT_MAX_PASSWORD_LENGTH
 
 
 @ddt.ddt
@@ -140,7 +144,7 @@ class RegistrationValidationViewTests(test_utils.ApiTestCase):
     def test_confirm_email_doesnt_equal_email(self, confirm_email):
         self.assertValidationDecision(
             {'email': 'user@email.com', 'confirm_email': confirm_email},
-            {'email': '', 'confirm_email': accounts.REQUIRED_FIELD_CONFIRM_EMAIL_MSG}
+            {'email': '', 'confirm_email': text_type(accounts.REQUIRED_FIELD_CONFIRM_EMAIL_MSG)}
         )
 
     @ddt.data(
@@ -150,7 +154,7 @@ class RegistrationValidationViewTests(test_utils.ApiTestCase):
     def test_username_bad_length_validation_decision(self, username):
         self.assertValidationDecision(
             {'username': username},
-            {'username': accounts.USERNAME_BAD_LENGTH_MSG}
+            {'username': text_type(accounts.USERNAME_BAD_LENGTH_MSG)}
         )
 
     @unittest.skipUnless(settings.FEATURES.get("ENABLE_UNICODE_USERNAME"), "Unicode usernames disabled.")
@@ -158,7 +162,7 @@ class RegistrationValidationViewTests(test_utils.ApiTestCase):
     def test_username_invalid_unicode_validation_decision(self, username):
         self.assertValidationDecision(
             {'username': username},
-            {'username': accounts.USERNAME_INVALID_CHARS_UNICODE}
+            {'username': text_type(accounts.USERNAME_INVALID_CHARS_UNICODE)}
         )
 
     @unittest.skipIf(settings.FEATURES.get("ENABLE_UNICODE_USERNAME"), "Unicode usernames enabled.")
@@ -166,31 +170,61 @@ class RegistrationValidationViewTests(test_utils.ApiTestCase):
     def test_username_invalid_ascii_validation_decision(self, username):
         self.assertValidationDecision(
             {'username': username},
-            {"username": accounts.USERNAME_INVALID_CHARS_ASCII}
+            {"username": text_type(accounts.USERNAME_INVALID_CHARS_ASCII)}
         )
 
     def test_password_empty_validation_decision(self):
+        # 2 is the default setting for minimum length found in lms/envs/common.py
+        # under AUTH_PASSWORD_VALIDATORS.MinimumLengthValidator
+        msg = u'This password is too short. It must contain at least 2 characters.'
         self.assertValidationDecision(
             {'password': ''},
-            {"password": accounts.PASSWORD_EMPTY_MSG}
+            {"password": msg}
         )
 
     def test_password_bad_min_length_validation_decision(self):
-        password = 'p' * (accounts.PASSWORD_MIN_LENGTH - 1)
+        password = 'p'
+        # 2 is the default setting for minimum length found in lms/envs/common.py
+        # under AUTH_PASSWORD_VALIDATORS.MinimumLengthValidator
+        msg = u'This password is too short. It must contain at least 2 characters.'
         self.assertValidationDecision(
             {'password': password},
-            {"password": accounts.PASSWORD_BAD_MIN_LENGTH_MSG}
+            {"password": msg}
         )
 
     def test_password_bad_max_length_validation_decision(self):
-        password = 'p' * (accounts.PASSWORD_MAX_LENGTH + 1)
+        password = 'p' * DEFAULT_MAX_PASSWORD_LENGTH
+        # 75 is the default setting for maximum length found in lms/envs/common.py
+        # under AUTH_PASSWORD_VALIDATORS.MaximumLengthValidator
+        msg = u'This password is too long. It must contain no more than 75 characters.'
         self.assertValidationDecision(
             {'password': password},
-            {"password": accounts.PASSWORD_BAD_MAX_LENGTH_MSG}
+            {"password": msg}
         )
 
     def test_password_equals_username_validation_decision(self):
         self.assertValidationDecision(
             {"username": "somephrase", "password": "somephrase"},
-            {"username": "", "password": accounts.PASSWORD_CANT_EQUAL_USERNAME_MSG}
+            {"username": "", "password": u"The password is too similar to the username."}
         )
+
+    @override_settings(
+        CACHES={
+            'default': {
+                'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+                'LOCATION': 'registration_proxy',
+            }
+        }
+    )
+    def test_rate_limiting_registration_view(self):
+        """
+        Confirm rate limits work as expected for registration
+        end point /api/user/v1/validation/registration/. Note
+        that drf's rate limiting makes use of the default cache
+        to enforce limits; that's why this test needs a "real"
+        default cache (as opposed to the usual-for-tests DummyCache)
+        """
+        for _ in range(RegistrationValidationThrottle().num_requests):
+            self.request_without_auth('post', self.path)
+        response = self.request_without_auth('post', self.path)
+        self.assertEqual(response.status_code, 429)

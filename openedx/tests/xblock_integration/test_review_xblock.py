@@ -6,8 +6,7 @@ import unittest
 
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.core.urlresolvers import reverse
-from nose.plugins.attrib import attr
+from django.urls import reverse
 
 from lms.djangoapps.courseware.tests.factories import GlobalStaffFactory
 from lms.djangoapps.courseware.tests.helpers import LoginEnrollmentTestCase
@@ -191,7 +190,6 @@ class TestReviewXBlock(SharedModuleStoreTestCase, LoginEnrollmentTestCase):
         self.enroll(course, verify=True)
 
 
-@attr(shard=1)
 @ddt.ddt
 class TestReviewFunctions(TestReviewXBlock):
     """
@@ -199,6 +197,8 @@ class TestReviewFunctions(TestReviewXBlock):
     Tests cover the basic process of receiving a hint, adding a new hint,
     and rating/reporting hints.
     """
+    shard = 6
+
     def test_no_review_problems(self):
         """
         If a user has not seen any problems, they should

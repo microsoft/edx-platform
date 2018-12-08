@@ -2,41 +2,51 @@
 """
 Test cases to cover Accounts-related behaviors of the User API application
 """
+from copy import deepcopy
 import datetime
 import hashlib
 import json
-import unittest
-from copy import deepcopy
 
 import ddt
-import pytest
 from django.conf import settings
 from django.core.urlresolvers import reverse
-from django.test import TestCase
 from django.test.testcases import TransactionTestCase
 from django.test.utils import override_settings
-from mock import patch
-from nose.plugins.attrib import attr
-from pytz import UTC
-from rest_framework import status
+
+import mock
+import pytz
 from rest_framework.test import APIClient, APITestCase
 
 from openedx.core.djangoapps.user_api.accounts import ACCOUNT_VISIBILITY_PREF_KEY
 from openedx.core.djangoapps.user_api.models import UserPreference
 from openedx.core.djangoapps.user_api.preferences.api import set_user_preference
 from openedx.core.djangolib.testing.utils import CacheIsolationTestCase, skip_unless_lms
-from openedx.core.lib.token_utils import JwtBuilder
-from student.models import LanguageProficiency, PendingEmailChange, UserProfile
+from student.models import (
+    CourseEnrollment,
+    CourseEnrollmentAllowed,
+    ManualEnrollmentAudit,
+    PasswordHistory,
+    PendingEmailChange,
+    PendingNameChange,
+    Registration,
+    SocialLink,
+    UserProfile,
+    get_retired_username_by_username,
+)
 from student.tests.factories import (
     TEST_PASSWORD,
     ContentTypeFactory,
+    CourseEnrollmentAllowedFactory,
+    PendingEmailChangeFactory,
     PermissionFactory,
     SuperuserFactory,
     UserFactory
 )
+
 from .. import ALL_USERS_VISIBILITY, PRIVATE_VISIBILITY
 
-TEST_PROFILE_IMAGE_UPLOADED_AT = datetime.datetime(2002, 1, 9, 15, 43, 1, tzinfo=UTC)
+
+TEST_PROFILE_IMAGE_UPLOADED_AT = datetime.datetime(2002, 1, 9, 15, 43, 1, tzinfo=pytz.UTC)
 
 
 # this is used in one test to check the behavior of profile image url
@@ -86,6 +96,7 @@ class UserAPITestCase(APITestCase):
         self.assertEqual(expected_status, response.status_code)
         return response
 
+    # pylint: disable=no-member
     def send_put(self, client, json_data, content_type="application/json", expected_status=204):
         """
         Helper method for sending a PUT to the server. Verifies the expected status and returns the response.
@@ -94,6 +105,7 @@ class UserAPITestCase(APITestCase):
         self.assertEqual(expected_status, response.status_code)
         return response
 
+    # pylint: disable=no-member
     def send_delete(self, client, expected_status=204):
         """
         Helper method for sending a DELETE to the server. Verifies the expected status and returns the response.
@@ -148,11 +160,11 @@ class UserAPITestCase(APITestCase):
 
 @ddt.ddt
 @skip_unless_lms
-@attr(shard=2)
 class TestOwnUsernameAPI(CacheIsolationTestCase, UserAPITestCase):
     """
     Unit tests for the Accounts API.
     """
+    shard = 2
 
     ENABLED_CACHES = ['default']
 
@@ -177,7 +189,7 @@ class TestOwnUsernameAPI(CacheIsolationTestCase, UserAPITestCase):
         Test that a client (logged in) can get her own username.
         """
         self.client.login(username=self.user.username, password=TEST_PASSWORD)
-        self._verify_get_own_username(15)
+        self._verify_get_own_username(16)
 
     def test_get_username_inactive(self):
         """
@@ -187,7 +199,7 @@ class TestOwnUsernameAPI(CacheIsolationTestCase, UserAPITestCase):
         self.client.login(username=self.user.username, password=TEST_PASSWORD)
         self.user.is_active = False
         self.user.save()
-        self._verify_get_own_username(15)
+        self._verify_get_own_username(16)
 
     def test_get_username_not_logged_in(self):
         """
@@ -201,17 +213,17 @@ class TestOwnUsernameAPI(CacheIsolationTestCase, UserAPITestCase):
 
 @ddt.ddt
 @skip_unless_lms
-@patch('openedx.core.djangoapps.user_api.accounts.image_helpers._PROFILE_IMAGE_SIZES', [50, 10])
-@patch.dict(
+@mock.patch('openedx.core.djangoapps.user_api.accounts.image_helpers._PROFILE_IMAGE_SIZES', [50, 10])
+@mock.patch.dict(
     'django.conf.settings.PROFILE_IMAGE_SIZES_MAP',
     {'full': 50, 'small': 10},
     clear=True
 )
-@attr(shard=2)
 class TestAccountsAPI(CacheIsolationTestCase, UserAPITestCase):
     """
     Unit tests for the Accounts API.
     """
+    shard = 2
 
     ENABLED_CACHES = ['default']
 
@@ -300,8 +312,7 @@ class TestAccountsAPI(CacheIsolationTestCase, UserAPITestCase):
     # Note: using getattr so that the patching works even if there is no configuration.
     # This is needed when testing CMS as the patching is still executed even though the
     # suite is skipped.
-    @patch.dict(getattr(settings, "ACCOUNT_VISIBILITY_CONFIGURATION", {}), {"default_visibility": "all_users"})
-    @pytest.mark.django111_expected_failure
+    @mock.patch.dict(getattr(settings, "ACCOUNT_VISIBILITY_CONFIGURATION", {}), {"default_visibility": "all_users"})
     def test_get_account_different_user_visible(self):
         """
         Test that a client (logged in) can only get the shareable fields for a different user.
@@ -309,15 +320,14 @@ class TestAccountsAPI(CacheIsolationTestCase, UserAPITestCase):
         """
         self.different_client.login(username=self.different_user.username, password=TEST_PASSWORD)
         self.create_mock_profile(self.user)
-        with self.assertNumQueries(20):
+        with self.assertNumQueries(21):
             response = self.send_get(self.different_client)
         self._verify_full_shareable_account_response(response, account_privacy=ALL_USERS_VISIBILITY)
 
     # Note: using getattr so that the patching works even if there is no configuration.
     # This is needed when testing CMS as the patching is still executed even though the
     # suite is skipped.
-    @patch.dict(getattr(settings, "ACCOUNT_VISIBILITY_CONFIGURATION", {}), {"default_visibility": "private"})
-    @pytest.mark.django111_expected_failure
+    @mock.patch.dict(getattr(settings, "ACCOUNT_VISIBILITY_CONFIGURATION", {}), {"default_visibility": "private"})
     def test_get_account_different_user_private(self):
         """
         Test that a client (logged in) can only get the shareable fields for a different user.
@@ -325,11 +335,11 @@ class TestAccountsAPI(CacheIsolationTestCase, UserAPITestCase):
         """
         self.different_client.login(username=self.different_user.username, password=TEST_PASSWORD)
         self.create_mock_profile(self.user)
-        with self.assertNumQueries(20):
+        with self.assertNumQueries(21):
             response = self.send_get(self.different_client)
         self._verify_private_account_response(response, account_privacy=PRIVATE_VISIBILITY)
 
-    @patch.dict(settings.FEATURES, {'ENABLE_OPENBADGES': True})
+    @mock.patch.dict(settings.FEATURES, {'ENABLE_OPENBADGES': True})
     @ddt.data(
         ("client", "user", PRIVATE_VISIBILITY),
         ("different_client", "different_user", PRIVATE_VISIBILITY),
@@ -339,7 +349,6 @@ class TestAccountsAPI(CacheIsolationTestCase, UserAPITestCase):
         ("staff_client", "staff_user", ALL_USERS_VISIBILITY),
     )
     @ddt.unpack
-    @pytest.mark.django111_expected_failure
     def test_get_account_private_visibility(self, api_client, requesting_username, preference_visibility):
         """
         Test the return from GET based on user visibility setting.
@@ -401,12 +410,12 @@ class TestAccountsAPI(CacheIsolationTestCase, UserAPITestCase):
             self.assertEqual(False, data["accomplishments_shared"])
 
         self.client.login(username=self.user.username, password=TEST_PASSWORD)
-        verify_get_own_information(18)
+        verify_get_own_information(19)
 
         # Now make sure that the user can get the same information, even if not active
         self.user.is_active = False
         self.user.save()
-        verify_get_own_information(12)
+        verify_get_own_information(13)
 
     def test_get_account_empty_string(self):
         """
@@ -420,7 +429,7 @@ class TestAccountsAPI(CacheIsolationTestCase, UserAPITestCase):
         legacy_profile.save()
 
         self.client.login(username=self.user.username, password=TEST_PASSWORD)
-        with self.assertNumQueries(18):
+        with self.assertNumQueries(19):
             response = self.send_get(self.client)
         for empty_field in ("level_of_education", "gender", "country", "bio"):
             self.assertIsNone(response.data[empty_field])
@@ -613,12 +622,11 @@ class TestAccountsAPI(CacheIsolationTestCase, UserAPITestCase):
         verify_change_info(name_change_info[0], old_name, self.user.username, "Donald Duck",)
         verify_change_info(name_change_info[1], "Mickey Mouse", self.user.username, "Donald Duck")
 
-    @patch.dict(
+    @mock.patch.dict(
         'django.conf.settings.PROFILE_IMAGE_SIZES_MAP',
         {'full': 50, 'medium': 30, 'small': 10},
         clear=True
     )
-    @pytest.mark.django111_expected_failure
     def test_patch_email(self):
         """
         Test that the user can request an email change through the accounts API.
@@ -667,6 +675,23 @@ class TestAccountsAPI(CacheIsolationTestCase, UserAPITestCase):
             field_errors["email"]["developer_message"]
         )
         self.assertEqual("Valid e-mail address required.", field_errors["email"]["user_message"])
+
+    @mock.patch('student.views.management.do_email_change_request')
+    def test_patch_duplicate_email(self, do_email_change_request):
+        """
+        Test that same success response will be sent to user even if the given email already used.
+        """
+        existing_email = "same@example.com"
+        UserFactory.create(email=existing_email)
+
+        client = self.login_client("client", "user")
+
+        # Try changing to an existing email to make sure no error messages returned.
+        response = self.send_patch(client, {"email": existing_email})
+        self.assertEqual(200, response.status_code)
+
+        # Verify that no actual request made for email change
+        self.assertFalse(do_email_change_request.called)
 
     def test_patch_language_proficiencies(self):
         """
@@ -721,7 +746,7 @@ class TestAccountsAPI(CacheIsolationTestCase, UserAPITestCase):
             )
         )
 
-    @patch('openedx.core.djangoapps.user_api.accounts.serializers.AccountUserSerializer.save')
+    @mock.patch('openedx.core.djangoapps.user_api.accounts.serializers.AccountUserSerializer.save')
     def test_patch_serializer_save_fails(self, serializer_save):
         """
         Test that AccountUpdateErrors are passed through to the response.
@@ -802,12 +827,12 @@ class TestAccountsAPI(CacheIsolationTestCase, UserAPITestCase):
         )
 
 
-@attr(shard=2)
 @skip_unless_lms
 class TestAccountAPITransactions(TransactionTestCase):
     """
     Tests the transactional behavior of the account API
     """
+    shard = 2
 
     def setUp(self):
         super(TestAccountAPITransactions, self).setUp()
@@ -815,7 +840,7 @@ class TestAccountAPITransactions(TransactionTestCase):
         self.user = UserFactory.create(password=TEST_PASSWORD)
         self.url = reverse("accounts_api", kwargs={'username': self.user.username})
 
-    @patch('student.views.do_email_change_request')
+    @mock.patch('student.views.do_email_change_request')
     def test_update_account_settings_rollback(self, mock_email_change):
         """
         Verify that updating account settings is transactional when a failure happens.
@@ -836,85 +861,3 @@ class TestAccountAPITransactions(TransactionTestCase):
         data = response.data
         self.assertEqual(old_email, data["email"])
         self.assertEqual(u"m", data["gender"])
-
-
-@unittest.skipUnless(settings.ROOT_URLCONF == 'lms.urls', 'Account APIs are only supported in LMS')
-class TestAccountDeactivation(TestCase):
-    """
-    Tests the account deactivation endpoint.
-    """
-
-    def setUp(self):
-        super(TestAccountDeactivation, self).setUp()
-        self.test_user = UserFactory()
-        self.url = reverse('accounts_deactivation', kwargs={'username': self.test_user.username})
-
-    def build_jwt_headers(self, user):
-        """
-        Helper function for creating headers for the JWT authentication.
-        """
-        token = JwtBuilder(user).build_token([])
-        headers = {
-            'HTTP_AUTHORIZATION': 'JWT ' + token
-        }
-        return headers
-
-    def assert_activation_status(self, headers, expected_status=status.HTTP_200_OK, expected_activation_status=False):
-        """
-        Helper function for making a request to the deactivation endpoint, and asserting the status.
-
-        Args:
-            expected_status(int): Expected request's response status.
-            expected_activation_status(bool): Expected user has_usable_password attribute value.
-        """
-        self.assertTrue(self.test_user.has_usable_password())  # pylint: disable=no-member
-        response = self.client.post(self.url, **headers)
-        self.assertEqual(response.status_code, expected_status)
-        self.test_user.refresh_from_db()  # pylint: disable=no-member
-        self.assertEqual(self.test_user.has_usable_password(), expected_activation_status)  # pylint: disable=no-member
-
-    def test_superuser_deactivates_user(self):
-        """
-        Verify a user is deactivated when a superuser posts to the deactivation endpoint.
-        """
-        superuser = SuperuserFactory()
-        headers = self.build_jwt_headers(superuser)
-        self.assert_activation_status(headers)
-
-    def test_user_with_permission_deactivates_user(self):
-        """
-        Verify a user is deactivated when a user with permission posts to the deactivation endpoint.
-        """
-        user = UserFactory()
-        permission = PermissionFactory(
-            codename='can_deactivate_users',
-            content_type=ContentTypeFactory(
-                app_label='student'
-            )
-        )
-        user.user_permissions.add(permission)  # pylint: disable=no-member
-        headers = self.build_jwt_headers(user)
-        self.assertTrue(self.test_user.has_usable_password())  # pylint: disable=no-member
-        self.assert_activation_status(headers)
-
-    def test_unauthorized_rejection(self):
-        """
-        Verify unauthorized users cannot deactivate accounts.
-        """
-        headers = self.build_jwt_headers(self.test_user)
-        self.assert_activation_status(
-            headers,
-            expected_status=status.HTTP_403_FORBIDDEN,
-            expected_activation_status=True
-        )
-
-    def test_on_jwt_headers_rejection(self):
-        """
-        Verify users who are not JWT authenticated are rejected.
-        """
-        user = UserFactory()
-        self.assert_activation_status(
-            {},
-            expected_status=status.HTTP_401_UNAUTHORIZED,
-            expected_activation_status=True
-        )

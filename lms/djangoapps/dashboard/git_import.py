@@ -15,7 +15,8 @@ from django.core import management
 from django.core.management.base import CommandError
 from django.utils import timezone
 from django.utils.translation import ugettext_lazy as _
-from opaque_keys.edx.keys import CourseKey
+from xmodule.util.sandboxing import DEFAULT_PYTHON_LIB_FILENAME
+from opaque_keys.edx.locator import CourseLocator
 
 from dashboard.models import CourseImportLog
 
@@ -32,7 +33,7 @@ class GitImportError(Exception):
 
     def __init__(self, message=None):
         if message is None:
-            message = self.message
+            message = self.MESSAGE
         super(GitImportError, self).__init__(message)
 
 
@@ -184,6 +185,8 @@ def add_repo(repo, rdir_in, branch=None):
 
     git_repo_dir = getattr(settings, 'GIT_REPO_DIR', DEFAULT_GIT_REPO_DIR)
     git_import_static = getattr(settings, 'GIT_IMPORT_STATIC', True)
+    git_import_python_lib = getattr(settings, 'GIT_IMPORT_PYTHON_LIB', True)
+    python_lib_filename = getattr(settings, 'PYTHON_LIB_FILENAME', DEFAULT_PYTHON_LIB_FILENAME)
 
     # Set defaults even if it isn't defined in settings
     mongo_db = {
@@ -271,8 +274,11 @@ def add_repo(repo, rdir_in, branch=None):
         loggers.append(logger)
 
     try:
-        management.call_command('import', git_repo_dir, rdir,
-                                nostatic=not git_import_static)
+        management.call_command(
+            'import', git_repo_dir, rdir,
+            nostatic=not git_import_static, nopythonlib=not git_import_python_lib,
+            python_lib_filename=python_lib_filename
+        )
     except CommandError:
         raise GitImportErrorXmlImportFailed()
     except NotImplementedError:
@@ -292,8 +298,13 @@ def add_repo(repo, rdir_in, branch=None):
     # this is needed in order for custom course scripts to work
     match = re.search(r'(?ms)===> IMPORTING courselike (\S+)', ret_import)
     if match:
-        course_id = match.group(1)
-        course_key = CourseKey.from_string(course_id)
+        course_id = match.group(1).split('/')
+        # we need to transform course key extracted from logs into CourseLocator instance, because
+        # we are using split module store and course keys store as instance of CourseLocator.
+        # please see common.lib.xmodule.xmodule.modulestore.split_mongo.split.SplitMongoModuleStore#make_course_key
+        # We want set course id in CourseImportLog as CourseLocator. So that in split module
+        # environment course id remain consistent as CourseLocator instance.
+        course_key = CourseLocator(*course_id)
         cdir = '{0}/{1}'.format(git_repo_dir, course_key.course)
         log.debug('Studio course dir = %s', cdir)
 

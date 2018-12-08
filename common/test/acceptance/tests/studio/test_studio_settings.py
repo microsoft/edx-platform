@@ -5,13 +5,15 @@ Acceptance tests for Studio's Setting pages
 from __future__ import unicode_literals
 
 import os
+import random
+import string
+import json
 from textwrap import dedent
 
 from bok_choy.promise import EmptyPromise
 from mock import patch
-from nose.plugins.attrib import attr
 
-from base_studio_test import StudioCourseTest
+from common.test.acceptance.tests.studio.base_studio_test import StudioCourseTest
 from common.test.acceptance.fixtures.course import XBlockFixtureDesc
 from common.test.acceptance.pages.common.utils import add_enrollment_course_modes
 from common.test.acceptance.pages.lms.courseware import CoursewarePage
@@ -19,12 +21,13 @@ from common.test.acceptance.pages.studio.overview import CourseOutlinePage
 from common.test.acceptance.pages.studio.settings import SettingsPage
 from common.test.acceptance.pages.studio.settings_advanced import AdvancedSettingsPage
 from common.test.acceptance.pages.studio.settings_group_configurations import GroupConfigurationsPage
-from common.test.acceptance.pages.studio.utils import get_input_value
+from common.test.acceptance.pages.studio.utils import get_input_value, type_in_codemirror
 from common.test.acceptance.tests.helpers import create_user_partition_json, element_has_text
+from openedx.core.lib.tests import attr
 from xmodule.partitions.partitions import Group
 
 
-@attr(shard=8)
+@attr(shard=19)
 class ContentGroupConfigurationTest(StudioCourseTest):
     """
     Tests for content groups in the Group Configurations Page.
@@ -233,8 +236,11 @@ class ContentGroupConfigurationTest(StudioCourseTest):
         self.outline_page.wait_for_page()
 
 
-@attr(shard=5)
+@attr(shard=17)
 class EnrollmentTrackModeTest(StudioCourseTest):
+    """
+    Tests for the enrollment tracks section
+    """
 
     def setUp(self, is_staff=True, test_xss=True):
         super(EnrollmentTrackModeTest, self).setUp(is_staff=is_staff)
@@ -283,11 +289,14 @@ class EnrollmentTrackModeTest(StudioCourseTest):
         self.assertEqual(len(groups), 0)
 
 
-@attr(shard=8)
+@attr(shard=19)
 class AdvancedSettingsValidationTest(StudioCourseTest):
     """
     Tests for validation feature in Studio's advanced settings tab
     """
+    course_name_key = 'Course Display Name'
+    course_name_value = 'Test Name'
+
     def setUp(self):
         super(AdvancedSettingsValidationTest, self).setUp()
         self.advanced_settings = AdvancedSettingsPage(
@@ -302,6 +311,218 @@ class AdvancedSettingsValidationTest(StudioCourseTest):
 
         # Before every test, make sure to visit the page first
         self.advanced_settings.visit()
+
+    def test_course_author_sees_default_advanced_settings(self):
+        """
+        Scenario: Test that advanced settings have the default settings
+            Given a staff logs in to studio
+            When this user goes to advanced settings page
+                Then this user sees 'Allow Anonymous Discussion Posts' as true
+                And 'Enable Timed Exams' as false
+                And 'Maximum Attempts' as null
+        """
+        anonymous_discussion_setting = self.advanced_settings.get('Allow Anonymous Discussion Posts')
+        timed_exam_settings = self.advanced_settings.get('Enable Timed Exams')
+        max_attempts = self.advanced_settings.get('Maximum Attempts')
+        page_default_settings = [
+            anonymous_discussion_setting,
+            timed_exam_settings,
+            max_attempts
+        ]
+        default_anonymous_discussion_setting = 'true'
+        default_timed_exam_settings = 'false'
+        default_max_attempts = 'null'
+        expected_default_settings = [
+            default_anonymous_discussion_setting,
+            default_timed_exam_settings,
+            default_max_attempts
+        ]
+        self.assertEqual(
+            page_default_settings,
+            expected_default_settings
+        )
+
+    def test_keys_appear_alphabetically(self):
+        """
+        Scenario: Test that advanced settings have all the keys in alphabetic order
+            Given a staff logs in to studio
+            When this user goes to advanced settings page
+                Then he sees all the advanced setting keys in alphabetic order
+        """
+
+        key_names = self.advanced_settings.key_names
+        self.assertEqual(key_names, sorted(key_names))
+
+    def test_cancel_editing_key_value(self):
+        """
+        Scenario: Test that advanced settings does not save the key value, if cancel
+        is clicked from notification bar
+            Given a staff logs in to studio
+            When this user goes to advanced settings page and enters and new course name
+                Then he clicks 'cancel' buttin when asked to save changes
+            When this user reloads the page
+                And then he does not see any change in the original course name
+        """
+
+        original_course_display_name = self.advanced_settings.get(self.course_name_key)
+        new_course_name = 'New Course Name'
+        type_in_codemirror(self.advanced_settings, 16, new_course_name)
+        self.advanced_settings.cancel()
+        self.advanced_settings.refresh_and_wait_for_load()
+        self.assertNotEqual(
+            original_course_display_name,
+            new_course_name,
+            (
+                'original course name:{} can not not be equal to unsaved course name {}'.format(
+                    original_course_display_name,
+                    new_course_name
+                )
+            )
+        )
+        self.assertEqual(
+            self.advanced_settings.get(self.course_name_key),
+            original_course_display_name,
+            (
+                'course name from the page should be same as original_course_display_name:{}'.format(
+                    original_course_display_name
+                )
+            )
+        )
+
+    def test_editing_key_value(self):
+        """
+        Scenario: Test that advanced settings saves the key value, if save button
+        is clicked from notification bar after the editing
+            Given a staff logs in to studio
+            When this user goes to advanced settings page and enters a new course name
+                And he clicks 'save' button from the notification bar
+                Then he is able to see the updated course name
+        """
+        new_course_name = ''.join(random.choice(string.ascii_uppercase) for _ in range(10))
+        self.advanced_settings.set(self.course_name_key, new_course_name)
+        self.assertEqual(
+            self.advanced_settings.get(self.course_name_key),
+            '"{}"'.format(new_course_name),
+            (
+                'course name from the page should be same as new_course_name:{}'.format(
+                    new_course_name
+                )
+            )
+        )
+
+    def test_confirmation_is_shown_on_save(self):
+        """
+        Scenario: Test that advanced settings shows confirmation after editing a field successfully
+            Given a staff logs in to studio
+            When this user goes to advanced settings page and  edits any value
+                And he clicks 'save' button from the notification bar
+                Then he is able to see the confirmation message
+        """
+        self.advanced_settings.set('Maximum Attempts', 5)
+        confirmation_message = self.advanced_settings.confirmation_message
+        self.assertEqual(
+            confirmation_message,
+            'Your policy changes have been saved.',
+            'Settings must be saved successfully in order to have confirmation message'
+        )
+
+    def test_deprecated_settings_invisible_by_default(self):
+        """
+        Scenario: Test that advanced settings does not have deprecated settings by default
+            Given a staff logs in to studio
+            When this user goes to advanced settings page
+                Then the user does not see the deprecated settings
+                And sees 'Show Deprecated Settings' button
+        """
+        button_text = self.advanced_settings.deprecated_settings_button_text
+        self.assertEqual(button_text, 'Show Deprecated Settings')
+        self.assertFalse(self.advanced_settings.is_deprecated_setting_visible())
+
+    def test_deprecated_settings_can_be_toggled(self):
+        """
+        Scenario: Test that advanced settings can toggle deprecated settings
+            Given I am on the Advanced Course Settings page in Studio
+            When I toggle the display of deprecated settings
+                Then deprecated settings are then shown
+            And I toggle the display of deprecated settings
+                Then deprecated settings are not shown
+        """
+
+        self.advanced_settings.toggle_deprecated_settings()
+        button_text = self.advanced_settings.deprecated_settings_button_text
+        self.assertEqual(
+            button_text,
+            'Hide Deprecated Settings',
+            "Button text should change to 'Hide Deprecated Settings' after the click"
+        )
+        self.assertTrue(self.advanced_settings.is_deprecated_setting_visible())
+        self.advanced_settings.toggle_deprecated_settings()
+        self.assertFalse(self.advanced_settings.is_deprecated_setting_visible())
+        self.assertEqual(
+            self.advanced_settings.deprecated_settings_button_text,
+            'Show Deprecated Settings',
+            "Button text should change to 'Show Deprecated Settings' after the click"
+        )
+
+    def test_multi_line_input(self):
+        """
+        Scenario: Test that advanced settings correctly shows the multi-line input
+            Given I am on the Advanced Course Settings page in Studio
+            When I create a JSON object as a value for "Discussion Topic Mapping"
+                Then it is displayed as formatted
+        """
+
+        inputs = {
+            "key": "value",
+            "key_2": "value_2"
+        }
+        json_input = json.dumps(inputs)
+        self.advanced_settings.set('Discussion Topic Mapping', json_input)
+        self.assertEqual(
+            self.advanced_settings.get('Discussion Topic Mapping'),
+            '{\n    "key": "value",\n    "key_2": "value_2"\n}'
+        )
+
+    def test_automatic_quoting_of_non_json_value(self):
+        """
+        Scenario: Test that advanced settings automatically quotes the field input
+        upon saving
+            Given I am on the Advanced Course Settings page in Studio
+            When I create a non-JSON value not in quotes
+                Then it is displayed as a string
+        """
+
+        self.advanced_settings.set(self.course_name_key, self.course_name_value)
+        self.assertEqual(
+            self.advanced_settings.get(self.course_name_key),
+            '"Test Name"'
+        )
+
+    def test_validation_error_for_wrong_input_type(self):
+        """
+        Scenario: Test error if value supplied is of the wrong type
+            Given I am on the Advanced Course Settings page in Studio
+            When I create a JSON object as a value for "Course Display Name"
+                Then I get an error on save
+             And I reload the page
+             Then the policy key value is unchanged
+        """
+
+        course_display_name = self.advanced_settings.get('Course Display Name')
+        inputs = {
+            "key": "value",
+            "key_2": "value_2"
+        }
+        json_input = json.dumps(inputs)
+        self.advanced_settings.set('Course Display Name', json_input)
+        self.advanced_settings.wait_for_modal_load()
+        self.check_modal_shows_correct_contents(['Course Display Name'])
+        self.advanced_settings.refresh_and_wait_for_load()
+        self.assertEquals(
+            self.advanced_settings.get('Course Display Name'),
+            course_display_name,
+            'Wrong input for Course Display Name must not change its value'
+        )
 
     def test_modal_shows_one_validation_error(self):
         """
@@ -455,7 +676,7 @@ class AdvancedSettingsValidationTest(StudioCourseTest):
         self.assertEquals(set(displayed_fields), set(expected_fields))
 
 
-@attr(shard=1)
+@attr(shard=16)
 class ContentLicenseTest(StudioCourseTest):
     """
     Tests for course-level licensing (that is, setting the license,
@@ -617,7 +838,7 @@ class StudioSubsectionSettingsA11yTest(StudioCourseTest):
         self.course_outline.a11y_audit.check_for_accessibility_errors()
 
 
-@attr(shard=1)
+@attr(shard=16)
 class StudioSettingsImageUploadTest(StudioCourseTest):
     """
     Class to test course settings image uploads.
@@ -655,7 +876,7 @@ class StudioSettingsImageUploadTest(StudioCourseTest):
         self.assertIn(file_to_upload, self.settings_page.get_uploaded_image_path('#video-thumbnail-image'))
 
 
-@attr(shard=1)
+@attr(shard=16)
 class CourseSettingsTest(StudioCourseTest):
     """
     Class to test course settings.

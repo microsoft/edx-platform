@@ -10,7 +10,7 @@ import urllib
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.auth.views import redirect_to_login
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.http import Http404
 from django.template.context_processors import csrf
 from django.utils.decorators import method_decorator
@@ -19,6 +19,7 @@ from django.utils.translation import ugettext as _
 from django.views.decorators.cache import cache_control
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.generic import View
+from edx_django_utils.monitoring import set_custom_metrics_for_course_key
 from opaque_keys.edx.keys import CourseKey
 from web_fragments.fragment import Fragment
 
@@ -29,7 +30,6 @@ from lms.djangoapps.gating.api import get_entrance_exam_score_ratio, get_entranc
 from lms.djangoapps.grades.course_grade_factory import CourseGradeFactory
 from openedx.core.djangoapps.crawlers.models import CrawlersConfig
 from openedx.core.djangoapps.lang_pref import LANGUAGE_KEY
-from openedx.core.djangoapps.monitoring_utils import set_custom_metrics_for_course_key
 from openedx.core.djangoapps.user_api.preferences.api import get_user_preference
 from openedx.core.djangoapps.util.user_messages import PageLevelMessages
 from openedx.core.djangoapps.waffle_utils import WaffleSwitchNamespace, WaffleFlagNamespace, CourseWaffleFlag
@@ -97,7 +97,7 @@ class CoursewareIndex(View):
         """
         self.course_key = CourseKey.from_string(course_id)
 
-        if not (request.user.is_authenticated() or self.enable_anonymous_courseware_access):
+        if not (request.user.is_authenticated or self.enable_anonymous_courseware_access):
             return redirect_to_login(request.get_full_path())
 
         self.original_chapter_url_name = chapter
@@ -156,7 +156,7 @@ class CoursewareIndex(View):
                 self._save_positions()
                 self._prefetch_and_bind_section()
 
-        if not request.user.is_authenticated():
+        if not request.user.is_authenticated:
             qs = urllib.urlencode({
                 'course_id': self.course_key,
                 'enrollment_action': 'enroll',
@@ -218,7 +218,7 @@ class CoursewareIndex(View):
         """
         redeemed_registration_codes = []
 
-        if self.request.user.is_authenticated():
+        if self.request.user.is_authenticated:
             self.real_user = User.objects.prefetch_related("groups").get(id=self.real_user.id)
             redeemed_registration_codes = CourseRegistrationCode.objects.filter(
                 course_id=self.course_key,
@@ -255,7 +255,7 @@ class CoursewareIndex(View):
         """
         language_preference = settings.LANGUAGE_CODE
 
-        if self.request.user.is_authenticated():
+        if self.request.user.is_authenticated:
             language_preference = get_user_preference(self.real_user, LANGUAGE_KEY)
 
         return language_preference
@@ -437,23 +437,24 @@ class CoursewareIndex(View):
             )
             courseware_context['fragment'] = self.section.render(STUDENT_VIEW, section_context)
             if self.section.position and self.section.has_children:
-                display_items = self.section.get_display_items()
-                if display_items:
-                    try:
-                        courseware_context['sequence_title'] = display_items[self.section.position - 1] \
-                            .display_name_with_default
-                    except IndexError:
-                        log.exception(
-                            "IndexError loading courseware for user %s, course %s, section %s, position %d. Total items: %d. URL: %s",
-                            self.real_user.username,
-                            self.course.id,
-                            self.section.display_name_with_default,
-                            self.section.position,
-                            len(display_items),
-                            self.url,
-                        )
-                        raise
+                self._add_sequence_title_to_context(courseware_context)
+
         return courseware_context
+
+    def _add_sequence_title_to_context(self, courseware_context):
+        """
+        Adds sequence title to the given context.
+
+        If we're rendering a section with some display items, but position
+        exceeds the length of the displayable items, default the position
+        to the first element.
+        """
+        display_items = self.section.get_display_items()
+        if not display_items:
+            return
+        if self.section.position > len(display_items):
+            self.section.position = 1
+        courseware_context['sequence_title'] = display_items[self.section.position - 1].display_name_with_default
 
     def _add_entrance_exam_to_context(self, courseware_context):
         """
@@ -484,12 +485,12 @@ class CoursewareIndex(View):
 
         # NOTE (CCB): Pull the position from the URL for un-authenticated users. Otherwise, pull the saved
         # state from the data store.
-        position = None if self.request.user.is_authenticated() else self.position
+        position = None if self.request.user.is_authenticated else self.position
         section_context = {
             'activate_block_id': self.request.GET.get('activate_block_id'),
             'requested_child': self.request.GET.get("child"),
             'progress_url': reverse('progress', kwargs={'course_id': unicode(self.course_key)}),
-            'user_authenticated': self.request.user.is_authenticated(),
+            'user_authenticated': self.request.user.is_authenticated,
             'position': position,
         }
         if previous_of_active_section:

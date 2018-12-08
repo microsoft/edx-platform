@@ -8,11 +8,13 @@ from bok_choy.page_object import PageObject, unguarded
 from bok_choy.promise import EmptyPromise
 from selenium.webdriver.common.action_chains import ActionChains
 
+from common.test.acceptance.pages.lms import BASE_URL
 from common.test.acceptance.pages.lms.bookmarks import BookmarksPage
+from common.test.acceptance.pages.lms.completion import CompletionOnViewMixin
 from common.test.acceptance.pages.lms.course_page import CoursePage
 
 
-class CoursewarePage(CoursePage):
+class CoursewarePage(CoursePage, CompletionOnViewMixin):
     """
     Course info.
     """
@@ -153,27 +155,27 @@ class CoursewarePage(CoursePage):
         return int(tab_id.split('_')[1])
 
     @property
-    def _active_sequence_tab(self):  # pylint: disable=missing-docstring
+    def _active_sequence_tab(self):
         return self.q(css='#sequence-list .nav-item.active')
 
     @property
-    def is_next_button_enabled(self):  # pylint: disable=missing-docstring
+    def is_next_button_enabled(self):
         return not self.q(css='.sequence-nav > .sequence-nav-button.button-next.disabled').is_present()
 
     @property
-    def is_previous_button_enabled(self):  # pylint: disable=missing-docstring
+    def is_previous_button_enabled(self):
         return not self.q(css='.sequence-nav > .sequence-nav-button.button-previous.disabled').is_present()
 
-    def click_next_button_on_top(self):  # pylint: disable=missing-docstring
+    def click_next_button_on_top(self):
         self._click_navigation_button('sequence-nav', 'button-next')
 
-    def click_next_button_on_bottom(self):  # pylint: disable=missing-docstring
+    def click_next_button_on_bottom(self):
         self._click_navigation_button('sequence-bottom', 'button-next')
 
-    def click_previous_button_on_top(self):  # pylint: disable=missing-docstring
+    def click_previous_button_on_top(self):
         self._click_navigation_button('sequence-nav', 'button-previous')
 
-    def click_previous_button_on_bottom(self):  # pylint: disable=missing-docstring
+    def click_previous_button_on_bottom(self):
         self._click_navigation_button('sequence-bottom', 'button-previous')
 
     def _click_navigation_button(self, top_or_bottom_class, next_or_previous_class):
@@ -587,3 +589,25 @@ class CourseNavPage(PageObject):
         # reload the same page with the course_outline_page flag
         self.browser.get(self.browser.current_url + "&course_experience.course_outline_page=1")
         self.wait_for_page()
+
+
+class RenderXBlockPage(PageObject, CompletionOnViewMixin):
+    """
+    render_xblock page.
+    """
+
+    xblock_component_selector = '.xblock'
+
+    def __init__(self, browser, block_id):
+        super(RenderXBlockPage, self).__init__(browser)
+        self.block_id = block_id
+
+    @property
+    def url(self):
+        """
+        Construct a URL to the page within the course.
+        """
+        return BASE_URL + "/xblock/" + self.block_id
+
+    def is_browser_on_page(self):
+        return self.q(css='.course-content').present

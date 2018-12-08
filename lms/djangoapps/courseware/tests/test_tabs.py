@@ -1,15 +1,13 @@
 """
 Test cases for tabs.
 """
-
-import pytest
 from django.contrib.auth.models import AnonymousUser
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.http import Http404
 from milestones.tests.utils import MilestonesTestCaseMixin
 from mock import MagicMock, Mock, patch
-from nose.plugins.attrib import attr
 from six import text_type
+from crum import set_current_request
 
 from courseware.courses import get_course_by_id
 from courseware.tabs import (
@@ -25,6 +23,7 @@ from courseware.tests.helpers import LoginEnrollmentTestCase
 from courseware.views.views import StaticCourseTabView, get_static_tab_fragment
 from openedx.core.djangoapps.waffle_utils.testutils import override_waffle_flag
 from openedx.core.djangolib.testing.utils import get_mock_request
+from openedx.core.lib.tests import attr
 from openedx.features.course_experience import UNIFIED_COURSE_TAB_FLAG
 from student.models import CourseEnrollment
 from student.tests.factories import UserFactory
@@ -263,6 +262,7 @@ class StaticTabDateTestCase(LoginEnrollmentTestCase, SharedModuleStoreTestCase):
 
     def test_invalid_course_key(self):
         self.setup_user()
+        self.addCleanup(set_current_request, None)
         request = get_mock_request(self.user)
         with self.assertRaises(Http404):
             StaticCourseTabView().get(request, course_id='edX/toy', tab_slug='new_tab')
@@ -270,6 +270,7 @@ class StaticTabDateTestCase(LoginEnrollmentTestCase, SharedModuleStoreTestCase):
     def test_get_static_tab_fragment(self):
         self.setup_user()
         course = get_course_by_id(self.course.id)
+        self.addCleanup(set_current_request, None)
         request = get_mock_request(self.user)
         tab = xmodule_tabs.CourseTabList.get_tab_by_slug(course.tabs, 'new_tab')
 
@@ -369,6 +370,7 @@ class EntranceExamsTabsTestCase(LoginEnrollmentTestCase, ModuleStoreTestCase, Mi
         self.enroll(self.course)
         self.user.is_staff = True
         self.relationship_types = get_milestone_relationship_types()
+        self.addCleanup(set_current_request, None)
 
     def test_get_course_tabs_list_entrance_exam_enabled(self):
         """
@@ -429,7 +431,7 @@ class EntranceExamsTabsTestCase(LoginEnrollmentTestCase, ModuleStoreTestCase, Mi
         self.login(self.email, self.password)
         request = get_mock_request(self.user)
         course_tab_list = get_course_tab_list(request, self.course)
-        self.assertEqual(len(course_tab_list), 5)
+        self.assertEqual(len(course_tab_list), 4)
 
     def test_course_tabs_list_for_staff_members(self):
         """
@@ -442,7 +444,7 @@ class EntranceExamsTabsTestCase(LoginEnrollmentTestCase, ModuleStoreTestCase, Mi
         self.client.login(username=staff_user.username, password='test')
         request = get_mock_request(staff_user)
         course_tab_list = get_course_tab_list(request, self.course)
-        self.assertEqual(len(course_tab_list), 5)
+        self.assertEqual(len(course_tab_list), 4)
 
 
 @attr(shard=1)
@@ -482,6 +484,7 @@ class TextBookCourseViewsTestCase(LoginEnrollmentTestCase, SharedModuleStoreTest
         Test that all textbooks tab links generating correctly.
         """
         type_to_reverse_name = {'textbook': 'book', 'pdftextbook': 'pdf_book', 'htmltextbook': 'html_book'}
+        self.addCleanup(set_current_request, None)
         request = get_mock_request(self.user)
         course_tab_list = get_course_tab_list(request, self.course)
         num_of_textbooks_found = 0
@@ -604,6 +607,10 @@ class ValidateTabsTestCase(TabListTestCase):
 class CourseTabListTestCase(TabListTestCase):
     """Testing the generator method for iterating through displayable tabs"""
 
+    def setUp(self):
+        super(CourseTabListTestCase, self).setUp()
+        self.addCleanup(set_current_request, None)
+
     def has_tab(self, tab_list, tab_type):
         """ Searches the given lab_list for a given tab_type. """
         for tab in tab_list:
@@ -693,7 +700,6 @@ class CourseTabListTestCase(TabListTestCase):
             # get tab by id
             self.assertEquals(xmodule_tabs.CourseTabList.get_tab_by_id(self.course.tabs, tab.tab_id), tab)
 
-    @pytest.mark.django111_expected_failure
     def test_course_tabs_staff_only(self):
         """
         Tests the static tabs that available only for instructor
@@ -707,6 +713,7 @@ class CourseTabListTestCase(TabListTestCase):
         self.course.save()
 
         user = self.create_mock_user(is_staff=False, is_enrolled=True)
+        self.addCleanup(set_current_request, None)
         request = get_mock_request(user)
         course_tab_list = get_course_tab_list(request, self.course)
         name_list = [x.name for x in course_tab_list]
@@ -725,7 +732,6 @@ class CourseTabListTestCase(TabListTestCase):
 
 
 @attr(shard=1)
-@pytest.mark.django111_expected_failure
 class ProgressTestCase(TabTestCase):
     """Test cases for Progress Tab."""
 
@@ -756,7 +762,6 @@ class ProgressTestCase(TabTestCase):
 
 
 @attr(shard=1)
-@pytest.mark.django111_expected_failure
 class StaticTabTestCase(TabTestCase):
     """Test cases for Static Tab."""
 
@@ -776,11 +781,11 @@ class StaticTabTestCase(TabTestCase):
 
 
 @attr(shard=1)
-@pytest.mark.django111_expected_failure
 class CourseInfoTabTestCase(TabTestCase):
     """Test cases for the course info tab."""
     def setUp(self):
         self.user = self.create_mock_user()
+        self.addCleanup(set_current_request, None)
         self.request = get_mock_request(self.user)
 
     @override_waffle_flag(UNIFIED_COURSE_TAB_FLAG, active=False)
@@ -805,7 +810,6 @@ class CourseInfoTabTestCase(TabTestCase):
 
 
 @attr(shard=1)
-@pytest.mark.django111_expected_failure
 class DiscussionLinkTestCase(TabTestCase):
     """Test cases for discussion link tab."""
 
@@ -823,7 +827,7 @@ class DiscussionLinkTestCase(TabTestCase):
         """Custom reverse function"""
         def reverse_discussion_link(viewname, args):
             """reverse lookup for discussion link"""
-            if viewname == "discussion.views.forum_form_discussion" and args == [unicode(course.id)]:
+            if viewname == "forum_form_discussion" and args == [unicode(course.id)]:
                 return "default_discussion_link"
         return reverse_discussion_link
 

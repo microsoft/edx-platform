@@ -6,7 +6,7 @@ import json
 import sys
 
 from django.conf import settings
-from django.core.urlresolvers import clear_url_caches, resolve
+from django.urls import clear_url_caches, resolve
 from django.test import TestCase
 from mock import patch
 
@@ -76,8 +76,7 @@ class EventTestMixin(object):
     """
     def setUp(self, tracker):
         super(EventTestMixin, self).setUp()
-        self.tracker = tracker
-        patcher = patch(self.tracker)
+        patcher = patch(tracker)
         self.mock_tracker = patcher.start()
         self.addCleanup(patcher.stop)
 

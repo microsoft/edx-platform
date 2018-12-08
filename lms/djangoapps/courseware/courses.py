@@ -21,11 +21,12 @@ from courseware.date_summary import (
 from courseware.model_data import FieldDataCache
 from courseware.module_render import get_module
 from django.conf import settings
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.http import Http404, QueryDict
 from enrollment.api import get_course_enrollment_details
 from edxmako.shortcuts import render_to_string
 from fs.errors import ResourceNotFound
+from lms.djangoapps.certificates import api as certs_api
 from lms.djangoapps.courseware.courseware_access_exception import CoursewareAccessException
 from lms.djangoapps.courseware.exceptions import CourseAccessRedirect
 from opaque_keys.edx.keys import UsageKey
@@ -224,6 +225,7 @@ def get_course_about_section(request, course, section_key):
 
     Valid keys:
     - overview
+    - about_sidebar_html
     - short_description
     - description
     - key_dates (includes start, end, exams, etc)
@@ -259,6 +261,7 @@ def get_course_about_section(request, course, section_key):
         'effort',
         'end_date',
         'prerequisites',
+        'about_sidebar_html',
         'ocw_links'
     }
 
@@ -368,14 +371,15 @@ def get_course_date_blocks(course, user):
     Return the list of blocks to display on the course info page,
     sorted by date.
     """
-    block_classes = (
-        CertificateAvailableDate,
+    block_classes = [
         CourseEndDate,
         CourseStartDate,
         TodaysDate,
         VerificationDeadlineDate,
         VerifiedUpgradeDeadlineDate,
-    )
+    ]
+    if certs_api.get_active_web_certificate(course):
+        block_classes.insert(0, CertificateAvailableDate)
 
     blocks = (cls(course, user) for cls in block_classes)
 
@@ -593,3 +597,20 @@ def get_current_child(xmodule, min_depth=None, requested_child=None):
                 child = _get_default_child_module(children)
 
     return child
+
+
+def get_course_chapter_ids(course_key):
+    """
+    Extracts the chapter block keys from a course structure.
+
+    Arguments:
+        course_key (CourseLocator): The course key
+    Returns:
+        list (string): The list of string representations of the chapter block keys in the course.
+    """
+    try:
+        chapter_keys = modulestore().get_course(course_key).children
+    except Exception:  # pylint: disable=broad-except
+        log.exception('Failed to retrieve course from modulestore.')
+        return []
+    return [unicode(chapter_key) for chapter_key in chapter_keys if chapter_key.block_type == 'chapter']

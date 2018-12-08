@@ -8,12 +8,17 @@ from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
-from django.core.urlresolvers import reverse
+from django.urls import reverse
+from six import text_type
 
 from lms.djangoapps.badges.utils import badges_enabled
 from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 from openedx.core.djangoapps.user_api import errors
-from openedx.core.djangoapps.user_api.models import UserPreference
+from openedx.core.djangoapps.user_api.models import (
+    RetirementState,
+    UserPreference,
+    UserRetirementStatus
+)
 from openedx.core.djangoapps.user_api.serializers import ReadOnlyFieldsSerializerMixin
 from student.models import UserProfile, LanguageProficiency, SocialLink
 
@@ -208,7 +213,9 @@ class AccountLegacyProfileSerializer(serializers.HyperlinkedModelSerializer, Rea
         return new_name
 
     def validate_language_proficiencies(self, value):
-        """ Enforce all languages are unique. """
+        """
+        Enforce all languages are unique.
+        """
         language_proficiencies = [language for language in value]
         unique_language_proficiencies = set(language["code"] for language in language_proficiencies)
         if len(language_proficiencies) != len(unique_language_proficiencies):
@@ -216,7 +223,9 @@ class AccountLegacyProfileSerializer(serializers.HyperlinkedModelSerializer, Rea
         return value
 
     def validate_social_links(self, value):
-        """ Enforce only one entry for a particular social platform. """
+        """
+        Enforce only one entry for a particular social platform.
+        """
         social_links = [social_link for social_link in value]
         unique_social_links = set(social_link["platform"] for social_link in social_links)
         if len(social_links) != len(unique_social_links):
@@ -224,29 +233,41 @@ class AccountLegacyProfileSerializer(serializers.HyperlinkedModelSerializer, Rea
         return value
 
     def transform_gender(self, user_profile, value):  # pylint: disable=unused-argument
-        """ Converts empty string to None, to indicate not set. Replaced by to_representation in version 3. """
+        """
+        Converts empty string to None, to indicate not set. Replaced by to_representation in version 3.
+        """
         return AccountLegacyProfileSerializer.convert_empty_to_None(value)
 
     def transform_country(self, user_profile, value):  # pylint: disable=unused-argument
-        """ Converts empty string to None, to indicate not set. Replaced by to_representation in version 3. """
+        """
+        Converts empty string to None, to indicate not set. Replaced by to_representation in version 3.
+        """
         return AccountLegacyProfileSerializer.convert_empty_to_None(value)
 
     def transform_level_of_education(self, user_profile, value):  # pylint: disable=unused-argument
-        """ Converts empty string to None, to indicate not set. Replaced by to_representation in version 3. """
+        """
+        Converts empty string to None, to indicate not set. Replaced by to_representation in version 3.
+        """
         return AccountLegacyProfileSerializer.convert_empty_to_None(value)
 
     def transform_bio(self, user_profile, value):  # pylint: disable=unused-argument
-        """ Converts empty string to None, to indicate not set. Replaced by to_representation in version 3. """
+        """
+        Converts empty string to None, to indicate not set. Replaced by to_representation in version 3.
+        """
         return AccountLegacyProfileSerializer.convert_empty_to_None(value)
 
     @staticmethod
     def convert_empty_to_None(value):
-        """ Helper method to convert empty string to None (other values pass through). """
+        """
+        Helper method to convert empty string to None (other values pass through).
+        """
         return None if value == "" else value
 
     @staticmethod
     def get_profile_image(user_profile, user, request=None):
-        """ Returns metadata about a user's profile image. """
+        """
+        Returns metadata about a user's profile image.
+        """
         data = {'has_image': user_profile.has_profile_image}
         urls = get_profile_image_urls_for_user(user, request)
         data.update({
@@ -256,7 +277,9 @@ class AccountLegacyProfileSerializer(serializers.HyperlinkedModelSerializer, Rea
         return data
 
     def get_requires_parental_consent(self, user_profile):
-        """ Returns a boolean representing whether the user requires parental controls.  """
+        """
+        Returns a boolean representing whether the user requires parental controls.
+        """
         return user_profile.requires_parental_consent()
 
     def _get_profile_image(self, user_profile):
@@ -313,8 +336,8 @@ class AccountLegacyProfileSerializer(serializers.HyperlinkedModelSerializer, Rea
                 # If we have encountered any validation errors, return them to the user.
                 raise errors.AccountValidationError({
                     'social_links': {
-                        "developer_message": u"Error thrown from adding new social link: '{}'".format(err.message),
-                        "user_message": err.message
+                        "developer_message": u"Error thrown from adding new social link: '{}'".format(text_type(err)),
+                        "user_message": text_type(err)
                     }
                 })
 
@@ -331,8 +354,71 @@ class AccountLegacyProfileSerializer(serializers.HyperlinkedModelSerializer, Rea
         return instance
 
 
+class RetirementUserProfileSerializer(serializers.ModelSerializer):
+    """
+    Serialize a small subset of UserProfile data for use in RetirementStatus APIs
+    """
+    class Meta(object):
+        model = UserProfile
+        fields = ('id', 'name')
+
+
+class RetirementUserSerializer(serializers.ModelSerializer):
+    """
+    Serialize a small subset of User data for use in RetirementStatus APIs
+    """
+    profile = RetirementUserProfileSerializer(read_only=True)
+
+    class Meta(object):
+        model = User
+        fields = ('id', 'username', 'email', 'profile')
+
+
+class RetirementStateSerializer(serializers.ModelSerializer):
+    """
+    Serialize a small subset of RetirementState data for use in RetirementStatus APIs
+    """
+    class Meta(object):
+        model = RetirementState
+        fields = ('id', 'state_name', 'state_execution_order')
+
+
+class UserRetirementStatusSerializer(serializers.ModelSerializer):
+    """
+    Perform serialization for the RetirementStatus model
+    """
+    user = RetirementUserSerializer(read_only=True)
+    current_state = RetirementStateSerializer(read_only=True)
+    last_state = RetirementStateSerializer(read_only=True)
+
+    class Meta(object):
+        model = UserRetirementStatus
+        exclude = ['responses', ]
+
+
+class UserRetirementPartnerReportSerializer(serializers.Serializer):
+    """
+    Perform serialization for the UserRetirementPartnerReportingStatus model
+    """
+    user_id = serializers.IntegerField()
+    original_username = serializers.CharField()
+    original_email = serializers.EmailField()
+    original_name = serializers.CharField()
+    orgs = serializers.ListField(child=serializers.CharField())
+    created = serializers.DateTimeField()
+
+    # Required overrides of abstract base class methods, but we don't use them
+    def create(self, validated_data):
+        pass
+
+    def update(self, instance, validated_data):
+        pass
+
+
 def get_extended_profile(user_profile):
-    """Returns the extended user profile fields stored in user_profile.meta"""
+    """
+    Returns the extended user profile fields stored in user_profile.meta
+    """
 
     # pick the keys from the site configuration
     extended_profile_field_names = configuration_helpers.get_value('extended_profile_fields', [])
@@ -352,7 +438,9 @@ def get_extended_profile(user_profile):
 
 
 def get_profile_visibility(user_profile, user, configuration=None):
-    """Returns the visibility level for the specified user profile."""
+    """
+    Returns the visibility level for the specified user profile.
+    """
     if user_profile.requires_parental_consent():
         return PRIVATE_VISIBILITY
 

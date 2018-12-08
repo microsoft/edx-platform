@@ -5,13 +5,13 @@ import logging
 from collections import defaultdict
 from copy import deepcopy
 from itertools import chain
-from urlparse import urljoin
+from urlparse import urljoin, urlparse, urlunparse
 
 from dateutil.parser import parse
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.utils.functional import cached_property
 from edx_rest_api_client.exceptions import SlumberBaseException
 from opaque_keys.edx.keys import CourseKey
@@ -21,13 +21,17 @@ from requests.exceptions import ConnectionError, Timeout
 from course_modes.models import CourseMode
 from entitlements.models import CourseEntitlement
 from lms.djangoapps.certificates import api as certificate_api
+from lms.djangoapps.certificates.models import GeneratedCertificate
 from lms.djangoapps.commerce.utils import EcommerceService
 from lms.djangoapps.courseware.access import has_access
 from lms.djangoapps.grades.course_grade_factory import CourseGradeFactory
 from openedx.core.djangoapps.catalog.utils import get_programs, get_fulfillable_course_runs_for_entitlement
+from openedx.core.djangoapps.certificates.api import available_date_for_certificate
 from openedx.core.djangoapps.commerce.utils import ecommerce_api_client
 from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
 from openedx.core.djangoapps.credentials.utils import get_credentials
+from openedx.core.djangoapps.programs import ALWAYS_CALCULATE_PROGRAM_PRICE_AS_ANONYMOUS_USER
+from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 from student.models import CourseEnrollment
 from util.date_utils import strftime_localized
 from xmodule.modulestore.django import modulestore
@@ -274,27 +278,89 @@ class ProgramProgressMeter(object):
         return progress
 
     @property
-    def completed_programs(self):
-        """Identify programs completed by the student.
-
-        Returns:
-            list of UUIDs, each identifying a completed program.
+    def completed_programs_with_available_dates(self):
         """
-        return [program['uuid'] for program in self.programs if self._is_program_complete(program)]
+        Calculate the available date for completed programs based on course runs.
 
-    def _is_program_complete(self, program):
-        """Check if a user has completed a program.
+        Returns a dict of {uuid_string: available_datetime}
+        """
+        # Query for all user certs up front, for performance reasons (rather than querying per course run).
+        user_certificates = GeneratedCertificate.eligible_certificates.filter(user=self.user)
+        certificates_by_run = {cert.course_id: cert for cert in user_certificates}
 
-        A program is completed if the user has completed all nested courses.
+        completed = {}
+        for program in self.programs:
+            available_date = self._available_date_for_program(program, certificates_by_run)
+            if available_date:
+                completed[program['uuid']] = available_date
+        return completed
+
+    def _available_date_for_program(self, program_data, certificates):
+        """
+        Calculate the available date for the program based on the courses within it.
 
         Arguments:
-            program (dict): Representing the program whose completion to assess.
+            program_data (dict): nested courses and course runs
+            certificates (dict): course run key -> certificate mapping
 
-        Returns:
-            bool, indicating whether the program is complete.
+        Returns a datetime object or None if the program is not complete.
         """
-        return all(self._is_course_complete(course) for course in program['courses']) \
-            and len(program['courses']) > 0
+        program_available_date = None
+        for course in program_data['courses']:
+            earliest_course_run_date = None
+
+            for course_run in course['course_runs']:
+                key = CourseKey.from_string(course_run['key'])
+
+                # Get a certificate if one exists
+                certificate = certificates.get(key)
+                if certificate is None:
+                    continue
+
+                # Modes must match (see _is_course_complete() comments for why)
+                course_run_mode = self._course_run_mode_translation(course_run['type'])
+                certificate_mode = self._certificate_mode_translation(certificate.mode)
+                modes_match = course_run_mode == certificate_mode
+
+                # Grab the available date and keep it if it's the earliest one for this catalog course.
+                if modes_match and certificate_api.is_passing_status(certificate.status):
+                    course_overview = CourseOverview.get_from_id(key)
+                    available_date = available_date_for_certificate(course_overview, certificate)
+                    earliest_course_run_date = min(filter(None, [available_date, earliest_course_run_date]))
+
+            # If we're missing a cert for a course, the program isn't completed and we should just bail now
+            if earliest_course_run_date is None:
+                return None
+
+            # Keep the catalog course date if it's the latest one
+            program_available_date = max(filter(None, [earliest_course_run_date, program_available_date]))
+
+        return program_available_date
+
+    def _course_run_mode_translation(self, course_run_mode):
+        """
+        Returns a canonical mode for a course run (whose data is coming from the program cache).
+        This mode must match the certificate mode to be counted as complete.
+        """
+        mappings = {
+            # Runs of type 'credit' are counted as 'verified' since verified
+            # certificates are earned when credit runs are completed. LEARNER-1274
+            # tracks a cleaner way to do this using the discovery service's
+            # applicable_seat_types field.
+            CourseMode.CREDIT_MODE: CourseMode.VERIFIED,
+        }
+        return mappings.get(course_run_mode, course_run_mode)
+
+    def _certificate_mode_translation(self, certificate_mode):
+        """
+        Returns a canonical mode for a certificate (whose data is coming from the database).
+        This mode must match the course run mode to be counted as complete.
+        """
+        mappings = {
+            # Treat "no-id-professional" certificates as "professional" certificates
+            CourseMode.NO_ID_PROFESSIONAL_MODE: CourseMode.PROFESSIONAL,
+        }
+        return mappings.get(certificate_mode, certificate_mode)
 
     def _is_course_complete(self, course):
         """Check if a user has completed a course.
@@ -323,12 +389,7 @@ class ProgramProgressMeter(object):
                 # count towards completion of a course in a program). This may change
                 # in the future to make use of the more rigid set of "applicable seat
                 # types" associated with each program type in the catalog.
-
-                # Runs of type 'credit' are counted as 'verified' since verified
-                # certificates are earned when credit runs are completed. LEARNER-1274
-                # tracks a cleaner way to do this using the discovery service's
-                # applicable_seat_types field.
-                'type': 'verified' if course_run['type'] == 'credit' else course_run['type'],
+                'type': self._course_run_mode_translation(course_run['type']),
             }
 
         return any(reshape(course_run) in self.completed_course_runs for course_run in course['course_runs'])
@@ -365,15 +426,9 @@ class ProgramProgressMeter(object):
 
         completed_runs, failed_runs = [], []
         for certificate in course_run_certificates:
-            certificate_type = certificate['type']
-
-            # Treat "no-id-professional" certificates as "professional" certificates
-            if certificate_type == CourseMode.NO_ID_PROFESSIONAL_MODE:
-                certificate_type = CourseMode.PROFESSIONAL
-
             course_data = {
                 'course_run_id': unicode(certificate['course_key']),
-                'type': certificate_type,
+                'type': self._certificate_mode_translation(certificate['type']),
             }
 
             if certificate_api.is_passing_status(certificate['status']):
@@ -571,7 +626,7 @@ class ProgramDataExtender(object):
 
         if is_learner_eligible_for_one_click_purchase:
             courses = self.data['courses']
-            if not self.user.is_anonymous():
+            if not self.user.is_anonymous:
                 courses = self._filter_out_courses_with_enrollments(courses)
                 courses = self._filter_out_courses_with_entitlements(courses)
 
@@ -604,15 +659,21 @@ class ProgramDataExtender(object):
         if skus:
             try:
                 api_user = self.user
-                if not self.user.is_authenticated():
+                is_anonymous = False
+                if not self.user.is_authenticated:
                     user = get_user_model()
                     service_user = user.objects.get(username=settings.ECOMMERCE_SERVICE_WORKER_USERNAME)
                     api_user = service_user
+                    is_anonymous = True
 
                 api = ecommerce_api_client(api_user)
 
-                # Make an API call to calculate the discounted price
-                discount_data = api.baskets.calculate.get(sku=skus)
+                # The user specific program price is slow to calculate, so use switch to force the
+                # anonymous price for all users. See LEARNER-5555 for more details.
+                if is_anonymous or ALWAYS_CALCULATE_PROGRAM_PRICE_AS_ANONYMOUS_USER.is_enabled():
+                    discount_data = api.baskets.calculate.get(sku=skus, is_anonymous=True)
+                else:
+                    discount_data = api.baskets.calculate.get(sku=skus, username=self.user.username)
 
                 program_discounted_price = discount_data['total_incl_tax']
                 program_full_price = discount_data['total_incl_tax_excl_discounts']
@@ -667,16 +728,30 @@ def get_certificates(user, extended_program):
                 # We only want one certificate per course to be returned.
                 break
 
-    program_credentials = get_credentials(user, program_uuid=extended_program['uuid'])
+    program_credentials = get_credentials(user, program_uuid=extended_program['uuid'], credential_type='program')
     # only include a program certificate if a certificate is available for every course
     if program_credentials and (len(certificates) == len(extended_program['courses'])):
+        enabled_force_program_cert_auth = configuration_helpers.get_value(
+            'force_program_cert_auth',
+            True
+        )
+        cert_url = program_credentials[0]['certificate_url']
+        url = get_logged_in_program_certificate_url(cert_url) if enabled_force_program_cert_auth else cert_url
+
         certificates.append({
             'type': 'program',
             'title': extended_program['title'],
-            'url': program_credentials[0]['certificate_url'],
+            'url': url,
         })
 
     return certificates
+
+
+def get_logged_in_program_certificate_url(certificate_url):
+    parsed_url = urlparse(certificate_url)
+    query_string = 'next=' + parsed_url.path
+    url_parts = (parsed_url.scheme, parsed_url.netloc, '/login/', '', query_string, '')
+    return urlunparse(url_parts)
 
 
 class ProgramMarketingDataExtender(ProgramDataExtender):
@@ -767,7 +842,7 @@ class ProgramMarketingDataExtender(ProgramDataExtender):
         pass
 
     def _attach_course_run_upgrade_url(self, run_mode):
-        if not self.user.is_anonymous():
+        if not self.user.is_anonymous:
             super(ProgramMarketingDataExtender, self)._attach_course_run_upgrade_url(run_mode)
         else:
             run_mode['upgrade_url'] = None

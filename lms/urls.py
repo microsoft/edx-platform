@@ -8,9 +8,9 @@ from django.conf.urls.static import static
 from django.contrib.admin import autodiscover as django_autodiscover
 from django.utils.translation import ugettext_lazy as _
 from django.views.generic.base import RedirectView
+from rest_framework_swagger.views import get_swagger_view
 
 from branding import views as branding_views
-from certificates import views as certificates_views
 from config_models.views import ConfigurationModelCurrentAPIView
 from courseware.masquerade import handle_ajax as courseware_masquerade_handle_ajax
 from courseware.module_render import handle_xblock_callback, handle_xblock_callback_noauth, xblock_view, xqueue_callback
@@ -20,32 +20,35 @@ from courseware.views.views import CourseTabView, EnrollStaffView, StaticCourseT
 from debug import views as debug_views
 from django_comment_common.models import ForumsConfig
 from django_openid_auth import views as django_openid_auth_views
+from lms.djangoapps.certificates import views as certificates_views
 from lms.djangoapps.discussion import views as discussion_views
 from lms.djangoapps.instructor.views import coupons as instructor_coupons_views
 from lms.djangoapps.instructor.views import instructor_dashboard as instructor_dashboard_views
 from lms.djangoapps.instructor.views import registration_codes as instructor_registration_codes_views
 from lms.djangoapps.instructor_task import views as instructor_task_views
-from lms_migration import migrate as lms_migrate_views
 from notes import views as notes_views
 from notification_prefs import views as notification_prefs_views
 from openedx.core.djangoapps.auth_exchange.views import LoginWithAccessTokenView
 from openedx.core.djangoapps.catalog.models import CatalogIntegration
+from openedx.core.djangoapps.common_views.xblock import xblock_resource
 from openedx.core.djangoapps.cors_csrf import views as cors_csrf_views
 from openedx.core.djangoapps.course_groups import views as course_groups_views
 from openedx.core.djangoapps.debug import views as openedx_debug_views
 from openedx.core.djangoapps.external_auth import views as external_auth_views
 from openedx.core.djangoapps.lang_pref import views as lang_pref_views
+from openedx.core.djangoapps.password_policy import compliance as password_policy_compliance
+from openedx.core.djangoapps.password_policy.forms import PasswordPolicyAwareAdminAuthForm
+from openedx.core.djangoapps.plugins import constants as plugin_constants
+from openedx.core.djangoapps.plugins import plugin_urls
 from openedx.core.djangoapps.programs.models import ProgramsApiConfig
 from openedx.core.djangoapps.self_paced.models import SelfPacedConfiguration
 from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 from openedx.core.djangoapps.verified_track_content import views as verified_track_content_views
-from openedx.core.djangoapps.common_views.xblock import xblock_resource
 from openedx.features.enterprise_support.api import enterprise_enabled
 from ratelimitbackend import admin
 from static_template_view import views as static_template_view_views
 from staticbook import views as staticbook_views
 from student import views as student_views
-from student_account import views as student_account_views
 from track import views as track_views
 from util import views as util_views
 
@@ -54,20 +57,25 @@ if settings.DEBUG or settings.FEATURES.get('ENABLE_DJANGO_ADMIN_SITE'):
     admin.site.site_header = _('LMS Administration')
     admin.site.site_title = admin.site.site_header
 
+    if password_policy_compliance.should_enforce_compliance_on_login():
+        admin.site.login_form = PasswordPolicyAwareAdminAuthForm
+
+# Custom error pages
+# These are used by Django to render these error codes. Do not remove.
+# pylint: disable=invalid-name
+handler404 = static_template_view_views.render_404
+handler500 = static_template_view_views.render_500
 
 urlpatterns = [
     url(r'^$', branding_views.index, name='root'),   # Main marketing page, or redirect to courseware
 
     url(r'', include('student.urls')),
     # TODO: Move lms specific student views out of common code
-    url(r'^dashboard/?$', student_views.dashboard, name='dashboard'),
+    url(r'^dashboard/?$', student_views.student_dashboard, name='dashboard'),
     url(r'^change_enrollment$', student_views.change_enrollment, name='change_enrollment'),
 
     # Event tracking endpoints
     url(r'', include('track.urls')),
-
-    # Performance endpoints
-    url(r'', include('openedx.core.djangoapps.performance.urls')),
 
     # Static template view endpoints like blog, faq, etc.
     url(r'', include('static_template_view.urls')),
@@ -94,9 +102,6 @@ urlpatterns = [
     # Courseware search endpoints
     url(r'^search/', include('search.urls')),
 
-    # Course content API
-    url(r'^api/course_structure/', include('course_structure_api.urls', namespace='course_structure_api')),
-
     # Course API
     url(r'^api/courses/', include('course_api.urls')),
 
@@ -106,9 +111,6 @@ urlpatterns = [
     # User API endpoints
     url(r'^api/user/', include('openedx.core.djangoapps.user_api.urls')),
 
-    # Bookmarks API endpoints
-    url(r'^api/bookmarks/', include('openedx.core.djangoapps.bookmarks.urls')),
-
     # Profile Images API endpoints
     url(r'^api/profile_images/', include('openedx.core.djangoapps.profile_images.urls')),
 
@@ -117,8 +119,8 @@ urlpatterns = [
     url(r'^api/val/v0/', include('edxval.urls')),
 
     url(r'^api/commerce/', include('commerce.api.urls', namespace='commerce_api')),
-    url(r'^api/credit/', include('openedx.core.djangoapps.credit.urls', app_name='credit', namespace='credit')),
-    url(r'^rss_proxy/', include('rss_proxy.urls', namespace='rss_proxy')),
+    url(r'^api/credit/', include('openedx.core.djangoapps.credit.urls')),
+    url(r'^rss_proxy/', include('rss_proxy.urls')),
     url(r'^api/organizations/', include('organizations.urls', namespace='organizations')),
 
     url(r'^catalog/', include('openedx.core.djangoapps.catalog.urls', namespace='catalog')),
@@ -141,43 +143,17 @@ urlpatterns = [
 
     url(r'^dashboard/', include('learner_dashboard.urls')),
     url(r'^api/experiments/', include('experiments.urls', namespace='api_experiments')),
-
-    # Zendesk API proxy endpoint
-    url(r'^zendesk_proxy/', include('openedx.core.djangoapps.zendesk_proxy.urls')),
 ]
 
-# TODO: This needs to move to a separate urls.py once the student_account and
-# student views below find a home together
-if settings.FEATURES['ENABLE_COMBINED_LOGIN_REGISTRATION']:
-    # Backwards compatibility with old URL structure, but serve the new views
-    urlpatterns += [
-        url(r'^login$', student_account_views.login_and_registration_form,
-            {'initial_mode': 'login'}, name='signin_user'),
-        url(r'^register$', student_account_views.login_and_registration_form,
-            {'initial_mode': 'register'}, name='register_user'),
-    ]
-else:
-    # Serve the old views
-    urlpatterns += [
-        url(r'^login$', student_views.signin_user, name='signin_user'),
-        url(r'^register$', student_views.register_user, name='register_user'),
-    ]
-
-if settings.FEATURES['ENABLE_MOBILE_REST_API']:
+if settings.FEATURES.get('ENABLE_MOBILE_REST_API'):
     urlpatterns += [
         url(r'^api/mobile/v0.5/', include('mobile_api.urls')),
     ]
 
-if settings.FEATURES['ENABLE_OPENBADGES']:
+if settings.FEATURES.get('ENABLE_OPENBADGES'):
     urlpatterns += [
         url(r'^api/badges/v1/', include('badges.api.urls', app_name='badges', namespace='badges_api')),
     ]
-
-js_info_dict = {
-    'domain': 'djangojs',
-    # We need to explicitly include external Django apps that are not in LOCALE_PATHS.
-    'packages': ('openassessment',),
-}
 
 urlpatterns += [
     url(r'^openassessment/fileupload/', include('openassessment.fileupload.urls')),
@@ -185,13 +161,13 @@ urlpatterns += [
 
 
 # sysadmin dashboard, to see what courses are loaded, to delete & load courses
-if settings.FEATURES['ENABLE_SYSADMIN_DASHBOARD']:
+if settings.FEATURES.get('ENABLE_SYSADMIN_DASHBOARD'):
     urlpatterns += [
         url(r'^sysadmin/', include('dashboard.sysadmin_urls')),
     ]
 
 urlpatterns += [
-    url(r'^support/', include('support.urls', app_name='support', namespace='support')),
+    url(r'^support/', include('support.urls')),
 ]
 
 # Favicon
@@ -218,7 +194,8 @@ if settings.WIKI_ENABLED:
         # never be returned by a reverse() so they come after the other url patterns
         url(r'^courses/{}/course_wiki/?$'.format(settings.COURSE_ID_PATTERN),
             course_wiki_views.course_wiki_redirect, name='course_wiki'),
-        url(r'^courses/{}/wiki/'.format(settings.COURSE_KEY_REGEX), include(wiki_pattern(app_name='course_wiki_do_not_reverse', namespace='course_wiki_do_not_reverse'))),
+        url(r'^courses/{}/wiki/'.format(settings.COURSE_KEY_REGEX),
+            include(wiki_pattern(app_name='course_wiki_do_not_reverse', namespace='course_wiki_do_not_reverse'))),
     ]
 
 COURSE_URLS = [
@@ -493,11 +470,6 @@ urlpatterns += [
         name='set_course_mode_price',
     ),
     url(
-        r'^courses/{}/instructor/api/'.format(
-            settings.COURSE_ID_PATTERN,
-        ),
-        include('lms.djangoapps.instructor.views.api_urls')),
-    url(
         r'^courses/{}/remove_coupon$'.format(
             settings.COURSE_ID_PATTERN,
         ),
@@ -622,12 +594,6 @@ urlpatterns += [
         name='lti_rest_endpoints',
     ),
 
-    # Student account
-    url(
-        r'^account/',
-        include('student_account.urls')
-    ),
-
     # Student Notes
     url(
         r'^courses/{}/edxnotes/'.format(
@@ -635,6 +601,12 @@ urlpatterns += [
         ),
         include('edxnotes.urls'),
         name='edxnotes_endpoints',
+    ),
+
+    # Student Notes API
+    url(
+        r'^api/edxnotes/v1/',
+        include('edxnotes.api_urls'),
     ),
 
     # Branding API
@@ -651,7 +623,7 @@ urlpatterns += [
         include('openedx.features.course_experience.urls'),
     ),
 
-    # Course bookmarks
+    # Course bookmarks UI in LMS
     url(
         r'^courses/{}/bookmarks/'.format(
             settings.COURSE_ID_PATTERN,
@@ -680,9 +652,17 @@ urlpatterns += [
         ),
         include('openedx.features.learner_analytics.urls'),
     ),
+
+    # Portfolio project experiment
+    url(
+        r'^courses/{}/xfeature/portfolio/'.format(
+            settings.COURSE_ID_PATTERN,
+        ),
+        include('openedx.features.portfolio_project.urls'),
+    ),
 ]
 
-if settings.FEATURES['ENABLE_TEAMS']:
+if settings.FEATURES.get('ENABLE_TEAMS'):
     # Teams endpoints
     urlpatterns += [
         url(
@@ -732,12 +712,6 @@ if settings.FEATURES.get('ENABLE_DISCUSSION_SERVICE'):
                 settings.COURSE_ID_PATTERN,
             ),
             include('django_comment_client.urls')
-        ),
-        url(
-            r'^courses/{}/discussion/forum/'.format(
-                settings.COURSE_ID_PATTERN,
-            ),
-            include('discussion.urls')
         ),
         url(
             r'^notification_prefs/enable/',
@@ -809,6 +783,10 @@ if settings.FEATURES.get('CLASS_DASHBOARD'):
 if settings.DEBUG or settings.FEATURES.get('ENABLE_DJANGO_ADMIN_SITE'):
     # Jasmine and admin
     urlpatterns += [
+        # The password pages in the admin tool are disabled so that all password
+        # changes go through our user portal and follow complexity requirements.
+        url(r'^admin/password_change/$', handler404),
+        url(r'^admin/auth/user/\d+/password/$', handler404),
         url(r'^admin/', include(admin.site.urls)),
     ]
 
@@ -844,7 +822,7 @@ if settings.FEATURES.get('RESTRICT_ENROLL_BY_REG_METHOD'):
             external_auth_views.course_specific_register, name='course-specific-register'),
     ]
 
-if configuration_helpers.get_value('ENABLE_BULK_ENROLLMENT_VIEW', settings.FEATURES['ENABLE_BULK_ENROLLMENT_VIEW']):
+if configuration_helpers.get_value('ENABLE_BULK_ENROLLMENT_VIEW', settings.FEATURES.get('ENABLE_BULK_ENROLLMENT_VIEW')):
     urlpatterns += [
         url(r'^api/bulk_enroll/v1/', include('bulk_enroll.urls')),
     ]
@@ -912,18 +890,6 @@ if settings.FEATURES.get('ENABLE_OAUTH2_PROVIDER'):
         url(r'^_o/', include('oauth2_provider.urls', namespace='oauth2_provider')),
     ]
 
-if settings.FEATURES.get('ENABLE_LMS_MIGRATION'):
-    urlpatterns += [
-        url(r'^migrate/modules$', lms_migrate_views.manage_modulestores),
-        url(r'^migrate/reload/(?P<reload_dir>[^/]+)$', lms_migrate_views.manage_modulestores),
-        url(
-            r'^migrate/reload/(?P<reload_dir>[^/]+)/(?P<commit_id>[^/]+)$',
-            lms_migrate_views.manage_modulestores
-        ),
-        url(r'^gitreload$', lms_migrate_views.gitreload),
-        url(r'^gitreload/(?P<reload_dir>[^/]+)$', lms_migrate_views.gitreload),
-    ]
-
 if settings.FEATURES.get('ENABLE_SQL_TRACKING_LOGS'):
     urlpatterns += [
         url(r'^event_logs$', track_views.view_tracking_log),
@@ -964,9 +930,6 @@ if settings.FEATURES.get('ENABLE_THIRD_PARTY_AUTH'):
     urlpatterns += [
         url(r'', include('third_party_auth.urls')),
         url(r'api/third_party_auth/', include('third_party_auth.api.urls')),
-        # NOTE: The following login_oauth_token endpoint is DEPRECATED.
-        # Please use the exchange_access_token endpoint instead.
-        url(r'^login_oauth_token/(?P<backend>[^/]+)/$', student_views.login_oauth_token),
     ]
 
 # Enterprise
@@ -987,7 +950,7 @@ if settings.FEATURES.get('ENABLE_OAUTH2_PROVIDER'):
 
 # Certificates
 urlpatterns += [
-    url(r'^certificates/', include('certificates.urls', app_name='certificates', namespace='certificates')),
+    url(r'^certificates/', include('certificates.urls')),
 
     # Backwards compatibility with XQueue, which uses URLs that are not prefixed with /certificates/
     url(r'^update_certificate$', certificates_views.update_certificate, name='update_certificate'),
@@ -1007,7 +970,7 @@ urlpatterns += [
 ]
 
 # Custom courses on edX (CCX) URLs
-if settings.FEATURES['CUSTOM_COURSES_EDX']:
+if settings.FEATURES.get('CUSTOM_COURSES_EDX'):
     urlpatterns += [
         url(r'^courses/{}/'.format(settings.COURSE_ID_PATTERN),
             include('ccx.urls')),
@@ -1046,13 +1009,6 @@ if 'debug_toolbar' in settings.INSTALLED_APPS:
         url(r'^__debug__/', include(debug_toolbar.urls)),
     ]
 
-
-# Custom error pages
-# These are used by Django to render these error codes. Do not remove.
-# pylint: disable=invalid-name
-handler404 = static_template_view_views.render_404
-handler500 = static_template_view_views.render_500
-
 # include into our URL patterns the HTTP REST API that comes with edx-proctoring.
 urlpatterns += [
     url(r'^api/', include('edx_proctoring.urls')),
@@ -1080,9 +1036,17 @@ if settings.FEATURES.get('ENABLE_FINANCIAL_ASSISTANCE_FORM'):
 # Branch.io Text Me The App
 if settings.BRANCH_IO_KEY:
     urlpatterns += [
-        url(r'^text-me-the-app', 'student.views.text_me_the_app', name='text_me_the_app'),
+        url(r'^text-me-the-app', student_views.text_me_the_app, name='text_me_the_app'),
     ]
 
+if settings.FEATURES.get('ENABLE_API_DOCS'):
+    urlpatterns += [
+        url(r'^api-docs/$', get_swagger_view(title='LMS API')),
+    ]
 
-from openedx.core.djangoapps.plugins import constants as plugin_constants, plugin_urls
+# edx-drf-extensions csrf app
+urlpatterns += [
+    url(r'', include('csrf.urls')),
+]
+
 urlpatterns.extend(plugin_urls.get_patterns(plugin_constants.ProjectType.LMS))

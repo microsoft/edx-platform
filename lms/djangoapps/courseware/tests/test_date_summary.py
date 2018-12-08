@@ -5,11 +5,10 @@ from datetime import datetime, timedelta
 import ddt
 import waffle
 from django.contrib.messages.middleware import MessageMiddleware
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.test import RequestFactory
 from freezegun import freeze_time
 from mock import patch
-from nose.plugins.attrib import attr
 from pytz import utc
 
 from course_modes.models import CourseMode
@@ -37,6 +36,7 @@ from openedx.core.djangoapps.self_paced.models import SelfPacedConfiguration
 from openedx.core.djangoapps.site_configuration.tests.factories import SiteFactory
 from openedx.core.djangoapps.user_api.preferences.api import set_user_preference
 from openedx.core.djangoapps.waffle_utils.testutils import override_waffle_flag
+from openedx.core.lib.tests import attr
 from openedx.features.course_experience import UNIFIED_COURSE_TAB_FLAG, UPGRADE_DEADLINE_MESSAGE, CourseHomeMessages
 from student.tests.factories import TEST_PASSWORD, CourseEnrollmentFactory, UserFactory
 from xmodule.modulestore.tests.django_utils import SharedModuleStoreTestCase
@@ -63,9 +63,9 @@ class CourseDateSummaryTest(SharedModuleStoreTestCase):
         response = self.client.get(url)
         self.assertNotIn('date-summary', response.content)
 
-    def test_course_info_logged_out(self):
+    def test_course_home_logged_out(self):
         course = create_course_run()
-        url = reverse('info', args=(course.id,))
+        url = reverse('openedx.course_experience.course_home', args=(course.id,))
         response = self.client.get(url)
         self.assertEqual(200, response.status_code)
 
@@ -307,7 +307,7 @@ class CourseDateSummaryTest(SharedModuleStoreTestCase):
         CourseEnrollmentFactory(course_id=course.id, user=user, mode=CourseMode.VERIFIED)
 
         block = VerifiedUpgradeDeadlineDate(course, user)
-        self.assertEqual(block.link, '{}?sku={}'.format(configuration.MULTIPLE_ITEMS_BASKET_PAGE_URL, sku))
+        self.assertEqual(block.link, '{}?sku={}'.format(configuration.basket_checkout_page, sku))
 
     ## CertificateAvailableDate
     @waffle.testutils.override_switch('certificates.auto_certificate_generation', True)

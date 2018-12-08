@@ -2,9 +2,9 @@
 
 import datetime
 import json
+from unittest import skip
 
 import ddt
-from nose.plugins.attrib import attr
 from opaque_keys.edx.keys import CourseKey, UsageKey
 
 from common.test.acceptance.pages.lms.video.video import _parse_time_str
@@ -60,6 +60,7 @@ class VideoEventsTestMixin(EventsTestMixin, VideoBaseTest):
 
 class VideoEventsTest(VideoEventsTestMixin):
     """ Test video player event emission """
+    shard = 21
 
     def test_video_control_events(self):
         """
@@ -188,10 +189,10 @@ class VideoHLSEventsTest(VideoEventsTestMixin):
         self.assert_events_match(expected_events, captured_events)
 
 
-@attr(shard=8)
 @ddt.ddt
 class VideoBumperEventsTest(VideoEventsTestMixin):
     """ Test bumper video event emission """
+    shard = 19
 
     # helper methods
     def watch_video_and_skip(self):
@@ -230,6 +231,7 @@ class VideoBumperEventsTest(VideoEventsTestMixin):
         }
         self.course_fixture.add_advanced_settings(additional_data)
 
+    @skip("student: 5/2/18: flaky test")
     @ddt.data(
         ('edx.video.bumper.skipped', watch_video_and_skip),
         ('edx.video.bumper.dismissed', watch_video_and_dismiss),

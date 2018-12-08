@@ -5,13 +5,14 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.staticfiles.storage import staticfiles_storage
 from django.core.exceptions import ObjectDoesNotExist
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.http import Http404
 from django.shortcuts import render_to_response
 from django.utils.translation import ugettext as _
 from django.views.decorators.http import require_http_methods
 from django_countries import countries
 from edxmako.shortcuts import marketing_link
+from openedx.core.djangoapps.credentials.utils import get_credentials_records_url
 from openedx.core.djangoapps.programs.models import ProgramsApiConfig
 from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 from openedx.core.djangoapps.user_api.accounts.api import get_account_settings
@@ -19,6 +20,7 @@ from openedx.core.djangoapps.user_api.errors import UserNotAuthorized, UserNotFo
 from openedx.core.djangoapps.user_api.preferences.api import get_user_preferences
 from openedx.core.djangoapps.util.user_messages import PageLevelMessages
 from openedx.core.djangolib.markup import HTML, Text
+from openedx.features.journals.api import journals_enabled
 from student.models import User
 
 from .. import SHOW_PROFILE_MESSAGE
@@ -58,7 +60,7 @@ def learner_profile(request, username):
                 'profile. {learn_more_link_start}Learn more{learn_more_link_end}'
             )).format(
                 learn_more_link_start=HTML(
-                    '<a href="http://edx.readthedocs.io/projects/open-edx-learner-guide/en/'
+                    '<a href="https://edx.readthedocs.io/projects/open-edx-learner-guide/en/'
                     'latest/SFD_dashboard_profile_SectionHead.html#adding-profile-information">'
                 ),
                 learn_more_link_end=HTML('</a>')
@@ -136,9 +138,11 @@ def learner_profile_context(request, profile_username, user_is_staff):
             'social_platforms': settings.SOCIAL_PLATFORMS,
         },
         'show_program_listing': ProgramsApiConfig.is_enabled(),
+        'show_journal_listing': journals_enabled(),
         'show_dashboard_tabs': True,
         'disable_courseware_js': True,
         'nav_hidden': True,
+        'records_url': get_credentials_records_url(),
     }
 
     if badges_enabled():

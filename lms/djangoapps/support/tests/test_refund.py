@@ -26,6 +26,8 @@ class RefundTests(ModuleStoreTestCase):
     """
     Tests for the manual refund page
     """
+    shard = 4
+
     def setUp(self):
         super(RefundTests, self).setUp()
 
@@ -87,7 +89,7 @@ class RefundTests(ModuleStoreTestCase):
 
     def test_bad_courseid(self):
         response = self.client.post('/support/refund/', {'course_id': 'foo', 'user': self.student.email})
-        self.assertContains(response, 'Invalid course id')
+        self.assertContains(response, 'Course id invalid')
 
     def test_bad_user(self):
         response = self.client.post('/support/refund/', {'course_id': str(self.course_id), 'user': 'unknown@foo.com'})
@@ -120,7 +122,7 @@ class RefundTests(ModuleStoreTestCase):
         pars['confirmed'] = 'true'
         response = self.client.post('/support/refund/', pars)
         self.assertTrue(response.status_code, 302)
-        response = self.client.get(response.get('location'))  # pylint: disable=maybe-no-member
+        response = self.client.get(response.get('location'))
 
         self.assertContains(response, "Unenrolled %s from" % self.student)
         self.assertContains(response, "Refunded 1.00 for order id")

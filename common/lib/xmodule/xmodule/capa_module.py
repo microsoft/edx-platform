@@ -11,7 +11,9 @@ import dogstats_wrapper as dog_stats_api
 from capa import responsetypes
 from xmodule.exceptions import NotFoundError, ProcessingError
 from xmodule.raw_module import RawDescriptor
+from xmodule.contentstore.django import contentstore
 from xmodule.util.misc import escape_html_characters
+from xmodule.util.sandboxing import get_python_lib_zip
 from xmodule.x_module import DEPRECATION_VSCOMPAT_EVENT, XModule, module_attr
 
 from .capa_base import CapaFields, CapaMixin, ComplexEncoder
@@ -302,6 +304,107 @@ class CapaDescriptor(CapaFields, RawDescriptor):
             minimal_init=True,
         )
         return lcp.get_max_score()
+
+    def generate_report_data(self, user_state_iterator, limit_responses=None):
+        """
+        Return a list of student responses to this block in a readable way.
+
+        Arguments:
+            user_state_iterator: iterator over UserStateClient objects.
+                E.g. the result of user_state_client.iter_all_for_block(block_key)
+
+            limit_responses (int|None): maximum number of responses to include.
+                Set to None (default) to include all.
+
+        Returns:
+            each call returns a tuple like:
+            ("username", {
+                           "Question": "2 + 2 equals how many?",
+                           "Answer": "Four",
+                           "Answer ID": "98e6a8e915904d5389821a94e48babcf_10_1"
+            })
+        """
+
+        from capa.capa_problem import LoncapaProblem, LoncapaSystem
+
+        if self.category != 'problem':
+            raise NotImplementedError()
+
+        if limit_responses == 0:
+            # Don't even start collecting answers
+            return
+        capa_system = LoncapaSystem(
+            ajax_url=None,
+            # TODO set anonymous_student_id to the anonymous ID of the user which answered each problem
+            # Anonymous ID is required for Matlab, CodeResponse, and some custom problems that include
+            # '$anonymous_student_id' in their XML.
+            # For the purposes of this report, we don't need to support those use cases.
+            anonymous_student_id=None,
+            cache=None,
+            can_execute_unsafe_code=lambda: None,
+            get_python_lib_zip=(lambda: get_python_lib_zip(contentstore, self.runtime.course_id)),
+            DEBUG=None,
+            filestore=self.runtime.resources_fs,
+            i18n=self.runtime.service(self, "i18n"),
+            node_path=None,
+            render_template=None,
+            seed=1,
+            STATIC_URL=None,
+            xqueue=None,
+            matlab_api_key=None,
+        )
+        _ = capa_system.i18n.ugettext
+
+        count = 0
+        for user_state in user_state_iterator:
+
+            if 'student_answers' not in user_state.state:
+                continue
+
+            lcp = LoncapaProblem(
+                problem_text=self.data,
+                id=self.location.html_id(),
+                capa_system=capa_system,
+                # We choose to run without a fully initialized CapaModule
+                capa_module=None,
+                state={
+                    'done': user_state.state.get('done'),
+                    'correct_map': user_state.state.get('correct_map'),
+                    'student_answers': user_state.state.get('student_answers'),
+                    'has_saved_answers': user_state.state.get('has_saved_answers'),
+                    'input_state': user_state.state.get('input_state'),
+                    'seed': user_state.state.get('seed'),
+                },
+                seed=user_state.state.get('seed'),
+                # extract_tree=False allows us to work without a fully initialized CapaModule
+                # We'll still be able to find particular data in the XML when we need it
+                extract_tree=False,
+            )
+
+            for answer_id, orig_answers in lcp.student_answers.items():
+                # Some types of problems have data in lcp.student_answers that isn't in lcp.problem_data.
+                # E.g. formulae do this to store the MathML version of the answer.
+                # We exclude these rows from the report because we only need the text-only answer.
+                if answer_id.endswith('_dynamath'):
+                    continue
+
+                if limit_responses and count >= limit_responses:
+                    # End the iterator here
+                    return
+
+                question_text = lcp.find_question_label(answer_id)
+                answer_text = lcp.find_answer_text(answer_id, current_answer=orig_answers)
+                correct_answer_text = lcp.find_correct_answer_text(answer_id)
+
+                count += 1
+                report = {
+                    _("Answer ID"): answer_id,
+                    _("Question"): question_text,
+                    _("Answer"): answer_text,
+                }
+                if correct_answer_text is not None:
+                    report[_("Correct Answer")] = correct_answer_text
+                yield (user_state.username, report)
 
     # Proxy to CapaModule for access to any of its attributes
     answer_available = module_attr('answer_available')

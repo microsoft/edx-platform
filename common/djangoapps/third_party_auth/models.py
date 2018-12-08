@@ -18,6 +18,7 @@ from django.utils import timezone
 from django.utils.translation import ugettext_lazy as _
 from provider.oauth2.models import Client
 from provider.utils import long_token
+from six import text_type
 from social_core.backends.base import BaseAuth
 from social_core.backends.oauth import OAuthAuth
 from social_core.backends.saml import SAMLAuth
@@ -60,7 +61,7 @@ def clean_json(value, of_type):
     try:
         value_python = json.loads(value)
     except ValueError as err:
-        raise ValidationError("Invalid JSON: {}".format(err.message))
+        raise ValidationError("Invalid JSON: {}".format(text_type(err)))
     if not isinstance(value_python, of_type):
         raise ValidationError("Expected a JSON {}".format(of_type))
     return json.dumps(value_python, indent=4)
@@ -87,6 +88,8 @@ class ProviderConfig(ConfigurationModel):
     """
     Abstract Base Class for configuring a third_party_auth provider
     """
+    KEY_FIELDS = ('slug',)
+
     icon_class = models.CharField(
         max_length=50,
         blank=True,
@@ -108,6 +111,12 @@ class ProviderConfig(ConfigurationModel):
         ),
     )
     name = models.CharField(max_length=50, blank=False, help_text="Name of this provider (shown to users)")
+    slug = models.SlugField(
+        max_length=30, db_index=True, default='default',
+        help_text=(
+            'A short string uniquely identifying this provider. '
+            'Cannot contain spaces and should be a usable as a CSS class. Examples: "ubc", "mit-staging"'
+        ))
     secondary = models.BooleanField(
         default=False,
         help_text=_(
@@ -122,6 +131,7 @@ class ProviderConfig(ConfigurationModel):
         help_text=_(
             'The Site that this provider configuration belongs to.'
         ),
+        on_delete=models.CASCADE,
     )
     skip_hinted_login_dialog = models.BooleanField(
         default=False,
@@ -144,6 +154,12 @@ class ProviderConfig(ConfigurationModel):
         help_text=_(
             "If this option is selected, users will not be required to confirm their "
             "email, and their account will be activated immediately upon registration."
+        ),
+    )
+    send_welcome_email = models.BooleanField(
+        default=False,
+        help_text=_(
+            "If this option is selected, users will be sent a welcome email upon registration."
         ),
     )
     visible = models.BooleanField(
@@ -181,6 +197,10 @@ class ProviderConfig(ConfigurationModel):
             "with their account is changed as a part of this synchronization."
         )
     )
+    enable_sso_id_verification = models.BooleanField(
+        default=False,
+        help_text="Use the presence of a profile from a trusted third party as proof of identity verification.",
+    )
     prefix = None  # used for provider_id. Set to a string value in subclass
     backend_name = None  # Set to a field or fixed value in subclass
     accepts_logins = True  # Whether to display a sign-in button when the provider is enabled
@@ -207,6 +227,11 @@ class ProviderConfig(ConfigurationModel):
     def backend_class(self):
         """ Get the python-social-auth backend class used for this provider """
         return _PSA_BACKENDS[self.backend_name]
+
+    @property
+    def full_class_name(self):
+        """ Get the fully qualified class name of this provider. """
+        return '{}.{}'.format(self.__module__, self.__class__.__name__)
 
     def get_url_params(self):
         """ Get a dict of GET parameters to append to login links for this provider """
@@ -238,8 +263,8 @@ class ProviderConfig(ConfigurationModel):
     def get_register_form_data(cls, pipeline_kwargs):
         """Gets dict of data to display on the register form.
 
-        common.djangoapps.student.views.register_user uses this to populate the
-        new account creation form with values supplied by the user's chosen
+        openedx.core.djangoapps.user_authn.views.deprecated.register_user uses this to populate
+        the new account creation form with values supplied by the user's chosen
         provider, preventing duplicate data entry.
 
         Args:
@@ -305,7 +330,6 @@ class OAuth2ProviderConfig(ProviderConfig):
     Also works for OAuth1 providers.
     """
     prefix = 'oa2'
-    KEY_FIELDS = ('provider_slug', )  # Backend name is unique
     backend_name = models.CharField(
         max_length=50, blank=False, db_index=True,
         help_text=(
@@ -314,12 +338,6 @@ class OAuth2ProviderConfig(ProviderConfig):
             # To be precise, it's set by AUTHENTICATION_BACKENDS - which aws.py sets from THIRD_PARTY_AUTH_BACKENDS
         )
     )
-    provider_slug = models.SlugField(
-        max_length=30, db_index=True,
-        help_text=(
-            'A short string uniquely identifying this provider. '
-            'Cannot contain spaces and should be a usable as a CSS class. Examples: "ubc", "mit-staging"'
-        ))
     key = models.TextField(blank=True, verbose_name="Client ID")
     secret = models.TextField(
         blank=True,
@@ -359,157 +377,28 @@ class OAuth2ProviderConfig(ProviderConfig):
         raise KeyError
 
 
-class SAMLProviderConfig(ProviderConfig):
-    """
-    Configuration Entry for a SAML/Shibboleth provider.
-    """
-    prefix = 'saml'
-    KEY_FIELDS = ('idp_slug', )
-    backend_name = models.CharField(
-        max_length=50, default='tpa-saml', blank=False,
-        help_text="Which python-social-auth provider backend to use. 'tpa-saml' is the standard edX SAML backend.")
-    idp_slug = models.SlugField(
-        max_length=30, db_index=True,
-        help_text=(
-            'A short string uniquely identifying this provider. '
-            'Cannot contain spaces and should be a usable as a CSS class. Examples: "ubc", "mit-staging"'
-        ))
-    entity_id = models.CharField(
-        max_length=255, verbose_name="Entity ID", help_text="Example: https://idp.testshib.org/idp/shibboleth")
-    metadata_source = models.CharField(
-        max_length=255,
-        help_text=(
-            "URL to this provider's XML metadata. Should be an HTTPS URL. "
-            "Example: https://www.testshib.org/metadata/testshib-providers.xml"
-        ))
-    attr_user_permanent_id = models.CharField(
-        max_length=128, blank=True, verbose_name="User ID Attribute",
-        help_text="URN of the SAML attribute that we can use as a unique, persistent user ID. Leave blank for default.")
-    attr_full_name = models.CharField(
-        max_length=128, blank=True, verbose_name="Full Name Attribute",
-        help_text="URN of SAML attribute containing the user's full name. Leave blank for default.")
-    attr_first_name = models.CharField(
-        max_length=128, blank=True, verbose_name="First Name Attribute",
-        help_text="URN of SAML attribute containing the user's first name. Leave blank for default.")
-    attr_last_name = models.CharField(
-        max_length=128, blank=True, verbose_name="Last Name Attribute",
-        help_text="URN of SAML attribute containing the user's last name. Leave blank for default.")
-    attr_username = models.CharField(
-        max_length=128, blank=True, verbose_name="Username Hint Attribute",
-        help_text="URN of SAML attribute to use as a suggested username for this user. Leave blank for default.")
-    attr_email = models.CharField(
-        max_length=128, blank=True, verbose_name="Email Attribute",
-        help_text="URN of SAML attribute containing the user's email address[es]. Leave blank for default.")
-    automatic_refresh_enabled = models.BooleanField(
-        default=True, verbose_name="Enable automatic metadata refresh",
-        help_text="When checked, the SAML provider's metadata will be included in the automatic refresh job, if configured.")
-    identity_provider_type = models.CharField(
-        max_length=128, blank=False, verbose_name="Identity Provider Type", default=STANDARD_SAML_PROVIDER_KEY,
-        choices=get_saml_idp_choices(), help_text=(
-            "Some SAML providers require special behavior. For example, SAP SuccessFactors SAML providers require an "
-            "additional API call to retrieve user metadata not provided in the SAML response. Select the provider type "
-            "which best matches your use case. If in doubt, choose the Standard SAML Provider type."
-        )
-    )
-    debug_mode = models.BooleanField(
-        default=False, verbose_name="Debug Mode",
-        help_text=(
-            "In debug mode, all SAML XML requests and responses will be logged. "
-            "This is helpful for testing/setup but should always be disabled before users start using this provider."
-        ),
-    )
-    other_settings = models.TextField(
-        verbose_name="Advanced settings", blank=True,
-        help_text=(
-            'For advanced use cases, enter a JSON object with addtional configuration. '
-            'The tpa-saml backend supports {"requiredEntitlements": ["urn:..."]}, '
-            'which can be used to require the presence of a specific eduPersonEntitlement, '
-            'and {"extra_field_definitions": [{"name": "...", "urn": "..."},...]}, which can be '
-            'used to define registration form fields and the URNs that can be used to retrieve '
-            'the relevant values from the SAML response. Custom provider types, as selected '
-            'in the "Identity Provider Type" field, may make use of the information stored '
-            'in this field for additional configuration.'
-        ))
-
-    def clean(self):
-        """ Standardize and validate fields """
-        super(SAMLProviderConfig, self).clean()
-        self.other_settings = clean_json(self.other_settings, dict)
-
-    class Meta(object):
-        app_label = "third_party_auth"
-        verbose_name = "Provider Configuration (SAML IdP)"
-        verbose_name_plural = "Provider Configuration (SAML IdPs)"
-
-    def get_url_params(self):
-        """ Get a dict of GET parameters to append to login links for this provider """
-        return {'idp': self.idp_slug}
-
-    def is_active_for_pipeline(self, pipeline):
-        """ Is this provider being used for the specified pipeline? """
-        return self.backend_name == pipeline['backend'] and self.idp_slug == pipeline['kwargs']['response']['idp_name']
-
-    def match_social_auth(self, social_auth):
-        """ Is this provider being used for this UserSocialAuth entry? """
-        prefix = self.idp_slug + ":"
-        return self.backend_name == social_auth.provider and social_auth.uid.startswith(prefix)
-
-    def get_remote_id_from_social_auth(self, social_auth):
-        """ Given a UserSocialAuth object, return the remote ID used by this provider. """
-        assert self.match_social_auth(social_auth)
-        # Remove the prefix from the UID
-        return social_auth.uid[len(self.idp_slug) + 1:]
-
-    def get_social_auth_uid(self, remote_id):
-        """ Get social auth uid from remote id by prepending idp_slug to the remote id """
-        return '{}:{}'.format(self.idp_slug, remote_id)
-
-    def get_config(self):
-        """
-        Return a SAMLIdentityProvider instance for use by SAMLAuthBackend.
-
-        Essentially this just returns the values of this object and its
-        associated 'SAMLProviderData' entry.
-        """
-        if self.other_settings:
-            conf = json.loads(self.other_settings)
-        else:
-            conf = {}
-        attrs = (
-            'attr_user_permanent_id', 'attr_full_name', 'attr_first_name',
-            'attr_last_name', 'attr_username', 'attr_email', 'entity_id')
-        for field in attrs:
-            val = getattr(self, field)
-            if val:
-                conf[field] = val
-        # Now get the data fetched automatically from the metadata.xml:
-        data = SAMLProviderData.current(self.entity_id)
-        if not data or not data.is_valid():
-            log.error(
-                'No SAMLProviderData found for provider "%s" with entity id "%s" and IdP slug "%s". '
-                'Run "manage.py saml pull" to fix or debug.',
-                self.name, self.entity_id, self.idp_slug
-            )
-            raise AuthNotConfigured(provider_name=self.name)
-        conf['x509cert'] = data.public_key
-        conf['url'] = data.sso_url
-        idp_class = get_saml_idp_class(self.identity_provider_type)
-        return idp_class(self.idp_slug, **conf)
-
-
 class SAMLConfiguration(ConfigurationModel):
     """
     General configuration required for this edX instance to act as a SAML
     Service Provider and allow users to authenticate via third party SAML
     Identity Providers (IdPs)
     """
-    KEY_FIELDS = ('site_id', )
+    KEY_FIELDS = ('site_id', 'slug')
     site = models.ForeignKey(
         Site,
         default=settings.SITE_ID,
         related_name='%(class)ss',
         help_text=_(
             'The Site that this SAML configuration belongs to.'
+        ),
+        on_delete=models.CASCADE,
+    )
+    slug = models.SlugField(
+        max_length=30,
+        default='default',
+        help_text=(
+            'A short string uniquely identifying this configuration. '
+            'Cannot contain spaces. Examples: "ubc", "mit-staging"'
         ),
     )
     private_key = models.TextField(
@@ -551,6 +440,16 @@ class SAMLConfiguration(ConfigurationModel):
         verbose_name = "SAML Configuration"
         verbose_name_plural = verbose_name
 
+    def __str__(self):
+        """
+        Return human-readable string representation.
+        """
+        return "SAMLConfiguration {site}: {slug} on {date:%Y-%m-%d %H:%M:%S}".format(
+            site=self.site.name,
+            slug=self.slug,
+            date=self.change_date,
+        )
+
     def clean(self):
         """ Standardize and validate fields """
         super(SAMLConfiguration, self).clean()
@@ -590,12 +489,20 @@ class SAMLConfiguration(ConfigurationModel):
             if self.public_key:
                 return self.public_key
             # To allow instances to avoid storing keys in the DB, the key pair can also be set via Django:
-            return getattr(settings, 'SOCIAL_AUTH_SAML_SP_PUBLIC_CERT', '')
+            if self.slug == 'default':
+                return getattr(settings, 'SOCIAL_AUTH_SAML_SP_PUBLIC_CERT', '')
+            else:
+                public_certs = getattr(settings, 'SOCIAL_AUTH_SAML_SP_PUBLIC_CERT_DICT', {})
+                return public_certs.get(self.slug, '')
         if name == "SP_PRIVATE_KEY":
             if self.private_key:
                 return self.private_key
             # To allow instances to avoid storing keys in the DB, the private key can also be set via Django:
-            return getattr(settings, 'SOCIAL_AUTH_SAML_SP_PRIVATE_KEY', '')
+            if self.slug == 'default':
+                return getattr(settings, 'SOCIAL_AUTH_SAML_SP_PRIVATE_KEY', '')
+            else:
+                private_keys = getattr(settings, 'SOCIAL_AUTH_SAML_SP_PRIVATE_KEY_DICT', {})
+                return private_keys.get(self.slug, '')
         other_config = {
             # These defaults can be overriden by self.other_config_str
             "GET_ALL_EXTRA_DATA": True,  # Save all attribute values the IdP sends into the UserSocialAuth table
@@ -604,6 +511,161 @@ class SAMLConfiguration(ConfigurationModel):
         }
         other_config.update(json.loads(self.other_config_str))
         return other_config[name]  # SECURITY_CONFIG, SP_EXTRA, or similar extra settings
+
+
+def active_saml_configurations_filter():
+    """
+    Returns a mapping to be used for the SAMLProviderConfig to limit the SAMLConfiguration choices to the current set.
+    """
+    query_set = SAMLConfiguration.objects.current_set()
+    return {'id__in': query_set.values_list('id', flat=True)}
+
+
+class SAMLProviderConfig(ProviderConfig):
+    """
+    Configuration Entry for a SAML/Shibboleth provider.
+    """
+    prefix = 'saml'
+    backend_name = models.CharField(
+        max_length=50, default='tpa-saml', blank=False,
+        help_text="Which python-social-auth provider backend to use. 'tpa-saml' is the standard edX SAML backend.")
+    entity_id = models.CharField(
+        max_length=255, verbose_name="Entity ID", help_text="Example: https://idp.testshib.org/idp/shibboleth")
+    metadata_source = models.CharField(
+        max_length=255,
+        help_text=(
+            "URL to this provider's XML metadata. Should be an HTTPS URL. "
+            "Example: https://www.testshib.org/metadata/testshib-providers.xml"
+        ))
+    attr_user_permanent_id = models.CharField(
+        max_length=128, blank=True, verbose_name="User ID Attribute",
+        help_text="URN of the SAML attribute that we can use as a unique, persistent user ID. Leave blank for default.")
+    attr_full_name = models.CharField(
+        max_length=128, blank=True, verbose_name="Full Name Attribute",
+        help_text="URN of SAML attribute containing the user's full name. Leave blank for default.")
+    attr_first_name = models.CharField(
+        max_length=128, blank=True, verbose_name="First Name Attribute",
+        help_text="URN of SAML attribute containing the user's first name. Leave blank for default.")
+    attr_last_name = models.CharField(
+        max_length=128, blank=True, verbose_name="Last Name Attribute",
+        help_text="URN of SAML attribute containing the user's last name. Leave blank for default.")
+    attr_username = models.CharField(
+        max_length=128, blank=True, verbose_name="Username Hint Attribute",
+        help_text="URN of SAML attribute to use as a suggested username for this user. Leave blank for default.")
+    attr_email = models.CharField(
+        max_length=128, blank=True, verbose_name="Email Attribute",
+        help_text="URN of SAML attribute containing the user's email address[es]. Leave blank for default.")
+    automatic_refresh_enabled = models.BooleanField(
+        default=True, verbose_name="Enable automatic metadata refresh",
+        help_text="When checked, the SAML provider's metadata will be included "
+                  "in the automatic refresh job, if configured."
+    )
+    identity_provider_type = models.CharField(
+        max_length=128, blank=False, verbose_name="Identity Provider Type", default=STANDARD_SAML_PROVIDER_KEY,
+        choices=get_saml_idp_choices(), help_text=(
+            "Some SAML providers require special behavior. For example, SAP SuccessFactors SAML providers require an "
+            "additional API call to retrieve user metadata not provided in the SAML response. Select the provider type "
+            "which best matches your use case. If in doubt, choose the Standard SAML Provider type."
+        )
+    )
+    debug_mode = models.BooleanField(
+        default=False, verbose_name="Debug Mode",
+        help_text=(
+            "In debug mode, all SAML XML requests and responses will be logged. "
+            "This is helpful for testing/setup but should always be disabled before users start using this provider."
+        ),
+    )
+    other_settings = models.TextField(
+        verbose_name="Advanced settings", blank=True,
+        help_text=(
+            'For advanced use cases, enter a JSON object with addtional configuration. '
+            'The tpa-saml backend supports {"requiredEntitlements": ["urn:..."]}, '
+            'which can be used to require the presence of a specific eduPersonEntitlement, '
+            'and {"extra_field_definitions": [{"name": "...", "urn": "..."},...]}, which can be '
+            'used to define registration form fields and the URNs that can be used to retrieve '
+            'the relevant values from the SAML response. Custom provider types, as selected '
+            'in the "Identity Provider Type" field, may make use of the information stored '
+            'in this field for additional configuration.'
+        ))
+    archived = models.BooleanField(default=False)
+    saml_configuration = models.ForeignKey(
+        SAMLConfiguration,
+        on_delete=models.SET_NULL,
+        limit_choices_to=active_saml_configurations_filter,
+        null=True,
+        blank=True,
+    )
+
+    def clean(self):
+        """ Standardize and validate fields """
+        super(SAMLProviderConfig, self).clean()
+        self.other_settings = clean_json(self.other_settings, dict)
+
+    class Meta(object):
+        app_label = "third_party_auth"
+        verbose_name = "Provider Configuration (SAML IdP)"
+        verbose_name_plural = "Provider Configuration (SAML IdPs)"
+
+    def get_url_params(self):
+        """ Get a dict of GET parameters to append to login links for this provider """
+        return {'idp': self.slug}
+
+    def is_active_for_pipeline(self, pipeline):
+        """ Is this provider being used for the specified pipeline? """
+        return self.backend_name == pipeline['backend'] and self.slug == pipeline['kwargs']['response']['idp_name']
+
+    def match_social_auth(self, social_auth):
+        """ Is this provider being used for this UserSocialAuth entry? """
+        prefix = self.slug + ":"
+        return self.backend_name == social_auth.provider and social_auth.uid.startswith(prefix)
+
+    def get_remote_id_from_social_auth(self, social_auth):
+        """ Given a UserSocialAuth object, return the remote ID used by this provider. """
+        assert self.match_social_auth(social_auth)
+        # Remove the prefix from the UID
+        return social_auth.uid[len(self.slug) + 1:]
+
+    def get_social_auth_uid(self, remote_id):
+        """ Get social auth uid from remote id by prepending idp_slug to the remote id """
+        return '{}:{}'.format(self.slug, remote_id)
+
+    def get_config(self):
+        """
+        Return a SAMLIdentityProvider instance for use by SAMLAuthBackend.
+
+        Essentially this just returns the values of this object and its
+        associated 'SAMLProviderData' entry.
+        """
+        if self.other_settings:
+            conf = json.loads(self.other_settings)
+        else:
+            conf = {}
+        attrs = (
+            'attr_user_permanent_id', 'attr_full_name', 'attr_first_name',
+            'attr_last_name', 'attr_username', 'attr_email', 'entity_id')
+        for field in attrs:
+            val = getattr(self, field)
+            if val:
+                conf[field] = val
+        # Now get the data fetched automatically from the metadata.xml:
+        data = SAMLProviderData.current(self.entity_id)
+        if not data or not data.is_valid():
+            log.error(
+                'No SAMLProviderData found for provider "%s" with entity id "%s" and IdP slug "%s". '
+                'Run "manage.py saml pull" to fix or debug.',
+                self.name, self.entity_id, self.slug
+            )
+            raise AuthNotConfigured(provider_name=self.name)
+        conf['x509cert'] = data.public_key
+        conf['url'] = data.sso_url
+
+        # Add SAMLConfiguration appropriate for this IdP
+        conf['saml_sp_configuration'] = (
+            self.saml_configuration or
+            SAMLConfiguration.current(self.site.id, 'default')
+        )
+        idp_class = get_saml_idp_class(self.identity_provider_type)
+        return idp_class(self.slug, **conf)
 
 
 class SAMLProviderData(models.Model):
@@ -752,7 +814,7 @@ class ProviderApiPermissions(models.Model):
 
     It gives permission for a OAuth2 client to access the information under certain IdPs.
     """
-    client = models.ForeignKey(Client)
+    client = models.ForeignKey(Client, on_delete=models.CASCADE)
     provider_id = models.CharField(
         max_length=255,
         help_text=(

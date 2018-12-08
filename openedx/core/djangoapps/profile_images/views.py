@@ -8,17 +8,16 @@ from contextlib import closing
 
 from pytz import UTC
 from django.utils.translation import ugettext as _
+from edx_rest_framework_extensions.authentication import SessionAuthenticationAllowInactiveUser
 from rest_framework import permissions, status
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from six import text_type
 
 from openedx.core.djangoapps.user_api.accounts.image_helpers import get_profile_image_names, set_has_profile_image
 from openedx.core.djangoapps.user_api.errors import UserNotFound
-from openedx.core.lib.api.authentication import (
-    OAuth2AuthenticationAllowInactiveUser,
-    SessionAuthenticationAllowInactiveUser
-)
+from openedx.core.lib.api.authentication import OAuth2AuthenticationAllowInactiveUser
 from openedx.core.lib.api.parsers import TypedFileUploadParser
 from openedx.core.lib.api.permissions import IsUserInUrl
 from openedx.core.lib.api.view_utils import DeveloperErrorViewMixin
@@ -145,7 +144,7 @@ class ProfileImageView(DeveloperErrorViewMixin, APIView):
                 validate_uploaded_image(uploaded_file)
             except ImageValidationError as error:
                 return Response(
-                    {"developer_message": error.message, "user_message": error.user_message},
+                    {"developer_message": text_type(error), "user_message": error.user_message},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 

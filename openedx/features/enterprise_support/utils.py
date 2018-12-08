@@ -1,6 +1,7 @@
 from __future__ import unicode_literals
 
 import hashlib
+import json
 
 import six
 from django.conf import settings
@@ -8,8 +9,8 @@ from django.utils.translation import ugettext as _
 
 import third_party_auth
 from third_party_auth import pipeline
-from student.cookies import set_experiments_is_enterprise_cookie
 
+from openedx.core.djangoapps.user_authn.cookies import standard_cookie_settings
 from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 from openedx.core.djangolib.markup import HTML, Text
 
@@ -95,7 +96,11 @@ def get_enterprise_sidebar_context(enterprise_customer):
         end_bold=HTML('</b>'),
         line_break=HTML('<br/>'),
         enterprise_name=enterprise_customer['name'],
-        platform_name=platform_name
+        platform_name=platform_name,
+        privacy_policy_link_start=HTML("<a href='{pp_url}' target='_blank'>").format(
+            pp_url=settings.MKTG_URLS.get('PRIVACY', 'https://www.edx.org/edx-privacy-policy')
+        ),
+        privacy_policy_link_end=HTML("</a>"),
     )
 
     platform_welcome_template = configuration_helpers.get_value(
@@ -184,12 +189,27 @@ def handle_enterprise_cookies_for_logistration(request, response, context):
     # This cookie can be used for tests or minor features,
     # but should not be used for payment related or other critical work
     # since users can edit their cookies
-    set_experiments_is_enterprise_cookie(request, response, context['enable_enterprise_sidebar'])
+    _set_experiments_is_enterprise_cookie(request, response, context['enable_enterprise_sidebar'])
 
     # Remove enterprise cookie so that subsequent requests show default login page.
     response.delete_cookie(
         configuration_helpers.get_value('ENTERPRISE_CUSTOMER_COOKIE_NAME', settings.ENTERPRISE_CUSTOMER_COOKIE_NAME),
         domain=configuration_helpers.get_value('BASE_COOKIE_DOMAIN', settings.BASE_COOKIE_DOMAIN),
+    )
+
+
+def _set_experiments_is_enterprise_cookie(request, response, experiments_is_enterprise):
+    """ Sets the experiments_is_enterprise cookie on the response.
+    This cookie can be used for tests or minor features,
+    but should not be used for payment related or other critical work
+    since users can edit their cookies
+    """
+    cookie_settings = standard_cookie_settings(request)
+
+    response.set_cookie(
+        'experiments_is_enterprise',
+        json.dumps(experiments_is_enterprise),
+        **cookie_settings
     )
 
 
@@ -220,3 +240,20 @@ def update_account_settings_context_for_enterprise(context, enterprise_customer)
             enterprise_context['sync_learner_profile_data'] = identity_provider.sync_learner_profile_data
 
     context.update(enterprise_context)
+
+
+def get_enterprise_learner_generic_name(request):
+    """
+    Get a generic name concatenating the Enterprise Customer name and 'Learner'.
+
+    ENT-924: Temporary solution for hiding potentially sensitive SSO names.
+    When a more complete solution is put in place, delete this function and all of its uses.
+    """
+    # Prevent a circular import. This function makes sense to be in this module though. And see function description.
+    from openedx.features.enterprise_support.api import enterprise_customer_for_request
+    enterprise_customer = enterprise_customer_for_request(request)
+    return (
+        enterprise_customer['name'] + 'Learner'
+        if enterprise_customer and enterprise_customer['replace_sensitive_sso_username']
+        else ''
+    )

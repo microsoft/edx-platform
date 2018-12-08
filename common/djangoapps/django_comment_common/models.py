@@ -8,10 +8,13 @@ from django.db import models
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils.translation import ugettext_noop
-
-from openedx.core.djangoapps.xmodule_django.models import CourseKeyField, NoneToEmptyManager
+from jsonfield.fields import JSONField
+from opaque_keys.edx.django.models import CourseKeyField
 from six import text_type
+
+from openedx.core.djangoapps.xmodule_django.models import NoneToEmptyManager
 from student.models import CourseEnrollment
+from student.roles import GlobalStaff
 from xmodule.modulestore.django import modulestore
 from xmodule.modulestore.exceptions import ItemNotFoundError
 
@@ -136,22 +139,33 @@ def permission_blacked_out(course, role_names, permission_name):
 
 def all_permissions_for_user_in_course(user, course_id):  # pylint: disable=invalid-name
     """Returns all the permissions the user has in the given course."""
-    if not user.is_authenticated():
+    if not user.is_authenticated:
         return {}
 
     course = modulestore().get_course(course_id)
     if course is None:
         raise ItemNotFoundError(course_id)
 
-    all_roles = {role.name for role in Role.objects.filter(users=user, course_id=course_id)}
+    roles = Role.objects.filter(users=user, course_id=course_id)
+    role_names = {role.name for role in roles}
 
-    permissions = {
-        permission.name
-        for permission
-        in Permission.objects.filter(roles__users=user, roles__course_id=course_id)
-        if not permission_blacked_out(course, all_roles, permission.name)
-    }
-    return permissions
+    permission_names = set()
+    for role in roles:
+        # Intentional n+1 query pattern to get permissions for each role because
+        # Aurora's query optimizer can't handle the join proplerly on 30M+ row
+        # tables (EDUCATOR-3374). Fortunately, there are very few forum roles.
+        for permission in role.permissions.all():
+            if not permission_blacked_out(course, role_names, permission.name):
+                permission_names.add(permission.name)
+
+    # Prevent a circular import
+    from django_comment_common.utils import GLOBAL_STAFF_ROLE_PERMISSIONS
+
+    if GlobalStaff().has_user(user):
+        for permission in GLOBAL_STAFF_ROLE_PERMISSIONS:
+            permission_names.add(permission)
+
+    return permission_names
 
 
 class ForumsConfig(ConfigurationModel):
@@ -179,6 +193,11 @@ class CourseDiscussionSettings(models.Model):
         db_index=True,
         help_text="Which course are these settings associated with?",
     )
+    discussions_id_map = JSONField(
+        null=True,
+        blank=True,
+        help_text="Key/value store mapping discussion IDs to discussion XBlock usage keys.",
+    )
     always_divide_inline_discussions = models.BooleanField(default=False)
     _divided_discussions = models.TextField(db_column='divided_discussions', null=True, blank=True)  # JSON list
 
@@ -197,3 +216,24 @@ class CourseDiscussionSettings(models.Model):
     def divided_discussions(self, value):
         """Un-Jsonify the divided_discussions"""
         self._divided_discussions = json.dumps(value)
+
+
+class DiscussionsIdMapping(models.Model):
+    """This model is a performance optimization, updated on course publish."""
+    course_id = CourseKeyField(db_index=True, primary_key=True, max_length=255)
+    mapping = JSONField(
+        help_text="Key/value store mapping discussion IDs to discussion XBlock usage keys.",
+    )
+
+    @classmethod
+    def update_mapping(cls, course_key, discussions_id_map):
+        """Update the mapping of discussions IDs to XBlock usage key strings."""
+        mapping_entry, created = cls.objects.get_or_create(
+            course_id=course_key,
+            defaults={
+                'mapping': discussions_id_map,
+            },
+        )
+        if not created:
+            mapping_entry.mapping = discussions_id_map
+            mapping_entry.save()

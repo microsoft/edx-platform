@@ -14,6 +14,7 @@ from django.test.utils import override_settings
 from django.utils.translation import ugettext as _
 from opaque_keys.edx.locator import CourseLocator
 from search.api import perform_search
+from edx_django_utils.monitoring.middleware import _DEFAULT_NAMESPACE as DJANGO_UTILS_NAMESPACE
 
 from contentstore.courseware_index import CoursewareSearchIndexer, SearchIndexingError
 from contentstore.tests.utils import CourseTestCase
@@ -23,6 +24,7 @@ from contentstore.views.course import (
     course_outline_initial_state,
     reindex_course_and_check_access
 )
+from contentstore.config.waffle import WAFFLE_NAMESPACE as STUDIO_WAFFLE_NAMESPACE
 from contentstore.views.course import WAFFLE_NAMESPACE as COURSE_WAFFLE_NAMESPACE
 from contentstore.views.item import VisibilityState, create_xblock_info
 from course_action_state.managers import CourseRerunUIStateManager
@@ -42,6 +44,8 @@ class TestCourseIndex(CourseTestCase):
     """
     Unit tests for getting the list of courses and the course outline.
     """
+    shard = 1
+
     def setUp(self):
         """
         Add a course with odd characters in the fields
@@ -315,6 +319,8 @@ class TestCourseIndexArchived(CourseTestCase):
     """
     Unit tests for testing the course index list when there are archived courses.
     """
+    shard = 1
+
     NOW = datetime.datetime.now(pytz.utc)
     DAY = datetime.timedelta(days=1)
     YESTERDAY = NOW - DAY
@@ -364,6 +370,8 @@ class TestCourseIndexArchived(CourseTestCase):
         # Make sure we've cached data which could change the query counts
         # depending on test execution order
         WaffleSwitchNamespace(name=COURSE_WAFFLE_NAMESPACE).is_enabled(u'enable_global_staff_optimization')
+        WaffleSwitchNamespace(name=STUDIO_WAFFLE_NAMESPACE).is_enabled(u'enable_policy_page')
+        WaffleSwitchNamespace(name=DJANGO_UTILS_NAMESPACE).is_enabled(u'enable_memory_middleware')
 
     def check_index_page_with_query_count(self, separate_archived_courses, org, mongo_queries, sql_queries):
         """
@@ -392,13 +400,13 @@ class TestCourseIndexArchived(CourseTestCase):
 
     @ddt.data(
         # Staff user has course staff access
-        (True, 'staff', None, 3, 17),
-        (False, 'staff', None, 3, 17),
+        (True, 'staff', None, 3, 18),
+        (False, 'staff', None, 3, 18),
         # Base user has global staff access
-        (True, 'user', ORG, 3, 17),
-        (False, 'user', ORG, 3, 17),
-        (True, 'user', None, 3, 17),
-        (False, 'user', None, 3, 17),
+        (True, 'user', ORG, 3, 18),
+        (False, 'user', ORG, 3, 18),
+        (True, 'user', None, 3, 18),
+        (False, 'user', None, 3, 18),
     )
     @ddt.unpack
     def test_separate_archived_courses(self, separate_archived_courses, username, org, mongo_queries, sql_queries):
@@ -426,6 +434,7 @@ class TestCourseOutline(CourseTestCase):
     """
     Unit tests for the course outline.
     """
+    shard = 1
     ENABLED_SIGNALS = ['course_published']
 
     def setUp(self):
@@ -513,38 +522,6 @@ class TestCourseOutline(CourseTestCase):
         self.assertIn(unicode(self.sequential.location), expanded_locators)
         self.assertIn(unicode(self.vertical.location), expanded_locators)
 
-    def test_start_date_on_page(self):
-        """
-        Verify that the course start date is included on the course outline page.
-        """
-        def _get_release_date(response):
-            """Return the release date from the course page"""
-            parsed_html = lxml.html.fromstring(response.content)
-            return parsed_html.find_class('course-status')[0].find_class('status-release-value')[0].text_content()
-
-        def _assert_settings_link_present(response):
-            """
-            Asserts there's a course settings link on the course page by the course release date.
-            """
-            parsed_html = lxml.html.fromstring(response.content)
-            settings_link = parsed_html.find_class('course-status')[0].find_class('action-edit')[0].find('a')
-            self.assertIsNotNone(settings_link)
-            self.assertEqual(settings_link.get('href'), reverse_course_url('settings_handler', self.course.id))
-
-        outline_url = reverse_course_url('course_handler', self.course.id)
-        response = self.client.get(outline_url, {}, HTTP_ACCEPT='text/html')
-
-        # A course with the default release date should display as "Unscheduled"
-        self.assertEqual(_get_release_date(response), 'Unscheduled')
-        _assert_settings_link_present(response)
-
-        self.course.start = datetime.datetime(2014, 1, 1, tzinfo=pytz.utc)
-        modulestore().update_item(self.course, ModuleStoreEnum.UserID.test)
-        response = self.client.get(outline_url, {}, HTTP_ACCEPT='text/html')
-
-        self.assertEqual(_get_release_date(response), get_default_time_display(self.course.start))
-        _assert_settings_link_present(response)
-
     def _create_test_data(self, course_module, create_blocks=False, publish=True, block_types=None):
         """
         Create data for test.
@@ -628,79 +605,12 @@ class TestCourseOutline(CourseTestCase):
             expected_block_types
         )
 
-    @ddt.data(
-        {'delete_vertical': True},
-        {'delete_vertical': False},
-    )
-    @ddt.unpack
-    def test_deprecated_blocks_list_updated_correctly(self, delete_vertical):
-        """
-        Verify that deprecated blocks list shown on banner is updated correctly.
-
-        Here is the scenario:
-            This list of deprecated blocks shown on banner contains published
-            and un-published blocks. That list should be updated when we delete
-            un-published block(s). This behavior should be same if we delete
-            unpublished vertical or problem.
-        """
-        block_types = ['notes']
-        course_module = modulestore().get_item(self.course.location)
-
-        vertical1 = ItemFactory.create(
-            parent_location=self.sequential.location, category='vertical', display_name='Vert1 Subsection1'
-        )
-        problem1 = ItemFactory.create(
-            parent_location=vertical1.location,
-            category='notes',
-            display_name='notes problem in vert1',
-            publish_item=False
-        )
-
-        info = _deprecated_blocks_info(course_module, block_types)
-        # info['blocks'] should be empty here because there is nothing
-        # published or un-published present
-        self.assertEqual(info['blocks'], [])
-
-        vertical2 = ItemFactory.create(
-            parent_location=self.sequential.location, category='vertical', display_name='Vert2 Subsection1'
-        )
-        ItemFactory.create(
-            parent_location=vertical2.location,
-            category='notes',
-            display_name='notes problem in vert2',
-            pubish_item=True
-        )
-        # At this point CourseStructure will contain both the above
-        # published and un-published verticals
-
-        info = _deprecated_blocks_info(course_module, block_types)
-        self.assertItemsEqual(
-            info['blocks'],
-            [
-                [reverse_usage_url('container_handler', vertical1.location), 'notes problem in vert1'],
-                [reverse_usage_url('container_handler', vertical2.location), 'notes problem in vert2']
-            ]
-        )
-
-        # Delete the un-published vertical or problem so that CourseStructure updates its data
-        if delete_vertical:
-            self.store.delete_item(vertical1.location, self.user.id)
-        else:
-            self.store.delete_item(problem1.location, self.user.id)
-
-        info = _deprecated_blocks_info(course_module, block_types)
-        # info['blocks'] should only contain the info about vertical2 which is published.
-        # There shouldn't be any info present about un-published vertical1
-        self.assertEqual(
-            info['blocks'],
-            [[reverse_usage_url('container_handler', vertical2.location), 'notes problem in vert2']]
-        )
-
 
 class TestCourseReIndex(CourseTestCase):
     """
     Unit tests for the course outline.
     """
+    shard = 1
     SUCCESSFUL_RESPONSE = _("Course has been successfully reindexed.")
 
     ENABLED_SIGNALS = ['course_published']

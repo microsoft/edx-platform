@@ -10,7 +10,7 @@ import mock
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.core import mail
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.test.client import RequestFactory
 from django.test.testcases import TransactionTestCase
 from django.test.utils import override_settings
@@ -20,22 +20,33 @@ from six import text_type
 from social_django.models import UserSocialAuth, Partial
 
 from django_comment_common import models
+from openedx.core.djangoapps.user_api.models import UserRetirementStatus
 from openedx.core.djangoapps.site_configuration.helpers import get_value
 from openedx.core.lib.api.test_utils import ApiTestCase, TEST_API_KEY
 from openedx.core.lib.time_zone_utils import get_display_time_zone
 from openedx.core.djangoapps.site_configuration.tests.test_util import with_site_configuration
 from openedx.core.djangolib.testing.utils import CacheIsolationTestCase, skip_unless_lms
 from student.tests.factories import UserFactory
+from student.models import get_retired_email_by_email, get_retired_username_by_username
 from third_party_auth.tests.testutil import simulate_running_pipeline, ThirdPartyAuthTestMixin
 from third_party_auth.tests.utils import (
     ThirdPartyOAuthTestMixin, ThirdPartyOAuthTestMixinFacebook, ThirdPartyOAuthTestMixinGoogle
+)
+from util.password_policy_validators import (
+    create_validator_config, password_validators_instruction_texts, password_validators_restrictions,
+    DEFAULT_MAX_PASSWORD_LENGTH,
 )
 from .test_helpers import TestCaseForm
 from xmodule.modulestore.tests.django_utils import SharedModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
 from ..accounts import (
-    NAME_MAX_LENGTH, EMAIL_MIN_LENGTH, EMAIL_MAX_LENGTH, PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH,
+    NAME_MAX_LENGTH, EMAIL_MIN_LENGTH, EMAIL_MAX_LENGTH,
     USERNAME_MIN_LENGTH, USERNAME_MAX_LENGTH, USERNAME_BAD_LENGTH_MSG
+)
+from ..accounts.tests.retirement_helpers import (  # pylint: disable=unused-import
+    RetirementTestCase,
+    fake_requested_retirement,
+    setup_retirement_states
 )
 from ..accounts.api import get_account_settings
 from ..models import UserOrgTag
@@ -170,7 +181,7 @@ class RoleTestCase(UserApiTestCase):
     @override_settings(DEBUG=True)
     @override_settings(EDX_API_KEY=None)
     def test_debug_auth(self):
-        self.assertHttpOK(self.client.get(self.LIST_URI))
+        self.assertHttpForbidden(self.client.get(self.LIST_URI))
 
     @override_settings(DEBUG=False)
     @override_settings(EDX_API_KEY=TEST_API_KEY)
@@ -255,7 +266,7 @@ class UserViewSetTest(UserApiTestCase):
     @override_settings(DEBUG=True)
     @override_settings(EDX_API_KEY=None)
     def test_debug_auth(self):
-        self.assertHttpOK(self.client.get(self.LIST_URI))
+        self.assertHttpForbidden(self.client.get(self.LIST_URI))
 
     @override_settings(DEBUG=False)
     @override_settings(EDX_API_KEY=TEST_API_KEY)
@@ -371,7 +382,7 @@ class UserPreferenceViewSetTest(CacheIsolationTestCase, UserApiTestCase):
     @override_settings(DEBUG=True)
     @override_settings(EDX_API_KEY=None)
     def test_debug_auth(self):
-        self.assertHttpOK(self.client.get(self.LIST_URI))
+        self.assertHttpForbidden(self.client.get(self.LIST_URI))
 
     def test_get_list_nonempty(self):
         result = self.get_json(self.LIST_URI)
@@ -508,7 +519,7 @@ class PreferenceUsersListViewTest(UserApiTestCase):
     @override_settings(DEBUG=True)
     @override_settings(EDX_API_KEY=None)
     def test_debug_auth(self):
-        self.assertHttpOK(self.client.get(self.LIST_URI))
+        self.assertHttpForbidden(self.client.get(self.LIST_URI))
 
     def test_get_basic(self):
         result = self.get_json(self.LIST_URI)
@@ -612,7 +623,7 @@ class LoginSessionViewTest(UserAPITestCase):
                 "placeholder": "",
                 "instructions": "",
                 "restrictions": {
-                    "max_length": PASSWORD_MAX_LENGTH,
+                    "max_length": DEFAULT_MAX_PASSWORD_LENGTH,
                 },
                 "errorMessages": {},
                 "supplementalText": "",
@@ -776,7 +787,7 @@ class PasswordResetViewTest(UserAPITestCase):
 
 @ddt.ddt
 @skip_unless_lms
-class RegistrationViewValidationErrorTest(ThirdPartyAuthTestMixin, UserAPITestCase):
+class RegistrationViewValidationErrorTest(ThirdPartyAuthTestMixin, UserAPITestCase, RetirementTestCase):
     """
     Tests for catching duplicate email and username validation errors within
     the registration end-points of the User API.
@@ -798,6 +809,130 @@ class RegistrationViewValidationErrorTest(ThirdPartyAuthTestMixin, UserAPITestCa
     def setUp(self):
         super(RegistrationViewValidationErrorTest, self).setUp()
         self.url = reverse("user_api_registration")
+
+    @mock.patch('openedx.core.djangoapps.user_api.views.check_account_exists')
+    def test_register_retired_email_validation_error(self, dummy_check_account_exists):
+        dummy_check_account_exists.return_value = []
+        # Register the first user
+        response = self.client.post(self.url, {
+            "email": self.EMAIL,
+            "name": self.NAME,
+            "username": self.USERNAME,
+            "password": self.PASSWORD,
+            "honor_code": "true",
+        })
+        self.assertHttpOK(response)
+
+        # Initiate retirement for the above user:
+        fake_requested_retirement(User.objects.get(username=self.USERNAME))
+
+        # Try to create a second user with the same email address as the retired user
+        response = self.client.post(self.url, {
+            "email": self.EMAIL,
+            "name": "Someone Else",
+            "username": "someone_else",
+            "password": self.PASSWORD,
+            "honor_code": "true",
+        })
+        self.assertEqual(response.status_code, 400)
+        response_json = json.loads(response.content)
+        self.assertEqual(
+            response_json,
+            {
+                "email": [{
+                    "user_message": (
+                        "It looks like {} belongs to an existing account. "
+                        "Try again with a different email address."
+                    ).format(
+                        self.EMAIL
+                    )
+                }]
+            }
+        )
+
+    def test_register_retired_email_validation_error_no_bypass_check_account_exists(self):
+        """
+        This test is the same as above, except it doesn't bypass check_account_exists.  Not bypassing this function
+        results in the same error message, but a 409 status code rather than 400.
+        """
+        # Register the first user
+        response = self.client.post(self.url, {
+            "email": self.EMAIL,
+            "name": self.NAME,
+            "username": self.USERNAME,
+            "password": self.PASSWORD,
+            "honor_code": "true",
+        })
+        self.assertHttpOK(response)
+
+        # Initiate retirement for the above user:
+        fake_requested_retirement(User.objects.get(username=self.USERNAME))
+
+        # Try to create a second user with the same email address as the retired user
+        response = self.client.post(self.url, {
+            "email": self.EMAIL,
+            "name": "Someone Else",
+            "username": "someone_else",
+            "password": self.PASSWORD,
+            "honor_code": "true",
+        })
+        self.assertEqual(response.status_code, 409)
+        response_json = json.loads(response.content)
+        self.assertEqual(
+            response_json,
+            {
+                "email": [{
+                    "user_message": (
+                        "It looks like {} belongs to an existing account. "
+                        "Try again with a different email address."
+                    ).format(
+                        self.EMAIL
+                    )
+                }]
+            }
+        )
+
+    def test_register_duplicate_retired_username_account_validation_error(self):
+        # Register the first user
+        response = self.client.post(self.url, {
+            "email": self.EMAIL,
+            "name": self.NAME,
+            "username": self.USERNAME,
+            "password": self.PASSWORD,
+            "honor_code": "true",
+        })
+        self.assertHttpOK(response)
+
+        # Initiate retirement for the above user.
+        fake_requested_retirement(User.objects.get(username=self.USERNAME))
+
+        with mock.patch('openedx.core.djangoapps.user_authn.views.register.do_create_account') as dummy_do_create_acct:
+            # do_create_account should *not* be called - the duplicate retired username
+            # should be detected by check_account_exists before account creation is called.
+            dummy_do_create_acct.side_effect = Exception('do_create_account should *not* have been called!')
+            # Try to create a second user with the same username.
+            response = self.client.post(self.url, {
+                "email": "someone+else@example.com",
+                "name": "Someone Else",
+                "username": self.USERNAME,
+                "password": self.PASSWORD,
+                "honor_code": "true",
+            })
+        self.assertEqual(response.status_code, 409)
+        response_json = json.loads(response.content)
+        self.assertEqual(
+            response_json,
+            {
+                "username": [{
+                    "user_message": (
+                        "It looks like {} belongs to an existing account. "
+                        "Try again with a different username."
+                    ).format(
+                        self.USERNAME
+                    )
+                }]
+            }
+        )
 
     @mock.patch('openedx.core.djangoapps.user_api.views.check_account_exists')
     def test_register_duplicate_email_validation_error(self, dummy_check_account_exists):
@@ -1054,10 +1189,39 @@ class RegistrationViewTest(ThirdPartyAuthTestMixin, UserAPITestCase):
                 u"type": u"password",
                 u"required": True,
                 u"label": u"Password",
-                u"restrictions": {
-                    'min_length': PASSWORD_MIN_LENGTH,
-                    'max_length': PASSWORD_MAX_LENGTH
-                },
+                u"instructions": password_validators_instruction_texts(),
+                u"restrictions": password_validators_restrictions(),
+            }
+        )
+
+    @override_settings(AUTH_PASSWORD_VALIDATORS=[
+        create_validator_config('util.password_policy_validators.MinimumLengthValidator', {'min_length': 2}),
+        create_validator_config('util.password_policy_validators.UppercaseValidator', {'min_upper': 3}),
+        create_validator_config('util.password_policy_validators.SymbolValidator', {'min_symbol': 1}),
+    ])
+    def test_register_form_password_complexity(self):
+        no_extra_fields_setting = {}
+
+        # Without enabling password policy
+        self._assert_reg_field(
+            no_extra_fields_setting,
+            {
+                u'name': u'password',
+                u'label': u'Password',
+                u"instructions": password_validators_instruction_texts(),
+                u"restrictions": password_validators_restrictions(),
+            }
+        )
+
+        msg = u'Your password must contain at least 2 characters, including '\
+              u'3 uppercase letters & 1 symbol.'
+        self._assert_reg_field(
+            no_extra_fields_setting,
+            {
+                u'name': u'password',
+                u'label': u'Password',
+                u'instructions': msg,
+                u"restrictions": password_validators_restrictions(),
             }
         )
 
@@ -1516,17 +1680,24 @@ class RegistrationViewTest(ThirdPartyAuthTestMixin, UserAPITestCase):
     @mock.patch.dict(settings.FEATURES, {"ENABLE_MKTG_SITE": True})
     def test_registration_honor_code_mktg_site_enabled(self):
         link_template = "<a href='https://www.test.com/honor' target='_blank'>{link_label}</a>"
+        link_template2 = "<a href='#' target='_blank'>{link_label}</a>"
         link_label = "Terms of Service and Honor Code"
+        link_label2 = "Privacy Policy"
         self._assert_reg_field(
             {"honor_code": "required"},
             {
-                "label": u"I agree to the {platform_name} {link_label}".format(
+                "label": (u"By creating an account with {platform_name}, you agree {spacing}"
+                          u"to abide by our {platform_name} {spacing}"
+                          u"{link_label} {spacing}"
+                          u"and agree to our {link_label2}.").format(
                     platform_name=settings.PLATFORM_NAME,
-                    link_label=link_template.format(link_label=link_label)
+                    link_label=link_template.format(link_label=link_label),
+                    link_label2=link_template2.format(link_label=link_label2),
+                    spacing=' ' * 18
                 ),
                 "name": "honor_code",
                 "defaultValue": False,
-                "type": "checkbox",
+                "type": "plaintext",
                 "required": True,
                 "errorMessages": {
                     "required": u"You must agree to the {platform_name} {link_label}".format(
@@ -1540,17 +1711,24 @@ class RegistrationViewTest(ThirdPartyAuthTestMixin, UserAPITestCase):
     @override_settings(MKTG_URLS_LINK_MAP={"HONOR": "honor"})
     @mock.patch.dict(settings.FEATURES, {"ENABLE_MKTG_SITE": False})
     def test_registration_honor_code_mktg_site_disabled(self):
+        link_template = "<a href='/privacy' target='_blank'>{link_label}</a>"
         link_label = "Terms of Service and Honor Code"
+        link_label2 = "Privacy Policy"
         self._assert_reg_field(
             {"honor_code": "required"},
             {
-                "label": u"I agree to the {platform_name} {link_label}".format(
+                "label": (u"By creating an account with {platform_name}, you agree {spacing}"
+                          u"to abide by our {platform_name} {spacing}"
+                          u"{link_label} {spacing}"
+                          u"and agree to our {link_label2}.").format(
                     platform_name=settings.PLATFORM_NAME,
-                    link_label=self.link_template.format(link_label=link_label)
+                    link_label=self.link_template.format(link_label=link_label),
+                    link_label2=link_template.format(link_label=link_label2),
+                    spacing=' ' * 18
                 ),
                 "name": "honor_code",
                 "defaultValue": False,
-                "type": "checkbox",
+                "type": "plaintext",
                 "required": True,
                 "errorMessages": {
                     "required": u"You must agree to the {platform_name} {link_label}".format(
@@ -1655,7 +1833,7 @@ class RegistrationViewTest(ThirdPartyAuthTestMixin, UserAPITestCase):
                 "type": "checkbox",
                 "required": True,
                 "errorMessages": {
-                    "required": u"You must agree to the {platform_name} Terms of Service".format(  # pylint: disable=line-too-long
+                    "required": u"You must agree to the {platform_name} Terms of Service".format(
                         platform_name=settings.PLATFORM_NAME
                     )
                 }
@@ -2130,7 +2308,7 @@ class RegistrationViewTest(ThirdPartyAuthTestMixin, UserAPITestCase):
             response_json,
             {
                 u"username": [{u"user_message": USERNAME_BAD_LENGTH_MSG}],
-                u"password": [{u"user_message": u"A valid password is required"}],
+                u"password": [{u"user_message": u"This field is required."}],
             }
         )
 
@@ -2499,6 +2677,18 @@ class UpdateEmailOptInTestCase(UserAPITestCase, SharedModuleStoreTestCase):
         )
         self.assertEquals(preference.value, u"True")
 
+    def test_update_email_opt_in_anonymous_user(self):
+        """
+        Test that an anonymous user gets 403 response when
+        updating email optin preference.
+        """
+        self.client.logout()
+        response = self.client.post(self.url, {
+            "course_id": unicode(self.course.id),
+            "email_opt_in": u"True"
+        })
+        self.assertEqual(response.status_code, 403)
+
     def test_update_email_opt_with_invalid_course_key(self):
         """
         Test that with invalid key it returns bad request
@@ -2539,7 +2729,8 @@ class CountryTimeZoneListViewTest(UserApiTestCase):
         self.assertIn(time_zone_name, common_timezones_set)
         self.assertEqual(time_zone_info['description'], get_display_time_zone(time_zone_name))
 
-    @ddt.data((ALL_TIME_ZONES_URI, 436),
+    # The time zones count may need to change each time we upgrade pytz
+    @ddt.data((ALL_TIME_ZONES_URI, 439),
               (COUNTRY_TIME_ZONES_URI, 28))
     @ddt.unpack
     def test_get_basic(self, country_uri, expected_count):

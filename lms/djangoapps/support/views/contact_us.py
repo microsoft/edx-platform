@@ -18,24 +18,26 @@ class ContactUsView(View):
     def get(self, request):
         context = {
             'platform_name': configuration_helpers.get_value('platform_name', settings.PLATFORM_NAME),
+            'support_email': configuration_helpers.get_value('CONTACT_EMAIL', settings.CONTACT_EMAIL),
             'custom_fields': settings.ZENDESK_CUSTOM_FIELDS
         }
 
-        # Tag all issues with LMS to distinguish channel in Zendesk; requested by student support team
-        zendesk_tags = ['LMS']
+        # Tag all issues with LMS to distinguish channel which received the request
+        tags = ['LMS']
 
         # Per edX support, we would like to be able to route feedback items by site via tagging
         current_site_name = configuration_helpers.get_value("SITE_NAME")
         if current_site_name:
             current_site_name = current_site_name.replace(".", "_")
-            zendesk_tags.append("site_name_{site}".format(site=current_site_name))
+            tags.append("site_name_{site}".format(site=current_site_name))
 
-        if request.user.is_authenticated():
-            context['user_enrollments'] = CourseEnrollment.enrollments_for_user(request.user)
-            enterprise_learner_data = enterprise_api.get_enterprise_learner_data(site=request.site, user=request.user)
+        if request.user.is_authenticated:
+            context['course_id'] = request.session.get('course_id', '')
+            context['user_enrollments'] = CourseEnrollment.enrollments_for_user_with_overviews_preload(request.user)
+            enterprise_learner_data = enterprise_api.get_enterprise_learner_data(user=request.user)
             if enterprise_learner_data:
-                zendesk_tags.append('enterprise_learner')
+                tags.append('enterprise_learner')
 
-        context['zendesk_tags'] = zendesk_tags
+        context['tags'] = tags
 
         return render_to_response("support/contact_us.html", context)

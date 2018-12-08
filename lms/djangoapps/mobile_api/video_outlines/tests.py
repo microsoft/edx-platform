@@ -14,13 +14,13 @@ from django.conf import settings
 from edxval import api
 from milestones.tests.utils import MilestonesTestCaseMixin
 from mock import patch
-from nose.plugins.attrib import attr
 
 from mobile_api.models import MobileApiConfig
 from mobile_api.testutils import MobileAPITestCase, MobileAuthTestMixin, MobileCourseAccessTestMixin
 from openedx.core.djangoapps.course_groups.cohorts import add_user_to_cohort, remove_user_from_cohort
 from openedx.core.djangoapps.course_groups.models import CourseUserGroupPartitionGroup
 from openedx.core.djangoapps.course_groups.tests.helpers import CohortFactory
+from openedx.core.lib.tests import attr
 from xmodule.modulestore.django import modulestore
 from xmodule.modulestore.tests.factories import ItemFactory
 from xmodule.partitions.partitions import Group, UserPartition
@@ -161,7 +161,7 @@ class TestVideoAPIMixin(object):
 
     def _setup_course_partitions(self, scheme_id='random', is_cohorted=False):
         """Helper method to configure the user partitions in the course."""
-        self.partition_id = 0  # pylint: disable=attribute-defined-outside-init
+        self.partition_id = 0
         self.course.user_partitions = [
             UserPartition(
                 self.partition_id, 'first_partition', 'First Partition',
@@ -180,7 +180,7 @@ class TestVideoAPIMixin(object):
     def _setup_split_module(self, sub_block_category):
         """Helper method to configure a split_test unit with children of type sub_block_category."""
         self._setup_course_partitions()
-        self.split_test = ItemFactory.create(  # pylint: disable=attribute-defined-outside-init
+        self.split_test = ItemFactory.create(
             parent=self.unit,
             category="split_test",
             display_name=u"split test unit",
@@ -203,7 +203,7 @@ class TestVideoAPIMixin(object):
         return sub_block_a, sub_block_b
 
 
-@attr(shard=2)
+@attr(shard=9)
 class TestNonStandardCourseStructure(MobileAPITestCase, TestVideoAPIMixin, MilestonesTestCaseMixin):
     """
     Tests /api/mobile/v0.5/video_outlines/courses/{course_id} with no course set
@@ -413,7 +413,7 @@ class TestNonStandardCourseStructure(MobileAPITestCase, TestVideoAPIMixin, Miles
         )
 
 
-@attr(shard=2)
+@attr(shard=9)
 @ddt.ddt
 class TestVideoSummaryList(TestVideoAPITestCase, MobileAuthTestMixin, MobileCourseAccessTestMixin,
                            TestVideoAPIMixin, MilestonesTestCaseMixin):
@@ -922,7 +922,6 @@ class TestVideoSummaryList(TestVideoAPITestCase, MobileAuthTestMixin, MobileCour
         ({'uk': 1, 'de': 1}, 'en-subs', ['de', 'en'], ['en', 'uk', 'de']),
     )
     @ddt.unpack
-    @patch('openedx.core.djangoapps.video_config.models.VideoTranscriptEnabledFlag.feature_enabled', Mock(return_value=True))
     @patch('xmodule.video_module.transcripts_utils.edxval_api.get_available_transcript_languages')
     def test_val_transcripts_with_feature_enabled(self, transcripts, english_sub, val_transcripts,
                                                   expected_transcripts, mock_get_transcript_languages):
@@ -944,7 +943,7 @@ class TestVideoSummaryList(TestVideoAPITestCase, MobileAuthTestMixin, MobileCour
         self.assertItemsEqual(course_outline[0]['summary']['transcripts'].keys(), expected_transcripts)
 
 
-@attr(shard=2)
+@attr(shard=9)
 class TestTranscriptsDetail(TestVideoAPITestCase, MobileAuthTestMixin, MobileCourseAccessTestMixin,
                             TestVideoAPIMixin, MilestonesTestCaseMixin):
     """
@@ -973,10 +972,6 @@ class TestTranscriptsDetail(TestVideoAPITestCase, MobileAuthTestMixin, MobileCou
         self.login_and_enroll()
         self.api_response(expected_response_code=200, lang='en')
 
-    @patch(
-        'openedx.core.djangoapps.video_config.models.VideoTranscriptEnabledFlag.feature_enabled',
-        Mock(return_value=True),
-    )
     @patch(
         'xmodule.video_module.transcripts_utils.edxval_api.get_available_transcript_languages',
         Mock(return_value=['uk']),
@@ -1009,20 +1004,3 @@ class TestTranscriptsDetail(TestVideoAPITestCase, MobileAuthTestMixin, MobileCou
         self.assertEqual(response.content, expected_content)
         for attribute, value in expected_headers.iteritems():
             self.assertEqual(response.get(attribute), value)
-
-    @patch(
-        'openedx.core.djangoapps.video_config.models.VideoTranscriptEnabledFlag.feature_enabled',
-        Mock(return_value=False),
-    )
-    @patch(
-        'xmodule.video_module.transcripts_utils.edxval_api.get_available_transcript_languages',
-        Mock(return_value=['uk']),
-    )
-    def test_val_transcript_feature_disabled(self):
-        """
-        Tests transcript retrieval view with val transcripts when
-        the corresponding feature is disabled.
-        """
-        self.login_and_enroll()
-        # request to retrieval endpoint will result in 404 as val transcripts are disabled.
-        self.api_response(expected_response_code=404, lang='uk')

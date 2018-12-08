@@ -1,8 +1,9 @@
 import copy
+import crum
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.utils.translation import ugettext as _
 from django_countries import countries
 
@@ -12,9 +13,13 @@ from edxmako.shortcuts import marketing_link
 from openedx.core.djangolib.markup import HTML, Text
 from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 from openedx.core.djangoapps.user_api.helpers import FormDescription
+from openedx.core.lib.mobile_utils import is_request_from_mobile_app
 from openedx.features.enterprise_support.api import enterprise_customer_for_request
 from student.forms import get_registration_extension_form
 from student.models import UserProfile
+from util.password_policy_validators import (
+    password_validators_instruction_texts, password_validators_restrictions, DEFAULT_MAX_PASSWORD_LENGTH,
+)
 
 
 def get_password_reset_form():
@@ -113,9 +118,7 @@ def get_login_session_form(request):
         "password",
         label=password_label,
         field_type="password",
-        restrictions={
-            "max_length": accounts.PASSWORD_MAX_LENGTH,
-        }
+        restrictions={'max_length': DEFAULT_MAX_PASSWORD_LENGTH}
     )
 
     form_desc.add_field(
@@ -418,10 +421,8 @@ class RegistrationFormFactory(object):
             "password",
             label=password_label,
             field_type="password",
-            restrictions={
-                "min_length": accounts.PASSWORD_MIN_LENGTH,
-                "max_length": accounts.PASSWORD_MAX_LENGTH,
-            },
+            instructions=password_validators_instruction_texts(),
+            restrictions=password_validators_restrictions(),
             required=required
         )
 
@@ -438,7 +439,7 @@ class RegistrationFormFactory(object):
         error_msg = accounts.REQUIRED_FIELD_LEVEL_OF_EDUCATION_MSG
 
         # The labels are marked for translation in UserProfile model definition.
-        options = [(name, _(label)) for name, label in UserProfile.LEVEL_OF_EDUCATION_CHOICES]  # pylint: disable=translation-of-non-string
+        options = [(name, _(label)) for name, label in UserProfile.LEVEL_OF_EDUCATION_CHOICES]
         form_desc.add_field(
             "level_of_education",
             label=education_level_label,
@@ -463,7 +464,7 @@ class RegistrationFormFactory(object):
         gender_label = _(u"Gender")
 
         # The labels are marked for translation in UserProfile model definition.
-        options = [(name, _(label)) for name, label in UserProfile.GENDER_CHOICES]  # pylint: disable=translation-of-non-string
+        options = [(name, _(label)) for name, label in UserProfile.GENDER_CHOICES]
         form_desc.add_field(
             "gender",
             label=gender_label,
@@ -785,8 +786,10 @@ class RegistrationFormFactory(object):
         Keyword Arguments:
             required (bool): Whether this field is required; defaults to True
         """
+
+        separate_honor_and_tos = self._is_field_visible("terms_of_service")
         # Separate terms of service and honor code checkboxes
-        if self._is_field_visible("terms_of_service"):
+        if separate_honor_and_tos:
             terms_label = _(u"Honor Code")
             terms_link = marketing_link("HONOR")
 
@@ -814,11 +817,32 @@ class RegistrationFormFactory(object):
             platform_name=configuration_helpers.get_value("PLATFORM_NAME", settings.PLATFORM_NAME),
             terms_of_service=terms_label
         )
+        field_type = 'checkbox'
+
+        if not separate_honor_and_tos:
+            current_request = crum.get_current_request()
+
+            field_type = 'plaintext'
+
+            pp_link = marketing_link("PRIVACY")
+            label = Text(_(
+                u"By creating an account with {platform_name}, you agree \
+                  to abide by our {platform_name} \
+                  {terms_of_service_link_start}{terms_of_service}{terms_of_service_link_end} \
+                  and agree to our {privacy_policy_link_start}Privacy Policy{privacy_policy_link_end}."
+            )).format(
+                platform_name=configuration_helpers.get_value("PLATFORM_NAME", settings.PLATFORM_NAME),
+                terms_of_service=terms_label,
+                terms_of_service_link_start=HTML("<a href='{terms_url}' target='_blank'>").format(terms_url=terms_link),
+                terms_of_service_link_end=HTML("</a>"),
+                privacy_policy_link_start=HTML("<a href='{pp_url}' target='_blank'>").format(pp_url=pp_link),
+                privacy_policy_link_end=HTML("</a>"),
+            )
 
         form_desc.add_field(
             "honor_code",
             label=label,
-            field_type="checkbox",
+            field_type=field_type,
             default=False,
             required=required,
             error_messages={

@@ -10,9 +10,10 @@ import pymongo
 import logging
 
 from opaque_keys.edx.keys import UsageKey
-from opaque_keys.edx.locations import Location
+from opaque_keys.edx.locator import BlockUsageLocator
 from six import text_type
-from openedx.core.lib.cache_utils import memoize_in_request_cache
+from openedx.core.lib.cache_utils import request_cached
+from xblock.core import XBlock
 from xmodule.exceptions import InvalidVersionError
 from xmodule.modulestore import ModuleStoreEnum
 from xmodule.modulestore.exceptions import (
@@ -271,7 +272,7 @@ class DraftModuleStore(MongoModuleStore):
 
         # return only the parent(s) that satisfy the request
         return [
-            Location._from_deprecated_son(parent['_id'], location.course_key.run)
+            BlockUsageLocator._from_deprecated_son(parent['_id'], location.course_key.run)
             for parent in parents
             if (
                 # return all versions of the parent if revision is ModuleStoreEnum.RevisionOption.all
@@ -426,7 +427,7 @@ class DraftModuleStore(MongoModuleStore):
             # collect the children's ids for future processing
             next_tier = []
             for child in item.get('definition', {}).get('children', []):
-                child_loc = Location.from_string(child)
+                child_loc = BlockUsageLocator.from_string(child)
                 next_tier.append(child_loc.to_deprecated_son())
 
             # insert a new DRAFT version of the item
@@ -641,13 +642,24 @@ class DraftModuleStore(MongoModuleStore):
             bulk_record.dirty = True
             self.collection.remove({'_id': {'$in': to_be_deleted}}, safe=self.collection.safe)
 
-    @memoize_in_request_cache('request_cache')
     def has_changes(self, xblock):
         """
         Check if the subtree rooted at xblock has any drafts and thus may possibly have changes
         :param xblock: xblock to check
         :return: True if there are any drafts anywhere in the subtree under xblock (a weaker
             condition than for other stores)
+        """
+        return self._cached_has_changes(self.request_cache, xblock)
+
+    @request_cached(
+        # use the XBlock's location value in the cache key
+        arg_map_function=lambda arg: unicode(arg.location if isinstance(arg, XBlock) else arg),
+        # use this store's request_cache
+        request_cache_getter=lambda args, kwargs: args[1],
+    )
+    def _cached_has_changes(self, request_cache, xblock):
+        """
+        Internal has_changes method that caches the result.
         """
         # don't check children if this block has changes (is not public)
         if getattr(xblock, 'is_draft', False):
@@ -815,7 +827,7 @@ class DraftModuleStore(MongoModuleStore):
                 item = versions_found[0]
                 assert item.get('_id').get('revision') != MongoRevisionKey.draft
                 for child in item.get('definition', {}).get('children', []):
-                    child_loc = Location.from_string(child)
+                    child_loc = BlockUsageLocator.from_string(child)
                     delete_draft_only(child_loc)
 
         delete_draft_only(location)
@@ -840,7 +852,7 @@ class DraftModuleStore(MongoModuleStore):
 
             if source_item.parent and source_item.parent.block_id != original_parent_location.block_id:
                 if self.update_item_parent(item_location, original_parent_location, source_item.parent, user_id):
-                    delete_draft_only(Location.from_string(child_location))
+                    delete_draft_only(BlockUsageLocator.from_string(child_location))
 
     def _query_children_for_cache_children(self, course_key, items):
         # first get non-draft in a round-trip
@@ -848,7 +860,7 @@ class DraftModuleStore(MongoModuleStore):
 
         to_process_dict = {}
         for non_draft in to_process_non_drafts:
-            to_process_dict[Location._from_deprecated_son(non_draft["_id"], course_key.run)] = non_draft
+            to_process_dict[BlockUsageLocator._from_deprecated_son(non_draft["_id"], course_key.run)] = non_draft
 
         if self.get_branch_setting() == ModuleStoreEnum.Branch.draft_preferred:
             # now query all draft content in another round-trip
@@ -865,7 +877,7 @@ class DraftModuleStore(MongoModuleStore):
                 # with the draft. This is because the semantics of the DraftStore is to
                 # always return the draft - if available
                 for draft in to_process_drafts:
-                    draft_loc = Location._from_deprecated_son(draft["_id"], course_key.run)
+                    draft_loc = BlockUsageLocator._from_deprecated_son(draft["_id"], course_key.run)
                     draft_as_non_draft_loc = as_published(draft_loc)
 
                     # does non-draft exist in the collection

@@ -1,20 +1,19 @@
 """Tests for the resubmit_error_certificates management command. """
 import ddt
-import pytest
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test.utils import override_settings
 from mock import patch
-from nose.plugins.attrib import attr
 from opaque_keys.edx.locator import CourseLocator
 from six import text_type
 
 from badges.events.course_complete import get_completion_badge
 from badges.models import BadgeAssertion
 from badges.tests.factories import BadgeAssertionFactory, CourseCompleteImageConfigurationFactory
-from certificates.models import CertificateStatuses, GeneratedCertificate
+from lms.djangoapps.certificates.models import CertificateStatuses, GeneratedCertificate
 from course_modes.models import CourseMode
 from lms.djangoapps.grades.tests.utils import mock_passing_grade
+from openedx.core.lib.tests import attr
 from student.tests.factories import CourseEnrollmentFactory, UserFactory
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory, check_mongo_calls
@@ -139,7 +138,6 @@ class ResubmitErrorCertificatesTest(CertificateManagementTest):
         with self.assertRaisesRegexp(CommandError, invalid_key):
             call_command(self.command, course_key_list=[invalid_key])
 
-    @pytest.mark.django111_expected_failure
     def test_course_does_not_exist(self):
         phantom_course = CourseLocator(org='phantom', course='phantom', run='phantom')
         self._create_cert(phantom_course, self.user, 'error')
@@ -168,7 +166,7 @@ class RegenerateCertificatesTest(CertificateManagementTest):
     @ddt.data(True, False)
     @override_settings(CERT_QUEUE='test-queue')
     @patch.dict('django.conf.settings.FEATURES', {'ENABLE_OPENBADGES': True})
-    @patch('certificates.api.XQueueCertInterface', spec=True)
+    @patch('lms.djangoapps.certificates.api.XQueueCertInterface', spec=True)
     def test_clear_badge(self, issue_badges, xqueue):
         """
         Given that I have a user with a badge

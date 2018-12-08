@@ -9,10 +9,12 @@ import ddt
 import mock
 import pytz
 from django.conf import settings
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.test.client import RequestFactory
 from django.test.utils import override_settings
-from nose.plugins.attrib import attr
+from opaque_keys.edx.keys import CourseKey
+from six import text_type
+from crum import set_current_request
 
 from courseware.courses import (
     course_open_for_self_enrollment,
@@ -20,17 +22,19 @@ from courseware.courses import (
     get_cms_course_link,
     get_course_about_section,
     get_course_by_id,
+    get_course_chapter_ids,
     get_course_info_section,
     get_course_overview_with_access,
     get_course_with_access,
     get_courses,
-    get_current_child
+    get_current_child,
 )
 from courseware.model_data import FieldDataCache
 from courseware.module_render import get_module_for_descriptor
 from lms.djangoapps.courseware.courseware_access_exception import CoursewareAccessException
 from openedx.core.djangolib.testing.utils import get_mock_request
 from openedx.core.lib.courses import course_image_url
+from openedx.core.lib.tests import attr
 from student.tests.factories import UserFactory
 from xmodule.modulestore import ModuleStoreEnum
 from xmodule.modulestore.django import _get_modulestore_branch_setting, modulestore
@@ -78,7 +82,7 @@ class CoursesTest(ModuleStoreTestCase):
 
         with self.assertRaises(CoursewareAccessException) as error:
             course_access_func(user, 'load', course.id)
-        self.assertEqual(error.exception.message, "Course not found.")
+        self.assertEqual(text_type(error.exception), "Course not found.")
         self.assertEqual(error.exception.access_response.error_code, "not_visible_to_user")
         self.assertFalse(error.exception.access_response.has_access)
 
@@ -304,6 +308,7 @@ class CoursesRenderTest(ModuleStoreTestCase):
         course_items = import_course_from_xml(store, self.user.id, TEST_DATA_DIR, ['toy'])
         course_key = course_items[0].id
         self.course = get_course_by_id(course_key)
+        self.addCleanup(set_current_request, None)
         self.request = get_mock_request(UserFactory.create())
 
     def test_get_course_info_section_render(self):
@@ -423,3 +428,33 @@ class CourseInstantiationTests(ModuleStoreTestCase):
                 for section in chapter.get_children():
                     for item in section.get_children():
                         self.assertTrue(item.graded)
+
+
+@attr(shard=1)
+class TestGetCourseChapters(ModuleStoreTestCase):
+    """
+    Tests for the `get_course_chapter_ids` function.
+    """
+
+    def test_get_non_existant_course(self):
+        """
+        Test non-existant course returns empty list.
+        """
+        self.assertEqual(get_course_chapter_ids(None), [])
+        # build a fake key
+        fake_course_key = CourseKey.from_string('course-v1:FakeOrg+CN1+CR-FALLNEVER1')
+        self.assertEqual(get_course_chapter_ids(fake_course_key), [])
+
+    def test_get_chapters(self):
+        """
+        Test get_course_chapter_ids returns expected result.
+        """
+        course = CourseFactory()
+        ItemFactory(parent=course, category='chapter')
+        ItemFactory(parent=course, category='chapter')
+        course_chapter_ids = get_course_chapter_ids(course.location.course_key)
+        self.assertEqual(len(course_chapter_ids), 2)
+        self.assertEqual(
+            course_chapter_ids,
+            [unicode(child) for child in course.children]
+        )

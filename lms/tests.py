@@ -3,7 +3,7 @@
 import logging
 import mimetypes
 
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.test import TestCase
 from mock import patch
 from six import text_type
@@ -21,6 +21,7 @@ class LmsModuleTests(TestCase):
     """
     Tests for lms module itself.
     """
+    shard = 5
 
     def test_new_mimetypes(self):
         extensions = ['eot', 'otf', 'ttf', 'woff']
@@ -33,6 +34,7 @@ class TemplateLookupTests(TestCase):
     """
     Tests for TemplateLookup.
     """
+    shard = 5
 
     def test_add_lookup_to_main(self):
         """Test that any template directories added are not cleared when microsites are enabled."""
@@ -50,6 +52,8 @@ class TemplateLookupTests(TestCase):
 @patch.dict('django.conf.settings.FEATURES', {'ENABLE_FEEDBACK_SUBMISSION': True})
 class HelpModalTests(ModuleStoreTestCase):
     """Tests for the help modal"""
+    shard = 5
+
     def setUp(self):
         super(HelpModalTests, self).setUp()
         self.course = CourseFactory.create()

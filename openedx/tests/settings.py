@@ -55,6 +55,7 @@ INSTALLED_APPS = (
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
+    'django.contrib.sites',
     'djcelery',
     'openedx.core.djangoapps.video_config',
     'openedx.core.djangoapps.video_pipeline',
@@ -62,7 +63,8 @@ INSTALLED_APPS = (
     'edxval',
     'courseware',
     'student',
-    'certificates.apps.CertificatesConfig',
+    'openedx.core.djangoapps.site_configuration',
+    'lms.djangoapps.certificates.apps.CertificatesConfig',
     'openedx.core.djangoapps.user_api',
     'course_modes.apps.CourseModesConfig',
     'lms.djangoapps.verify_student.apps.VerifyStudentConfig',
@@ -73,7 +75,9 @@ INSTALLED_APPS = (
     'openedx.core.djangoapps.self_paced',
     'milestones',
     'celery_utils',
-    'lms.djangoapps.completion.apps.CompletionAppConfig',
+
+    # Django 1.11 demands to have imported models supported by installed apps.
+    'completion',
 )
 
 LMS_ROOT_URL = 'http://localhost:8000'
@@ -88,3 +92,6 @@ SECRET_KEY = 'insecure-secret-key'
 TRACK_MAX_EVENT = 50000
 
 USE_TZ = True
+
+RETIREMENT_SERVICE_WORKER_USERNAME = 'RETIREMENT_SERVICE_USER'
+RETIRED_USERNAME_PREFIX = 'retired__user_'

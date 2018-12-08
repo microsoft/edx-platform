@@ -5,11 +5,9 @@ import json
 import urllib
 
 import ddt
-import pytest
 from django.conf import settings
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from mock import patch
-from nose.plugins.attrib import attr
 from rest_framework.test import APIClient
 
 from openedx.core.djangolib.testing.utils import skip_unless_lms
@@ -18,7 +16,6 @@ from .test_api import BookmarkApiEventTestMixin
 from .test_models import BookmarksTestsBase
 
 
-# pylint: disable=no-member
 class BookmarksViewsTestsBase(BookmarksTestsBase, BookmarkApiEventTestMixin):
     """
     Base class for bookmarks views tests.
@@ -63,16 +60,16 @@ class BookmarksViewsTestsBase(BookmarksTestsBase, BookmarkApiEventTestMixin):
         return response
 
 
-@attr(shard=2)
 @ddt.ddt
 @skip_unless_lms
-@pytest.mark.django111_expected_failure
 class BookmarksListViewTests(BookmarksViewsTestsBase):
     """
     This contains the tests for GET & POST methods of bookmark.views.BookmarksListView class
     GET /api/bookmarks/v1/bookmarks/?course_id={course_id1}
     POST /api/bookmarks/v1/bookmarks
     """
+    shard = 9
+
     @ddt.data(
         (1, False),
         (10, False),
@@ -177,7 +174,7 @@ class BookmarksListViewTests(BookmarksViewsTestsBase):
         bookmarks_data = response.data['results']
 
         self.assertEqual(len(bookmarks_data), 0)
-        self.assertFalse(mock_tracker.emit.called)  # pylint: disable=maybe-no-member
+        self.assertFalse(mock_tracker.emit.called)
 
     @patch('eventtracking.tracker.emit')
     def test_get_all_bookmarks_when_course_id_not_given(self, mock_tracker):
@@ -369,14 +366,14 @@ class BookmarksListViewTests(BookmarksViewsTestsBase):
         )
 
 
-@attr(shard=2)
 @ddt.ddt
 @skip_unless_lms
-@pytest.mark.django111_expected_failure
 class BookmarksDetailViewTests(BookmarksViewsTestsBase):
     """
     This contains the tests for GET & DELETE methods of bookmark.views.BookmarksDetailView class
     """
+    shard = 9
+
     @ddt.data(
         ('', False),
         ('fields=path,display_name', True)
@@ -400,15 +397,28 @@ class BookmarksDetailViewTests(BookmarksViewsTestsBase):
 
     def test_get_bookmark_that_belongs_to_other_user(self):
         """
-        Test that requesting bookmark that belongs to other user returns 404 status code.
+        Test that requesting bookmark that belongs to other user returns 403 status code.
         """
         self.send_get(
             client=self.client,
             url=reverse(
                 'bookmarks_detail',
-                kwargs={'username': 'other', 'usage_id': unicode(self.vertical_1.location)}
+                kwargs={'username': self.other_user.username, 'usage_id': unicode(self.vertical_1.location)}
             ),
-            expected_status=404
+            expected_status=403
+        )
+
+    def test_get_bookmark_that_belongs_to_nonexistent_user(self):
+        """
+        Test that requesting bookmark that belongs to a non-existent user also returns 403 status code.
+        """
+        self.send_get(
+            client=self.client,
+            url=reverse(
+                'bookmarks_detail',
+                kwargs={'username': 'non-existent', 'usage_id': unicode(self.vertical_1.location)}
+            ),
+            expected_status=403
         )
 
     def test_get_bookmark_that_does_not_exist(self):
@@ -485,7 +495,7 @@ class BookmarksDetailViewTests(BookmarksViewsTestsBase):
 
     def test_delete_bookmark_that_belongs_to_other_user(self):
         """
-        Test that delete bookmark that belongs to other user returns 404.
+        Test that delete bookmark that belongs to other user returns 403.
         """
         self.send_delete(
             client=self.client,
@@ -493,7 +503,7 @@ class BookmarksDetailViewTests(BookmarksViewsTestsBase):
                 'bookmarks_detail',
                 kwargs={'username': 'other', 'usage_id': unicode(self.vertical_1.location)}
             ),
-            expected_status=404
+            expected_status=403
         )
 
     def test_delete_bookmark_that_does_not_exist(self):

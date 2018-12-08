@@ -8,12 +8,12 @@ import re
 from datetime import datetime
 from functools import wraps
 from StringIO import StringIO
+from contextlib import contextmanager
 
 import dateutil.parser
 import ddt
 import pytz
 from django.conf import settings
-from django.core.files.uploadedfile import UploadedFile
 from django.test.utils import override_settings
 from edxval.api import (
     create_profile,
@@ -29,7 +29,6 @@ from contentstore.tests.utils import CourseTestCase
 from contentstore.utils import reverse_course_url
 from contentstore.views.videos import (
     _get_default_video_image_url,
-    validate_video_image,
     VIDEO_IMAGE_UPLOAD_ENABLED,
     WAFFLE_SWITCHES,
     TranscriptProvider
@@ -37,8 +36,12 @@ from contentstore.views.videos import (
 from contentstore.views.videos import KEY_EXPIRATION_IN_SECONDS, StatusDisplayStrings, convert_video_status
 from xmodule.modulestore.tests.factories import CourseFactory
 
+from openedx.core.djangoapps.video_pipeline.config.waffle import waffle_flags, DEPRECATE_YOUTUBE
 from openedx.core.djangoapps.profile_images.tests.helpers import make_image_file
+from openedx.core.djangoapps.waffle_utils.models import WaffleFlagCourseOverrideModel
+
 from edxval.api import create_or_update_transcript_preferences, get_transcript_preferences
+from waffle.testutils import override_flag
 
 
 def override_switch(switch, active):
@@ -63,6 +66,8 @@ class VideoUploadTestBase(object):
     """
     Test cases for the video upload feature
     """
+    shard = 1
+
     def get_url_for_course_key(self, course_key, kwargs=None):
         """Return video handler URL for the given course"""
         return reverse_course_url(self.VIEW_NAME, course_key, kwargs)
@@ -172,6 +177,8 @@ class VideoUploadTestMixin(VideoUploadTestBase):
     """
     Test cases for the video upload feature
     """
+    shard = 1
+
     def test_anon_user(self):
         self.client.logout()
         response = self.client.get(self.url)
@@ -211,6 +218,7 @@ class VideoUploadTestMixin(VideoUploadTestBase):
 @override_settings(VIDEO_UPLOAD_PIPELINE={"BUCKET": "test_bucket", "ROOT_PATH": "test_root"})
 class VideosHandlerTestCase(VideoUploadTestMixin, CourseTestCase):
     """Test cases for the main video upload endpoint"""
+    shard = 1
 
     VIEW_NAME = 'videos_handler'
 
@@ -224,7 +232,16 @@ class VideosHandlerTestCase(VideoUploadTestMixin, CourseTestCase):
             original_video = self.previous_uploads[-(i + 1)]
             self.assertEqual(
                 set(response_video.keys()),
-                set(['edx_video_id', 'client_video_id', 'created', 'duration', 'status', 'course_video_image_url'])
+                set([
+                    'edx_video_id',
+                    'client_video_id',
+                    'created',
+                    'duration',
+                    'status',
+                    'course_video_image_url',
+                    'transcripts',
+                    'transcription_status'
+                ])
             )
             dateutil.parser.parse(response_video['created'])
             for field in ['edx_video_id', 'client_video_id', 'duration']:
@@ -236,15 +253,10 @@ class VideosHandlerTestCase(VideoUploadTestMixin, CourseTestCase):
 
     @ddt.data(
         (
-            False,
-            ['edx_video_id', 'client_video_id', 'created', 'duration', 'status', 'course_video_image_url'],
-            [],
-            []
-        ),
-        (
-            True,
-            ['edx_video_id', 'client_video_id', 'created', 'duration', 'status', 'course_video_image_url',
-                'transcripts'],
+            [
+                'edx_video_id', 'client_video_id', 'created', 'duration',
+                'status', 'course_video_image_url', 'transcripts', 'transcription_status',
+            ],
             [
                 {
                     'video_id': 'test1',
@@ -257,9 +269,10 @@ class VideosHandlerTestCase(VideoUploadTestMixin, CourseTestCase):
             ['en']
         ),
         (
-            True,
-            ['edx_video_id', 'client_video_id', 'created', 'duration', 'status', 'course_video_image_url',
-                'transcripts'],
+            [
+                'edx_video_id', 'client_video_id', 'created', 'duration',
+                'status', 'course_video_image_url', 'transcripts', 'transcription_status',
+            ],
             [
                 {
                     'video_id': 'test1',
@@ -280,14 +293,10 @@ class VideosHandlerTestCase(VideoUploadTestMixin, CourseTestCase):
         )
     )
     @ddt.unpack
-    @patch('openedx.core.djangoapps.video_config.models.VideoTranscriptEnabledFlag.feature_enabled')
-    def test_get_json_transcripts(self, is_video_transcript_enabled, expected_video_keys, uploaded_transcripts,
-                                  expected_transcripts, video_transcript_feature):
+    def test_get_json_transcripts(self, expected_video_keys, uploaded_transcripts, expected_transcripts):
         """
         Test that transcripts are attached based on whether the video transcript feature is enabled.
         """
-        video_transcript_feature.return_value = is_video_transcript_enabled
-
         for transcript in uploaded_transcripts:
             create_or_update_video_transcript(
                 transcript['video_id'],
@@ -491,10 +500,12 @@ class VideosHandlerTestCase(VideoUploadTestMixin, CourseTestCase):
             self.assertIsNotNone(path_match)
             video_id = path_match.group(1)
             mock_key_instance = mock_key_instances[i]
+
             mock_key_instance.set_metadata.assert_any_call(
                 'course_video_upload_token',
                 self.test_token
             )
+
             mock_key_instance.set_metadata.assert_any_call(
                 'client_video_id',
                 file_info['file_name']
@@ -518,6 +529,74 @@ class VideosHandlerTestCase(VideoUploadTestMixin, CourseTestCase):
             response_file = response_obj['files'][i]
             self.assertEqual(response_file['file_name'], file_info['file_name'])
             self.assertEqual(response_file['upload_url'], mock_key_instance.generate_url())
+
+    @override_settings(AWS_ACCESS_KEY_ID='test_key_id', AWS_SECRET_ACCESS_KEY='test_secret')
+    @patch('boto.s3.key.Key')
+    @patch('boto.s3.connection.S3Connection')
+    @ddt.data(
+        {
+            'global_waffle': True,
+            'course_override': WaffleFlagCourseOverrideModel.ALL_CHOICES.off,
+            'expect_token': True
+        },
+        {
+            'global_waffle': False,
+            'course_override': WaffleFlagCourseOverrideModel.ALL_CHOICES.on,
+            'expect_token': False
+        },
+        {
+            'global_waffle': False,
+            'course_override': WaffleFlagCourseOverrideModel.ALL_CHOICES.off,
+            'expect_token': True
+        }
+    )
+    def test_video_upload_token_in_meta(self, data, mock_conn, mock_key):
+        """
+        Test video upload token in s3 metadata.
+        """
+        @contextmanager
+        def proxy_manager(manager, ignore_manager):
+            """
+            This acts as proxy to the original manager in the arguments given
+            the original manager is not set to be ignored.
+            """
+            if ignore_manager:
+                yield
+            else:
+                with manager:
+                    yield
+
+        file_data = {
+            'file_name': 'first.mp4',
+            'content_type': 'video/mp4',
+        }
+        mock_conn.return_value = Mock(get_bucket=Mock(return_value=Mock()))
+        mock_key_instance = Mock(
+            generate_url=Mock(
+                return_value='http://example.com/url_{}'.format(file_data['file_name'])
+            )
+        )
+        # If extra calls are made, return a dummy
+        mock_key.side_effect = [mock_key_instance]
+
+        # expected args to be passed to `set_metadata`.
+        expected_args = ('course_video_upload_token', self.test_token)
+
+        DEPRECATE_YOUTUBE_FLAG = waffle_flags()[DEPRECATE_YOUTUBE]
+        with patch.object(WaffleFlagCourseOverrideModel, 'override_value', return_value=data['course_override']):
+            with override_flag(DEPRECATE_YOUTUBE_FLAG.namespaced_flag_name, active=data['global_waffle']):
+                response = self.client.post(
+                    self.url,
+                    json.dumps({'files': [file_data]}),
+                    content_type='application/json'
+                )
+                self.assertEqual(response.status_code, 200)
+
+                with proxy_manager(self.assertRaises(AssertionError), data['expect_token']):
+                    # if we're not expecting token then following should raise assertion error and
+                    # if we're expecting token then we will be able to find the call to set the token
+                    # in s3 metadata.
+                    mock_key_instance.set_metadata.assert_any_call(*expected_args)
 
     def _assert_video_removal(self, url, edx_video_id, deleted_videos):
         """
@@ -582,9 +661,20 @@ class VideosHandlerTestCase(VideoUploadTestMixin, CourseTestCase):
         status = convert_video_status(video)
         self.assertEqual(status, StatusDisplayStrings.get('youtube_duplicate'))
 
+        # `transcript_ready` should be converted to `file_complete`
+        video['status'] = 'transcript_ready'
+        status = convert_video_status(video)
+        self.assertEqual(status, StatusDisplayStrings.get('file_complete'))
+
+        # The encode status should be converted to `file_complete` if video encodes are complete
+        video['status'] = 'transcription_in_progress'
+        status = convert_video_status(video, is_video_encodes_ready=True)
+        self.assertEqual(status, StatusDisplayStrings.get('file_complete'))
+
         # for all other status, there should not be any conversion
         statuses = StatusDisplayStrings._STATUS_MAP.keys()  # pylint: disable=protected-access
         statuses.remove('invalid_token')
+        statuses.remove('transcript_ready')
         for status in statuses:
             video['status'] = status
             new_status = convert_video_status(video)
@@ -634,6 +724,39 @@ class VideosHandlerTestCase(VideoUploadTestMixin, CourseTestCase):
 
         self.assert_video_status(url, edx_video_id, 'Failed')
 
+    @ddt.data(
+        ('test_video_token', "Transcription in Progress"),
+        ('', "Ready"),
+    )
+    @ddt.unpack
+    def test_video_transcript_status_conversion(self, course_video_upload_token, expected_video_status_text):
+        """
+        Verifies that video status `transcription_in_progress` gets converted
+        correctly into the `file_complete` for the new video workflow and
+        stays as it is, for the old video workflow.
+        """
+        self.course.video_upload_pipeline = {
+            'course_video_upload_token': course_video_upload_token
+        }
+        self.save_course()
+
+        url = self.get_url_for_course_key(self.course.id)
+        edx_video_id = 'test1'
+        self.assert_video_status(url, edx_video_id, 'Uploading')
+
+        response = self.client.post(
+            url,
+            json.dumps([{
+                'edxVideoId': edx_video_id,
+                'status': 'transcription_in_progress',
+                'message': 'Transcription is in progress'
+            }]),
+            content_type="application/json"
+        )
+        self.assertEqual(response.status_code, 204)
+
+        self.assert_video_status(url, edx_video_id, expected_video_status_text)
+
     @ddt.data(True, False)
     @patch('openedx.core.djangoapps.video_config.models.VideoTranscriptEnabledFlag.feature_enabled')
     def test_video_index_transcript_feature_enablement(self, is_video_transcript_enabled, video_transcript_feature):
@@ -658,6 +781,7 @@ class VideoImageTestCase(VideoUploadTestBase, CourseTestCase):
     """
     Tests for video image.
     """
+    shard = 1
 
     VIEW_NAME = "video_images_handler"
 
@@ -732,26 +856,6 @@ class VideoImageTestCase(VideoUploadTestBase, CourseTestCase):
         video_image_upload_url = self.get_url_for_course_key(self.course.id, {'edx_video_id': 'test1'})
         response = self.client.post(video_image_upload_url, {})
         self.verify_error_message(response, 'An image file is required.')
-
-    def test_invalid_image_file_info(self):
-        """
-        Test that when no file information is provided to validate_video_image, it gives proper error message.
-        """
-        error = validate_video_image({})
-        self.assertEquals(error, 'The image must have name, content type, and size information.')
-
-    def test_corrupt_image_file(self):
-        """
-        Test that when corrupt file is provided to validate_video_image, it gives proper error message.
-        """
-        with open(settings.MEDIA_ROOT + '/test-corrupt-image.png', 'w+') as file:
-            image_file = UploadedFile(
-                file,
-                content_type='image/png',
-                size=settings.VIDEO_IMAGE_SETTINGS['VIDEO_IMAGE_MIN_BYTES']
-            )
-            error = validate_video_image(image_file)
-            self.assertEquals(error, 'There is a problem with this image file. Try to upload a different file.')
 
     @override_switch(VIDEO_IMAGE_UPLOAD_ENABLED, True)
     def test_no_video_image(self):
@@ -966,6 +1070,7 @@ class TranscriptPreferencesTestCase(VideoUploadTestBase, CourseTestCase):
     """
     Tests for video transcripts preferences.
     """
+    shard = 1
 
     VIEW_NAME = 'transcript_preferences_handler'
 
@@ -1277,6 +1382,7 @@ class TranscriptPreferencesTestCase(VideoUploadTestBase, CourseTestCase):
 @override_settings(VIDEO_UPLOAD_PIPELINE={"BUCKET": "test_bucket", "ROOT_PATH": "test_root"})
 class VideoUrlsCsvTestCase(VideoUploadTestMixin, CourseTestCase):
     """Test cases for the CSV download endpoint for video uploads"""
+    shard = 1
 
     VIEW_NAME = "video_encodings_download"
 

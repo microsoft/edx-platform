@@ -4,11 +4,11 @@ Models for configuring waffle utils.
 from django.db.models import CharField
 from django.utils.translation import ugettext_lazy as _
 from model_utils import Choices
+from opaque_keys.edx.django.models import CourseKeyField
 from six import text_type
 
 from config_models.models import ConfigurationModel
-from openedx.core.djangoapps.xmodule_django.models import CourseKeyField
-from request_cache.middleware import request_cached
+from openedx.core.lib.cache_utils import request_cached
 
 
 class WaffleFlagCourseOverrideModel(ConfigurationModel):
@@ -26,7 +26,7 @@ class WaffleFlagCourseOverrideModel(ConfigurationModel):
     override_choice = CharField(choices=OVERRIDE_CHOICES, default=OVERRIDE_CHOICES.on, max_length=3)
 
     @classmethod
-    @request_cached
+    @request_cached()
     def override_value(cls, waffle_flag, course_id):
         """
         Returns whether the waffle flag was overridden (on or off) for the
@@ -58,5 +58,4 @@ class WaffleFlagCourseOverrideModel(ConfigurationModel):
 
     def __unicode__(self):
         enabled_label = "Enabled" if self.enabled else "Not Enabled"
-        # pylint: disable=no-member
         return u"Course '{}': Persistent Grades {}".format(text_type(self.course_id), enabled_label)

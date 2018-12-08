@@ -1,4 +1,6 @@
 """
+THIS MODULE IS DEPRECATED IN FAVOR OF https://github.com/edx/xblock-lti-consumer
+
 Learning Tools Interoperability (LTI) module.
 
 
@@ -80,7 +82,7 @@ log = logging.getLogger(__name__)
 
 DOCS_ANCHOR_TAG_OPEN = (
     "<a target='_blank' "
-    "href='http://edx.readthedocs.io/projects/edx-partner-course-staff/en/latest/exercises_tools/lti_component.html'>"
+    "href='https://edx.readthedocs.io/projects/edx-partner-course-staff/en/latest/exercises_tools/lti_component.html'>"
 )
 
 # Make '_' a no-op so we can scrape strings. Using lambda instead of
@@ -250,6 +252,8 @@ class LTIFields(object):
 
 class LTIModule(LTIFields, LTI20ModuleMixin, XModule):
     """
+    THIS MODULE IS DEPRECATED IN FAVOR OF https://github.com/edx/xblock-lti-consumer
+
     Module provides LTI integration to course.
 
     Except usual Xmodule structure it proceeds with OAuth signing.
@@ -734,7 +738,7 @@ oauth_consumer_key="", oauth_signature="frVp4JuvT1mVXlxktiAUjQ7%2F1cw%3D"'}
         try:
             imsx_messageIdentifier, sourcedId, score, action = self.parse_grade_xml_body(request.body)
         except Exception as e:
-            error_message = "Request body XML parsing error: " + escape(e.message)
+            error_message = "Request body XML parsing error: " + escape(text_type(e))
             log.debug("[LTI]: " + error_message)
             failure_values['imsx_description'] = error_message
             return Response(response_xml_template.format(**failure_values), content_type="application/xml")
@@ -744,7 +748,7 @@ oauth_consumer_key="", oauth_signature="frVp4JuvT1mVXlxktiAUjQ7%2F1cw%3D"'}
             self.verify_oauth_body_sign(request)
         except (ValueError, LTIError) as e:
             failure_values['imsx_messageIdentifier'] = escape(imsx_messageIdentifier)
-            error_message = "OAuth verification error: " + escape(e.message)
+            error_message = "OAuth verification error: " + escape(text_type(e))
             failure_values['imsx_description'] = error_message
             log.debug("[LTI]: " + error_message)
             return Response(response_xml_template.format(**failure_values), content_type="application/xml")

@@ -15,8 +15,7 @@ Examples of html5 videos for manual testing:
 import copy
 import json
 import logging
-import random
-from collections import OrderedDict
+from collections import defaultdict, OrderedDict
 from operator import itemgetter
 
 from pkg_resources import resource_string
@@ -25,7 +24,8 @@ from django.conf import settings
 from lxml import etree
 from opaque_keys.edx.locator import AssetLocator
 from openedx.core.djangoapps.video_config.models import HLSPlaybackEnabledFlag
-from openedx.core.lib.cache_utils import memoize_in_request_cache
+from openedx.core.djangoapps.video_pipeline.config.waffle import waffle_flags, DEPRECATE_YOUTUBE
+from openedx.core.lib.cache_utils import request_cached
 from openedx.core.lib.license import LicenseMixin
 from xblock.completable import XBlockCompletionMode
 from xblock.core import XBlock
@@ -44,13 +44,13 @@ from xmodule.xml_module import deserialize_field, is_pointer_tag, name_to_pathna
 from .bumper_utils import bumperize
 from .transcripts_utils import (
     get_html5_ids,
-    get_video_ids_info,
     Transcript,
     VideoTranscriptsMixin,
+    clean_video_id,
+    subs_filename,
+    get_transcript_for_video
 )
-from .transcripts_model_utils import (
-    is_val_transcript_feature_enabled_for_course
-)
+
 from .video_handlers import VideoStudentViewHandlers, VideoStudioViewHandlers
 from .video_utils import create_youtube_string, format_xml_exception_message, get_poster, rewrite_video_url
 from .video_xfields import VideoFields
@@ -97,6 +97,9 @@ log = logging.getLogger(__name__)
 #  `django.utils.translation.ugettext_noop` because Django cannot be imported in this file
 _ = lambda text: text
 
+EXPORT_IMPORT_COURSE_DIR = u'course'
+EXPORT_IMPORT_STATIC_DIR = u'static'
+
 
 @XBlock.wants('settings', 'completion')
 class VideoModule(VideoFields, VideoTranscriptsMixin, VideoStudentViewHandlers, XModule, LicenseMixin):
@@ -124,40 +127,6 @@ class VideoModule(VideoFields, VideoTranscriptsMixin, VideoStudentViewHandlers, 
     #TODO: For each of the following, ensure that any generated html is properly escaped.
     js = {
         'js': [
-            resource_string(module, 'js/src/time.js'),
-            resource_string(module, 'js/src/video/00_component.js'),
-            resource_string(module, 'js/src/video/00_video_storage.js'),
-            resource_string(module, 'js/src/video/00_resizer.js'),
-            resource_string(module, 'js/src/video/00_async_process.js'),
-            resource_string(module, 'js/src/video/00_i18n.js'),
-            resource_string(module, 'js/src/video/00_sjson.js'),
-            resource_string(module, 'js/src/video/00_iterator.js'),
-            resource_string(module, 'js/src/video/01_initialize.js'),
-            resource_string(module, 'js/src/video/025_focus_grabber.js'),
-            resource_string(module, 'js/src/video/02_html5_video.js'),
-            resource_string(module, 'js/src/video/02_html5_hls_video.js'),
-            resource_string(module, 'js/src/video/03_video_player.js'),
-            resource_string(module, 'js/src/video/035_video_accessible_menu.js'),
-            resource_string(module, 'js/src/video/04_video_control.js'),
-            resource_string(module, 'js/src/video/04_video_full_screen.js'),
-            resource_string(module, 'js/src/video/05_video_quality_control.js'),
-            resource_string(module, 'js/src/video/06_video_progress_slider.js'),
-            resource_string(module, 'js/src/video/07_video_volume_control.js'),
-            resource_string(module, 'js/src/video/08_video_speed_control.js'),
-            resource_string(module, 'js/src/video/08_video_auto_advance_control.js'),
-            resource_string(module, 'js/src/video/09_video_caption.js'),
-            resource_string(module, 'js/src/video/09_play_placeholder.js'),
-            resource_string(module, 'js/src/video/09_play_pause_control.js'),
-            resource_string(module, 'js/src/video/09_play_skip_control.js'),
-            resource_string(module, 'js/src/video/09_skip_control.js'),
-            resource_string(module, 'js/src/video/09_bumper.js'),
-            resource_string(module, 'js/src/video/09_save_state_plugin.js'),
-            resource_string(module, 'js/src/video/09_events_plugin.js'),
-            resource_string(module, 'js/src/video/09_events_bumper_plugin.js'),
-            resource_string(module, 'js/src/video/09_poster.js'),
-            resource_string(module, 'js/src/video/09_completion.js'),
-            resource_string(module, 'js/src/video/095_video_context_menu.js'),
-            resource_string(module, 'js/src/video/10_commands.js'),
             resource_string(module, 'js/src/video/10_main.js'),
         ]
     }
@@ -211,7 +180,36 @@ class VideoModule(VideoFields, VideoTranscriptsMixin, VideoStudentViewHandlers, 
         sorted_languages = OrderedDict(sorted_languages)
         return track_url, transcript_language, sorted_languages
 
+    @property
+    def youtube_deprecated(self):
+        """
+        Return True if youtube is deprecated and hls as primary playback is enabled else False
+        """
+        # Return False if `hls` playback feature is disabled.
+        if not HLSPlaybackEnabledFlag.feature_enabled(self.location.course_key):
+            return False
+
+        # check if youtube has been deprecated and hls as primary playback
+        # is enabled for this course
+        return waffle_flags()[DEPRECATE_YOUTUBE].is_enabled(self.location.course_key)
+
+    def prioritize_hls(self, youtube_streams, html5_sources):
+        """
+        Decide whether hls can be prioritized as primary playback or not.
+
+        If both the youtube and hls sources are present then make decision on flag
+        If only either youtube or hls is present then play whichever is present
+        """
+        yt_present = bool(youtube_streams.strip())
+        hls_present = any(source for source in html5_sources if source.strip().endswith('.m3u8'))
+
+        if yt_present and hls_present:
+            return self.youtube_deprecated
+
+        return False
+
     def get_html(self):
+
         track_status = (self.download_track and self.track)
         transcript_download_format = self.transcript_download_format if not track_status else None
         sources = filter(None, self.html5_sources)
@@ -297,24 +295,11 @@ class VideoModule(VideoFields, VideoTranscriptsMixin, VideoStudentViewHandlers, 
             if download_video_link and download_video_link.endswith('.m3u8'):
                 download_video_link = None
 
-        feature_enabled = is_val_transcript_feature_enabled_for_course(self.course_id)
-        transcripts = self.get_transcripts_info(include_val_transcripts=feature_enabled)
+        transcripts = self.get_transcripts_info()
         track_url, transcript_language, sorted_languages = self.get_transcripts_for_student(transcripts=transcripts)
 
-        # CDN_VIDEO_URLS is only to be used here and will be deleted
-        # TODO(ali@edx.org): Delete this after the CDN experiment has completed.
-        html_id = self.location.html_id()
-        if self.system.user_location == 'CN' and \
-                settings.FEATURES.get('ENABLE_VIDEO_BEACON', False) and \
-                html_id in getattr(settings, 'CDN_VIDEO_URLS', {}).keys():
-            cdn_urls = getattr(settings, 'CDN_VIDEO_URLS', {})[html_id]
-            cdn_exp_group, new_source = random.choice(zip(range(len(cdn_urls)), cdn_urls))
-            if cdn_exp_group > 0:
-                sources[0] = new_source
-            cdn_eval = True
-        else:
-            cdn_eval = False
-            cdn_exp_group = None
+        cdn_eval = False
+        cdn_exp_group = None
 
         self.youtube_streams = youtube_streams or create_youtube_string(self)  # pylint: disable=W0201
 
@@ -356,7 +341,6 @@ class VideoModule(VideoFields, VideoTranscriptsMixin, VideoStudentViewHandlers, 
             'saveStateUrl': self.system.ajax_url + '/save_user_state',
             'autoplay': settings.FEATURES.get('AUTOPLAY_VIDEOS', False),
             'streams': self.youtube_streams,
-            'sub': self.sub,
             'sources': sources,
             'poster': poster,
             'duration': video_duration,
@@ -405,6 +389,7 @@ class VideoModule(VideoFields, VideoTranscriptsMixin, VideoStudentViewHandlers, 
             # this user, based on what was recorded the last time we saw the
             # user, and defaulting to True.
             'recordedYoutubeIsAvailable': self.youtube_is_available,
+            'prioritizeHls': self.prioritize_hls(self.youtube_streams, sources),
         }
 
         bumperize(self)
@@ -438,6 +423,7 @@ class VideoDescriptor(VideoFields, VideoTranscriptsMixin, VideoStudioViewHandler
     module_class = VideoModule
     transcript = module_attr('transcript')
     publish_completion = module_attr('publish_completion')
+    has_custom_completion = module_attr('has_custom_completion')
 
     show_in_read_only_mode = True
 
@@ -599,10 +585,39 @@ class VideoDescriptor(VideoFields, VideoTranscriptsMixin, VideoStudioViewHandler
         else:
             editable_fields.pop('source')
 
+        # Default Timed Transcript a.k.a `sub` has been deprecated and end users shall
+        # not be able to modify it.
+        editable_fields.pop('sub')
+
         languages = [{'label': label, 'code': lang} for lang, label in settings.ALL_LANGUAGES]
         languages.sort(key=lambda l: l['label'])
+        editable_fields['transcripts']['custom'] = True
         editable_fields['transcripts']['languages'] = languages
         editable_fields['transcripts']['type'] = 'VideoTranslations'
+
+        # We need to send ajax requests to show transcript status
+        # whenever edx_video_id changes on frontend. Thats why we
+        # are changing type to `VideoID` so that a specific
+        # Backbonjs view can handle it.
+        editable_fields['edx_video_id']['type'] = 'VideoID'
+
+        # construct transcripts info and also find if `en` subs exist
+        transcripts_info = self.get_transcripts_info()
+        possible_sub_ids = [self.sub, self.youtube_id_1_0] + get_html5_ids(self.html5_sources)
+        for sub_id in possible_sub_ids:
+            try:
+                get_transcript_for_video(
+                    self.location,
+                    subs_id=sub_id,
+                    file_name=sub_id,
+                    language=u'en'
+                )
+                transcripts_info['transcripts'] = dict(transcripts_info['transcripts'], en=sub_id)
+                break
+            except NotFoundError:
+                continue
+
+        editable_fields['transcripts']['value'] = transcripts_info['transcripts']
         editable_fields['transcripts']['urlRoot'] = self.runtime.handler_url(
             self,
             'studio_transcript',
@@ -643,8 +658,12 @@ class VideoDescriptor(VideoFields, VideoTranscriptsMixin, VideoStudioViewHandler
             field_data,
         )
 
-        # update val with info extracted from `xml_object`
-        video.import_video_info_into_val(xml_object, getattr(id_generator, 'target_course_id', None))
+        # Update VAL with info extracted from `xml_object`
+        video.edx_video_id = video.import_video_info_into_val(
+            xml_object,
+            system.resources_fs,
+            getattr(id_generator, 'target_course_id', None)
+        )
 
         return video
 
@@ -701,27 +720,51 @@ class VideoDescriptor(VideoFields, VideoTranscriptsMixin, VideoStudioViewHandler
             ele.set('src', self.handout)
             xml.append(ele)
 
+        transcripts = {}
         if self.transcripts is not None:
-            # sorting for easy testing of resulting xml
-            for transcript_language in sorted(self.transcripts.keys()):
+            transcripts.update(self.transcripts)
+
+        edx_video_id = clean_video_id(self.edx_video_id)
+        if edxval_api and edx_video_id:
+            try:
+                # Create static dir if not created earlier.
+                resource_fs.makedirs(EXPORT_IMPORT_STATIC_DIR, recreate=True)
+
+                # Backward compatible exports
+                # edxval exports new transcripts into the course OLX and returns a transcript
+                # files map so that it can also be rewritten in old transcript metadata fields
+                # (i.e. `self.transcripts`) on import and older open-releases (<= ginkgo),
+                # who do not have deprecated contentstore yet, can also import and use new-style
+                # transcripts into their openedX instances.
+
+                exported_metadata = edxval_api.export_to_xml(
+                    video_id=edx_video_id,
+                    resource_fs=resource_fs,
+                    static_dir=EXPORT_IMPORT_STATIC_DIR,
+                    course_id=unicode(self.runtime.course_id.for_branch(None))
+                )
+                # Update xml with edxval metadata
+                xml.append(exported_metadata['xml'])
+
+                # we don't need sub if english transcript
+                # is also in new transcripts.
+                new_transcripts = exported_metadata['transcripts']
+                transcripts.update(new_transcripts)
+                if new_transcripts.get('en'):
+                    xml.set('sub', '')
+
+                # Update `transcripts` attribute in the xml
+                xml.set('transcripts', json.dumps(transcripts))
+
+            except edxval_api.ValVideoNotFoundError:
+                pass
+
+            # Sorting transcripts for easy testing of resulting xml
+            for transcript_language in sorted(transcripts.keys()):
                 ele = etree.Element('transcript')
                 ele.set('language', transcript_language)
-                ele.set('src', self.transcripts[transcript_language])
+                ele.set('src', transcripts[transcript_language])
                 xml.append(ele)
-
-        if edxval_api:
-            external, video_ids = get_video_ids_info(self.edx_video_id, self.youtube_id_1_0, self.html5_sources)
-            if video_ids:
-                try:
-                    xml.append(
-                        edxval_api.export_to_xml(
-                            video_ids,
-                            unicode(self.runtime.course_id.for_branch(None)),
-                            external=external
-                        )
-                    )
-                except edxval_api.ValVideoNotFoundError:
-                    pass
 
         # handle license specifically
         self.add_license_to_xml(xml)
@@ -925,27 +968,49 @@ class VideoDescriptor(VideoFields, VideoTranscriptsMixin, VideoStudioViewHandler
 
         return field_data
 
-    def import_video_info_into_val(self, xml, course_id):
+    def import_video_info_into_val(self, xml, resource_fs, course_id):
         """
         Import parsed video info from `xml` into edxval.
 
         Arguments:
-            xml (lxml object): xml representation of video to be imported
+            xml (lxml object): xml representation of video to be imported.
+            resource_fs (OSFS): Import file system.
             course_id (str): course id
         """
-        if self.edx_video_id is not None:
-            edx_video_id = self.edx_video_id.strip()
+        edx_video_id = clean_video_id(self.edx_video_id)
 
+        # Create video_asset is not already present.
         video_asset_elem = xml.find('video_asset')
-        if edxval_api and video_asset_elem is not None:
-            # Always pass the edx_video_id, Whether the video is internal or external
-            # In case of external, we only need to import transcripts and for that
-            # purpose video id is already present in the xml
-            edxval_api.import_from_xml(
+        if video_asset_elem is None:
+            video_asset_elem = etree.Element('video_asset')
+
+        # This will be a dict containing the list of names of the external transcripts.
+        # Example:
+        # {
+        #     'en': ['The_Flash.srt', 'Harry_Potter.srt'],
+        #     'es': ['Green_Arrow.srt']
+        # }
+        external_transcripts = defaultdict(list)
+
+        # Add trancript from self.sub and self.youtube_id_1_0 fields.
+        external_transcripts['en'] = [
+            subs_filename(transcript, 'en')
+            for transcript in [self.sub, self.youtube_id_1_0] if transcript
+        ]
+
+        for language_code, transcript in self.transcripts.items():
+            external_transcripts[language_code].append(transcript)
+
+        if edxval_api:
+            edx_video_id = edxval_api.import_from_xml(
                 video_asset_elem,
                 edx_video_id,
+                resource_fs,
+                EXPORT_IMPORT_STATIC_DIR,
+                external_transcripts,
                 course_id=course_id
             )
+        return edx_video_id
 
     def index_dictionary(self):
         xblock_body = super(VideoDescriptor, self).index_dictionary()
@@ -988,8 +1053,11 @@ class VideoDescriptor(VideoFields, VideoTranscriptsMixin, VideoStudioViewHandler
         """
         return self.runtime.service(self, "request_cache")
 
-    @memoize_in_request_cache('request_cache')
-    def get_cached_val_data_for_course(self, video_profile_names, course_id):
+    @classmethod
+    @request_cached(
+        request_cache_getter=lambda args, kwargs: args[1],
+    )
+    def get_cached_val_data_for_course(cls, request_cache, video_profile_names, course_id):
         """
         Returns the VAL data for the requested video profiles for the given course.
         """
@@ -1018,9 +1086,15 @@ class VideoDescriptor(VideoFields, VideoTranscriptsMixin, VideoStudioViewHandler
         # Check in VAL data first if edx_video_id exists
         if self.edx_video_id:
             video_profile_names = context.get("profiles", ["mobile_low"])
+            if HLSPlaybackEnabledFlag.feature_enabled(self.location.course_key) and 'hls' not in video_profile_names:
+                video_profile_names.append('hls')
 
             # get and cache bulk VAL data for course
-            val_course_data = self.get_cached_val_data_for_course(video_profile_names, self.location.course_key)
+            val_course_data = self.get_cached_val_data_for_course(
+                self.request_cache,
+                video_profile_names,
+                self.location.course_key,
+            )
             val_video_data = val_course_data.get(self.edx_video_id, {})
 
             # Get the encoded videos if data from VAL is found
@@ -1059,9 +1133,7 @@ class VideoDescriptor(VideoFields, VideoTranscriptsMixin, VideoStudioViewHandler
                     "file_size": 0,  # File size is not relevant for external link
                 }
 
-        feature_enabled = is_val_transcript_feature_enabled_for_course(self.runtime.course_id.for_branch(None))
-        transcripts_info = self.get_transcripts_info(include_val_transcripts=feature_enabled)
-        available_translations = self.available_translations(transcripts_info, include_val_transcripts=feature_enabled)
+        available_translations = self.available_translations(self.get_transcripts_info())
         transcripts = {
             lang: self.runtime.handler_url(self, 'transcript', 'download', query="lang=" + lang, thirdparty=True)
             for lang in available_translations

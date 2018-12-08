@@ -6,8 +6,11 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from opaque_keys import InvalidKeyError
 from opaque_keys.edx.keys import CourseKey
+from six import text_type
 
 from student.models import CourseEnrollment, User
+
+from student.models import CourseEnrollmentAttribute
 
 logger = logging.getLogger(__name__)  # pylint: disable=invalid-name
 
@@ -40,7 +43,7 @@ class Command(BaseCommand):
           $ ... change_enrollment -u joe,frank,bill -c some/course/id --from audit --to honor -n
     """
 
-    enrollment_modes = ('audit', 'verified', 'honor')
+    enrollment_modes = ('audit', 'verified', 'honor', 'credit')
 
     def add_arguments(self, parser):
         parser.add_argument('-f', '--from',
@@ -95,7 +98,7 @@ class Command(BaseCommand):
 
         self.report(error_users, success_users)
 
-    def update_enrollments(self, identifier, enrollment_args, options, error_users, success_users):
+    def update_enrollments(self, identifier, enrollment_args, options, error_users, success_users, enrollment_attrs=None):
         """ Update enrollments for a specific user identifier (email or username). """
         users = options[identifier].split(",")
 
@@ -110,10 +113,19 @@ class Command(BaseCommand):
                 enrollment_args['user'] = User.objects.get(**user_args)
                 enrollments = CourseEnrollment.objects.filter(**enrollment_args)
 
+                enrollment_attrs = []
                 with transaction.atomic():
                     for enrollment in enrollments:
                         enrollment.update_enrollment(mode=options['to_mode'])
                         enrollment.save()
+                        if options['to_mode'] == 'credit':
+                            enrollment_attrs.append({
+                                'namespace': 'credit',
+                                'name': 'provider_id',
+                                'value': enrollment_args['course_id'].org,
+                            })
+                            CourseEnrollmentAttribute.add_enrollment_attr(enrollment=enrollment,
+                                                                          data_list=enrollment_attrs)
 
                     if options['noop']:
                         raise RollbackException('Forced rollback.')
@@ -135,4 +147,4 @@ class Command(BaseCommand):
         if len(error_users) > 0:
             logger.info('The following %i user(s) not saved:', len(error_users))
             for user, error in error_users:
-                logger.info('user: [%s] reason: [%s] %s', user, type(error).__name__, error.message)
+                logger.info('user: [%s] reason: [%s] %s', user, type(error).__name__, text_type(error))

@@ -2,11 +2,10 @@
 Management command which fixes ungraded certificates for students
 """
 import logging
-from optparse import make_option
 
 from django.core.management.base import BaseCommand
 
-from certificates.models import GeneratedCertificate
+from lms.djangoapps.certificates.models import GeneratedCertificate
 from courseware import courses
 from lms.djangoapps.grades.course_grade_factory import CourseGradeFactory
 
@@ -23,24 +22,23 @@ class Command(BaseCommand):
     and grade them.
     """
 
-    option_list = BaseCommand.option_list + (
-        make_option(
+    def add_arguments(self, parser):
+        parser.add_argument(
             '-n',
             '--noop',
             action='store_true',
             dest='noop',
             default=False,
             help="Print but do not update the GeneratedCertificate table"
-        ),
-        make_option(
+        )
+        parser.add_argument(
             '-c',
             '--course',
             metavar='COURSE_ID',
             dest='course',
             default=False,
             help='Grade ungraded users for this course'
-        ),
-    )
+        )
 
     def handle(self, *args, **options):
         course_id = options['course']

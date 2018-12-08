@@ -9,7 +9,7 @@ import uuid
 import pytz
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.http import Http404, HttpResponseServerError
 from django.utils.html import escape
 from django.utils.translation import ugettext as _
@@ -24,8 +24,8 @@ from xblock.field_data import DictFieldData
 from xblock.fields import ScopeIds
 
 from bulk_email.models import BulkEmailFlag
-from certificates import api as certs_api
-from certificates.models import (
+from lms.djangoapps.certificates import api as certs_api
+from lms.djangoapps.certificates.models import (
     CertificateGenerationConfiguration,
     CertificateGenerationHistory,
     CertificateInvalidation,
@@ -122,7 +122,7 @@ def instructor_dashboard_2(request, course_id):
 
     sections = [
         _section_course_info(course, access),
-        _section_membership(course, access, is_white_label),
+        _section_membership(course, access),
         _section_cohort_management(course, access),
         _section_discussions_management(course, access),
         _section_student_admin(course, access),
@@ -207,11 +207,11 @@ def instructor_dashboard_2(request, course_id):
     disable_buttons = not _is_small_course(course_key)
 
     certificate_white_list = CertificateWhitelist.get_certificate_white_list(course_key)
-    generate_certificate_exceptions_url = reverse(  # pylint: disable=invalid-name
+    generate_certificate_exceptions_url = reverse(
         'generate_certificate_exceptions',
         kwargs={'course_id': unicode(course_key), 'generate_for': ''}
     )
-    generate_bulk_certificate_exceptions_url = reverse(  # pylint: disable=invalid-name
+    generate_bulk_certificate_exceptions_url = reverse(
         'generate_bulk_certificate_exceptions',
         kwargs={'course_id': unicode(course_key)}
     )
@@ -220,7 +220,7 @@ def instructor_dashboard_2(request, course_id):
         kwargs={'course_id': unicode(course_key)}
     )
 
-    certificate_invalidation_view_url = reverse(  # pylint: disable=invalid-name
+    certificate_invalidation_view_url = reverse(
         'certificate_invalidation_view',
         kwargs={'course_id': unicode(course_key)}
     )
@@ -480,16 +480,18 @@ def _section_course_info(course, access):
     return section_data
 
 
-def _section_membership(course, access, is_white_label):
+def _section_membership(course, access):
     """ Provide data for the corresponding dashboard section """
     course_key = course.id
     ccx_enabled = settings.FEATURES.get('CUSTOM_COURSES_EDX', False) and course.enable_ccx
+    enrollment_role_choices = configuration_helpers.get_value('MANUAL_ENROLLMENT_ROLE_CHOICES',
+                                                              settings.MANUAL_ENROLLMENT_ROLE_CHOICES)
+
     section_data = {
         'section_key': 'membership',
         'section_display_name': _('Membership'),
         'access': access,
         'ccx_is_enabled': ccx_enabled,
-        'is_white_label': is_white_label,
         'enroll_button_url': reverse('students_update_enrollment', kwargs={'course_id': unicode(course_key)}),
         'unenroll_button_url': reverse('students_update_enrollment', kwargs={'course_id': unicode(course_key)}),
         'upload_student_csv_button_url': reverse('register_and_enroll_students', kwargs={'course_id': unicode(course_key)}),
@@ -498,6 +500,7 @@ def _section_membership(course, access, is_white_label):
         'modify_access_url': reverse('modify_access', kwargs={'course_id': unicode(course_key)}),
         'list_forum_members_url': reverse('list_forum_members', kwargs={'course_id': unicode(course_key)}),
         'update_forum_role_membership_url': reverse('update_forum_role_membership', kwargs={'course_id': unicode(course_key)}),
+        'enrollment_role_choices': enrollment_role_choices
     }
     return section_data
 

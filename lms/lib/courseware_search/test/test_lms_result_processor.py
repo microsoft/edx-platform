@@ -9,6 +9,7 @@ from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
 
 class LmsSearchResultProcessorTestCase(ModuleStoreTestCase):
     """ Test case class to test search result processor """
+    shard = 5
 
     def build_course(self):
         """
@@ -59,8 +60,6 @@ class LmsSearchResultProcessorTestCase(ModuleStoreTestCase):
         )
 
     def setUp(self):
-        # from nose.tools import set_trace
-        # set_trace()
         super(LmsSearchResultProcessorTestCase, self).setUp()
         self.build_course()
 

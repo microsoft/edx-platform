@@ -4,7 +4,7 @@ import mock
 from django.core.management import call_command
 from django.test import TestCase
 
-from certificates.models import CertificateStatuses  # pylint: disable=import-error
+from lms.djangoapps.certificates.models import CertificateStatuses
 from course_modes.models import CourseMode
 from lms.djangoapps.certificates.api import MODES
 from lms.djangoapps.certificates.tests.factories import GeneratedCertificateFactory
@@ -162,7 +162,7 @@ class BackpopulateProgramCredentialsTests(CatalogIntegrationMixin, CredentialsAp
         call_command('backpopulate_program_credentials', commit=True)
 
         # The task should be called for both users since professional and no-id-professional are equivalent.
-        mock_task.assert_has_calls([mock.call(self.alice.username), mock.call(self.bob.username)])
+        mock_task.assert_has_calls([mock.call(self.alice.username), mock.call(self.bob.username)], any_order=True)
 
     @ddt.data(SEPARATE_PROGRAMS, SEPARATE_COURSES, SAME_COURSE)
     def test_handle_flatten(self, hierarchy_type, mock_task, mock_get_programs):

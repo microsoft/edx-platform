@@ -1,7 +1,6 @@
 """
 Tests for users API
 """
-# pylint: disable=no-member
 import datetime
 
 import ddt
@@ -12,11 +11,10 @@ from django.test import RequestFactory, override_settings
 from django.utils import timezone
 from milestones.tests.utils import MilestonesTestCaseMixin
 from mock import patch
-from nose.plugins.attrib import attr
 
-from certificates.api import generate_user_certificates
-from certificates.models import CertificateStatuses
-from certificates.tests.factories import GeneratedCertificateFactory
+from lms.djangoapps.certificates.api import generate_user_certificates
+from lms.djangoapps.certificates.models import CertificateStatuses
+from lms.djangoapps.certificates.tests.factories import GeneratedCertificateFactory
 from course_modes.models import CourseMode
 from courseware.access_response import MilestoneAccessError, StartDateError, VisibilityError
 from lms.djangoapps.grades.tests.utils import mock_passing_grade
@@ -27,6 +25,7 @@ from mobile_api.testutils import (
     MobileCourseAccessTestMixin
 )
 from openedx.core.lib.courses import course_image_url
+from openedx.core.lib.tests import attr
 from student.models import CourseEnrollment
 from util.milestones_helpers import set_prerequisite_courses
 from util.testing import UrlResetMixin
@@ -37,7 +36,7 @@ from .. import errors
 from .serializers import CourseEnrollmentSerializer
 
 
-@attr(shard=2)
+@attr(shard=9)
 class TestUserDetailApi(MobileAPITestCase, MobileAuthUserTestMixin):
     """
     Tests for /api/mobile/v0.5/users/<user_name>...
@@ -52,7 +51,7 @@ class TestUserDetailApi(MobileAPITestCase, MobileAuthUserTestMixin):
         self.assertEqual(response.data['email'], self.user.email)
 
 
-@attr(shard=2)
+@attr(shard=9)
 class TestUserInfoApi(MobileAPITestCase, MobileAuthTestMixin):
     """
     Tests for /api/mobile/v0.5/my_user_info
@@ -68,7 +67,7 @@ class TestUserInfoApi(MobileAPITestCase, MobileAuthTestMixin):
         self.assertIn(self.username, response['location'])
 
 
-@attr(shard=2)
+@attr(shard=9)
 @ddt.ddt
 @override_settings(MKTG_URLS={'ROOT': 'dummy-root'})
 class TestUserEnrollmentApi(UrlResetMixin, MobileAPITestCase, MobileAuthUserTestMixin,
@@ -91,7 +90,7 @@ class TestUserEnrollmentApi(UrlResetMixin, MobileAPITestCase, MobileAuthUserTest
     }
 
     @patch.dict(settings.FEATURES, {"ENABLE_DISCUSSION_SERVICE": True})
-    def setUp(self, *args, **kwargs):
+    def setUp(self):
         super(TestUserEnrollmentApi, self).setUp()
 
     def verify_success(self, response):
@@ -202,79 +201,12 @@ class TestUserEnrollmentApi(UrlResetMixin, MobileAPITestCase, MobileAuthUserTest
         self.assertEqual(response.data[0]['course']['start_type'], expected_type)
         self.assertEqual(response.data[0]['course']['start_display'], expected_display)
 
-    @patch.dict(settings.FEATURES, {'ENABLE_MKTG_SITE': True})
-    def test_no_certificate(self):
-        self.login_and_enroll()
-
-        response = self.api_response()
-        certificate_data = response.data[0]['certificate']
-        self.assertDictEqual(certificate_data, {})
-
-    def verify_pdf_certificate(self):
-        """
-        Verifies the correct URL is returned in the response
-        for PDF certificates.
-        """
-        self.login_and_enroll()
-
-        certificate_url = "http://test_certificate_url"
-        GeneratedCertificateFactory.create(
-            user=self.user,
-            course_id=self.course.id,
-            status=CertificateStatuses.downloadable,
-            mode='verified',
-            download_url=certificate_url,
-        )
-
-        response = self.api_response()
-        certificate_data = response.data[0]['certificate']
-        self.assertEquals(certificate_data['url'], certificate_url)
-
-    @patch.dict(settings.FEATURES, {'CERTIFICATES_HTML_VIEW': False, 'ENABLE_MKTG_SITE': True})
-    def test_pdf_certificate_with_html_cert_disabled(self):
-        """
-        Tests PDF certificates with CERTIFICATES_HTML_VIEW set to False.
-        """
-        self.verify_pdf_certificate()
-
-    @patch.dict(settings.FEATURES, {'CERTIFICATES_HTML_VIEW': True, 'ENABLE_MKTG_SITE': True})
-    def test_pdf_certificate_with_html_cert_enabled(self):
-        """
-        Tests PDF certificates with CERTIFICATES_HTML_VIEW set to True.
-        """
-        self.verify_pdf_certificate()
-
-    @patch.dict(settings.FEATURES, {'CERTIFICATES_HTML_VIEW': True, 'ENABLE_MKTG_SITE': True})
-    def test_web_certificate(self):
-        CourseMode.objects.create(
-            course_id=self.course.id,
-            mode_display_name="Honor",
-            mode_slug=CourseMode.HONOR,
-        )
-        self.login_and_enroll()
-
-        self.course.cert_html_view_enabled = True
-        self.store.update_item(self.course, self.user.id)
-
-        with mock_passing_grade():
-            generate_user_certificates(self.user, self.course.id)
-
-        response = self.api_response()
-        certificate_data = response.data[0]['certificate']
-        self.assertRegexpMatches(
-            certificate_data['url'],
-            r'http.*/certificates/user/{user_id}/course/{course_id}'.format(
-                user_id=self.user.id,
-                course_id=self.course.id,
-            )
-        )
-
     @patch.dict(settings.FEATURES, {"ENABLE_DISCUSSION_SERVICE": True, 'ENABLE_MKTG_SITE': True})
     def test_discussion_url(self):
         self.login_and_enroll()
 
         response = self.api_response()
-        response_discussion_url = response.data[0]['course']['discussion_url']  # pylint: disable=E1101
+        response_discussion_url = response.data[0]['course']['discussion_url']
         self.assertIn('/api/discussion/v1/courses/{}'.format(self.course.id), response_discussion_url)
 
     def test_org_query(self):
@@ -304,7 +236,83 @@ class TestUserEnrollmentApi(UrlResetMixin, MobileAPITestCase, MobileAuthUserTest
             self.assertEqual(entry['course']['org'], 'edX')
 
 
-@attr(shard=2)
+@attr(shard=9)
+@override_settings(MKTG_URLS={'ROOT': 'dummy-root'})
+class TestUserEnrollmentCertificates(UrlResetMixin, MobileAPITestCase, MilestonesTestCaseMixin):
+    """
+    Tests for /api/mobile/v0.5/users/<user_name>/course_enrollments/
+    """
+    REVERSE_INFO = {'name': 'courseenrollment-detail', 'params': ['username']}
+    ENABLED_SIGNALS = ['course_published']
+
+    def verify_pdf_certificate(self):
+        """
+        Verifies the correct URL is returned in the response
+        for PDF certificates.
+        """
+        self.login_and_enroll()
+
+        certificate_url = "http://test_certificate_url"
+        GeneratedCertificateFactory.create(
+            user=self.user,
+            course_id=self.course.id,
+            status=CertificateStatuses.downloadable,
+            mode='verified',
+            download_url=certificate_url,
+        )
+
+        response = self.api_response()
+        certificate_data = response.data[0]['certificate']
+        self.assertEquals(certificate_data['url'], certificate_url)
+
+    @patch.dict(settings.FEATURES, {'ENABLE_MKTG_SITE': True})
+    def test_no_certificate(self):
+        self.login_and_enroll()
+
+        response = self.api_response()
+        certificate_data = response.data[0]['certificate']
+        self.assertDictEqual(certificate_data, {})
+
+    @patch.dict(settings.FEATURES, {'CERTIFICATES_HTML_VIEW': False, 'ENABLE_MKTG_SITE': True})
+    def test_pdf_certificate_with_html_cert_disabled(self):
+        """
+        Tests PDF certificates with CERTIFICATES_HTML_VIEW set to True.
+        """
+        self.verify_pdf_certificate()
+
+    @patch.dict(settings.FEATURES, {'CERTIFICATES_HTML_VIEW': True, 'ENABLE_MKTG_SITE': True})
+    def test_pdf_certificate_with_html_cert_enabled(self):
+        """
+        Tests PDF certificates with CERTIFICATES_HTML_VIEW set to True.
+        """
+        self.verify_pdf_certificate()
+
+    @patch.dict(settings.FEATURES, {'CERTIFICATES_HTML_VIEW': True, 'ENABLE_MKTG_SITE': True})
+    def test_web_certificate(self):
+        CourseMode.objects.create(
+            course_id=self.course.id,
+            mode_display_name="Honor",
+            mode_slug=CourseMode.HONOR,
+        )
+        self.login_and_enroll()
+        self.course.cert_html_view_enabled = True
+        self.store.update_item(self.course, self.user.id)
+
+        with mock_passing_grade():
+            generate_user_certificates(self.user, self.course.id)
+
+        response = self.api_response()
+        certificate_data = response.data[0]['certificate']
+        self.assertRegexpMatches(
+            certificate_data['url'],
+            r'http.*/certificates/user/{user_id}/course/{course_id}'.format(
+                user_id=self.user.id,
+                course_id=self.course.id,
+            )
+        )
+
+
+@attr(shard=9)
 class CourseStatusAPITestCase(MobileAPITestCase):
     """
     Base test class for /api/mobile/v0.5/users/<user_name>/course_status_info/{course_id}
@@ -339,7 +347,7 @@ class CourseStatusAPITestCase(MobileAPITestCase):
         )
 
 
-@attr(shard=2)
+@attr(shard=9)
 class TestCourseStatusGET(CourseStatusAPITestCase, MobileAuthUserTestMixin,
                           MobileCourseAccessTestMixin, MilestonesTestCaseMixin):
     """
@@ -359,7 +367,7 @@ class TestCourseStatusGET(CourseStatusAPITestCase, MobileAuthUserTestMixin,
         )
 
 
-@attr(shard=2)
+@attr(shard=9)
 class TestCourseStatusPATCH(CourseStatusAPITestCase, MobileAuthUserTestMixin,
                             MobileCourseAccessTestMixin, MilestonesTestCaseMixin):
     """
@@ -463,7 +471,7 @@ class TestCourseStatusPATCH(CourseStatusAPITestCase, MobileAuthUserTestMixin,
         )
 
 
-@attr(shard=2)
+@attr(shard=9)
 @patch.dict(settings.FEATURES, {'ENABLE_MKTG_SITE': True})
 @override_settings(MKTG_URLS={'ROOT': 'dummy-root'})
 class TestCourseEnrollmentSerializer(MobileAPITestCase, MilestonesTestCaseMixin):
@@ -489,8 +497,8 @@ class TestCourseEnrollmentSerializer(MobileAPITestCase, MilestonesTestCaseMixin)
 
         # Assert utm parameters
         expected_utm_parameters = {
-            'twitter': 'utm_campaign=social-sharing&utm_medium=social-post&utm_source=twitter',
-            'facebook': 'utm_campaign=social-sharing&utm_medium=social-post&utm_source=facebook'
+            'twitter': 'utm_campaign=social-sharing-db&utm_medium=social&utm_source=twitter',
+            'facebook': 'utm_campaign=social-sharing-db&utm_medium=social&utm_source=facebook'
         }
         self.assertEqual(serialized['course']['course_sharing_utm_parameters'], expected_utm_parameters)
 

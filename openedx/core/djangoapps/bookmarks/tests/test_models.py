@@ -6,10 +6,8 @@ from contextlib import contextmanager
 
 import ddt
 import mock
-import pytest
 import pytz
 from freezegun import freeze_time
-from nose.plugins.attrib import attr
 from opaque_keys.edx.keys import UsageKey
 from opaque_keys.edx.locator import BlockUsageLocator, CourseLocator
 
@@ -133,7 +131,7 @@ class BookmarksTestsBase(ModuleStoreTestCase):
 
             # self.other_vertical_1 has two parents
             self.other_sequential_2.children.append(self.other_vertical_1.location)
-            modulestore().update_item(self.other_sequential_2, self.admin.id)  # pylint: disable=no-member
+            modulestore().update_item(self.other_sequential_2, self.admin.id)
 
         self.other_bookmark_1 = BookmarkFactory.create(
             user=self.user,
@@ -225,13 +223,14 @@ class BookmarksTestsBase(ModuleStoreTestCase):
             self.assertEqual(bookmark_data['path'], bookmark.path)
 
 
-@attr(shard=2)
 @ddt.ddt
 @skip_unless_lms
 class BookmarkModelTests(BookmarksTestsBase):
     """
     Test the Bookmark model.
     """
+    shard = 9
+
     def setUp(self):
         super(BookmarkModelTests, self).setUp()
 
@@ -265,7 +264,6 @@ class BookmarkModelTests(BookmarksTestsBase):
         (ModuleStoreEnum.Type.split, 'html_1', ['chapter_1', 'sequential_2', 'vertical_2'], 2),
     )
     @ddt.unpack
-    @pytest.mark.django111_expected_failure
     def test_path_and_queries_on_create(self, store_type, block_to_bookmark, ancestors_attrs, expected_mongo_calls):
         """
         In case of mongo, 1 query is used to fetch the block, and 2
@@ -289,7 +287,6 @@ class BookmarkModelTests(BookmarksTestsBase):
         self.assertIsNotNone(bookmark.xblock_cache)
         self.assertEqual(bookmark.xblock_cache.paths, [])
 
-    @pytest.mark.django111_expected_failure
     def test_create_bookmark_success(self):
         """
         Tests creation of bookmark.
@@ -312,7 +309,6 @@ class BookmarkModelTests(BookmarksTestsBase):
         self.assertNotEqual(bookmark, bookmark3)
         self.assert_bookmark_model_is_valid(bookmark3, bookmark_data_different_user)
 
-    @pytest.mark.django111_expected_failure
     def test_create_bookmark_successfully_with_display_name_none(self):
         """
         Tests creation of bookmark with display_name None.
@@ -331,7 +327,6 @@ class BookmarkModelTests(BookmarksTestsBase):
     )
     @ddt.unpack
     @mock.patch('openedx.core.djangoapps.bookmarks.models.Bookmark.get_path')
-    @pytest.mark.django111_expected_failure
     def test_path(self, seconds_delta, paths, get_path_call_count, mock_get_path):
 
         block_path = [PathItem(UsageKey.from_string(EXAMPLE_USAGE_KEY_1), '1')]
@@ -369,7 +364,6 @@ class BookmarkModelTests(BookmarksTestsBase):
         (ModuleStoreEnum.Type.split, 2, 4, 2),
     )
     @ddt.unpack
-    @pytest.mark.django111_expected_failure
     def test_get_path_queries(self, store_type, children_per_block, depth, expected_mongo_calls):
         """
         In case of mongo, 2 queries are used by path_to_location(), and then
@@ -388,7 +382,6 @@ class BookmarkModelTests(BookmarksTestsBase):
             path = Bookmark.get_path(block.location)
             self.assertEqual(len(path), depth - 2)
 
-    @pytest.mark.django111_expected_failure
     def test_get_path_in_case_of_exceptions(self):
 
         user = UserFactory.create()
@@ -400,7 +393,7 @@ class BookmarkModelTests(BookmarksTestsBase):
 
         # Block is an orphan
         self.other_sequential_1.children = []
-        modulestore().update_item(self.other_sequential_1, self.admin.id)  # pylint: disable=no-member
+        modulestore().update_item(self.other_sequential_1, self.admin.id)
 
         bookmark_data = self.get_bookmark_data(self.other_vertical_2, user=user)
         bookmark, __ = Bookmark.create(bookmark_data)
@@ -417,13 +410,12 @@ class BookmarkModelTests(BookmarksTestsBase):
             self.assertEqual(bookmark.path, [])
 
 
-@attr(shard=2)
 @ddt.ddt
 class XBlockCacheModelTest(ModuleStoreTestCase):
     """
     Test the XBlockCache model.
     """
-
+    shard = 9
     COURSE_KEY = CourseLocator(org='test', course='test', run='test')
     CHAPTER1_USAGE_KEY = BlockUsageLocator(COURSE_KEY, block_type='chapter', block_id='chapter1')
     SECTION1_USAGE_KEY = BlockUsageLocator(COURSE_KEY, block_type='section', block_id='section1')

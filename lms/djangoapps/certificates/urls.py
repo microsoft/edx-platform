@@ -4,8 +4,9 @@ URLs for the certificates app.
 from django.conf import settings
 from django.conf.urls import url
 
-from certificates import views
+from lms.djangoapps.certificates import views
 
+app_name = 'certificates'
 urlpatterns = [
     # Certificates HTML view end point to render web certs by user and course
     url(

@@ -3,7 +3,7 @@ E-commerce Tab Instructor Dashboard Query Registration Code Status.
 """
 import logging
 
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.utils.translation import ugettext as _
 from django.views.decorators.cache import cache_control
 from django.views.decorators.http import require_GET, require_POST
@@ -118,7 +118,7 @@ def delete_redemption_entry(request, code_redemption, course_key):
 
     course = get_course_by_id(course_key, depth=0)
     email_params = get_email_params(course, True, secure=request.is_secure())
-    email_params['message'] = 'enrolled_unenroll'
+    email_params['message_type'] = 'enrolled_unenroll'
     email_params['email_address'] = email_address
     email_params['full_name'] = full_name
     send_mail_to_student(email_address, email_params)

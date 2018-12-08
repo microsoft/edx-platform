@@ -1,6 +1,7 @@
 """Tests covering utilities for integrating with the catalog service."""
 # pylint: disable=missing-docstring
 import copy
+from datetime import timedelta
 
 import ddt
 import mock
@@ -8,13 +9,24 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.test.client import RequestFactory
-from student.tests.factories import UserFactory
+from django.utils.timezone import now
+from opaque_keys.edx.keys import CourseKey
 
-from openedx.core.djangoapps.catalog.cache import PROGRAM_CACHE_KEY_TPL, SITE_PROGRAM_UUIDS_CACHE_KEY_TPL
+from course_modes.helpers import CourseMode
+from course_modes.tests.factories import CourseModeFactory
+from entitlements.tests.factories import CourseEntitlementFactory
+from openedx.core.constants import COURSE_UNPUBLISHED
+from openedx.core.djangoapps.catalog.cache import (
+    PATHWAY_CACHE_KEY_TPL,
+    PROGRAM_CACHE_KEY_TPL,
+    SITE_PATHWAY_IDS_CACHE_KEY_TPL,
+    SITE_PROGRAM_UUIDS_CACHE_KEY_TPL
+)
 from openedx.core.djangoapps.catalog.models import CatalogIntegration
 from openedx.core.djangoapps.catalog.tests.factories import (
     CourseFactory,
     CourseRunFactory,
+    PathwayFactory,
     ProgramFactory,
     ProgramTypeFactory
 )
@@ -23,14 +35,17 @@ from openedx.core.djangoapps.catalog.utils import (
     get_course_runs,
     get_course_runs_for_course,
     get_course_run_details,
+    get_pathways,
     get_currency_data,
     get_localized_price_text,
     get_program_types,
     get_programs,
-    get_programs_with_type
+    get_visible_sessions_for_entitlement
 )
+from openedx.core.djangoapps.content.course_overviews.tests.factories import CourseOverviewFactory
 from openedx.core.djangoapps.site_configuration.tests.factories import SiteFactory
 from openedx.core.djangolib.testing.utils import CacheIsolationTestCase, skip_unless_lms
+from student.tests.factories import CourseEnrollmentFactory, UserFactory
 
 UTILS_MODULE = 'openedx.core.djangoapps.catalog.utils'
 User = get_user_model()  # pylint: disable=invalid-name
@@ -58,7 +73,9 @@ class TestGetPrograms(CacheIsolationTestCase):
         # When called before UUIDs are cached, the function should return an
         # empty list and log a warning.
         self.assertEqual(get_programs(self.site), [])
-        mock_warning.assert_called_once_with('Failed to get program UUIDs from the cache.')
+        mock_warning.assert_called_once_with(
+            'Failed to get program UUIDs from the cache for site {}.'.format(self.site.domain)
+        )
         mock_warning.reset_mock()
 
         # Cache UUIDs for all 3 programs.
@@ -168,63 +185,134 @@ class TestGetPrograms(CacheIsolationTestCase):
 
 
 @skip_unless_lms
-@ddt.ddt
-class TestGetProgramsWithType(TestCase):
+@mock.patch(UTILS_MODULE + '.logger.info')
+@mock.patch(UTILS_MODULE + '.logger.warning')
+class TestGetPathways(CacheIsolationTestCase):
+    ENABLED_CACHES = ['default']
+
     def setUp(self):
-        super(TestGetProgramsWithType, self).setUp()
+        super(TestGetPathways, self).setUp()
         self.site = SiteFactory()
 
-        # We have seen what seem like flaky tests for these, but can't debug them due to the diff being too large.
-        # If you fix the flakiness of the tests this could go away as well.
-        self.maxDiff = None
+    def test_get_many(self, mock_warning, mock_info):
+        pathways = PathwayFactory.create_batch(3)
 
-    @mock.patch(UTILS_MODULE + '.get_programs')
-    @mock.patch(UTILS_MODULE + '.get_program_types')
-    def test_get_programs_with_type(self, mock_get_program_types, mock_get_programs):
-        """Verify get_programs_with_type returns the expected list of programs."""
-        programs_with_program_type = []
-        programs = ProgramFactory.create_batch(2)
-        program_types = []
+        # Cache details for 2 of 3 programs.
+        partial_pathways = {
+            PATHWAY_CACHE_KEY_TPL.format(id=pathway['id']): pathway for pathway in pathways[:2]
+        }
+        cache.set_many(partial_pathways, None)
 
-        for program in programs:
-            program_type = ProgramTypeFactory(name=program['type'])
-            program_types.append(program_type)
+        # When called before pathways are cached, the function should return an
+        # empty list and log a warning.
+        self.assertEqual(get_pathways(self.site), [])
+        mock_warning.assert_called_once_with('Failed to get credit pathway ids from the cache.')
+        mock_warning.reset_mock()
 
-            program_with_type = copy.deepcopy(program)
-            program_with_type['type'] = program_type
-            programs_with_program_type.append(program_with_type)
+        # Cache all 3 pathways
+        cache.set(
+            SITE_PATHWAY_IDS_CACHE_KEY_TPL.format(domain=self.site.domain),
+            [pathway['id'] for pathway in pathways],
+            None
+        )
 
-        mock_get_programs.return_value = programs
-        mock_get_program_types.return_value = program_types
+        actual_pathways = get_pathways(self.site)
 
-        actual = get_programs_with_type(self.site)
-        self.assertEqual(actual, programs_with_program_type)
+        # The 2 cached pathways should be returned while info and warning
+        # messages should be logged for the missing one.
+        self.assertEqual(
+            set(pathway['id'] for pathway in actual_pathways),
+            set(pathway['id'] for pathway in partial_pathways.values())
+        )
+        mock_info.assert_called_with('Failed to get details for 1 pathways. Retrying.')
+        mock_warning.assert_called_with(
+            'Failed to get details for credit pathway {id} from the cache.'.format(id=pathways[2]['id'])
+        )
+        mock_warning.reset_mock()
 
-    @ddt.data(False, True)
-    @mock.patch(UTILS_MODULE + '.get_programs')
-    @mock.patch(UTILS_MODULE + '.get_program_types')
-    def test_get_programs_with_type_include_hidden(self, include_hidden, mock_get_program_types, mock_get_programs):
-        """Verify get_programs_with_type returns the expected list of programs with include_hidden parameter."""
-        programs_with_program_type = []
-        programs = [ProgramFactory(hidden=False), ProgramFactory(hidden=True)]
-        program_types = []
+        # We can't use a set comparison here because these values are dictionaries
+        # and aren't hashable. We've already verified that all pathways came out
+        # of the cache above, so all we need to do here is verify the accuracy of
+        # the data itself.
+        for pathway in actual_pathways:
+            key = PATHWAY_CACHE_KEY_TPL.format(id=pathway['id'])
+            self.assertEqual(pathway, partial_pathways[key])
 
-        for program in programs:
-            if program['hidden'] and not include_hidden:
-                continue
+        # Cache details for all 3 pathways.
+        all_pathways = {
+            PATHWAY_CACHE_KEY_TPL.format(id=pathway['id']): pathway for pathway in pathways
+        }
+        cache.set_many(all_pathways, None)
 
-            program_type = ProgramTypeFactory(name=program['type'])
-            program_types.append(program_type)
+        actual_pathways = get_pathways(self.site)
 
-            program_with_type = copy.deepcopy(program)
-            program_with_type['type'] = program_type
-            programs_with_program_type.append(program_with_type)
+        # All 3 pathways should be returned.
+        self.assertEqual(
+            set(pathway['id'] for pathway in actual_pathways),
+            set(pathway['id'] for pathway in all_pathways.values())
+        )
+        self.assertFalse(mock_warning.called)
 
-        mock_get_programs.return_value = programs
-        mock_get_program_types.return_value = program_types
+        for pathway in actual_pathways:
+            key = PATHWAY_CACHE_KEY_TPL.format(id=pathway['id'])
+            self.assertEqual(pathway, all_pathways[key])
 
-        actual = get_programs_with_type(self.site, include_hidden=include_hidden)
-        self.assertEqual(actual, programs_with_program_type)
+    @mock.patch(UTILS_MODULE + '.cache')
+    def test_get_many_with_missing(self, mock_cache, mock_warning, mock_info):
+        pathways = PathwayFactory.create_batch(3)
+
+        all_pathways = {
+            PATHWAY_CACHE_KEY_TPL.format(id=pathway['id']): pathway for pathway in pathways
+        }
+
+        partial_pathways = {
+            PATHWAY_CACHE_KEY_TPL.format(id=pathway['id']): pathway for pathway in pathways[:2]
+        }
+
+        def fake_get_many(keys):
+            if len(keys) == 1:
+                return {PATHWAY_CACHE_KEY_TPL.format(id=pathways[-1]['id']): pathways[-1]}
+            else:
+                return partial_pathways
+
+        mock_cache.get.return_value = [pathway['id'] for pathway in pathways]
+        mock_cache.get_many.side_effect = fake_get_many
+
+        actual_pathways = get_pathways(self.site)
+
+        # All 3 cached pathways should be returned. An info message should be
+        # logged about the one that was initially missing, but the code should
+        # be able to stitch together all the details.
+        self.assertEqual(
+            set(pathway['id'] for pathway in actual_pathways),
+            set(pathway['id'] for pathway in all_pathways.values())
+        )
+        self.assertFalse(mock_warning.called)
+        mock_info.assert_called_with('Failed to get details for 1 pathways. Retrying.')
+
+        for pathway in actual_pathways:
+            key = PATHWAY_CACHE_KEY_TPL.format(id=pathway['id'])
+            self.assertEqual(pathway, all_pathways[key])
+
+    def test_get_one(self, mock_warning, _mock_info):
+        expected_pathway = PathwayFactory()
+        expected_id = expected_pathway['id']
+
+        self.assertEqual(get_pathways(self.site, pathway_id=expected_id), None)
+        mock_warning.assert_called_once_with(
+            'Failed to get details for credit pathway {id} from the cache.'.format(id=expected_id)
+        )
+        mock_warning.reset_mock()
+
+        cache.set(
+            PATHWAY_CACHE_KEY_TPL.format(id=expected_id),
+            expected_pathway,
+            None
+        )
+
+        actual_pathway = get_pathways(self.site, pathway_id=expected_id)
+        self.assertEqual(actual_pathway, expected_pathway)
+        self.assertFalse(mock_warning.called)
 
 
 @mock.patch(UTILS_MODULE + '.get_edx_api_data')
@@ -374,6 +462,109 @@ class TestGetCourseRuns(CatalogIntegrationMixin, TestCase):
         data = get_course_runs_for_course(course_uuid=str(catalog_course['uuid']))
         self.assertTrue(mock_get_edx_api_data.called)
         self.assertEqual(data, catalog_course_runs)
+
+
+@skip_unless_lms
+@mock.patch(UTILS_MODULE + '.get_edx_api_data')
+class TestSessionEntitlement(CatalogIntegrationMixin, TestCase):
+    """
+    Test Covering data related Entitlements.
+    """
+    def setUp(self):
+        super(TestSessionEntitlement, self).setUp()
+
+        self.catalog_integration = self.create_catalog_integration(cache_ttl=1)
+        self.user = UserFactory(username=self.catalog_integration.service_username)
+        self.tomorrow = now() + timedelta(days=1)
+
+    def test_get_visible_sessions_for_entitlement(self, mock_get_edx_api_data):
+        """
+        Test retrieval of visible session entitlements.
+        """
+        catalog_course_run = CourseRunFactory.create()
+        catalog_course = CourseFactory(course_runs=[catalog_course_run])
+        mock_get_edx_api_data.return_value = catalog_course
+        course_key = CourseKey.from_string(catalog_course_run.get('key'))
+        course_overview = CourseOverviewFactory.create(id=course_key, start=self.tomorrow)
+        CourseModeFactory.create(mode_slug=CourseMode.VERIFIED, min_price=100, course_id=course_overview.id)
+        course_enrollment = CourseEnrollmentFactory(
+            user=self.user, course_id=unicode(course_overview.id), mode=CourseMode.VERIFIED
+        )
+        entitlement = CourseEntitlementFactory(
+            user=self.user, enrollment_course_run=course_enrollment, mode=CourseMode.VERIFIED
+        )
+
+        session_entitlements = get_visible_sessions_for_entitlement(entitlement)
+        self.assertEqual(session_entitlements, [catalog_course_run])
+
+    def test_get_visible_sessions_for_entitlement_expired_mode(self, mock_get_edx_api_data):
+        """
+        Test retrieval of visible session entitlements.
+        """
+        catalog_course_run = CourseRunFactory.create()
+        catalog_course = CourseFactory(course_runs=[catalog_course_run])
+        mock_get_edx_api_data.return_value = catalog_course
+        course_key = CourseKey.from_string(catalog_course_run.get('key'))
+        course_overview = CourseOverviewFactory.create(id=course_key, start=self.tomorrow)
+        CourseModeFactory.create(
+            mode_slug=CourseMode.VERIFIED,
+            min_price=100,
+            course_id=course_overview.id,
+            expiration_datetime=now() - timedelta(days=1)
+        )
+        course_enrollment = CourseEnrollmentFactory(
+            user=self.user, course_id=unicode(course_overview.id), mode=CourseMode.VERIFIED
+        )
+        entitlement = CourseEntitlementFactory(
+            user=self.user, enrollment_course_run=course_enrollment, mode=CourseMode.VERIFIED
+        )
+
+        session_entitlements = get_visible_sessions_for_entitlement(entitlement)
+        self.assertEqual(session_entitlements, [catalog_course_run])
+
+    def test_unpublished_sessions_for_entitlement_when_enrolled(self, mock_get_edx_api_data):
+        """
+        Test unpublished course runs are part of visible session entitlements when the user
+        is enrolled.
+        """
+        catalog_course_run = CourseRunFactory.create(status=COURSE_UNPUBLISHED)
+        catalog_course = CourseFactory(course_runs=[catalog_course_run])
+        mock_get_edx_api_data.return_value = catalog_course
+        course_key = CourseKey.from_string(catalog_course_run.get('key'))
+        course_overview = CourseOverviewFactory.create(id=course_key, start=self.tomorrow)
+        CourseModeFactory.create(
+            mode_slug=CourseMode.VERIFIED,
+            min_price=100,
+            course_id=course_overview.id,
+            expiration_datetime=now() - timedelta(days=1)
+        )
+        course_enrollment = CourseEnrollmentFactory(
+            user=self.user, course_id=unicode(course_overview.id), mode=CourseMode.VERIFIED
+        )
+        entitlement = CourseEntitlementFactory(
+            user=self.user, enrollment_course_run=course_enrollment, mode=CourseMode.VERIFIED
+        )
+
+        session_entitlements = get_visible_sessions_for_entitlement(entitlement)
+        self.assertEqual(session_entitlements, [catalog_course_run])
+
+    def test_unpublished_sessions_for_entitlement(self, mock_get_edx_api_data):
+        """
+        Test unpublished course runs are not part of visible session entitlements when the user
+        is not enrolled.
+        """
+        catalog_course_run = CourseRunFactory.create(status=COURSE_UNPUBLISHED)
+        catalog_course = CourseFactory(course_runs=[catalog_course_run])
+        mock_get_edx_api_data.return_value = catalog_course
+        course_key = CourseKey.from_string(catalog_course_run.get('key'))
+        course_overview = CourseOverviewFactory.create(id=course_key, start=self.tomorrow)
+        CourseModeFactory.create(mode_slug=CourseMode.VERIFIED, min_price=100, course_id=course_overview.id)
+        entitlement = CourseEntitlementFactory(
+            user=self.user, mode=CourseMode.VERIFIED
+        )
+
+        session_entitlements = get_visible_sessions_for_entitlement(entitlement)
+        self.assertEqual(session_entitlements, [])
 
 
 @skip_unless_lms

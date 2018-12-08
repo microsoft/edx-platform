@@ -11,9 +11,9 @@ from django.test import TestCase
 from django.test.utils import override_settings
 import ddt
 import mock
-from nose.plugins.attrib import attr
 import piexif
 from PIL import Image
+from six import text_type
 
 from openedx.core.djangolib.testing.utils import skip_unless_lms
 from ..exceptions import ImageValidationError
@@ -28,7 +28,6 @@ from ..images import (
 from .helpers import make_image_file, make_uploaded_file
 
 
-@attr(shard=2)
 @ddt.ddt
 @skip_unless_lms
 class TestValidateUploadedImage(TestCase):
@@ -40,6 +39,7 @@ class TestValidateUploadedImage(TestCase):
             valid_file_types=_get_valid_file_types()
         )
     )
+    shard = 2
 
     def check_validation_result(self, uploaded_file, expected_failure_message):
         """
@@ -48,7 +48,7 @@ class TestValidateUploadedImage(TestCase):
         if expected_failure_message is not None:
             with self.assertRaises(ImageValidationError) as ctx:
                 validate_uploaded_image(uploaded_file)
-            self.assertEqual(ctx.exception.message, expected_failure_message)
+            self.assertEqual(text_type(ctx.exception), expected_failure_message)
         else:
             validate_uploaded_image(uploaded_file)
             self.assertEqual(uploaded_file.tell(), 0)
@@ -107,7 +107,7 @@ class TestValidateUploadedImage(TestCase):
                 )
                 with self.assertRaises(ImageValidationError) as ctx:
                     validate_uploaded_image(uploaded_file)
-                self.assertEqual(ctx.exception.message, file_upload_bad_ext)
+                self.assertEqual(text_type(ctx.exception), file_upload_bad_ext)
 
     def test_content_type(self):
         """
@@ -121,16 +121,16 @@ class TestValidateUploadedImage(TestCase):
         with make_uploaded_file(extension=".jpeg", content_type="image/gif") as uploaded_file:
             with self.assertRaises(ImageValidationError) as ctx:
                 validate_uploaded_image(uploaded_file)
-            self.assertEqual(ctx.exception.message, file_upload_bad_mimetype)
+            self.assertEqual(text_type(ctx.exception), file_upload_bad_mimetype)
 
 
-@attr(shard=2)
 @ddt.ddt
 @skip_unless_lms
 class TestGenerateProfileImages(TestCase):
     """
     Test create_profile_images
     """
+    shard = 2
 
     def check_exif_orientation(self, image, expected_orientation):
         """
@@ -222,12 +222,13 @@ class TestGenerateProfileImages(TestCase):
                 yield name, image
 
 
-@attr(shard=2)
 @skip_unless_lms
 class TestRemoveProfileImages(TestCase):
     """
     Test remove_profile_images
     """
+    shard = 2
+
     def test_remove(self):
         """
         Ensure that the outcome of calling the function is that the named images

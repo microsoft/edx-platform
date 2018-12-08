@@ -2,7 +2,7 @@
 Extra views required for SSO
 """
 from django.conf import settings
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.http import Http404, HttpResponse, HttpResponseNotAllowed, HttpResponseServerError
 from django.shortcuts import redirect, render
 from django.views.decorators.csrf import csrf_exempt
@@ -12,8 +12,10 @@ from social_core.utils import setting_name
 
 from student.models import UserProfile
 from student.views import compose_and_send_activation_email
+import third_party_auth
+from third_party_auth import pipeline, provider
 
-from .models import SAMLConfiguration
+from .models import SAMLConfiguration, SAMLProviderConfig
 
 URL_NAMESPACE = getattr(settings, setting_name('URL_NAMESPACE'), None) or 'social'
 
@@ -27,12 +29,27 @@ def inactive_user_view(request):
     The reason this view exists is that if we don't define this as the
     SOCIAL_AUTH_INACTIVE_USER_URL, inactive users will get sent to LOGIN_ERROR_URL, which we
     don't want.
+
+    If the third_party_provider.skip_email_verification is set then the user is activated
+    and verification email is not sent
     """
     # 'next' may be set to '/account/finish_auth/.../' if this user needs to be auto-enrolled
     # in a course. Otherwise, just redirect them to the dashboard, which displays a message
     # about activating their account.
-    profile = UserProfile.objects.get(user=request.user)
-    compose_and_send_activation_email(request.user, profile)
+    user = request.user
+    profile = UserProfile.objects.get(user=user)
+    activated = user.is_active
+    # If the user is registering via 3rd party auth, track which provider they use
+    if third_party_auth.is_enabled() and pipeline.running(request):
+        running_pipeline = pipeline.get(request)
+        third_party_provider = provider.Registry.get_from_pipeline(running_pipeline)
+        if third_party_provider.skip_email_verification and not activated:
+            user.is_active = True
+            user.save()
+            activated = True
+    if not activated:
+        compose_and_send_activation_email(user, profile)
+
     return redirect(request.GET.get('next', 'dashboard'))
 
 
@@ -41,13 +58,19 @@ def saml_metadata_view(request):
     Get the Service Provider metadata for this edx-platform instance.
     You must send this XML to any Shibboleth Identity Provider that you wish to use.
     """
-    if not SAMLConfiguration.is_enabled(request.site):
+    idp_slug = request.GET.get('tpa_hint', None)
+    saml_config = 'default'
+    if idp_slug:
+        idp = SAMLProviderConfig.current(idp_slug)
+        if idp.saml_configuration:
+            saml_config = idp.saml_configuration.slug
+    if not SAMLConfiguration.is_enabled(request.site, saml_config):
         raise Http404
     complete_url = reverse('social:complete', args=("tpa-saml", ))
     if settings.APPEND_SLASH and not complete_url.endswith('/'):
         complete_url = complete_url + '/'  # Required for consistency
     saml_backend = load_backend(load_strategy(request), "tpa-saml", redirect_uri=complete_url)
-    metadata, errors = saml_backend.generate_metadata_xml()
+    metadata, errors = saml_backend.generate_metadata_xml(idp_slug)
 
     if not errors:
         return HttpResponse(content=metadata, content_type='text/xml')

@@ -96,6 +96,7 @@ DATABASES = {
 
 # Use the auto_auth workflow for creating users and logging them in
 FEATURES['AUTOMATIC_AUTH_FOR_TESTING'] = True
+FEATURES['RESTRICT_AUTOMATIC_AUTH'] = False
 
 # Forums are disabled in test.py to speed up unit tests, but we do not have
 # per-test control for lettuce acceptance tests.
@@ -108,10 +109,6 @@ FEATURES['ENABLE_DISCUSSION_SERVICE'] = False
 # Setting this flag to false causes imports to not load correctly in the lettuce python files
 # We do not yet understand why this occurs. Setting this to true is a stopgap measure
 USE_I18N = True
-
-# Override the test stub webpack_loader that is installed in test.py.
-INSTALLED_APPS = [app for app in INSTALLED_APPS if app != 'openedx.tests.util.webpack_loader']
-INSTALLED_APPS.append('webpack_loader')
 
 # Include the lettuce app for acceptance testing, including the 'harvest' django-admin command
 # django.contrib.staticfiles used to be loaded by lettuce, now we must add it ourselves
@@ -131,14 +128,15 @@ SELENIUM_GRID = {
 #####################################################################
 # Lastly, see if the developer has any local overrides.
 try:
-    from .private import *  # pylint: disable=import-error
+    from .private import *
 except ImportError:
     pass
 
 # Point the URL used to test YouTube availability to our stub YouTube server
-YOUTUBE['API'] = "http://127.0.0.1:{0}/get_youtube_api/".format(YOUTUBE_PORT)
-YOUTUBE['METADATA_URL'] = "http://127.0.0.1:{0}/test_youtube/".format(YOUTUBE_PORT)
-YOUTUBE['TEXT_API']['url'] = "127.0.0.1:{0}/test_transcripts_youtube/".format(YOUTUBE_PORT)
+YOUTUBE_HOSTNAME = os.environ.get('BOK_CHOY_HOSTNAME', '127.0.0.1')
+YOUTUBE['API'] = "http://{0}:{1}/get_youtube_api/".format(YOUTUBE_HOSTNAME, YOUTUBE_PORT)
+YOUTUBE['METADATA_URL'] = "http://{0}:{1}/test_youtube/".format(YOUTUBE_HOSTNAME, YOUTUBE_PORT)
+YOUTUBE['TEXT_API']['url'] = "{0}:{1}/test_transcripts_youtube/".format(YOUTUBE_HOSTNAME, YOUTUBE_PORT)
 YOUTUBE['TEST_TIMEOUT'] = 1500
 
 # Generate a random UUID so that different runs of acceptance tests don't break each other
@@ -148,3 +146,4 @@ SECRET_KEY = uuid.uuid4().hex
 ############################### PIPELINE #######################################
 
 PIPELINE_ENABLED = False
+REQUIRE_DEBUG = True

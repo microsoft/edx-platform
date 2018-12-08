@@ -5,7 +5,9 @@ Admin site configuration for third party authentication
 from config_models.admin import KeyedConfigurationModelAdmin
 from django import forms
 from django.contrib import admin
-from django.core.urlresolvers import reverse
+from django.urls import reverse
+from django.db import DatabaseError, transaction
+from django.utils.translation import ugettext_lazy as _
 
 from third_party_auth.provider import Registry
 
@@ -35,7 +37,7 @@ class OAuth2ProviderConfigAdmin(KeyedConfigurationModelAdmin):
     def get_list_display(self, request):
         """ Don't show every single field in the admin change list """
         return (
-            'name', 'enabled', 'provider_slug', 'site', 'backend_name', 'secondary', 'skip_registration_form',
+            'name', 'enabled', 'slug', 'site', 'backend_name', 'secondary', 'skip_registration_form',
             'skip_email_verification', 'change_date', 'changed_by', 'edit_link',
         )
 
@@ -51,14 +53,45 @@ class SAMLProviderConfigAdmin(KeyedConfigurationModelAdmin):
     """ Django Admin class for SAMLProviderConfig """
     form = SAMLProviderConfigForm
 
+    def get_queryset(self, request):
+        """
+        Filter the queryset to exclude the archived records.
+        """
+        queryset = super(SAMLProviderConfigAdmin, self).get_queryset(request).exclude(archived=True)
+        return queryset
+
+    def archive_provider_configuration(self, request, queryset):
+        """
+        Archived the selected provider configurations.
+        """
+        with transaction.atomic():
+            for obj in queryset:
+                self.model.objects.filter(pk=obj.pk).update(archived=True, enabled=False)
+        self.message_user(request, _("Deleted the selected configuration(s)."))
+
     def get_list_display(self, request):
         """ Don't show every single field in the admin change list """
         return (
             'name_with_update_link', 'enabled', 'site', 'entity_id', 'metadata_source',
-            'has_data', 'mode', 'change_date', 'changed_by',
+            'has_data', 'mode', 'saml_configuration', 'change_date', 'changed_by',
         )
 
     list_display_links = None
+
+    def get_actions(self, request):
+        """
+        Get the actions.
+        """
+        actions = super(SAMLProviderConfigAdmin, self).get_actions(request)
+        action_delete = {
+            'archive_provider_configuration': (
+                SAMLProviderConfigAdmin.archive_provider_configuration,
+                'archive_provider_configuration',
+                _('Delete the selected configuration')
+            )
+        }
+        actions.update(action_delete)
+        return actions
 
     def name_with_update_link(self, instance):
         """
@@ -109,7 +142,7 @@ class SAMLConfigurationAdmin(KeyedConfigurationModelAdmin):
     def get_list_display(self, request):
         """ Shorten the public/private keys in the change view """
         return (
-            'site', 'change_date', 'changed_by', 'enabled', 'entity_id',
+            'site', 'slug', 'change_date', 'changed_by', 'enabled', 'entity_id',
             'org_info_str', 'key_summary', 'edit_link',
         )
 
@@ -134,7 +167,7 @@ class SAMLProviderDataAdmin(admin.ModelAdmin):
 
     def get_readonly_fields(self, request, obj=None):
         if obj:  # editing an existing object
-            return [field.name for field in self.model._meta.get_fields()]  # pylint: disable=protected-access
+            return [field.name for field in self.model._meta.get_fields()]
         return self.readonly_fields
 
 

@@ -5,7 +5,6 @@ Unit tests for preference APIs.
 import datetime
 import ddt
 from mock import patch
-from nose.plugins.attrib import attr
 from pytz import common_timezones, utc
 
 from django.contrib.auth.models import User
@@ -14,6 +13,7 @@ from dateutil.parser import parse as parse_datetime
 
 from openedx.core.djangolib.testing.utils import CacheIsolationTestCase, skip_unless_lms
 from openedx.core.lib.time_zone_utils import get_display_time_zone
+from student.models import UserProfile
 from student.tests.factories import UserFactory
 
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
@@ -27,7 +27,7 @@ from ...errors import (
     PreferenceUpdateError,
     CountryCodeError,
 )
-from ...models import UserProfile, UserOrgTag
+from ...models import UserOrgTag
 from ...preferences.api import (
     get_user_preference,
     get_user_preferences,
@@ -39,7 +39,6 @@ from ...preferences.api import (
 )
 
 
-@attr(shard=2)
 @skip_unless_lms
 class TestPreferenceAPI(CacheIsolationTestCase):
     """
@@ -48,6 +47,7 @@ class TestPreferenceAPI(CacheIsolationTestCase):
     are not specified.
     """
     password = "test"
+    shard = 2
 
     def setUp(self):
         super(TestPreferenceAPI, self).setUp()
@@ -76,7 +76,7 @@ class TestPreferenceAPI(CacheIsolationTestCase):
         """
         Verifies that get_user_preference returns appropriate errors.
         """
-        with self.assertRaises(UserNotFound):
+        with self.assertRaises(UserNotAuthorized):
             get_user_preference(self.user, self.test_preference_key, username="no_such_user")
 
         with self.assertRaises(UserNotFound):
@@ -99,7 +99,7 @@ class TestPreferenceAPI(CacheIsolationTestCase):
         """
         Verifies that get_user_preferences returns appropriate errors.
         """
-        with self.assertRaises(UserNotFound):
+        with self.assertRaises(UserNotAuthorized):
             get_user_preferences(self.user, username="no_such_user")
 
         with self.assertRaises(UserNotFound):
@@ -124,7 +124,7 @@ class TestPreferenceAPI(CacheIsolationTestCase):
         """
         Verifies that set_user_preference returns appropriate errors.
         """
-        with self.assertRaises(UserNotFound):
+        with self.assertRaises(UserNotAuthorized):
             set_user_preference(self.user, self.test_preference_key, "new_value", username="no_such_user")
 
         with self.assertRaises(UserNotFound):
@@ -226,7 +226,7 @@ class TestPreferenceAPI(CacheIsolationTestCase):
         update_data = {
             self.test_preference_key: "new_value"
         }
-        with self.assertRaises(UserNotFound):
+        with self.assertRaises(UserNotAuthorized):
             update_user_preferences(self.user, update_data, user="no_such_user")
 
         with self.assertRaises(UserNotFound):
@@ -302,7 +302,7 @@ class TestPreferenceAPI(CacheIsolationTestCase):
         """
         Verifies that delete_user_preference returns appropriate errors.
         """
-        with self.assertRaises(UserNotFound):
+        with self.assertRaises(UserNotAuthorized):
             delete_user_preference(self.user, self.test_preference_key, username="no_such_user")
 
         with self.assertRaises(UserNotFound):
@@ -327,7 +327,6 @@ class TestPreferenceAPI(CacheIsolationTestCase):
         )
 
 
-@attr(shard=2)
 @ddt.ddt
 class UpdateEmailOptInTests(ModuleStoreTestCase):
     """
@@ -336,6 +335,7 @@ class UpdateEmailOptInTests(ModuleStoreTestCase):
     USERNAME = u'frank-underwood'
     PASSWORD = u'ṕáśśẃőŕd'
     EMAIL = u'frank+underwood@example.com'
+    shard = 2
 
     @ddt.data(
         # Check that a 27 year old can opt-in

@@ -847,6 +847,7 @@ div.problem {
         .status-icon {
           &::after {
             content: '';
+            display: inline-block;
           }
         }
       }
@@ -1674,4 +1675,11 @@ div.problem .annotation-input {
   .submitted {
     content: '';
   }
+}
+
+// Loading Spinner
+// ====================
+.problems-wrapper .loading-spinner {
+  text-align: center;
+  color: $gray-d1;
 }

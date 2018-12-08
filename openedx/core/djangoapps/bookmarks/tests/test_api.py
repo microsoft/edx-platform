@@ -2,9 +2,7 @@
 Tests for bookmarks api.
 """
 import ddt
-import pytest
 from mock import patch
-from nose.plugins.attrib import attr
 
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
@@ -34,17 +32,17 @@ class BookmarkApiEventTestMixin(object):
         """
         Assert no events were emitted.
         """
-        self.assertFalse(mock_tracker.called)  # pylint: disable=maybe-no-member
+        self.assertFalse(mock_tracker.called)
 
 
-@attr(shard=2)
 @ddt.ddt
 @skip_unless_lms
-@pytest.mark.django111_expected_failure
 class BookmarksAPITests(BookmarkApiEventTestMixin, BookmarksTestsBase):
     """
     These tests cover the parts of the API methods.
     """
+    shard = 9
+
     def test_get_bookmark(self):
         """
         Verifies that get_bookmark returns data as expected.
@@ -112,7 +110,7 @@ class BookmarksAPITests(BookmarkApiEventTestMixin, BookmarksTestsBase):
         with self.assertNumQueries(1):
             bookmarks = api.get_bookmarks(user=self.user, course_key=course.id, serialized=False)
             self.assertEqual(len(bookmarks), count)
-        self.assertIs(bookmarks.model, Bookmark)  # pylint: disable=no-member
+        self.assertIs(bookmarks.model, Bookmark)
 
     @patch('openedx.core.djangoapps.bookmarks.api.tracker.emit')
     def test_create_bookmark(self, mock_tracker):

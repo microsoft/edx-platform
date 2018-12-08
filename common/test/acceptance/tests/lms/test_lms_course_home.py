@@ -3,9 +3,8 @@
 End-to-end tests for the LMS that utilize the course home page and course outline.
 """
 
-from nose.plugins.attrib import attr
-
 from common.test.acceptance.pages.lms.create_mode import ModeCreationPage
+from openedx.core.lib.tests import attr
 
 from ...fixtures.course import CourseFixture, XBlockFixtureDesc
 from ...pages.lms.bookmarks import BookmarksPage
@@ -91,8 +90,8 @@ class CourseHomeTest(CourseHomeBaseTest):
 
         # Check that the course navigation appears correctly
         EXPECTED_SECTIONS = {
-            'Test Section': ['Test Subsection'],
-            'Test Section 2': ['Test Subsection 2', 'Test Subsection 3']
+            u'Test Section': [u'Test Subsection'],
+            u'Test Section 2': [u'Test Subsection 2', u'Test Subsection 3']
         }
 
         actual_sections = self.course_home_page.outline.sections
@@ -101,7 +100,7 @@ class CourseHomeTest(CourseHomeBaseTest):
             self.assertEqual(actual_sections[section], EXPECTED_SECTIONS[section])
 
         # Navigate to a particular section
-        self.course_home_page.outline.go_to_section('Test Section', 'Test Subsection')
+        self.course_home_page.outline.go_to_section(u'Test Section', u'Test Subsection')
 
         # Check the sequence items on the courseware page
         EXPECTED_ITEMS = ['Test Problem 1', 'Test Problem 2', 'Test HTML']
@@ -123,16 +122,6 @@ class CourseHomeTest(CourseHomeBaseTest):
         self.course_home_page.click_bookmarks_button()
         bookmarks_page = BookmarksPage(self.browser, self.course_id)
         self.assertTrue(bookmarks_page.is_browser_on_page())
-
-        # Test "Resume Course" button from header
-        self.course_home_page.visit()
-        self.course_home_page.resume_course_from_header()
-        self.assertTrue(self.courseware_page.nav.is_on_section('Test Section 2', 'Test Subsection 3'))
-
-        # Test "Resume Course" button from within outline
-        self.course_home_page.visit()
-        self.course_home_page.outline.resume_course_from_outline()
-        self.assertTrue(self.courseware_page.nav.is_on_section('Test Section 2', 'Test Subsection 3'))
 
 
 @attr('a11y')

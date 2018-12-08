@@ -2,7 +2,7 @@
 from __future__ import unicode_literals
 
 from django.db import migrations, models
-import openedx.core.djangoapps.xmodule_django.models
+from opaque_keys.edx.django.models import CourseKeyField
 
 
 # This should only be used for migrations that have be verified to have a net-neutral sql
@@ -28,7 +28,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='coursemode',
             name='course_id',
-            field=openedx.core.djangoapps.xmodule_django.models.CourseKeyField(max_length=255, db_index=True, verbose_name="Course", db_column='course_id'),
+            field=CourseKeyField(max_length=255, db_index=True, verbose_name="Course", db_column='course_id'),
         ),
         # Change the field name in Django to match our target field name
         migrations.RenameField(
@@ -45,7 +45,7 @@ class Migration(migrations.Migration):
         NoSqlAlterField(
             model_name='coursemode',
             name='course',
-            field=models.ForeignKey(related_name='modes', db_constraint=False, default=None, to='course_overviews.CourseOverview'),
+            field=models.ForeignKey(related_name='modes', db_constraint=False, default=None, to='course_overviews.CourseOverview', on_delete=models.CASCADE),
             preserve_default=False,
         ),
         # Change the Django unique-together constraint (this is Django-level only

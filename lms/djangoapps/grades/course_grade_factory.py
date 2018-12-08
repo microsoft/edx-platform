@@ -1,7 +1,11 @@
+"""
+Course Grade Factory Class
+"""
 from collections import namedtuple
 from logging import getLogger
 
 import dogstats_wrapper as dog_stats_api
+from six import text_type
 
 from openedx.core.djangoapps.signals.signals import COURSE_GRADE_CHANGED, COURSE_GRADE_NOW_PASSED
 
@@ -123,7 +127,7 @@ class CourseGradeFactory(object):
                 'Cannot grade student %s in course %s because of exception: %s',
                 user.id,
                 course_data.course_key,
-                exc.message
+                text_type(exc)
             )
             return self.GradeResult(user, None, exc)
 
@@ -152,7 +156,7 @@ class CourseGradeFactory(object):
             course_data,
             persistent_grade.percent_grade,
             persistent_grade.letter_grade,
-            persistent_grade.passed_timestamp is not None,
+            persistent_grade.letter_grade is not u''
         )
 
     @staticmethod

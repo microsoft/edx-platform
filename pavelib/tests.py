@@ -69,6 +69,11 @@ __test__ = False  # do not collect
         dest='disable_migrations',
         help="Create tables by applying migrations."
     ),
+    make_option(
+        '--xdist_ip_addresses',
+        dest='xdist_ip_addresses',
+        help="Comma separated string of ip addresses to shard tests to via xdist."
+    )
 ], share_with=['pavelib.utils.test.utils.clean_reports_dir'])
 @PassthroughTask
 @timed
@@ -80,8 +85,8 @@ def test_system(options, passthrough_options):
     test_id = getattr(options, 'test_id', None)
     django_version = getattr(options, 'django_version', None)
 
-    assert(system in (None, 'lms', 'cms'))
-    assert(django_version in (None, '1.8', '1.9', '1.10', '1.11'))
+    assert system in (None, 'lms', 'cms')
+    assert django_version in (None, '1.8', '1.9', '1.10', '1.11')
 
     if test_id:
         # Testing a single test ID.
@@ -133,6 +138,10 @@ def test_system(options, passthrough_options):
         help="Run against which Django version (1.8, 1.9, 1.10, -or- 1.11)."
     ),
     make_option(
+        "--eval-attr", dest="eval_attr",
+        help="Only run tests matching given attribute expression."
+    ),
+    make_option(
         '-c', '--cov-args', default='',
         help='adds as args to coverage for the test run'
     ),
@@ -148,6 +157,13 @@ def test_system(options, passthrough_options):
         "--disable-coverage", action="store_false", dest="with_coverage",
         help="Run the unit tests directly through pytest, NOT coverage"
     ),
+    make_option(
+        '--xdist_ip_addresses',
+        dest='xdist_ip_addresses',
+        help="Comma separated string of ip addresses to shard tests to via xdist."
+    ),
+    make_option('-p', '--processes', dest='processes', default=0, help='number of processes to use running tests'),
+    make_option('-r', '--randomize', action='store_true', help='run the tests in a random order'),
 ], share_with=['pavelib.utils.test.utils.clean_reports_dir'])
 @PassthroughTask
 @timed
@@ -159,7 +175,7 @@ def test_lib(options, passthrough_options):
     test_id = getattr(options, 'test_id', lib)
     django_version = getattr(options, 'django_version', None)
 
-    assert(django_version in (None, '1.8', '1.9', '1.10', '1.11'))
+    assert django_version in (None, '1.8', '1.9', '1.10', '1.11')
 
     if test_id:
         # Testing a single test id.

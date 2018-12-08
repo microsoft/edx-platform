@@ -12,6 +12,7 @@ import memcache
 from lazy import lazy
 from path import Path as path
 from paver.easy import sh
+from six.moves import configparser
 
 from pavelib.utils.cmd import django_cmd
 
@@ -54,6 +55,7 @@ class Env(object):
     # Reports Directory
     REPORT_DIR = REPO_ROOT / 'reports'
     METRICS_DIR = REPORT_DIR / 'metrics'
+    QUALITY_DIR = REPORT_DIR / 'quality_junitxml'
 
     # Generic log dir
     GEN_LOG_DIR = REPO_ROOT / "test_root" / "log"
@@ -181,9 +183,10 @@ class Env(object):
     KARMA_CONFIG_FILES = [
         REPO_ROOT / 'cms/static/karma_cms.conf.js',
         REPO_ROOT / 'cms/static/karma_cms_squire.conf.js',
+        REPO_ROOT / 'cms/static/karma_cms_webpack.conf.js',
         REPO_ROOT / 'lms/static/karma_lms.conf.js',
-        REPO_ROOT / 'lms/static/karma_lms_coffee.conf.js',
         REPO_ROOT / 'common/lib/xmodule/xmodule/js/karma_xmodule.conf.js',
+        REPO_ROOT / 'common/lib/xmodule/xmodule/js/karma_xmodule_webpack.conf.js',
         REPO_ROOT / 'common/static/karma_common.conf.js',
         REPO_ROOT / 'common/static/karma_common_requirejs.conf.js',
     ]
@@ -191,11 +194,13 @@ class Env(object):
     JS_TEST_ID_KEYS = [
         'cms',
         'cms-squire',
+        'cms-webpack',
         'lms',
-        'lms-coffee',
         'xmodule',
+        'xmodule-webpack',
         'common',
-        'common-requirejs'
+        'common-requirejs',
+        'jest-snapshot'
     ]
 
     JS_REPORT_DIR = REPORT_DIR / 'javascript'
@@ -225,7 +230,7 @@ class Env(object):
             SERVICE_VARIANT = 'lms'
 
     @classmethod
-    def get_django_setting(self, django_setting, system, settings=None):
+    def get_django_setting(cls, django_setting, system, settings=None):
         """
         Interrogate Django environment for specific settings values
         :param django_setting: the django setting to get
@@ -246,6 +251,22 @@ class Env(object):
             capture=True
         )
         return unicode(value).strip()
+
+    @classmethod
+    def covered_modules(cls):
+        """
+        List the source modules listed in .coveragerc for which coverage
+        will be measured.
+        """
+        coveragerc = configparser.RawConfigParser()
+        coveragerc.read(cls.PYTHON_COVERAGERC)
+        modules = coveragerc.get('run', 'source')
+        result = []
+        for module in modules.split('\n'):
+            module = module.strip()
+            if module:
+                result.append(module)
+        return result
 
     @lazy
     def env_tokens(self):
@@ -291,3 +312,15 @@ class Env(object):
         Return a dictionary of feature flags configured by the environment.
         """
         return self.env_tokens.get('FEATURES', dict())
+
+    @classmethod
+    def rsync_dirs(cls):
+        """
+        List the directories that should be synced during pytest-xdist
+        execution.  Needs to include all modules for which coverage is
+        measured, not just the tests being run.
+        """
+        result = set()
+        for module in cls.covered_modules():
+            result.add(module.split('/')[0])
+        return result

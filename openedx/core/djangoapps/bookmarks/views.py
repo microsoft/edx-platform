@@ -21,7 +21,7 @@ from rest_framework_oauth.authentication import OAuth2Authentication
 
 import eventtracking
 from openedx.core.djangoapps.bookmarks.api import BookmarksLimitReachedError
-from openedx.core.lib.api.paginators import DefaultPagination
+from edx_rest_framework_extensions.paginators import DefaultPagination
 from openedx.core.lib.api.permissions import IsUserInUrl
 from openedx.core.lib.url_utils import unquote_slashes
 from xmodule.modulestore.exceptions import ItemNotFoundError
@@ -87,7 +87,7 @@ class BookmarksViewMixin(object):
         return Response(
             {
                 "developer_message": developer_message,
-                "user_message": _(user_message)  # pylint: disable=translation-of-non-string
+                "user_message": _(user_message)
             },
             status=error_status
         )
@@ -318,7 +318,7 @@ class BookmarksDetailView(APIView, BookmarksViewMixin):
             log.error(error_message)
             return self.error_response(error_message, error_status=status.HTTP_404_NOT_FOUND)
 
-    def get(self, request, username=None, usage_id=None):  # pylint: disable=unused-argument
+    def get(self, request, username=None, usage_id=None):
         """
         GET /api/bookmarks/v1/bookmarks/{username},{usage_id}?fields=display_name,path
         """

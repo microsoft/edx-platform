@@ -6,14 +6,15 @@ import json
 import logging
 from contextlib import closing
 from datetime import datetime, timedelta
+from pytz import UTC
 from uuid import uuid4
 
-import rfc6266
+import rfc6266_parser
 from boto import s3
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.staticfiles.storage import staticfiles_storage
-from django.core.files.images import get_image_dimensions
+from django.urls import reverse
 from django.http import HttpResponse, HttpResponseNotFound
 from django.utils.translation import ugettext as _
 from django.utils.translation import ugettext_noop
@@ -38,8 +39,10 @@ from xmodule.video_module.transcripts_utils import Transcript
 
 from contentstore.models import VideoUploadConfig
 from contentstore.utils import reverse_course_url
+from contentstore.video_utils import validate_video_image
 from edxmako.shortcuts import render_to_response
 from openedx.core.djangoapps.video_config.models import VideoTranscriptEnabledFlag
+from openedx.core.djangoapps.video_pipeline.config.waffle import waffle_flags, DEPRECATE_YOUTUBE
 from openedx.core.djangoapps.waffle_utils import WaffleSwitchNamespace
 from util.json_request import JsonResponse, expect_json
 
@@ -143,7 +146,7 @@ class StatusDisplayStrings(object):
     @staticmethod
     def get(val_status):
         """Map a VAL status string to a localized display string"""
-        return _(StatusDisplayStrings._STATUS_MAP.get(val_status, StatusDisplayStrings._UNKNOWN))    # pylint: disable=translation-of-non-string
+        return _(StatusDisplayStrings._STATUS_MAP.get(val_status, StatusDisplayStrings._UNKNOWN))
 
 
 @expect_json
@@ -183,60 +186,6 @@ def videos_handler(request, course_key_string, edx_video_id=None):
             return send_video_status_update(request.json)
 
         return videos_post(course, request)
-
-
-def validate_video_image(image_file):
-    """
-    Validates video image file.
-
-    Arguments:
-        image_file: The selected image file.
-
-   Returns:
-        error (String or None): If there is error returns error message otherwise None.
-    """
-    error = None
-
-    if not all(hasattr(image_file, attr) for attr in ['name', 'content_type', 'size']):
-        error = _('The image must have name, content type, and size information.')
-    elif image_file.content_type not in settings.VIDEO_IMAGE_SUPPORTED_FILE_FORMATS.values():
-        error = _('This image file type is not supported. Supported file types are {supported_file_formats}.').format(
-            supported_file_formats=settings.VIDEO_IMAGE_SUPPORTED_FILE_FORMATS.keys()
-        )
-    elif image_file.size > settings.VIDEO_IMAGE_SETTINGS['VIDEO_IMAGE_MAX_BYTES']:
-        error = _('This image file must be smaller than {image_max_size}.').format(
-            image_max_size=settings.VIDEO_IMAGE_MAX_FILE_SIZE_MB
-        )
-    elif image_file.size < settings.VIDEO_IMAGE_SETTINGS['VIDEO_IMAGE_MIN_BYTES']:
-        error = _('This image file must be larger than {image_min_size}.').format(
-            image_min_size=settings.VIDEO_IMAGE_MIN_FILE_SIZE_KB
-        )
-    else:
-        try:
-            image_file_width, image_file_height = get_image_dimensions(image_file)
-        except TypeError:
-            return _('There is a problem with this image file. Try to upload a different file.')
-        if image_file_width is None or image_file_height is None:
-            return _('There is a problem with this image file. Try to upload a different file.')
-        image_file_aspect_ratio = abs(image_file_width / float(image_file_height) - settings.VIDEO_IMAGE_ASPECT_RATIO)
-        if image_file_width < settings.VIDEO_IMAGE_MIN_WIDTH or image_file_height < settings.VIDEO_IMAGE_MIN_HEIGHT:
-            error = _('Recommended image resolution is {image_file_max_width}x{image_file_max_height}. '
-                      'The minimum resolution is {image_file_min_width}x{image_file_min_height}.').format(
-                image_file_max_width=settings.VIDEO_IMAGE_MAX_WIDTH,
-                image_file_max_height=settings.VIDEO_IMAGE_MAX_HEIGHT,
-                image_file_min_width=settings.VIDEO_IMAGE_MIN_WIDTH,
-                image_file_min_height=settings.VIDEO_IMAGE_MIN_HEIGHT
-            )
-        elif image_file_aspect_ratio > settings.VIDEO_IMAGE_ASPECT_RATIO_ERROR_MARGIN:
-            error = _('This image file must have an aspect ratio of {video_image_aspect_ratio_text}.').format(
-                video_image_aspect_ratio_text=settings.VIDEO_IMAGE_ASPECT_RATIO_TEXT
-            )
-        else:
-            try:
-                image_file.name.encode('ascii')
-            except UnicodeEncodeError:
-                error = _('The image file name can only contain letters, numbers, hyphens (-), and underscores (_).')
-    return error
 
 
 @expect_json
@@ -456,7 +405,7 @@ def video_encodings_download(request, course_key_string):
     # listing for videos uploaded through Studio
     filename = _("{course}_video_urls").format(course=course.id.course)
     # See https://tools.ietf.org/html/rfc6266#appendix-D
-    response["Content-Disposition"] = rfc6266.build_header(
+    response["Content-Disposition"] = rfc6266_parser.build_header(
         filename + ".csv",
         filename_compat="video_urls.csv"
     )
@@ -497,7 +446,7 @@ def _get_and_validate_course(course_key_string, user):
         return None
 
 
-def convert_video_status(video):
+def convert_video_status(video, is_video_encodes_ready=False):
     """
     Convert status of a video. Status can be converted to one of the following:
 
@@ -505,7 +454,8 @@ def convert_video_status(video):
         *   `YouTube Duplicate` if status is `invalid_token`
         *   user-friendly video status
     """
-    now = datetime.now(video['created'].tzinfo)
+    now = datetime.now(video.get('created', datetime.now().replace(tzinfo=UTC)).tzinfo)
+
     if video['status'] == 'upload' and (now - video['created']) > timedelta(hours=MAX_UPLOAD_HOURS):
         new_status = 'upload_failed'
         status = StatusDisplayStrings.get(new_status)
@@ -521,6 +471,8 @@ def convert_video_status(video):
         ])
     elif video['status'] == 'invalid_token':
         status = StatusDisplayStrings.get('youtube_duplicate')
+    elif is_video_encodes_ready or video['status'] == 'transcript_ready':
+        status = StatusDisplayStrings.get('file_complete')
     else:
         status = StatusDisplayStrings.get(video['status'])
 
@@ -531,15 +483,28 @@ def _get_videos(course):
     """
     Retrieves the list of videos from VAL corresponding to this course.
     """
-    is_video_transcript_enabled = VideoTranscriptEnabledFlag.feature_enabled(course.id)
     videos = list(get_videos_for_course(unicode(course.id), VideoSortField.created, SortDirection.desc))
+
+    # This is required to see if edx video pipeline is enabled while converting the video status.
+    course_video_upload_token = course.video_upload_pipeline.get('course_video_upload_token')
 
     # convert VAL's status to studio's Video Upload feature status.
     for video in videos:
-        video["status"] = convert_video_status(video)
-
-        if is_video_transcript_enabled:
-            video['transcripts'] = get_available_transcript_languages([video['edx_video_id']])
+        # If we are using "new video workflow" and status is `transcription_in_progress` then video encodes are ready.
+        # This is because Transcription starts once all the encodes are complete except for YT, but according to
+        # "new video workflow" YT is disabled as well as deprecated. So, Its precise to say that the Transcription
+        # starts once all the encodings are complete *for the new video workflow*.
+        is_video_encodes_ready = not course_video_upload_token and video['status'] == 'transcription_in_progress'
+        # Update with transcript languages
+        video['transcripts'] = get_available_transcript_languages(video_id=video['edx_video_id'])
+        # Transcription status should only be visible if 3rd party transcripts are pending.
+        video['transcription_status'] = (
+            StatusDisplayStrings.get(video['status'])
+            if not video['transcripts'] and is_video_encodes_ready else
+            ''
+        )
+        # Convert the video status.
+        video['status'] = convert_video_status(video, is_video_encodes_ready)
 
     return videos
 
@@ -556,10 +521,10 @@ def _get_index_videos(course):
     Returns the information about each video upload required for the video list
     """
     course_id = unicode(course.id)
-    attrs = ['edx_video_id', 'client_video_id', 'created', 'duration', 'status', 'courses']
-
-    if VideoTranscriptEnabledFlag.feature_enabled(course.id):
-        attrs += ['transcripts']
+    attrs = [
+        'edx_video_id', 'client_video_id', 'created', 'duration',
+        'status', 'courses', 'transcripts', 'transcription_status',
+    ]
 
     def _get_values(video):
         """
@@ -629,14 +594,19 @@ def videos_index_html(course):
             'supported_file_formats': settings.VIDEO_IMAGE_SUPPORTED_FILE_FORMATS
         },
         'is_video_transcript_enabled': is_video_transcript_enabled,
-        'video_transcript_settings': None,
         'active_transcript_preferences': None,
         'transcript_credentials': None,
-        'transcript_available_languages': None
+        'transcript_available_languages': get_all_transcript_languages(),
+        'video_transcript_settings': {
+            'transcript_download_handler_url': reverse('transcript_download_handler'),
+            'transcript_upload_handler_url': reverse('transcript_upload_handler'),
+            'transcript_delete_handler_url': reverse_course_url('transcript_delete_handler', unicode(course.id)),
+            'trancript_download_file_format': Transcript.SRT
+        }
     }
 
     if is_video_transcript_enabled:
-        context['video_transcript_settings'] = {
+        context['video_transcript_settings'].update({
             'transcript_preferences_handler_url': reverse_course_url(
                 'transcript_preferences_handler',
                 unicode(course.id)
@@ -645,25 +615,11 @@ def videos_index_html(course):
                 'transcript_credentials_handler',
                 unicode(course.id)
             ),
-            'transcript_download_handler_url': reverse_course_url(
-                'transcript_download_handler',
-                unicode(course.id)
-            ),
-            'transcript_upload_handler_url': reverse_course_url(
-                'transcript_upload_handler',
-                unicode(course.id)
-            ),
-            'transcript_delete_handler_url': reverse_course_url(
-                'transcript_delete_handler',
-                unicode(course.id)
-            ),
             'transcription_plans': get_3rd_party_transcription_plans(),
-            'trancript_download_file_format': Transcript.SRT
-        }
+        })
         context['active_transcript_preferences'] = get_transcript_preferences(unicode(course.id))
         # Cached state for transcript providers' credentials (org-specific)
         context['transcript_credentials'] = get_transcript_credentials_state_for_org(course.id.org)
-        context['transcript_available_languages'] = get_all_transcript_languages()
 
     return render_to_response('videos_index.html', context)
 
@@ -744,10 +700,12 @@ def videos_post(course, request):
             ('course_key', unicode(course.id)),
         ]
 
-        # Only include `course_video_upload_token` if its set, as it won't be required if video uploads
-        # are enabled by default.
+        deprecate_youtube = waffle_flags()[DEPRECATE_YOUTUBE]
         course_video_upload_token = course.video_upload_pipeline.get('course_video_upload_token')
-        if course_video_upload_token:
+
+        # Only include `course_video_upload_token` if youtube has not been deprecated
+        # for this course.
+        if not deprecate_youtube.is_enabled(course.id) and course_video_upload_token:
             metadata_list.append(('course_video_upload_token', course_video_upload_token))
 
         is_video_transcript_enabled = VideoTranscriptEnabledFlag.feature_enabled(course.id)

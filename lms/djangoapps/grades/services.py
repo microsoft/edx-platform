@@ -1,7 +1,11 @@
+"""
+Grade service
+"""
 from datetime import datetime
 
 import pytz
 
+from lms.djangoapps.utils import _get_key
 from opaque_keys.edx.keys import CourseKey, UsageKey
 from track.event_transaction_utils import create_new_event_transaction_id, set_event_transaction_type
 
@@ -10,18 +14,6 @@ from .constants import ScoreDatabaseTableEnum
 from .events import SUBSECTION_OVERRIDE_EVENT_TYPE
 from .models import PersistentSubsectionGrade, PersistentSubsectionGradeOverride
 from .signals.signals import SUBSECTION_OVERRIDE_CHANGED
-
-
-def _get_key(key_or_id, key_cls):
-    """
-    Helper method to get a course/usage key either from a string or a key_cls,
-    where the key_cls (CourseKey or UsageKey) will simply be returned.
-    """
-    return (
-        key_cls.from_string(key_or_id)
-        if isinstance(key_or_id, basestring)
-        else key_or_id
-    )
 
 
 class GradesService(object):
@@ -113,7 +105,11 @@ class GradesService(object):
         course_key = _get_key(course_key_or_id, CourseKey)
         usage_key = _get_key(usage_key_or_id, UsageKey)
 
-        override = self.get_subsection_grade_override(user_id, course_key, usage_key)
+        try:
+            override = self.get_subsection_grade_override(user_id, course_key, usage_key)
+        except PersistentSubsectionGrade.DoesNotExist:
+            return
+
         # Older rejected exam attempts that transition to verified might not have an override created
         if override is not None:
             override.delete()

@@ -22,17 +22,17 @@
             contactEmail,
             allowEmailChange,
             socialPlatforms,
-
             syncLearnerProfileData,
             enterpriseName,
             enterpriseReadonlyAccountFields,
             edxSupportUrl,
-            extendedProfileFields
+            extendedProfileFields,
+            displayAccountDeletion
         ) {
             var $accountSettingsElement, userAccountModel, userPreferencesModel, aboutSectionsData,
                 accountsSectionData, ordersSectionData, accountSettingsView, showAccountSettingsPage,
                 showLoadingError, orderNumber, getUserField, userFields, timeZoneDropdownField, countryDropdownField,
-                emailFieldView, socialFields, platformData,
+                emailFieldView, socialFields, accountDeletionFields, platformData,
                 aboutSectionMessageType, aboutSectionMessage, fullnameFieldView, countryFieldView,
                 fullNameFieldData, emailFieldData, countryFieldData, additionalFields, fieldItem;
 
@@ -168,7 +168,8 @@
                                     {platform_name: platformName}
                                 ),
                                 options: fieldsData.language.options,
-                                persistChanges: true
+                                persistChanges: true,
+                                focusNextID: '#u-field-select-country',
                             })
                         },
                         countryFieldView,
@@ -291,7 +292,19 @@
             }
             aboutSectionsData.push(socialFields);
 
+            // Add account deletion fields
+            if (displayAccountDeletion) {
+                accountDeletionFields = {
+                    title: gettext('Delete My Account'),
+                    fields: [],
+                    // Used so content can be rendered external to Backbone
+                    domHookId: 'account-deletion-container'
+                };
+                aboutSectionsData.push(accountDeletionFields);
+            }
+
             // set TimeZoneField to listen to CountryField
+
             getUserField = function(list, search) {
                 return _.find(list, function(field) {
                     return field.view.options.valueAttribute === search;
@@ -376,7 +389,12 @@
             });
 
             accountSettingsView.render();
-
+            if( $.cookie('focus_id')) {
+                $($.cookie('focus_id')).attr({"tabindex": 0});
+                $($.cookie('focus_id')).focus();
+                // Deleting the cookie
+                document.cookie = "focus_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/account;";
+            }
             showAccountSettingsPage = function() {
                 // Record that the account settings page was viewed.
                 Logger.log('edx.user.settings.viewed', {

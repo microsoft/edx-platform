@@ -8,7 +8,7 @@ from config_models.decorators import require_config
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import Group
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.db.models import Q
 from django.http import (
     Http404,
@@ -106,7 +106,7 @@ def add_course_to_cart(request, course_id):
     """
 
     assert isinstance(course_id, basestring)
-    if not request.user.is_authenticated():
+    if not request.user.is_authenticated:
         log.info(u"Anon user trying to add course %s to cart", course_id)
         return HttpResponseForbidden(_('You must be logged-in to add to a shopping cart'))
     cart = Order.get_cart_for_user(request.user)
@@ -530,6 +530,7 @@ def use_coupon_code(coupons, user):
 
 
 @require_config(DonationConfiguration)
+@csrf_exempt
 @require_POST
 @login_required
 def donate(request):

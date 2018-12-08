@@ -38,7 +38,7 @@ class CourseOutlineItem(object):
         # Check for the existence of a locator so that errors when navigating to the course outline page don't show up
         # as errors in the repr method instead.
         try:
-            return "{}(<browser>, {!r})".format(self.__class__.__name__, self.locator)  # pylint: disable=no-member
+            return "{}(<browser>, {!r})".format(self.__class__.__name__, self.locator)
         except AttributeError:
             return "{}(<browser>)".format(self.__class__.__name__)
 
@@ -290,13 +290,17 @@ class CourseOutlineContainer(CourseOutlineItem):
             self.wait_for_element_presence(
                 self._bounded_selector(self.ADD_BUTTON_SELECTOR), 'Toggle control is present'
             )
-            add_button = self.q(css=self._bounded_selector(self.ADD_BUTTON_SELECTOR)).first.results
+            css_element = self._bounded_selector(self.ADD_BUTTON_SELECTOR)
+            add_button = self.q(css=css_element).first.results  # pylint: disable=no-member
+            self.scroll_to_element(css_element)  # pylint: disable=no-member
             return add_button and add_button[0].is_displayed()
 
         currently_expanded = subsection_expanded()
 
         # Need to click slightly off-center in order for the click to be recognized.
-        ele = self.browser.find_element_by_css_selector(self._bounded_selector('.ui-toggle-expansion .fa'))
+        css_element = self._bounded_selector('.ui-toggle-expansion .fa')
+        self.scroll_to_element(css_element)  # pylint: disable=no-member
+        ele = self.browser.find_element_by_css_selector(css_element)  # pylint: disable=no-member
         ActionChains(self.browser).move_to_element_with_offset(ele, 8, 8).click().perform()  # pylint: disable=no-member
         self.wait_for_element_presence(self._bounded_selector(self.ADD_BUTTON_SELECTOR), 'Subsection is expanded')
 
@@ -314,7 +318,9 @@ class CourseOutlineContainer(CourseOutlineItem):
         """
         Return whether this outline item is currently collapsed.
         """
-        return "is-collapsed" in self.q(css=self._bounded_selector('')).first.attrs("class")[0]  # pylint: disable=no-member
+        css_element = self._bounded_selector('')
+        self.scroll_to_element(css_element)  # pylint: disable=no-member
+        return "is-collapsed" in self.q(css=css_element).first.attrs("class")[0]  # pylint: disable=no-member
 
 
 class CourseOutlineChild(PageObject, CourseOutlineItem):
@@ -492,11 +498,18 @@ class CourseOutlinePage(CoursePage, CourseOutlineContainer):
             self.q(css='div.ui-loading.is-hidden').present
         ])
 
+    def click_course_status_section_start_date_link(self):
+        self.course_start_date_link.click()
+
+    def click_course_status_section_checklists_link(self):
+        self.course_checklists_link.click()
+
     def view_live(self):
         """
         Clicks the "View Live" link and switches to the new tab
         """
         click_css(self, '.view-live-button', require_notification=False)
+        self.wait_for_page()
         self.browser.switch_to_window(self.browser.window_handles[-1])
 
     def section(self, title):
@@ -713,12 +726,13 @@ class CourseOutlinePage(CoursePage, CourseOutlineContainer):
         self.q(css=".action-save").first.click()
         self.wait_for_ajax()
 
-    def add_prerequisite_to_subsection(self, min_score):
+    def add_prerequisite_to_subsection(self, min_score, min_completion):
         """
         Adds a prerequisite to a subsection.
         """
         Select(self.q(css="#prereq")[0]).select_by_index(1)
         self.q(css="#prereq_min_score").fill(min_score)
+        self.q(css="#prereq_min_completion").fill(min_completion)
         self.q(css=".action-save").first.click()
         self.wait_for_ajax()
 
@@ -753,6 +767,20 @@ class CourseOutlinePage(CoursePage, CourseOutlineContainer):
 
         # The Prerequisites dropdown is visible
         return self.q(css="#prereq_min_score").visible
+
+    @property
+    def has_course_status_section(self):
+        # SFE and SFE-wrapper classes come from studio-frontend and
+        # wrap content provided by the studio-frontend package
+        return self.q(css='.course-status .SFE .SFE-wrapper').is_present()
+
+    @property
+    def course_start_date_link(self):
+        return self.q(css='.status-link').first
+
+    @property
+    def course_checklists_link(self):
+        return self.q(css='.status-link').nth(1)
 
     @property
     def bottom_add_section_button(self):
@@ -1151,7 +1179,7 @@ class SubsectionOutlineModal(CourseOutlineModal):
         return self.find_css('input[name=content-visibility]:checked').first.attrs('value')[0]
 
     @is_explicitly_locked.setter
-    def is_explicitly_locked(self, value):  # pylint: disable=arguments-differ
+    def is_explicitly_locked(self, value):
         """
         Override - sets visibility to staff_only if True, else 'visible'.
 

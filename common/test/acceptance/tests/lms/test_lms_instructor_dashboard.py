@@ -5,7 +5,6 @@ End-to-end tests for the LMS Instructor Dashboard.
 
 import ddt
 from bok_choy.promise import EmptyPromise
-from nose.plugins.attrib import attr
 
 from common.test.acceptance.fixtures.certificates import CertificateConfigFixture
 from common.test.acceptance.fixtures.course import CourseFixture, XBlockFixtureDesc
@@ -31,6 +30,7 @@ from common.test.acceptance.tests.helpers import (
     disable_animations,
     get_modal_alert
 )
+from openedx.core.lib.tests import attr
 
 
 class BaseInstructorDashboardTest(EventsTestMixin, UniqueCourseTest):
@@ -113,7 +113,7 @@ class BulkEmailTest(BaseInstructorDashboardTest):
         self.send_email_page.a11y_audit.check_for_accessibility_errors()
 
 
-@attr(shard=10)
+@attr(shard=3)
 class AutoEnrollmentWithCSVTest(BaseInstructorDashboardTest):
     """
     End-to-end tests for Auto-Registration and enrollment functionality via CSV file.
@@ -162,7 +162,6 @@ class AutoEnrollmentWithCSVTest(BaseInstructorDashboardTest):
             password="123456",
             username=username,
             full_name="Test User",
-            terms_of_service=True,
             country="US",
             favorite_movie="Harry Potter",
         )
@@ -396,35 +395,6 @@ class ProctoredExamsTest(BaseInstructorDashboardTest):
         # Stop the timed exam.
         self.courseware_page.stop_timed_exam()
         LogoutPage(self.browser).visit()
-
-    def test_can_add_remove_allowance(self):
-        """
-        Make sure that allowances can be added and removed.
-        """
-        # Given that an exam has been configured to be a timed exam.
-        self._create_a_timed_exam_and_attempt()
-
-        # When I log in as an instructor,
-        __, __ = self.log_in_as_instructor()
-
-        # And visit the Allowance Section of Instructor Dashboard's Special Exams tab
-        instructor_dashboard_page = self.visit_instructor_dashboard()
-        allowance_section = instructor_dashboard_page.select_special_exams().select_allowance_section()
-
-        # Then I can add Allowance to that exam for a student
-        self.assertTrue(allowance_section.is_add_allowance_button_visible)
-
-        # When I click the Add Allowance button
-        allowance_section.click_add_allowance_button()
-
-        # Then popup should be visible
-        self.assertTrue(allowance_section.is_add_allowance_popup_visible)
-
-        # When I fill and submit the allowance form
-        allowance_section.submit_allowance_form('10', self.USERNAME)
-
-        # Then, the added record should be visible
-        self.assertTrue(allowance_section.is_allowance_record_visible)
 
     def test_can_reset_attempts(self):
         """
@@ -1043,7 +1013,7 @@ class CertificatesTest(BaseInstructorDashboardTest):
         self.certificates_section.a11y_audit.check_for_accessibility_errors()
 
 
-@attr(shard=10)
+@attr(shard=20)
 class CertificateInvalidationTest(BaseInstructorDashboardTest):
     """
     Tests for Certificates functionality on instructor dashboard.
@@ -1252,7 +1222,7 @@ class CertificateInvalidationTest(BaseInstructorDashboardTest):
         self.certificates_section.a11y_audit.check_for_accessibility_errors()
 
 
-@attr(shard=10)
+@attr(shard=20)
 class EcommerceTest(BaseInstructorDashboardTest):
     """
     Bok Choy tests for the "E-Commerce" tab.

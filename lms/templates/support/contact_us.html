@@ -1,7 +1,7 @@
 <%page expression_filter="h"/>
 
 <%!
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.utils.translation import ugettext as _
 
 from openedx.core.djangolib.js_utils import js_escaped_string, dump_js_escaped_json
@@ -33,24 +33,28 @@ from openedx.core.djangolib.js_utils import js_escaped_string, dump_js_escaped_j
             'loginQuery': "${login_query() | n, js_escaped_string}",
             'dashboardUrl': "${reverse('dashboard') | n, js_escaped_string}",
             'homepageUrl': "${marketing_link('ROOT') | n, js_escaped_string}",
-            'zendeskProxyUrl': "${reverse('zendesk_proxy_v1') | n, js_escaped_string}",
+            'submitFormUrl': "${reverse('zendesk_proxy_v1') | n, js_escaped_string}",
             'customFields': ${custom_fields | n, dump_js_escaped_json},
-            'zendeskTags': ${zendesk_tags | n, dump_js_escaped_json},
+            'tags': ${tags | n, dump_js_escaped_json},
+            'supportEmail': "${support_email | n, js_escaped_string}",
         }
 
-        % if user.is_authenticated():
+        % if user.is_authenticated:
             context['user'] = {
                 'username': "${user.username | n, js_escaped_string}",
-                'email': "${user.email | n, js_escaped_string}"
+                'email': "${user.email | n, js_escaped_string}",
+                'course_id': "${course_id | n, js_escaped_string}"
             }
 
             % if user_enrollments:
                 enrollments = []
                 % for enrollment in user_enrollments:
-                    enrollments.push({
-                        'course_id': "${enrollment.course.id | n, js_escaped_string}",
-                        'course_name': "${enrollment.course.display_name | n, js_escaped_string}",
-                    })
+                    % if enrollment.course_overview:
+                        enrollments.push({
+                            'course_id': "${enrollment.course_overview.id | n, js_escaped_string}",
+                            'course_name': "${enrollment.course_overview.display_name | n, js_escaped_string}",
+                        })
+                    % endif
                 %endfor
                 context['user']['enrollments'] = enrollments
 

@@ -19,11 +19,12 @@ from django.db import IntegrityError, models, transaction
 from django.dispatch import receiver
 from django.utils.translation import ugettext as _
 from django.utils.translation import ugettext_lazy
+from edx_django_utils.cache import RequestCache
 from jsonfield.fields import JSONField
 from model_utils.models import TimeStampedModel
+from opaque_keys.edx.django.models import CourseKeyField
 
-from openedx.core.djangoapps.xmodule_django.models import CourseKeyField
-from request_cache.middleware import RequestCache, ns_request_cached
+from openedx.core.lib.cache_utils import request_cached
 
 CREDIT_PROVIDER_ID_REGEX = r"[a-z,A-Z,0-9,\-]+"
 log = logging.getLogger(__name__)
@@ -283,7 +284,7 @@ class CreditRequirement(TimeStampedModel):
     may need to determine whether a user has satisfied the requirement.
     """
 
-    course = models.ForeignKey(CreditCourse, related_name="credit_requirements")
+    course = models.ForeignKey(CreditCourse, related_name="credit_requirements", on_delete=models.CASCADE)
     namespace = models.CharField(max_length=255)
     name = models.CharField(max_length=255)
     display_name = models.CharField(max_length=255, default="")
@@ -334,7 +335,7 @@ class CreditRequirement(TimeStampedModel):
         return credit_requirement, created
 
     @classmethod
-    @ns_request_cached(CACHE_NAMESPACE)
+    @request_cached(namespace=CACHE_NAMESPACE)
     def get_course_requirements(cls, course_key, namespace=None, name=None):
         """
         Get credit requirements of a given course.
@@ -400,7 +401,7 @@ class CreditRequirement(TimeStampedModel):
 @receiver(models.signals.post_delete, sender=CreditRequirement)
 def invalidate_credit_requirement_cache(sender, **kwargs):   # pylint: disable=unused-argument
     """Invalidate the cache of credit requirements. """
-    RequestCache.clear_request_cache(name=CreditRequirement.CACHE_NAMESPACE)
+    RequestCache(namespace=CreditRequirement.CACHE_NAMESPACE).clear()
 
 
 class CreditRequirementStatus(TimeStampedModel):
@@ -426,7 +427,7 @@ class CreditRequirementStatus(TimeStampedModel):
     )
 
     username = models.CharField(max_length=255, db_index=True)
-    requirement = models.ForeignKey(CreditRequirement, related_name="statuses")
+    requirement = models.ForeignKey(CreditRequirement, related_name="statuses", on_delete=models.CASCADE)
     status = models.CharField(max_length=32, choices=REQUIREMENT_STATUS_CHOICES)
 
     # Include additional information about why the user satisfied or failed
@@ -446,7 +447,7 @@ class CreditRequirementStatus(TimeStampedModel):
         Get credit requirement statuses of given requirement and username
 
         Args:
-            requirement(CreditRequirement): The identifier for a requirement
+            requirements(list of CreditRequirements): The identifier for a requirement
             username(str): username of the user
 
         Returns:
@@ -508,8 +509,24 @@ class CreditRequirementStatus(TimeStampedModel):
             log.error(log_msg)
             return
 
+    @classmethod
+    def retire_user(cls, retirement):
+        """
+        Retire a user by anonymizing
 
-def default_deadline_for_credit_eligibility():  # pylint: disable=invalid-name
+        Args:
+            retirement: UserRetirementStatus of the user being retired
+        """
+        requirement_statuses = cls.objects.filter(
+            username=retirement.original_username
+        ).update(
+            username=retirement.retired_username,
+            reason={},
+        )
+        return requirement_statuses > 0
+
+
+def default_deadline_for_credit_eligibility():
     """ The default deadline to use when creating a new CreditEligibility model. """
     return datetime.datetime.now(pytz.UTC) + datetime.timedelta(
         days=getattr(settings, "CREDIT_ELIGIBILITY_EXPIRATION_DAYS", 365)
@@ -519,7 +536,7 @@ def default_deadline_for_credit_eligibility():  # pylint: disable=invalid-name
 class CreditEligibility(TimeStampedModel):
     """ A record of a user's eligibility for credit for a specific course. """
     username = models.CharField(max_length=255, db_index=True)
-    course = models.ForeignKey(CreditCourse, related_name="eligibilities")
+    course = models.ForeignKey(CreditCourse, related_name="eligibilities", on_delete=models.CASCADE)
 
     # Deadline for when credit eligibility will expire.
     # Once eligibility expires, users will no longer be able to purchase
@@ -632,8 +649,8 @@ class CreditRequest(TimeStampedModel):
 
     uuid = models.CharField(max_length=32, unique=True, db_index=True)
     username = models.CharField(max_length=255, db_index=True)
-    course = models.ForeignKey(CreditCourse, related_name="credit_requests")
-    provider = models.ForeignKey(CreditProvider, related_name="credit_requests")
+    course = models.ForeignKey(CreditCourse, related_name="credit_requests", on_delete=models.CASCADE)
+    provider = models.ForeignKey(CreditProvider, related_name="credit_requests", on_delete=models.CASCADE)
     parameters = JSONField()
 
     REQUEST_STATUS_PENDING = "pending"
@@ -656,6 +673,21 @@ class CreditRequest(TimeStampedModel):
         # request to a given provider.  Multiple requests use the same UUID.
         unique_together = ('username', 'course', 'provider')
         get_latest_by = 'created'
+
+    @classmethod
+    def retire_user(cls, retirement):
+        """
+        Obfuscates CreditRecord instances associated with `original_username`.
+        Empties the records' `parameters` field and replaces username with its
+        anonymized value, `retired_username`.
+        """
+        num_updated_credit_requests = cls.objects.filter(
+            username=retirement.original_username
+        ).update(
+            username=retirement.retired_username,
+            parameters={},
+        )
+        return num_updated_credit_requests > 0
 
     @classmethod
     def credit_requests_for_user(cls, username):

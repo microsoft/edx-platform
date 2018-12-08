@@ -3,7 +3,7 @@ import functools
 from django.contrib import admin
 from django import forms
 from django.db.models import F
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.utils.translation import ugettext_lazy as _
 from openedx.core.djangolib.markup import HTML
 
@@ -96,7 +96,7 @@ class CourseIdFilter(admin.SimpleListFilter):
         else:
             return queryset.filter(enrollment__course_id=value)
 
-    def choices(self, changelist):  # pylint: disable=unused-argument
+    def choices(self, changelist):
         yield {
             'selected': self.value() is None,
             'value': None,

@@ -3,6 +3,7 @@ import logging
 import sys
 from functools import wraps
 from smtplib import SMTPException
+import crum
 
 import zendesk
 from django.conf import settings
@@ -85,6 +86,21 @@ def require_global_staff(func):
                 )
             )
     return login_required(wrapped)
+
+
+def fix_crum_request(func):
+    """
+    A decorator that ensures that the 'crum' package (a middleware that stores and fetches the current request in
+    thread-local storage) can correctly fetch the current request. Under certain conditions, the current request cannot
+    be fetched by crum (e.g.: when HTTP errors are raised in our views via 'raise Http404', et. al.). This decorator
+    manually sets the current request for crum if it cannot be fetched.
+    """
+    @wraps(func)
+    def wrapper(request, *args, **kwargs):
+        if not crum.get_current_request():
+            crum.set_current_request(request=request)
+        return func(request, *args, **kwargs)
+    return wrapper
 
 
 @requires_csrf_token
@@ -232,7 +248,7 @@ def _get_zendesk_custom_field_context(request, **kwargs):
         return context
 
     context["course_id"] = course_id
-    if not request.user.is_authenticated():
+    if not request.user.is_authenticated:
         return context
 
     enrollment = CourseEnrollment.get_enrollment(request.user, CourseKey.from_string(course_id))
@@ -372,7 +388,7 @@ def get_feedback_form_context(request):
 
     context["additional_info"] = {}
 
-    if request.user.is_authenticated():
+    if request.user.is_authenticated:
         context["realname"] = request.user.profile.name
         context["email"] = request.user.email
         context["additional_info"]["username"] = request.user.username
@@ -416,7 +432,7 @@ def submit_feedback(request):
 
     required_fields = ["subject", "details"]
 
-    if not request.user.is_authenticated():
+    if not request.user.is_authenticated:
         required_fields += ["name", "email"]
 
     required_field_errs = {
@@ -429,7 +445,7 @@ def submit_feedback(request):
         if field not in request.POST or not request.POST[field]:
             return build_error_response(400, field, required_field_errs[field])
 
-    if not request.user.is_authenticated():
+    if not request.user.is_authenticated:
         try:
             validate_email(request.POST["email"])
         except ValidationError:
@@ -438,8 +454,8 @@ def submit_feedback(request):
     success = False
     context = get_feedback_form_context(request)
 
-    #Update the tag info with 'enterprise_learner' if the user belongs to an enterprise customer.
-    enterprise_learner_data = enterprise_api.get_enterprise_learner_data(site=request.site, user=request.user)
+    # Update the tag info with 'enterprise_learner' if the user belongs to an enterprise customer.
+    enterprise_learner_data = enterprise_api.get_enterprise_learner_data(user=request.user)
     if enterprise_learner_data:
         context["tags"]["learner_type"] = "enterprise_learner"
 

@@ -5,22 +5,21 @@ Tests for CourseDetails
 import datetime
 import ddt
 from pytz import UTC
-from nose.plugins.attrib import attr
 
 from xmodule.modulestore import ModuleStoreEnum
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
 
-from openedx.core.djangoapps.self_paced.models import SelfPacedConfiguration
 from openedx.core.djangoapps.models.course_details import CourseDetails, ABOUT_ATTRIBUTES
 
 
-@attr(shard=2)
 @ddt.ddt
 class CourseDetailsTestCase(ModuleStoreTestCase):
     """
     Tests the first course settings page (course dates, overview, etc.).
     """
+    shard = 2
+
     def setUp(self):
         super(CourseDetailsTestCase, self).setUp()
         self.course = CourseFactory.create()
@@ -50,7 +49,6 @@ class CourseDetailsTestCase(ModuleStoreTestCase):
         self.assertFalse(details.self_paced)
 
     def test_update_and_fetch(self):
-        SelfPacedConfiguration(enabled=True).save()
         jsondetails = CourseDetails.fetch(self.course.id)
         jsondetails.syllabus = "<a href='foo'>bar</a>"
         # encode - decode to convert date fields and other data which changes form
@@ -73,6 +71,11 @@ class CourseDetailsTestCase(ModuleStoreTestCase):
             self.assertEqual(
                 CourseDetails.update_from_json(self.course.id, jsondetails.__dict__, self.user).intro_video,
                 jsondetails.intro_video, "After set intro_video"
+            )
+            jsondetails.about_sidebar_html = "About Sidebar HTML"
+            self.assertEqual(
+                CourseDetails.update_from_json(self.course.id, jsondetails.__dict__, self.user).about_sidebar_html,
+                jsondetails.about_sidebar_html, "After set about_sidebar_html"
             )
             jsondetails.effort = "effort"
             self.assertEqual(
@@ -143,7 +146,6 @@ class CourseDetailsTestCase(ModuleStoreTestCase):
             )
 
     def test_toggle_pacing_during_course_run(self):
-        SelfPacedConfiguration(enabled=True).save()
         self.course.start = datetime.datetime.now()
         self.store.update_item(self.course, self.user.id)
 

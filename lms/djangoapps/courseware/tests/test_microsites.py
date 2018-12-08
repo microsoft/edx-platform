@@ -2,14 +2,12 @@
 Tests related to the Site Configuration feature
 """
 
-import pytest
 from bs4 import BeautifulSoup
 from contextlib import contextmanager
 from django.conf import settings
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.test.utils import override_settings
 from mock import patch
-from nose.plugins.attrib import attr
 from six import text_type
 
 from course_modes.models import CourseMode
@@ -19,12 +17,11 @@ from xmodule.modulestore.tests.django_utils import SharedModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
 
 
-@attr(shard=1)
 class TestSites(SharedModuleStoreTestCase, LoginEnrollmentTestCase):
     """
     This is testing of the Site Configuration feature
     """
-
+    shard = 1
     STUDENT_INFO = [('view@test.com', 'foo'), ('view2@test.com', 'foo')]
     ENABLED_SIGNALS = ['course_published']
 
@@ -136,7 +133,6 @@ class TestSites(SharedModuleStoreTestCase, LoginEnrollmentTestCase):
         self.assertNotContains(resp, 'This is a Test Site footer')
 
     @override_settings(SITE_NAME=settings.MICROSITE_TEST_HOSTNAME)
-    @pytest.mark.django111_expected_failure
     def test_site_homepage_course_max(self):
         """
         Verify that the number of courses displayed on the homepage honors

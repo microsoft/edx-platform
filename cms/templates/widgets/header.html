@@ -2,7 +2,7 @@
 <%namespace name='static' file='../static_content.html'/>
 <%!
   from django.conf import settings
-  from django.core.urlresolvers import reverse
+  from django.urls import reverse
   from django.utils.translation import ugettext as _
   from openedx.core.djangoapps.lang_pref.api import header_language_selector_is_enabled, released_languages
 %>
@@ -34,6 +34,8 @@
             certificates_url = ''
             if settings.FEATURES.get("CERTIFICATES_HTML_VIEW") and context_course.cert_html_view_enabled:
                 certificates_url = reverse('certificates_list_handler', kwargs={'course_key_string': unicode(course_key)})
+            checklists_url = reverse('checklists_handler', kwargs={'course_key_string': unicode(course_key)})
+
       %>
       <h2 class="info-course">
         <span class="sr">${_("Current Course:")}</span>
@@ -124,6 +126,9 @@
                     <a href="${reverse('export_git', kwargs=dict(course_key_string=unicode(course_key)))}">${_("Export to Git")}</a>
                   </li>
                   % endif
+                  <li class="nav-item nav-course-tools-checklists">
+                    <a href="${checklists_url}">${_("Checklists")}</a>
+                  </li>
                 </ul>
               </div>
             </div>
@@ -190,7 +195,7 @@
         <nav class="user-language-selector" aria-label="${_('Language preference')}">
           <form action="/i18n/setlang/" method="post" class="settings-language-form" id="language-settings-form">
               <input type="hidden" id="csrf_token" name="csrfmiddlewaretoken" value="${csrf_token}">
-              % if user.is_authenticated():
+              % if user.is_authenticated:
               <input title="preference api" type="hidden" id="preference-api-url" class="url-endpoint" value="${reverse('preferences_api', kwargs={'username': user.username})}" data-user-is-authenticated="true">
               % else:
               <input title="session update url" type="hidden" id="update-session-url" class="url-endpoint" value="${reverse('session_language')}" data-user-is-authenticated="false">
@@ -210,7 +215,7 @@
         </nav>
       % endif
       % endif
-      % if user.is_authenticated():
+      % if user.is_authenticated:
       <nav class="nav-account nav-is-signedin nav-dd ui-right" aria-label="${_('Account')}">
         <h2 class="sr-only">${_("Account Navigation")}</h2>
         <ol>

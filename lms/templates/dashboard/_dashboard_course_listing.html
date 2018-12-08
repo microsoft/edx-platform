@@ -1,11 +1,11 @@
-<%page args="course_overview, enrollment, entitlement, entitlement_session, course_card_index, is_unfulfilled_entitlement, is_fulfilled_entitlement, entitlement_available_sessions, entitlement_expiration_date, entitlement_expired_at, show_courseware_link, cert_status, can_refund_entitlement, can_unenroll, credit_status, show_email_settings, course_mode_info, is_paid_course, is_course_blocked, verification_status, course_requirements, dashboard_index, share_settings, related_programs, display_course_modes_on_dashboard, show_consent_link, enterprise_customer_name" expression_filter="h"/>
+<%page args="course_overview, enrollment, entitlement, entitlement_session, course_card_index, is_unfulfilled_entitlement, is_fulfilled_entitlement, entitlement_available_sessions, entitlement_expiration_date, entitlement_expired_at, show_courseware_link, cert_status, can_refund_entitlement, can_unenroll, credit_status, show_email_settings, course_mode_info, is_paid_course, is_course_blocked, verification_status, course_requirements, dashboard_index, share_settings, related_programs, display_course_modes_on_dashboard, show_consent_link, enterprise_customer_name, resume_button_url" expression_filter="h"/>
 
 <%!
 import urllib
 
 from django.utils.translation import ugettext as _
 from django.utils.translation import ungettext
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from course_modes.models import CourseMode
 from course_modes.helpers import enrollment_mode_display
 from openedx.core.djangolib.js_utils import dump_js_escaped_json, js_escaped_string
@@ -48,7 +48,7 @@ from util.course import get_link_for_about_page, get_encoded_course_sharing_utm_
     %>
     <%
         mode_class = course_verified_certs.get('display_mode', '')
-        if mode_class != '':
+        if mode_class:
             mode_class = ' ' + mode_class ;
     %>
   % else:
@@ -172,11 +172,34 @@ from util.course import get_link_for_about_page, get_encoded_course_sharing_utm_
                 % else:
                   <a class="enter-course-blocked archived" data-course-key="${enrollment.course_id}">${_('View Archived Course')}<span class="sr">&nbsp;${course_overview.display_name_with_default}</span></a>
                 % endif
+
               % else:
-                % if not is_course_blocked:
-                  <a href="${course_target}" class="enter-course ${'hidden' if is_unfulfilled_entitlement else ''}" data-course-key="${enrollment.course_id}">${_('View Course')}<span class="sr">&nbsp;${course_overview.display_name_with_default}</span></a>
+                % if resume_button_url != '':
+                  <a href="${resume_button_url}"
+                     class="enter-course ${'hidden' if is_unfulfilled_entitlement else ''}"
+                     data-course-key="${enrollment.course_id}">
+                    ${_('Resume Course')}
+                    <span class="sr">
+                      &nbsp;${course_overview.display_name_with_default}
+                    </span>
+                  </a>
+                % elif not is_course_blocked:
+                  <a href="${course_target}" 
+                     class="enter-course ${'hidden' if is_unfulfilled_entitlement else ''}" 
+                     data-course-key="${enrollment.course_id}">
+                    ${_('View Course')}
+                    <span class="sr">
+                      &nbsp;${course_overview.display_name_with_default}
+                    </span>
+                  </a>
                 % else:
-                  <a class="enter-course-blocked" data-course-key="${enrollment.course_id}">${_('View Course')}<span class="sr">&nbsp;${course_overview.display_name_with_default}</span></a>
+                  <a class="enter-course-blocked"
+                     data-course-key="${enrollment.course_id}">
+                    ${_('View Course')}
+                    <span class="sr">
+                      &nbsp;${course_overview.display_name_with_default}
+                    </span>
+                  </a>
                 % endif
               % endif
             % endif
@@ -303,7 +326,7 @@ from util.course import get_link_for_about_page, get_encoded_course_sharing_utm_
 
       % if entitlement and not entitlement_expired_at:
         <div class="course-entitlement-selection-container ${'' if is_unfulfilled_entitlement else 'hidden'}"></div>
-        <%static:require_module module_name="js/learner_dashboard/course_entitlement_factory" class_name="EntitlementFactory">
+        <%static:webpack entry="EntitlementFactory">
           EntitlementFactory({
               el: '${ '#course-card-' + str(course_card_index) + ' .course-entitlement-selection-container' | n, js_escaped_string }',
               triggerOpenBtn: '${ '#course-card-' + str(course_card_index) + ' .change-session' | n, js_escaped_string }',
@@ -321,7 +344,7 @@ from util.course import get_link_for_about_page, get_encoded_course_sharing_utm_
               expiredAt: '${ entitlement.expired_at_datetime | n, js_escaped_string }',
               daysUntilExpiration: '${ entitlement.get_days_until_expiration() | n, js_escaped_string }'
           });
-        </%static:require_module>
+        </%static:webpack>
       %endif
 
       % if related_programs:
@@ -335,22 +358,6 @@ from util.course import get_link_for_about_page, get_encoded_course_sharing_utm_
             </li>
             % endfor
           </ul>
-          <div class="complete-div" data-programdata="${program_data}">
-            % if program_data.get('is_learner_eligible_for_one_click_purchase'):
-              <div class="complete-program-dashboard-div"><span class="complete-program-dashboard-span">${_('Buy all remaining courses in this program and save 10%')}</span>
-                <a href="${urls.get('completeProgramURL')}" class="btn-brand btn cta-primary upgrade-button complete-program-dashboard-button">
-                  ${_('Upgrade All Remaining Courses (')}
-                  % if program_data.get('discount_data', {}).get('is_discounted'):
-                      <span class='list-price'>
-                        ${_('{"{0:.2f}".format(a)}'.format(program_data['discount_data']['total_incl_tax_excl_discounts'], 2))}
-                      </span>
-                  % endif
-                  ${_(' ${price:.2f} {currency} ) '.format(price=program_data.get('full_program_price'),
-                  currency=program_data.get('discount_data', {}).get('currency')))}
-                </a>
-              </div>
-            % endif
-          </div>
         </div>
       % endif
 
@@ -392,7 +399,7 @@ from util.course import get_link_for_about_page, get_encoded_course_sharing_utm_
           <%include file="_dashboard_show_consent.html" args="course_overview=course_overview, course_target=course_target, enrollment=enrollment, enterprise_customer_name=enterprise_customer_name"/>
         %endif
 
-        % if verification_status.get('status') in [VERIFY_STATUS_NEED_TO_VERIFY, VERIFY_STATUS_SUBMITTED, VERIFY_STATUS_RESUBMITTED, VERIFY_STATUS_APPROVED, VERIFY_STATUS_NEED_TO_REVERIFY]:
+        % if verification_status.get('should_display') and verification_status.get('status') in [VERIFY_STATUS_NEED_TO_VERIFY, VERIFY_STATUS_SUBMITTED, VERIFY_STATUS_RESUBMITTED, VERIFY_STATUS_APPROVED, VERIFY_STATUS_NEED_TO_REVERIFY]:
           <div class="message message-status wrapper-message-primary is-shown">
             % if verification_status['status'] == VERIFY_STATUS_NEED_TO_VERIFY:
               <div class="verification-reminder">

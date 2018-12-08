@@ -12,6 +12,7 @@ file and check it in at the same time as your model changes. To do that,
 ASSUMPTIONS: modules have unique IDs, even across different module_types
 
 """
+import codecs
 import csv
 import hashlib
 import json
@@ -24,9 +25,9 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.files.base import ContentFile
 from django.db import models, transaction
+from opaque_keys.edx.django.models import CourseKeyField
 from six import text_type
 
-from openedx.core.djangoapps.xmodule_django.models import CourseKeyField
 from openedx.core.storage import get_storage
 
 logger = logging.getLogger(__name__)
@@ -68,7 +69,7 @@ class InstructorTask(models.Model):
     task_id = models.CharField(max_length=255, db_index=True)  # max_length from celery_taskmeta
     task_state = models.CharField(max_length=50, null=True, db_index=True)  # max_length from celery_taskmeta
     task_output = models.CharField(max_length=1024, null=True)
-    requester = models.ForeignKey(User, db_index=True)
+    requester = models.ForeignKey(User, db_index=True, on_delete=models.CASCADE)
     created = models.DateTimeField(auto_now_add=True, null=True)
     updated = models.DateTimeField(auto_now=True)
     subtasks = models.TextField(blank=True)  # JSON dictionary
@@ -97,8 +98,8 @@ class InstructorTask(models.Model):
         json_task_input = json.dumps(task_input)
 
         # check length of task_input, and return an exception if it's too long:
-        if len(json_task_input) > 255:
-            fmt = 'Task input longer than 255: "{input}" for "{task}" of "{course}"'
+        if len(json_task_input) > 265:
+            fmt = 'Task input longer than 265: "{input}" for "{task}" of "{course}"'
             msg = fmt.format(input=json_task_input, task=task_type, course=course_id)
             raise ValueError(msg)
 
@@ -149,7 +150,7 @@ class InstructorTask(models.Model):
         Truncation is indicated by adding "..." to the end of the value.
         """
         tag = '...'
-        task_progress = {'exception': type(exception).__name__, 'message': unicode(exception.message)}
+        task_progress = {'exception': type(exception).__name__, 'message': text_type(exception)}
         if traceback_string is not None:
             # truncate any traceback that goes into the InstructorTask model:
             task_progress['traceback'] = traceback_string
@@ -270,6 +271,8 @@ class DjangoStorageReportStore(ReportStore):
         strings), write the rows to the storage backend in csv format.
         """
         output_buffer = ContentFile('')
+        # Adding unicode signature (BOM) for MS Excel 2013 compatibility
+        output_buffer.write(codecs.BOM_UTF8)
         csvwriter = csv.writer(output_buffer)
         csvwriter.writerows(self._get_utf8_encoded_rows(rows))
         output_buffer.seek(0)

@@ -9,10 +9,9 @@ import re
 from datetime import datetime, timedelta
 
 import ddt
-import pytest
-from django.core.urlresolvers import reverse
+from django.contrib.auth.models import User
+from django.urls import reverse
 from django.db.models import signals
-from nose.plugins.attrib import attr
 from pytz import UTC
 
 from common.test.utils import disable_signal
@@ -21,7 +20,7 @@ from course_modes.tests.factories import CourseModeFactory
 from lms.djangoapps.verify_student.models import VerificationDeadline
 from student.models import ENROLLED_TO_ENROLLED, CourseEnrollment, ManualEnrollmentAudit
 from student.roles import GlobalStaff, SupportStaffRole
-from student.tests.factories import CourseEnrollmentFactory, UserFactory
+from student.tests.factories import TEST_PASSWORD, CourseEnrollmentFactory, UserFactory
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase, SharedModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
 
@@ -44,12 +43,57 @@ class SupportViewTestCase(ModuleStoreTestCase):
         self.assertTrue(success, msg="Could not log in")
 
 
-@attr(shard=3)
+class SupportViewManageUserTests(SupportViewTestCase):
+    """
+    Base class for support view tests.
+    """
+
+    def setUp(self):
+        """Make the user support staff"""
+        super(SupportViewManageUserTests, self).setUp()
+        SupportStaffRole().add_users(self.user)
+
+    def test_get_support_form(self):
+        """
+        Tests Support View to return Manage User Form
+        """
+        url = reverse('support:manage_user')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+    def test_get_form_with_user_info(self):
+        """
+        Tests Support View to return Manage User Form
+        with user info
+        """
+        url = reverse('support:manage_user_detail') + self.user.username
+        response = self.client.get(url)
+        data = json.loads(response.content)
+        self.assertEqual(data['username'], self.user.username)
+
+    def test_disable_user_account(self):
+        """
+        Tests Support View to disable the user account
+        """
+        test_user = UserFactory(
+            username='foobar', email='foobar@foobar.com', password='foobar'
+        )
+        url = reverse('support:manage_user_detail') + test_user.username
+        response = self.client.post(url, data={
+            'username_or_email': test_user.username
+        })
+        data = json.loads(response.content)
+        self.assertEqual(data['success_msg'], 'User Disabled Successfully')
+        test_user = User.objects.get(username=test_user.username, email=test_user.email)
+        self.assertEqual(test_user.has_usable_password(), False)
+
+
 @ddt.ddt
 class SupportViewAccessTests(SupportViewTestCase):
     """
     Tests for access control of support views.
     """
+    shard = 3
 
     @ddt.data(*(
         (url_name, role, has_access)
@@ -59,7 +103,9 @@ class SupportViewAccessTests(SupportViewTestCase):
             'support:certificates',
             'support:refund',
             'support:enrollment',
-            'support:enrollment_list'
+            'support:enrollment_list',
+            'support:manage_user',
+            'support:manage_user_detail',
         ), (
             (GlobalStaff, True),
             (SupportStaffRole, True),
@@ -67,7 +113,6 @@ class SupportViewAccessTests(SupportViewTestCase):
         ))
     ))
     @ddt.unpack
-    @pytest.mark.django111_expected_failure
     def test_access(self, url_name, role, has_access):
         if role is not None:
             role().add_users(self.user)
@@ -85,7 +130,9 @@ class SupportViewAccessTests(SupportViewTestCase):
         "support:certificates",
         "support:refund",
         "support:enrollment",
-        "support:enrollment_list"
+        "support:enrollment_list",
+        "support:manage_user",
+        "support:manage_user_detail",
     )
     def test_require_login(self, url_name):
         url = reverse(url_name)
@@ -169,15 +216,15 @@ class SupportViewEnrollmentsTests(SharedModuleStoreTestCase, SupportViewTestCase
                 CourseMode.AUDIT, CourseMode.PROFESSIONAL, CourseMode.CREDIT_MODE,
                 CourseMode.NO_ID_PROFESSIONAL_MODE, CourseMode.VERIFIED, CourseMode.HONOR
         ):
-            CourseModeFactory.create(mode_slug=mode, course_id=self.course.id)  # pylint: disable=no-member
+            CourseModeFactory.create(mode_slug=mode, course_id=self.course.id)
 
         self.verification_deadline = VerificationDeadline(
-            course_key=self.course.id,  # pylint: disable=no-member
+            course_key=self.course.id,
             deadline=datetime.now(UTC) + timedelta(days=365)
         )
         self.verification_deadline.save()
 
-        CourseEnrollmentFactory.create(mode=CourseMode.AUDIT, user=self.student, course_id=self.course.id)  # pylint: disable=no-member
+        CourseEnrollmentFactory.create(mode=CourseMode.AUDIT, user=self.student, course_id=self.course.id)
 
         self.url = reverse('support:enrollment_list', kwargs={'username_or_email': self.student.username})
 
@@ -185,7 +232,7 @@ class SupportViewEnrollmentsTests(SharedModuleStoreTestCase, SupportViewTestCase
         """
         Assert that the student's enrollment has the correct mode.
         """
-        enrollment = CourseEnrollment.get_enrollment(self.student, self.course.id)  # pylint: disable=no-member
+        enrollment = CourseEnrollment.get_enrollment(self.student, self.course.id)
         self.assertEqual(enrollment.mode, mode)
 
     @ddt.data('username', 'email')
@@ -202,7 +249,7 @@ class SupportViewEnrollmentsTests(SharedModuleStoreTestCase, SupportViewTestCase
             'mode': CourseMode.AUDIT,
             'manual_enrollment': {},
             'user': self.student.username,
-            'course_id': unicode(self.course.id),  # pylint: disable=no-member
+            'course_id': unicode(self.course.id),
             'is_active': True,
             'verified_upgrade_deadline': None,
         }, data[0])
@@ -218,7 +265,7 @@ class SupportViewEnrollmentsTests(SharedModuleStoreTestCase, SupportViewTestCase
             self.student.email,
             ENROLLED_TO_ENROLLED,
             'Financial Assistance',
-            CourseEnrollment.objects.get(course_id=self.course.id, user=self.student)  # pylint: disable=no-member
+            CourseEnrollment.objects.get(course_id=self.course.id, user=self.student)
         )
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
@@ -236,7 +283,7 @@ class SupportViewEnrollmentsTests(SharedModuleStoreTestCase, SupportViewTestCase
             kwargs={'username_or_email': getattr(self.student, search_string_type)}
         )
         response = self.client.post(url, data={
-            'course_id': unicode(self.course.id),  # pylint: disable=no-member
+            'course_id': unicode(self.course.id),
             'old_mode': CourseMode.AUDIT,
             'new_mode': CourseMode.VERIFIED,
             'reason': 'Financial Assistance'
@@ -246,7 +293,7 @@ class SupportViewEnrollmentsTests(SharedModuleStoreTestCase, SupportViewTestCase
         self.assert_enrollment(CourseMode.VERIFIED)
 
     @ddt.data(
-        ({}, r"The field '\w+' is required."),
+        ({}, r"The field \"'\w+'\" is required."),  # The double quoting goes away in Django 2.0.1
         ({'course_id': 'bad course key'}, 'Could not parse course key.'),
         ({
             'course_id': 'course-v1:TestX+T101+2015',
@@ -272,7 +319,7 @@ class SupportViewEnrollmentsTests(SharedModuleStoreTestCase, SupportViewTestCase
         # `self` isn't available from within the DDT declaration, so
         # assign the course ID here
         if 'course_id' in data and data['course_id'] is None:
-            data['course_id'] = unicode(self.course.id)  # pylint: disable=no-member
+            data['course_id'] = unicode(self.course.id)
         response = self.client.post(self.url, data)
         self.assertEqual(response.status_code, 400)
         self.assertIsNotNone(re.match(error_message, response.content))
@@ -318,7 +365,7 @@ class SupportViewEnrollmentsTests(SharedModuleStoreTestCase, SupportViewTestCase
 
     def _assert_generated_modes(self, response):
         """Dry method to generate course modes dict and test with response data."""
-        modes = CourseMode.modes_for_course(self.course.id, include_expired=True)  # pylint: disable=no-member
+        modes = CourseMode.modes_for_course(self.course.id, include_expired=True)
         modes_data = []
         for mode in modes:
             expiry = mode.expiration_datetime.strftime('%Y-%m-%dT%H:%M:%SZ') if mode.expiration_datetime else None
@@ -357,7 +404,7 @@ class SupportViewEnrollmentsTests(SharedModuleStoreTestCase, SupportViewTestCase
             kwargs={'username_or_email': getattr(self.student, search_string_type)}
         )
         response = self.client.post(url, data={
-            'course_id': unicode(self.course.id),  # pylint: disable=no-member
+            'course_id': unicode(self.course.id),
             'old_mode': CourseMode.AUDIT,
             'new_mode': new_mode,
             'reason': 'Financial Assistance'
@@ -377,7 +424,7 @@ class SupportViewEnrollmentsTests(SharedModuleStoreTestCase, SupportViewTestCase
 
         # change verified mode expiry.
         verified_mode = CourseMode.objects.get(
-            course_id=self.course.id,   # pylint: disable=no-member
+            course_id=self.course.id,
             mode_slug=CourseMode.VERIFIED
         )
         verified_mode.expiration_datetime = datetime(year=1970, month=1, day=9, tzinfo=UTC)

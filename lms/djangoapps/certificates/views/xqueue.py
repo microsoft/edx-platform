@@ -13,8 +13,8 @@ from opaque_keys.edx.keys import CourseKey
 
 import dogstats_wrapper as dog_stats_api
 from capa.xqueue_interface import XQUEUE_METRIC_NAME
-from certificates.api import generate_user_certificates
-from certificates.models import (
+from lms.djangoapps.certificates.api import generate_user_certificates
+from lms.djangoapps.certificates.models import (
     CertificateStatuses,
     ExampleCertificate,
     GeneratedCertificate,
@@ -39,7 +39,7 @@ def request_certificate(request):
     then if and only if they pass, do they get a certificate issued.
     """
     if request.method == "POST":
-        if request.user.is_authenticated():
+        if request.user.is_authenticated:
             username = request.user.username
             student = User.objects.get(username=username)
             course_key = CourseKey.from_string(request.POST.get('course_id'))

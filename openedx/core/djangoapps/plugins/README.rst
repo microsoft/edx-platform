@@ -129,7 +129,7 @@ class::
 
                     # The regex to provide to django's urls.url.
                     # Optional; Defaults to r''.
-                    PluginURLs.REGEX: r'api/my_app/',
+                    PluginURLs.REGEX: r'^api/my_app/',
 
                     # The python path (relative to this app) to the URLs module to be plugged into the project.
                     # Optional; Defaults to u'urls'.
@@ -181,7 +181,7 @@ class::
 
                         # The full path to a sender (if connecting to a specific sender) to be passed to Signal.connect.
                         # Optional; Defaults to None.
-                        PluginSignals.SENDER_PATH: u'full_path_to_sender_app.ModelZ,
+                        PluginSignals.SENDER_PATH: u'full_path_to_sender_app.ModelZ',
                     }],
                 }
             }
@@ -197,7 +197,7 @@ OR use string constants when they cannot import from djangoapps.plugins::
             u'url_config': {
                 u'lms.djangoapp': {
                     u'namespace': u'my_app',
-                    u'regex': u'api/my_app/',
+                    u'regex': u'^api/my_app/',
                     u'relative_path': u'api.urls',
                 }
             },
@@ -214,9 +214,10 @@ OR use string constants when they cannot import from djangoapps.plugins::
                         u'receiver_func_name': u'on_signal_x',
                         u'signal_path': u'full_path_to_signal_x_module.SignalX',
                         u'dispatch_uid': u'my_app.my_signals.on_signal_x',
-                        u'sender_path': u'full_path_to_sender_app.ModelZ,
+                        u'sender_path': u'full_path_to_sender_app.ModelZ',
                     }],
                 }
+            }
         }
 
 4. For Plugin Settings, insert the following function into each of the Plugin

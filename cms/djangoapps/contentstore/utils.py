@@ -6,7 +6,7 @@ import logging
 from datetime import datetime
 
 from django.conf import settings
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.utils.translation import ugettext as _
 from opaque_keys.edx.keys import CourseKey, UsageKey
 from pytz import UTC
@@ -14,7 +14,6 @@ from six import text_type
 
 from django_comment_common.models import assign_default_role
 from django_comment_common.utils import seed_permissions_roles
-from openedx.core.djangoapps.self_paced.models import SelfPacedConfiguration
 from openedx.core.djangoapps.site_configuration.models import SiteConfiguration
 from student import auth
 from student.models import CourseEnrollment
@@ -132,7 +131,6 @@ def get_lms_link_for_item(location, preview=False):
     )
 
 
-# pylint: disable=invalid-name
 def get_lms_link_for_certificate_web_view(user_id, course_key, mode):
     """
     Returns the url to the certificate web view.
@@ -509,4 +507,4 @@ def is_self_paced(course):
     """
     Returns True if course is self-paced, False otherwise.
     """
-    return course and course.self_paced and SelfPacedConfiguration.current().enabled
+    return course and course.self_paced

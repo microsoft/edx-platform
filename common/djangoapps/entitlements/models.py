@@ -1,15 +1,26 @@
+"""Entitlement Models"""
+
+import logging
 import uuid as uuid_tools
 from datetime import timedelta
-from util.date_utils import strftime_localized
 
 from django.conf import settings
 from django.contrib.sites.models import Site
-from django.db import models
+from django.db import IntegrityError, models, transaction
 from django.utils.timezone import now
-
-from certificates.models import GeneratedCertificate
+from model_utils import Choices
 from model_utils.models import TimeStampedModel
+
+from course_modes.models import CourseMode
+from entitlements.utils import is_course_run_entitlement_fulfillable
+from lms.djangoapps.certificates.models import GeneratedCertificate
+from lms.djangoapps.commerce.utils import refund_entitlement
+from openedx.core.djangoapps.catalog.utils import get_course_uuid_for_course
 from openedx.core.djangoapps.content.course_overviews.models import CourseOverview
+from student.models import CourseEnrollment, CourseEnrollmentException
+from util.date_utils import strftime_localized
+
+log = logging.getLogger("common.entitlements.models")
 
 
 class CourseEntitlementPolicy(models.Model):
@@ -17,9 +28,10 @@ class CourseEntitlementPolicy(models.Model):
     Represents the Entitlement's policy for expiration, refunds, and regaining a used certificate
     """
 
-    DEFAULT_EXPIRATION_PERIOD_DAYS = 450
+    DEFAULT_EXPIRATION_PERIOD_DAYS = 730
     DEFAULT_REFUND_PERIOD_DAYS = 60
     DEFAULT_REGAIN_PERIOD_DAYS = 14
+    MODES = Choices((None, '---------'), CourseMode.VERIFIED, CourseMode.PROFESSIONAL)
 
     # Use a DurationField to calculate time as it returns a timedelta, useful in performing operations with datetimes
     expiration_period = models.DurationField(
@@ -38,7 +50,8 @@ class CourseEntitlementPolicy(models.Model):
                    "it is no longer able to be regained by a user."),
         null=False
     )
-    site = models.ForeignKey(Site)
+    site = models.ForeignKey(Site, null=True, on_delete=models.CASCADE)
+    mode = models.CharField(max_length=32, choices=MODES, null=True)
 
     def get_days_until_expiration(self, entitlement):
         """
@@ -121,11 +134,12 @@ class CourseEntitlementPolicy(models.Model):
                 and not entitlement.expired_at)
 
     def __unicode__(self):
-        return u'Course Entitlement Policy: expiration_period: {}, refund_period: {}, regain_period: {}'\
+        return u'Course Entitlement Policy: expiration_period: {}, refund_period: {}, regain_period: {}, mode: {}'\
             .format(
                 self.expiration_period,
                 self.refund_period,
                 self.regain_period,
+                self.mode
             )
 
 
@@ -133,7 +147,7 @@ class CourseEntitlement(TimeStampedModel):
     """
     Represents a Student's Entitlement to a Course Run for a given Course.
     """
-    user = models.ForeignKey(settings.AUTH_USER_MODEL)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     uuid = models.UUIDField(default=uuid_tools.uuid4, editable=False, unique=True)
     course_uuid = models.UUIDField(help_text='UUID for the Course, not the Course Run')
     expired_at = models.DateTimeField(
@@ -146,10 +160,12 @@ class CourseEntitlement(TimeStampedModel):
         'student.CourseEnrollment',
         null=True,
         help_text='The current Course enrollment for this entitlement. If NULL the Learner has not enrolled.',
-        blank=True
+        blank=True,
+        on_delete=models.CASCADE,
     )
     order_number = models.CharField(max_length=128, null=True)
-    _policy = models.ForeignKey(CourseEntitlementPolicy, null=True, blank=True)
+    refund_locked = models.BooleanField(default=False)
+    _policy = models.ForeignKey(CourseEntitlementPolicy, null=True, blank=True, on_delete=models.CASCADE)
 
     @property
     def expired_at_datetime(self):
@@ -194,8 +210,7 @@ class CourseEntitlement(TimeStampedModel):
         if not self.expired_at:
             if (self.policy.get_days_until_expiration(self) < 0 or
                     (self.enrollment_course_run and not self.is_entitlement_regainable())):
-                self.expired_at = now()
-                self.save()
+                self.expire_entitlement()
 
     def get_days_until_expiration(self):
         """
@@ -213,7 +228,7 @@ class CourseEntitlement(TimeStampedModel):
         """
         Returns a boolean as to whether or not the entitlement can be refunded based on the entitlement's policy
         """
-        return self.policy.is_entitlement_refundable(self)
+        return not self.refund_locked and self.policy.is_entitlement_refundable(self)
 
     def is_entitlement_redeemable(self):
         """
@@ -251,6 +266,13 @@ class CourseEntitlement(TimeStampedModel):
         Fulfills an entitlement by specifying a session.
         """
         self.enrollment_course_run = enrollment
+        self.save()
+
+    def expire_entitlement(self):
+        """
+        Expire the entitlement.
+        """
+        self.expired_at = now()
         self.save()
 
     @classmethod
@@ -301,3 +323,182 @@ class CourseEntitlement(TimeStampedModel):
             expired_at__isnull=False,
             enrollment_course_run=None
         ).select_related('user').select_related('enrollment_course_run')
+
+    @classmethod
+    def get_fulfillable_entitlements(cls, user):
+        """
+        Returns all fulfillable entitlements for a User
+
+        Arguments:
+            user (User): The user we are looking at the entitlements of.
+
+        Returns
+            Queryset: A queryset of course Entitlements ordered descending by creation date that a user can enroll in.
+            These must not be expired and not have a course run already assigned to it.
+        """
+
+        return cls.objects.filter(
+            user=user,
+        ).exclude(
+            expired_at__isnull=False,
+            enrollment_course_run__isnull=False
+        ).order_by('-created')
+
+    @classmethod
+    def get_fulfillable_entitlement_for_user_course_run(cls, user, course_run_key):
+        """
+        Retrieves a fulfillable entitlement for the user and the given course run.
+
+        Arguments:
+            user (User): The user that we are inspecting the entitlements for.
+            course_run_key (CourseKey): The course run Key.
+
+        Returns:
+            CourseEntitlement: The most recent fulfillable CourseEntitlement, None otherwise.
+        """
+        # Check if the User has any fulfillable entitlements.
+        # Note: Wait to retrieve the Course UUID until we have confirmed the User has fulfillable entitlements.
+        # This was done to avoid calling the APIs when the User does not have an entitlement.
+        entitlements = cls.get_fulfillable_entitlements(user)
+        if entitlements:
+            course_uuid = get_course_uuid_for_course(course_run_key)
+            if course_uuid:
+                entitlement = entitlements.filter(course_uuid=course_uuid).first()
+                if (entitlement and is_course_run_entitlement_fulfillable(
+                        course_run_key=course_run_key, entitlement=entitlement) and
+                        entitlement.is_entitlement_redeemable()):
+                    return entitlement
+        return None
+
+    @classmethod
+    @transaction.atomic
+    def enroll_user_and_fulfill_entitlement(cls, entitlement, course_run_key):
+        """
+        Enrolls the user in the Course Run and updates the entitlement with the new Enrollment.
+
+        Returns:
+            bool: True if successfully fulfills given entitlement by enrolling the user in the given course run.
+        """
+        try:
+            enrollment = CourseEnrollment.enroll(
+                user=entitlement.user,
+                course_key=course_run_key,
+                mode=entitlement.mode
+            )
+        except CourseEnrollmentException:
+            log.exception('Login for Course Entitlement {uuid} failed'.format(uuid=entitlement.uuid))
+            return False
+
+        entitlement.set_enrollment(enrollment)
+        return True
+
+    @classmethod
+    def check_for_existing_entitlement_and_enroll(cls, user, course_run_key):
+        """
+        Looks at the User's existing entitlements to see if the user already has a Course Entitlement for the
+        course run provided in the course_key.  If the user does have an Entitlement with no run set, the User is
+        enrolled in the mode set in the Entitlement.
+
+        Arguments:
+            user (User): The user that we are inspecting the entitlements for.
+            course_run_key (CourseKey): The course run Key.
+        Returns:
+            bool: True if the user had an eligible course entitlement to which an enrollment in the
+            given course run was applied.
+        """
+        entitlement = cls.get_fulfillable_entitlement_for_user_course_run(user, course_run_key)
+        if entitlement:
+            return cls.enroll_user_and_fulfill_entitlement(entitlement, course_run_key)
+        return False
+
+    @classmethod
+    def unenroll_entitlement(cls, course_enrollment, skip_refund):
+        """
+        Un-enroll the user from entitlement and refund if needed.
+        """
+        course_uuid = get_course_uuid_for_course(course_enrollment.course_id)
+        course_entitlement = cls.get_entitlement_if_active(course_enrollment.user, course_uuid)
+        if course_entitlement and course_entitlement.enrollment_course_run == course_enrollment:
+            course_entitlement.set_enrollment(None)
+            if not skip_refund and course_entitlement.is_entitlement_refundable():
+                course_entitlement.expire_entitlement()
+                course_entitlement.refund()
+
+    def refund(self):
+        """
+        Initiate refund process for the entitlement.
+        """
+        refund_successful = refund_entitlement(course_entitlement=self)
+        if not refund_successful:
+            # This state is achieved in most cases by a failure in the ecommerce service to process the refund.
+            log.warn(
+                'Entitlement Refund failed for Course Entitlement [%s], alert User',
+                self.uuid
+            )
+            # Force Transaction reset with an Integrity error exception, this will revert all previous transactions
+            raise IntegrityError
+
+
+class CourseEntitlementSupportDetail(TimeStampedModel):
+    """
+    Table recording support interactions with an entitlement
+    """
+    # Reasons deprecated
+    LEAVE_SESSION = 'LEAVE'
+    CHANGE_SESSION = 'CHANGE'
+    LEARNER_REQUEST_NEW = 'LEARNER_NEW'
+    COURSE_TEAM_REQUEST_NEW = 'COURSE_TEAM_NEW'
+    OTHER = 'OTHER'
+    ENTITLEMENT_SUPPORT_REASONS = (
+        (LEAVE_SESSION, u'Learner requested leave session for expired entitlement'),
+        (CHANGE_SESSION, u'Learner requested session change for expired entitlement'),
+        (LEARNER_REQUEST_NEW, u'Learner requested new entitlement'),
+        (COURSE_TEAM_REQUEST_NEW, u'Course team requested entitlement for learnerg'),
+        (OTHER, u'Other'),
+    )
+
+    REISSUE = 'REISSUE'
+    CREATE = 'CREATE'
+    ENTITLEMENT_SUPPORT_ACTIONS = (
+        (REISSUE, 'Re-issue entitlement'),
+        (CREATE, 'Create new entitlement'),
+    )
+
+    entitlement = models.ForeignKey('entitlements.CourseEntitlement', on_delete=models.CASCADE)
+    support_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+
+    #Deprecated: use action instead.
+    reason = models.CharField(max_length=15, choices=ENTITLEMENT_SUPPORT_REASONS)
+    action = models.CharField(max_length=15, choices=ENTITLEMENT_SUPPORT_ACTIONS)
+
+    comments = models.TextField(null=True)
+
+    unenrolled_run = models.ForeignKey(
+        CourseOverview,
+        null=True,
+        blank=True,
+        db_constraint=False,
+        on_delete=models.CASCADE,
+    )
+
+    def __unicode__(self):
+        """Unicode representation of an Entitlement"""
+        return u'Course Entitlement Support Detail: entitlement: {}, support_user: {}, reason: {}'.format(
+            self.entitlement,
+            self.support_user,
+            self.reason,
+        )
+
+    @classmethod
+    def get_support_actions_list(cls):
+        """
+        Method for retrieving a serializable version of the entitlement support reasons
+
+        Returns
+            list: Containing the possible support actions
+        """
+        return [
+            action[0]  # get just the action code, not the human readable description.
+            for action
+            in cls.ENTITLEMENT_SUPPORT_ACTIONS
+        ]

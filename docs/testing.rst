@@ -72,7 +72,7 @@ UI Acceptance Tests
    in favor of Bok Choy for new tests.  Most of these tests simulate user
    interactions through the browser using `splinter`_.
 
-.. _Bok Choy: http://bok-choy.readthedocs.org/en/latest/tutorial.html
+.. _Bok Choy: https://bok-choy.readthedocs.org/en/latest/tutorial.html
 .. _lettuce: http://lettuce.it/
 .. _splinter: http://splinter.cobrateam.info/
 
@@ -92,10 +92,10 @@ Test Locations
 
 -  Javascript unit tests: Located in ``spec`` folders. For example,
    ``common/lib/xmodule/xmodule/js/spec`` and
-   ``{cms,lms}/static/coffee/spec`` For consistency, you should use the
+   ``{cms,lms}/static/js/spec`` For consistency, you should use the
    same directory structure for implementation and test. For example,
-   the test for ``src/views/module.coffee`` should be written in
-   ``spec/views/module_spec.coffee``.
+   the test for ``src/views/module.js`` should be written in
+   ``spec/views/module_spec.js``.
 
 -  UI acceptance tests:
 
@@ -139,6 +139,28 @@ Note -
 
     paver -h
 
+Connecting to Browser
+---------------------
+
+If you want to see the browser being automated for JavaScript or bok-choy tests,
+you can connect to the container running it via VNC.
+
++------------------------+----------------------+
+| Browser                | VNC connection       |
++========================+======================+
+| Firefox (Default)      | vnc://0.0.0.0:25900  |
++------------------------+----------------------+
+| Chrome (via Selenium)  | vnc://0.0.0.0:15900  |
++------------------------+----------------------+
+
+On macOS, enter the VNC connection string in Safari to connect via VNC. The VNC
+passwords for both browsers are randomly generated and logged at container
+startup, and can be found by running ``make vnc-passwords``.
+
+Most tests are run in Firefox by default.  To use Chrome for tests that normally
+use Firefox instead, prefix the test command with
+``SELENIUM_BROWSER=chrome SELENIUM_HOST=edx.devstack.chrome``.
+
 Running Python Unit tests
 -------------------------
 
@@ -151,8 +173,8 @@ For example, this command runs all the python test scripts::
     paver test_python
 
 It also runs ``collectstatic``, which prepares the
-static files used by the site (for example, compiling CoffeeScript to
-JavaScript).
+static files used by the site (for example, compiling Sass to
+CSS).
 
 You can re-run all failed python tests by running this command (see note at end of
 section)::
@@ -332,7 +354,6 @@ To run a specific set of JavaScript tests and print the results to the
 console, run these commands::
 
     paver test_js_run -s lms
-    paver test_js_run -s lms-coffee
     paver test_js_run -s cms
     paver test_js_run -s cms-squire
     paver test_js_run -s xmodule
@@ -342,7 +363,6 @@ console, run these commands::
 To run JavaScript tests in a browser, run these commands::
 
     paver test_js_dev -s lms
-    paver test_js_dev -s lms-coffee
     paver test_js_dev -s cms
     paver test_js_dev -s cms-squire
     paver test_js_dev -s xmodule
@@ -443,12 +463,12 @@ Accessibility Developer Tools`_ or `Deque's aXe Core`_.  For more details about
 how to write accessibility tests, please read the `Bok Choy documentation`_ and
 the `Automated Accessibility Tests`_ Open edX Confluence page.
 
-.. _automated accessibility testing: http://bok-choy.readthedocs.org/en/latest/accessibility.html
+.. _automated accessibility testing: https://bok-choy.readthedocs.org/en/latest/accessibility.html
 .. _Selenium: http://docs.seleniumhq.org/
 .. _Python: https://www.python.org/
 .. _Google Accessibility Developer Tools: https://github.com/GoogleChrome/accessibility-developer-tools/
 .. _Deque's aXe Core: https://github.com/dequelabs/axe-core/
-.. _Bok Choy documentation: http://bok-choy.readthedocs.org/en/latest/accessibility.html
+.. _Bok Choy documentation: https://bok-choy.readthedocs.org/en/latest/accessibility.html
 .. _Automated Accessibility Tests: https://openedx.atlassian.net/wiki/display/TE/Automated+Accessibility+Tests
 
 
@@ -695,7 +715,7 @@ To view test coverage:
 Python Code Style Quality
 -------------------------
 
-To view Python code style quality (including pep8 and pylint violations) run this command::
+To view Python code style quality (including PEP 8 and pylint violations) run this command::
 
     paver run_quality
 

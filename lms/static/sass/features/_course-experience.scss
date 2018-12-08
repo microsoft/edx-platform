@@ -285,6 +285,12 @@
         margin-top: ($baseline / 5);
       }
     }
+
+    @media print {
+      .section-tools {
+        display: none !important;
+      }
+    }
   }
 
   @include media-breakpoint-down(sm) {
@@ -295,7 +301,7 @@
   }
 }
 
-// Course outline
+// Course outline for visual progress waffle switch
 .course-outline {
   .block-tree {
     margin: 0;
@@ -303,25 +309,25 @@
     list-style-type: none;
 
     .section {
-      margin: 0 (-1 * $baseline);
-      width: calc(100% + (2 * $baseline));
-      padding: 0 ($baseline);
-
-      &:not(:first-child) {
-        .section-name {
-          margin-top: $baseline;
-        }
+      @include media-breakpoint-up(md) {
+        margin: 0;
       }
 
-      .section-name {
-        @include margin(0, 0, ($baseline / 2), ($baseline / 2));
+      margin: 0 (-1 * $baseline) 0 ($baseline);
+      width: calc(100% + (2));
+      padding: 0;
 
-        padding: 0;
+      border-bottom: 1px solid $border-color;
+
+      .section-name {
+        padding: ($baseline / 2) 0 ($baseline / 2) 2px;
 
         .section-title {
-          font-weight: $font-bold;
+          font-weight: $font-regular;
           font-size: 1.1rem;
           margin: 0;
+          display: inline;
+          padding-left: $baseline - 2;
         }
       }
 
@@ -330,26 +336,61 @@
       }
 
       ol.outline-item {
-        padding-bottom: $baseline;
-        border-bottom: 1px solid $border-color;
-        margin: 0 0 ($baseline / 2) 0;
+        margin: 0;
 
         .subsection {
-          @include margin-left(10px);
-
           list-style-type: none;
-          border: 1px solid transparent;
-          border-radius: 3px;
-          margin-bottom: $baseline/4;
+          border-top: 1px solid $border-color;
+          margin: 0 0 0 35px;
 
-          a.outline-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: ($baseline / 2);
+          .subsection-title {
+            display: inline-block;
+            margin: 0;
+            font-weight: $font-regular;
+            margin-left: $baseline - 2;
+            display: inline;
+          }
 
-            .subsection-title {
-              margin: 0;
+          .subsection-text {
+            .details {
+              font-size: $body-font-size;
+              color: theme-color("secondary");
+              margin-left: 34px;
+            }
+            .prerequisite {
+              color: theme-color("secondary");
+              font-weight: $font-bold;
+            }
+          }
+
+          .vertical {
+            @include margin-left(16px);
+
+            list-style-type: none;
+
+            a.outline-item {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              padding: ($baseline / 2) 0 ($baseline / 2) 0;
+              margin: 0 0 0 ($baseline);
+              border-top: 1px solid $border-color;
+            }
+
+            a.outline-item:hover {
+              text-decoration: none;
+
+              .vertical-details {
+                text-decoration: underline;
+              }
+
+              .complete-checkmark {
+                text-decoration: none;
+              }
+            }
+
+            .vertical-details {
+              float:left;
             }
 
             &:hover,
@@ -359,45 +400,57 @@
               text-decoration: none;
             }
 
-            .subsection-text {
-              .details {
-                font-size: $body-font-size;
-                color: theme-color("secondary");
-              }
-            }
-
-            .subsection-actions {
+            .vertical-actions {
               .resume-right {
                 position: relative;
                 top: calc(50% - (#{$baseline} / 2));
               }
             }
           }
-
-          &.current {
-            border: 1px solid theme-color("primary");
-            border-radius: $btn-border-radius;
-
-            .resume-right {
-              @include float(right);
-            }
-          }
-
-          &:hover {
-            border: 1px solid theme-color("primary");
-          }
-
-          &:last-child {
-            margin-bottom: 0;
-          }
-        }
-
-        &:last-child {
-          border-bottom: none;
         }
       }
     }
   }
+}
+
+// Course outline accordion
+button.accordion-trigger, button.prerequisite-button {
+  padding: 10px 0 10px 2px;
+  border: none;
+  width: 100%;
+  text-align: left;
+  margin: 0px;
+  background: none;
+  cursor: pointer;
+
+  .fa {
+    color: $blue;
+  }
+}
+
+#expand-collapse-outline-all-button {
+  float: right;
+  background-color: $white;
+  color: $black;
+  cursor: pointer;
+}
+
+// extra padding for expand/collapse text change
+.expand-collapse-outline-all-extra-padding {
+  padding: 0 4px 0 4px;
+}
+
+.accordion-panel.is-hidden {
+  display: none;
+}
+
+.fa-check.fa.complete-checkmark {
+  border: 1px solid $green;
+  margin-right: $baseline / 2;
+  border-radius: 100px;
+  color: white;
+  background-color: $green;
+  float: right;
 }
 
 // date summary

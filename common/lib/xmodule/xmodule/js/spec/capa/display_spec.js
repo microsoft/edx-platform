@@ -19,7 +19,7 @@ describe('Problem', function() {
     spyOn(SR, 'readText');
     spyOn(SR, 'readTexts');
 
-    // Load this function from spec/helper.coffee
+    // Load this function from spec/helper.js
     // Note that if your test fails with a message like:
     // 'External request attempted for blah, which is not defined.'
     // this msg is coming from the stubRequests function else clause.
@@ -547,6 +547,41 @@ data-url='/problem/quiz/'> \
       // Submit should remain disabled
       expect(self.problem.submitButton).toHaveAttr('disabled');
       expect(self.problem.submitButtonLabel.text()).toBe('Submit');
+    });
+  });
+
+  describe('show problem with column in id', function() {
+    beforeEach(function () {
+      this.problem = new Problem($('.xblock-student_view'));
+      this.problem.el.prepend('<div id="answer_1_1:11" /><div id="answer_1_2:12" />');
+    });
+
+    it('log the problem_show event', function() {
+      this.problem.show();
+      expect(Logger.log).toHaveBeenCalledWith('problem_show',
+          {problem: 'i4x://edX/101/problem/Problem1'});
+    });
+
+    it('fetch the answers', function() {
+      spyOn($, 'postWithPrefix');
+      this.problem.show();
+      expect($.postWithPrefix).toHaveBeenCalledWith('/problem/Problem1/problem_show',
+          jasmine.any(Function));
+    });
+
+    it('show the answers', function() {
+      spyOn($, 'postWithPrefix').and.callFake(
+        (url, callback) => callback({answers: {'1_1:11': 'One', '1_2:12': 'Two'}})
+      );
+      this.problem.show();
+      expect($("#answer_1_1\\:11")).toHaveHtml('One');
+      expect($("#answer_1_2\\:12")).toHaveHtml('Two');
+    });
+
+    it('disables the show answer button', function() {
+      spyOn($, 'postWithPrefix').and.callFake((url, callback) => callback({answers: {}}));
+      this.problem.show();
+      expect(this.problem.el.find('.show').attr('disabled')).toEqual('disabled');
     });
   });
 

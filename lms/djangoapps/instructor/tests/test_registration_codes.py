@@ -3,10 +3,9 @@ Test for the registration code status information.
 """
 import json
 
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.test.utils import override_settings
 from django.utils.translation import ugettext as _
-from nose.plugins.attrib import attr
 from six import text_type
 
 from course_modes.models import CourseMode
@@ -27,12 +26,13 @@ from xmodule.modulestore.tests.django_utils import SharedModuleStoreTestCase
 from xmodule.modulestore.tests.factories import CourseFactory
 
 
-@attr(shard=1)
 @override_settings(REGISTRATION_CODE_LENGTH=8)
 class TestCourseRegistrationCodeStatus(SharedModuleStoreTestCase):
     """
     Test registration code status.
     """
+    shard = 1
+
     @classmethod
     def setUpClass(cls):
         super(TestCourseRegistrationCodeStatus, cls).setUpClass()

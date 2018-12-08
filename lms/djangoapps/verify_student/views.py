@@ -13,10 +13,10 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.staticfiles.storage import staticfiles_storage
 from django.core.mail import send_mail
-from django.core.urlresolvers import reverse
 from django.db import transaction
 from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import redirect
+from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.utils.translation import ugettext as _
 from django.utils.translation import ugettext_lazy
@@ -35,7 +35,10 @@ from edxmako.shortcuts import render_to_response, render_to_string
 from lms.djangoapps.commerce.utils import EcommerceService, is_account_activation_requirement_disabled
 from lms.djangoapps.verify_student.image import InvalidImageData, decode_image_data
 from lms.djangoapps.verify_student.models import SoftwareSecurePhotoVerification, VerificationDeadline
+from lms.djangoapps.verify_student.services import IDVerificationService
 from lms.djangoapps.verify_student.ssencrypt import has_valid_signature
+from lms.djangoapps.verify_student.tasks import send_verification_status_email
+from lms.djangoapps.verify_student.utils import is_verification_expiring_soon
 from openedx.core.djangoapps.commerce.utils import ecommerce_api_client
 from openedx.core.djangoapps.embargo import api as embargo_api
 from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
@@ -450,8 +453,8 @@ class PayAndVerifyView(View):
         return url
 
     def _redirect_if_necessary(
-            self, message, already_verified, already_paid, is_enrolled, course_key,  # pylint: disable=bad-continuation
-            user_is_trying_to_pay, user, sku  # pylint: disable=bad-continuation
+            self, message, already_verified, already_paid, is_enrolled, course_key,
+            user_is_trying_to_pay, user, sku
     ):
         """Redirect the user to a more appropriate page if necessary.
 
@@ -515,7 +518,10 @@ class PayAndVerifyView(View):
             # is enabled redirect him to the ecommerce checkout page.
             ecommerce_service = EcommerceService()
             if ecommerce_service.is_enabled(user):
-                url = ecommerce_service.get_checkout_page_url(sku)
+                url = ecommerce_service.get_checkout_page_url(
+                    sku,
+                    catalog=self.request.GET.get('catalog')
+                )
 
         # Redirect if necessary, otherwise implicitly return None
         if url is not None:
@@ -644,11 +650,13 @@ class PayAndVerifyView(View):
         Returns:
             datetime object in string format
         """
-        photo_verifications = SoftwareSecurePhotoVerification.verification_valid_or_pending(user)
+        expiration_datetime = IDVerificationService.get_expiration_datetime(
+            user, ['submitted', 'approved', 'must_retry']
+        )
         # return 'expiration_datetime' of latest photo verification if found,
         # otherwise implicitly return ''
-        if photo_verifications:
-            return photo_verifications[0].expiration_datetime.strftime(date_format)
+        if expiration_datetime:
+            return expiration_datetime.strftime(date_format)
 
         return ''
 
@@ -663,7 +671,7 @@ class PayAndVerifyView(View):
         submitted photos within the expiration period.
 
         """
-        return SoftwareSecurePhotoVerification.user_has_valid_or_pending(user)
+        return IDVerificationService.user_has_valid_or_pending(user)
 
     def _check_enrollment(self, user, course_key):
         """Check whether the user has an active enrollment and has paid.
@@ -851,8 +859,8 @@ class SubmitPhotosView(View):
     """
 
     @method_decorator(transaction.non_atomic_requests)
-    def dispatch(self, *args, **kwargs):    # pylint: disable=missing-docstring
-        return super(SubmitPhotosView, self).dispatch(*args, **kwargs)
+    def dispatch(self, request, *args, **kwargs):
+        return super(SubmitPhotosView, self).dispatch(request, *args, **kwargs)
 
     @method_decorator(login_required)
     @method_decorator(outer_atomic(read_committed=True))
@@ -1063,7 +1071,7 @@ class SubmitPhotosView(View):
             'platform_name': configuration_helpers.get_value("PLATFORM_NAME", settings.PLATFORM_NAME)
         }
 
-        subject = _("Verification photos received")
+        subject = _("{platform_name} ID Verification Photos Received").format(platform_name=context['platform_name'])
         message = render_to_string('emails/photo_submission_confirmation.txt', context)
         from_address = configuration_helpers.get_value('email_from_address', settings.DEFAULT_FROM_EMAIL)
         to_address = user.email
@@ -1152,15 +1160,50 @@ def results_callback(request):
     except SoftwareSecurePhotoVerification.DoesNotExist:
         log.error("Software Secure posted back for receipt_id %s, but not found", receipt_id)
         return HttpResponseBadRequest("edX ID {} not found".format(receipt_id))
+
+    user = attempt.user
+    verification_status_email_vars = {
+        'platform_name': settings.PLATFORM_NAME,
+    }
     if result == "PASS":
         log.debug("Approving verification for %s", receipt_id)
         attempt.approve()
         status = "approved"
+        expiry_date = datetime.date.today() + datetime.timedelta(
+            days=settings.VERIFY_STUDENT["DAYS_GOOD_FOR"]
+        )
+        verification_status_email_vars['expiry_date'] = expiry_date.strftime("%m/%d/%Y")
+        verification_status_email_vars['full_name'] = user.profile.name
+        subject = _("Your {platform_name} ID Verification Approved").format(
+            platform_name=settings.PLATFORM_NAME
+        )
+        context = {
+            'subject': subject,
+            'template': 'emails/passed_verification_email.txt',
+            'email': user.email,
+            'email_vars': verification_status_email_vars
+        }
+        send_verification_status_email.delay(context)
 
     elif result == "FAIL":
         log.debug("Denying verification for %s", receipt_id)
         attempt.deny(json.dumps(reason), error_code=error_code)
         status = "denied"
+        reverify_url = '{}{}'.format(settings.LMS_ROOT_URL, reverse("verify_student_reverify"))
+        verification_status_email_vars['reasons'] = reason
+        verification_status_email_vars['reverify_url'] = reverify_url
+        verification_status_email_vars['faq_url'] = settings.ID_VERIFICATION_SUPPORT_LINK
+        subject = _("Your {platform_name} Verification Has Been Denied").format(
+            platform_name=settings.PLATFORM_NAME
+        )
+        context = {
+            'subject': subject,
+            'template': 'emails/failed_verification_email.txt',
+            'email': user.email,
+            'email_vars': verification_status_email_vars
+        }
+        send_verification_status_email.delay(context)
+
     elif result == "SYSTEM FAIL":
         log.debug("System failure for %s -- resetting to must_retry", receipt_id)
         attempt.system_error(json.dumps(reason), error_code=error_code)
@@ -1195,12 +1238,12 @@ class ReverifyView(View):
         Most of the work is done client-side by composing the same
         Backbone views used in the initial verification flow.
         """
-        status, __ = SoftwareSecurePhotoVerification.user_status(request.user)
+        verification_status = IDVerificationService.user_status(request.user)
 
-        expiration_datetime = SoftwareSecurePhotoVerification.get_expiration_datetime(request.user)
+        expiration_datetime = IDVerificationService.get_expiration_datetime(request.user, ['approved'])
         can_reverify = False
         if expiration_datetime:
-            if SoftwareSecurePhotoVerification.is_verification_expiring_soon(expiration_datetime):
+            if is_verification_expiring_soon(expiration_datetime):
                 # The user has an active verification, but the verification
                 # is set to expire within "EXPIRING_SOON_WINDOW" days (default is 4 weeks).
                 # In this case user can resubmit photos for reverification.
@@ -1212,7 +1255,7 @@ class ReverifyView(View):
         # A photo verification is marked as 'pending' if its status is either
         # 'submitted' or 'must_retry'.
 
-        if status in ["none", "must_reverify", "expired", "pending"] or can_reverify:
+        if verification_status['status'] in ["none", "must_reverify", "expired", "pending"] or can_reverify:
             context = {
                 "user_full_name": request.user.profile.name,
                 "platform_name": configuration_helpers.get_value('PLATFORM_NAME', settings.PLATFORM_NAME),
@@ -1221,6 +1264,6 @@ class ReverifyView(View):
             return render_to_response("verify_student/reverify.html", context)
         else:
             context = {
-                "status": status
+                "status": verification_status['status']
             }
             return render_to_response("verify_student/reverify_not_allowed.html", context)

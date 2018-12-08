@@ -9,7 +9,7 @@ from ccx_keys.locator import CCXBlockUsageLocator, CCXLocator
 from django.db import transaction
 from opaque_keys.edx.keys import CourseKey, UsageKey
 
-import request_cache
+from openedx.core.lib.cache_utils import get_cache
 from courseware.field_overrides import FieldOverrideProvider
 from lms.djangoapps.ccx.models import CcxFieldOverride, CustomCourseForEdX
 
@@ -67,7 +67,7 @@ def get_current_ccx(course_key):
     if not isinstance(course_key, CCXLocator):
         return None
 
-    ccx_cache = request_cache.get_cache('ccx')
+    ccx_cache = get_cache('ccx')
     if course_key not in ccx_cache:
         ccx_cache[course_key] = CustomCourseForEdX.objects.get(pk=course_key.ccx)
 
@@ -120,7 +120,7 @@ def _get_overrides_for_ccx(ccx):
     Returns a dictionary mapping field name to overriden value for any
     overrides set on this block for this CCX.
     """
-    overrides_cache = request_cache.get_cache('ccx-overrides')
+    overrides_cache = get_cache('ccx-overrides')
 
     if ccx not in overrides_cache:
         overrides = {}
@@ -195,7 +195,7 @@ def clear_override_for_ccx(ccx, block, name):
         pass
 
 
-def clear_ccx_field_info_from_ccx_map(ccx, block, name):  # pylint: disable=invalid-name
+def clear_ccx_field_info_from_ccx_map(ccx, block, name):
     """
     Remove field information from ccx overrides mapping dictionary
     """

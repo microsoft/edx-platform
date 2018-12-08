@@ -14,6 +14,7 @@ from pkg_resources import (
     resource_string,
     resource_isdir,
 )
+from six import text_type
 from web_fragments.fragment import Fragment
 from webob import Response
 from webob.multidict import MultiDict
@@ -31,6 +32,7 @@ from xmodule import block_metadata_utils
 from xmodule.fields import RelativeTime
 from xmodule.errortracker import exc_info_to_str
 from xmodule.modulestore.exceptions import ItemNotFoundError
+from xmodule.util.xmodule_django import add_webpack_to_fragment
 
 from opaque_keys.edx.keys import UsageKey
 from opaque_keys.edx.asides import AsideUsageKeyV2, AsideDefinitionKeyV2
@@ -251,9 +253,15 @@ def shim_xmodule_js(block, fragment):
     """
     Set up the XBlock -> XModule shim on the supplied :class:`web_fragments.fragment.Fragment`
     """
+    # Delay this import so that it is only used (and django settings are parsed) when
+    # they are required (rather than at startup)
+    import webpack_loader.utils
+
     if not fragment.js_init_fn:
         fragment.initialize_js('XBlockToXModuleShim')
         fragment.json_init_args = {'xmodule-type': block.js_module_name}
+
+        add_webpack_to_fragment(fragment, 'XModuleShim')
 
 
 class XModuleFields(object):
@@ -420,8 +428,8 @@ class XModuleMixin(XModuleFields, XBlock):
                     result[field.name] = field.read_json(self)
                 except TypeError as exception:
                     exception_message = "{message}, Block-location:{location}, Field-name:{field_name}".format(
-                        message=exception.message,
-                        location=unicode(self.location),
+                        message=text_type(exception),
+                        location=text_type(self.location),
                         field_name=field.name
                     )
                     raise TypeError(exception_message)
@@ -1108,7 +1116,11 @@ class XModuleDescriptor(HTMLSnippet, ResourceTemplates, XModuleMixin):
         node.tag = exported_node.tag
         node.text = exported_node.text
         node.tail = exported_node.tail
+
         for key, value in exported_node.items():
+            if key == 'url_name' and value == 'course' and key in node.attrib:
+                # if url_name is set in ExportManager then do not override it here.
+                continue
             node.set(key, value)
 
         node.extend(list(exported_node))

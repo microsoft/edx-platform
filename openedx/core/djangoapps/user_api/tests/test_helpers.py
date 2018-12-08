@@ -5,10 +5,12 @@ import json
 import re
 import mock
 import ddt
+import pytest
 from django import forms
 from django.http import HttpRequest, HttpResponse
 from django.test import TestCase
-from nose.tools import raises
+from six import text_type
+
 from ..helpers import (
     intercept_errors, shim_student_view,
     FormDescription, InvalidFieldError
@@ -40,16 +42,16 @@ def intercepted_function(raise_error=None):
 class InterceptErrorsTest(TestCase):
     """Tests for the decorator that intercepts errors."""
 
-    @raises(FakeOutputException)
     def test_intercepts_errors(self):
-        intercepted_function(raise_error=FakeInputException)
+        with pytest.raises(FakeOutputException):
+            intercepted_function(raise_error=FakeInputException)
 
     def test_ignores_no_error(self):
         intercepted_function()
 
-    @raises(ValueError)
     def test_ignores_expected_errors(self):
-        intercepted_function(raise_error=ValueError)
+        with pytest.raises(ValueError):
+            intercepted_function(raise_error=ValueError)
 
     @mock.patch('openedx.core.djangoapps.user_api.helpers.LOGGER')
     def test_logs_errors(self, mock_logger):
@@ -66,7 +68,7 @@ class InterceptErrorsTest(TestCase):
         try:
             intercepted_function(raise_error=FakeInputException)
         except FakeOutputException as ex:
-            actual_message = re.sub(r'line \d+', 'line XXX', ex.message, flags=re.MULTILINE)
+            actual_message = re.sub(r'line \d+', 'line XXX', text_type(ex), flags=re.MULTILINE)
             self.assertEqual(actual_message, expected_log_msg)
 
         # Verify that the error logger is called
@@ -266,8 +268,8 @@ class StudentViewShimTest(TestCase):
         response = view(HttpRequest())
         self.assertEqual(response.status_code, 403)
 
-    def _shimmed_view(self, response, check_logged_in=False):  # pylint: disable=missing-docstring
-        def stub_view(request):  # pylint: disable=missing-docstring
+    def _shimmed_view(self, response, check_logged_in=False):
+        def stub_view(request):
             self.captured_request = request
             return response
         return shim_student_view(stub_view, check_logged_in=check_logged_in)

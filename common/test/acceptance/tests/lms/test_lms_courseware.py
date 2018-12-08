@@ -7,19 +7,19 @@ import json
 from datetime import datetime, timedelta
 
 import ddt
-from nose.plugins.attrib import attr
+
+from openedx.core.lib.tests import attr
 
 from ...fixtures.course import CourseFixture, XBlockFixtureDesc
 from ...pages.common.auto_auth import AutoAuthPage
 from ...pages.common.logout import LogoutPage
 from ...pages.lms.course_home import CourseHomePage
-from ...pages.lms.courseware import CoursewarePage, CoursewareSequentialTabPage
+from ...pages.lms.courseware import CoursewarePage, CoursewareSequentialTabPage, RenderXBlockPage
 from ...pages.lms.create_mode import ModeCreationPage
 from ...pages.lms.dashboard import DashboardPage
 from ...pages.lms.pay_and_verify import FakePaymentPage, FakeSoftwareSecureVerificationPage, PaymentAndVerificationFlow
 from ...pages.lms.problem import ProblemPage
 from ...pages.lms.progress import ProgressPage
-from ...pages.lms.staff_view import StaffCoursewarePage
 from ...pages.lms.track_selection import TrackSelectionPage
 from ...pages.studio.overview import CourseOutlinePage as StudioCourseOutlinePage
 from ..helpers import EventsTestMixin, UniqueCourseTest, auto_auth, create_multiple_choice_problem
@@ -293,25 +293,6 @@ class ProctoredExamTest(UniqueCourseTest):
         self.courseware_page.visit()
         self.assertEqual(self.courseware_page.has_submitted_exam_message(), hide_after_due)
 
-    def test_masquerade_visibility_override(self):
-        """
-        Given that a timed exam problem exists in the course
-        And a student has taken that exam
-        And that exam is hidden to the student
-        And I am a staff user masquerading as the student
-        Then I should be able to see the exam content
-        """
-        self._setup_and_take_timed_exam()
-
-        LogoutPage(self.browser).visit()
-        auto_auth(self.browser, "STAFF_TESTER", "staff101@example.com", True, self.course_id)
-        self.courseware_page.visit()
-        staff_page = StaffCoursewarePage(self.browser, self.course_id)
-        self.assertEqual(staff_page.staff_view_mode, 'Staff')
-
-        staff_page.set_staff_view_mode_specific_student(self.USERNAME)
-        self.assertFalse(self.courseware_page.has_submitted_exam_message())
-
     def test_field_visiblity_with_all_exam_types(self):
         """
         Given that I am a staff member
@@ -528,58 +509,6 @@ class CoursewareMultipleVerticalsTest(CoursewareMultipleVerticalsTestBase):
             sequence_ui_events
         )
 
-    # TODO: TNL-6546: Delete this whole test if these events are going away(?)
-    def test_outline_selected_events(self):
-        self.courseware_page.visit()
-
-        self.courseware_page.nav.go_to_section('Test Section 1', 'Test Subsection 1,2')
-
-        self.courseware_page.nav.go_to_section('Test Section 2', 'Test Subsection 2,1')
-
-        # test UI events emitted by navigating via the course outline
-        filter_selected_events = lambda event: event.get('name', '') == 'edx.ui.lms.outline.selected'
-        selected_events = self.wait_for_events(event_filter=filter_selected_events, timeout=2)
-
-        # note: target_url is tested in unit tests, as the url changes here with every test (it includes GUIDs).
-        self.assert_events_match(
-            [
-                {
-                    'event_type': 'edx.ui.lms.outline.selected',
-                    'name': 'edx.ui.lms.outline.selected',
-                    'event': {
-                        'target_name': 'Test Subsection 1,2 ',
-                        'widget_placement': 'accordion',
-                    }
-                },
-                {
-                    'event_type': 'edx.ui.lms.outline.selected',
-                    'name': 'edx.ui.lms.outline.selected',
-                    'event': {
-                        'target_name': 'Test Subsection 2,1 ',
-                        'widget_placement': 'accordion',
-
-                    }
-                },
-            ],
-            selected_events
-        )
-
-    # TODO: Delete as part of TNL-6546 / LEARNER-71
-    def test_link_clicked_events(self):
-        """
-        Given that I am a user in the courseware
-        When I navigate via the left-hand nav
-        Then a link clicked event is logged
-        """
-        self.courseware_page.visit()
-
-        self.courseware_page.nav.go_to_section('Test Section 1', 'Test Subsection 1,2')
-        self.courseware_page.nav.go_to_section('Test Section 2', 'Test Subsection 2,1')
-
-        filter_link_clicked = lambda event: event.get('name', '') == 'edx.ui.lms.link_clicked'
-        link_clicked_events = self.wait_for_events(event_filter=filter_link_clicked, timeout=2)
-        self.assertEqual(len(link_clicked_events), 2)
-
     def assert_navigation_state(
             self, section_title, subsection_title, subsection_position, next_enabled, prev_enabled
     ):
@@ -637,24 +566,6 @@ class CoursewareMultipleVerticalsTest(CoursewareMultipleVerticalsTestBase):
             position=4
         ).visit()
         self.assertIn('html 2 dummy body', html2_page.get_selected_tab_content())
-
-
-@attr('a11y')
-class CoursewareMultipleVerticalsA11YTest(CoursewareMultipleVerticalsTestBase):
-    """
-    Test a11y for courseware with multiple verticals
-    """
-
-    def test_courseware_a11y(self):
-        """
-        Run accessibility audit for the problem type.
-        """
-        self.course_home_page.visit()
-        self.course_home_page.outline.go_to_section('Test Section 1', 'Test Subsection 1,1')
-        # Set the scope to the sequence navigation
-        self.courseware_page.a11y_audit.config.set_scope(
-            include=['div.sequence-nav'])
-        self.courseware_page.a11y_audit.check_for_accessibility_errors()
 
 
 @attr(shard=9)
@@ -884,3 +795,61 @@ class SubsectionHiddenAfterDueDateTest(UniqueCourseTest):
 
         self.progress_page.visit()
         self.assertEqual(self.progress_page.scores('Test Section 1', 'Test Subsection 1'), [(0, 1)])
+
+
+@attr(shard=9)
+class CompletionTestCase(UniqueCourseTest, EventsTestMixin):
+    """
+    Test the completion on view functionality.
+    """
+    USERNAME = "STUDENT_TESTER"
+    EMAIL = "student101@example.com"
+    COMPLETION_BY_VIEWING_DELAY_MS = '1000'
+
+    def setUp(self):
+        super(CompletionTestCase, self).setUp()
+
+        self.studio_course_outline = StudioCourseOutlinePage(
+            self.browser,
+            self.course_info['org'],
+            self.course_info['number'],
+            self.course_info['run']
+        )
+
+        # Install a course with sections/problems, tabs, updates, and handouts
+        course_fix = CourseFixture(
+            self.course_info['org'], self.course_info['number'],
+            self.course_info['run'], self.course_info['display_name']
+        )
+
+        self.html_1_block = XBlockFixtureDesc('html', 'html 1', data="<html>html 1 dummy body</html>")
+        self.problem_1_block = XBlockFixtureDesc(
+            'problem', 'Test Problem 1', data='<problem>problem 1 dummy body</problem>'
+        )
+
+        course_fix.add_children(
+            XBlockFixtureDesc('chapter', 'Test Section 1').add_children(
+                XBlockFixtureDesc('sequential', 'Test Subsection 1,1').add_children(
+                    XBlockFixtureDesc('vertical', 'Test Unit 1,1,1').add_children(
+                        XBlockFixtureDesc('html', 'html 1', data="<html>html 1 dummy body</html>"),
+                        XBlockFixtureDesc(
+                            'html', 'html 2',
+                            data=("<html>html 2 dummy body</html>" * 100) + "<span id='html2-end'>End</span>",
+                        ),
+                        XBlockFixtureDesc('problem', 'Test Problem 1', data='<problem>problem 1 dummy body</problem>'),
+                    ),
+                    XBlockFixtureDesc('vertical', 'Test Unit 1,1,2').add_children(
+                        XBlockFixtureDesc('html', 'html 1', data="<html>html 1 dummy body</html>"),
+                        XBlockFixtureDesc('problem', 'Test Problem 1', data='<problem>problem 1 dummy body</problem>'),
+                    ),
+                    XBlockFixtureDesc('vertical', 'Test Unit 1,1,2').add_children(
+                        self.html_1_block,
+                        self.problem_1_block,
+                    ),
+                ),
+            ),
+        ).install()
+
+        # Auto-auth register for the course.
+        AutoAuthPage(self.browser, username=self.USERNAME, email=self.EMAIL,
+                     course_id=self.course_id, staff=False).visit()

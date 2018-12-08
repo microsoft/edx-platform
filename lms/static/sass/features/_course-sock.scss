@@ -27,6 +27,7 @@
     cursor: pointer;
 
     &.active,
+    &:focus,
     &:hover {
       color: theme-color("success");
       background-color: theme-color("inverse");
@@ -48,6 +49,15 @@
       color: $black-t3;
       position: relative;
 
+      h2 {
+        font-size: 1.5rem;
+        font-weight: $font-weight-bold;
+      }
+
+      h3 {
+        font-size: 1.25rem;
+      }
+
       @media (max-width: 960px) {
         .mini-cert {
           display: none;
@@ -61,16 +71,6 @@
         position: absolute;
         top: $baseline;
         width: ($baseline * 13);
-      }
-
-      h2 {
-        font-size: 1.5rem;
-        font-weight: 700;
-      }
-
-      h4 {
-        font-size: 1.25rem;
-        font-weight: 600;
       }
 
       .learner-story-container {
@@ -102,6 +102,12 @@
         color: theme-color("inverse");
         background-image: none;
         box-shadow: none;
+        cursor: pointer;
+
+        &:hover {
+          background-color: theme-color("inverse");
+          color: theme-color("success");
+        }
 
         @media (max-width: 960px) {
           & {

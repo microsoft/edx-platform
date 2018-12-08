@@ -6,7 +6,8 @@ from __future__ import absolute_import
 from django.conf import settings
 
 from xmodule.partitions.partitions import UserPartition
-from xblock.fields import Scope, Boolean, String, Float, XBlockMixin, Dict, Integer, List
+from xblock.core import XBlockMixin
+from xblock.fields import Scope, Boolean, String, Float, Dict, Integer, List
 from xblock.runtime import KeyValueStore, KvsFieldData
 from xmodule.fields import Date, Timedelta
 from ..course_metadata_utils import DEFAULT_START_DATE
@@ -66,18 +67,6 @@ class InheritanceMixin(XBlockMixin):
         display_name=_("XQA Key"),
         help=_("This setting is not currently supported."), scope=Scope.settings,
         deprecated=True
-    )
-    annotation_storage_url = String(
-        help=_("Enter the location of the annotation storage server. The textannotation, videoannotation, and imageannotation advanced modules require this setting."),
-        scope=Scope.settings,
-        default="http://your_annotation_storage.com",
-        display_name=_("URL for Annotation Storage")
-    )
-    annotation_token_secret = String(
-        help=_("Enter the secret string for annotation storage. The textannotation, videoannotation, and imageannotation advanced modules require this string."),
-        scope=Scope.settings,
-        default="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-        display_name=_("Secret Token String for Annotation")
     )
     graceperiod = Timedelta(
         help="Amount of time after the due date that submissions will be accepted",

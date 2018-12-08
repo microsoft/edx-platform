@@ -1,13 +1,14 @@
 """ Tests for analytics.csvs """
 
+import pytest
 from django.test import TestCase
-from nose.tools import raises
 
 from instructor_analytics.csvs import create_csv_response, format_dictlist, format_instances
 
 
 class TestAnalyticsCSVS(TestCase):
     """ Test analytics rendering of csv files."""
+    shard = 4
 
     def test_create_csv_response_nodata(self):
         header = ['Name', 'Email']
@@ -39,6 +40,7 @@ class TestAnalyticsCSVS(TestCase):
 
 class TestAnalyticsFormatDictlist(TestCase):
     """ Test format_dictlist method """
+    shard = 4
 
     def test_format_dictlist(self):
         dictlist = [
@@ -83,6 +85,8 @@ class TestAnalyticsFormatDictlist(TestCase):
 
 class TestAnalyticsFormatInstances(TestCase):
     """ test format_instances method """
+    shard = 4
+
     class TestDataClass(object):
         """ Test class to generate objects for format_instances """
         def __init__(self):
@@ -120,6 +124,6 @@ class TestAnalyticsFormatInstances(TestCase):
         self.assertEqual(header, [])
         self.assertEqual(datarows, [[] for _ in xrange(len(self.instances))])
 
-    @raises(AttributeError)
     def test_format_instances_response_nonexistantfeature(self):
-        format_instances(self.instances, ['robot_not_a_real_feature'])
+        with pytest.raises(AttributeError):
+            format_instances(self.instances, ['robot_not_a_real_feature'])

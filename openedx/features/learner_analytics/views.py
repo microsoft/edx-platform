@@ -12,7 +12,7 @@ from analyticsclient.client import Client
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.http import Http404
 from django.shortcuts import render_to_response
 from django.utils.decorators import method_decorator
@@ -23,7 +23,9 @@ from student.models import CourseEnrollment
 from util.views import ensure_valid_course_key
 from xmodule.modulestore.django import modulestore
 
+from course_modes.models import get_cosmetic_verified_display_price
 from lms.djangoapps.course_api.blocks.api import get_blocks
+from lms.djangoapps.commerce.utils import EcommerceService
 from lms.djangoapps.courseware.courses import get_course_with_access
 from lms.djangoapps.discussion.views import create_user_profile_context
 from lms.djangoapps.grades.course_grade_factory import CourseGradeFactory
@@ -66,7 +68,18 @@ class LearnerAnalyticsView(View):
         is_verified = CourseEnrollment.is_enrolled_as_verified(request.user, course_key)
         has_access = is_verified or request.user.is_staff
 
+        enrollment = CourseEnrollment.get_enrollment(request.user, course_key)
+
+        upgrade_price = None
+        upgrade_url = None
+
+        if enrollment and enrollment.upgrade_deadline:
+            upgrade_url = EcommerceService().upgrade_url(request.user, course_key)
+            upgrade_price = get_cosmetic_verified_display_price(course)
+
         context = {
+            'upgrade_price': upgrade_price,
+            'upgrade_link': upgrade_url,
             'course': course,
             'course_url': course_url,
             'disable_courseware_js': True,
@@ -79,21 +92,34 @@ class LearnerAnalyticsView(View):
         if (has_access):
             grading_policy = course.grading_policy
 
-            (grade_data, answered_percent) = self.get_grade_data(request.user, course_key, grading_policy['GRADE_CUTOFFS'])
-            schedule_data = self.get_assignments_with_due_date(request, course_key)
-            (grade_data, schedule_data) = self.sort_grade_and_schedule_data(grade_data, schedule_data)
+            (raw_grade_data, answered_percent, percent_grade) = self.get_grade_data(request.user, course_key, grading_policy['GRADE_CUTOFFS'])
+            raw_schedule_data = self.get_assignments_with_due_date(request, course_key)
+
+            grade_data, schedule_data = self.sort_grade_and_schedule_data(raw_grade_data, raw_schedule_data)
+
+            # TODO: LEARNER-3854: Fix hacked defaults with real error handling if implementing Learner Analytics.
+            try:
+                weekly_active_users = self.get_weekly_course_activity_count(course_key)
+                week_streak = self.consecutive_weeks_of_course_activity_for_user(
+                    request.user.username, course_key
+                )
+            except Exception as e:
+                logging.exception(e)
+                weekly_active_users = 134
+                week_streak = 1
 
             context.update({
                 'grading_policy': grading_policy,
                 'assignment_grades': grade_data,
                 'answered_percent': answered_percent,
                 'assignment_schedule': schedule_data,
+                'assignment_schedule_raw': raw_schedule_data,
                 'profile_image_urls': get_profile_image_urls_for_user(request.user, request),
                 'discussion_info': self.get_discussion_data(request, course_key),
-                'weekly_active_users': self.get_weekly_course_activity_count(course_key),
-                'week_streak': self.consecutive_weeks_of_course_activity_for_user(
-                    request.user.username, course_key
-                )
+                'passing_grade': math.ceil(100 * course.lowest_passing_grade),
+                'percent_grade': math.ceil(100 * percent_grade),
+                'weekly_active_users': weekly_active_users,
+                'week_streak': week_streak,
             })
 
         return render_to_response('learner_analytics/dashboard.html', context)
@@ -111,30 +137,38 @@ class LearnerAnalyticsView(View):
         grades = []
         total_earned = 0
         total_possible = 0
+        # answered_percent seems to be unused and it does not take into account assignment type weightings
         answered_percent = None
-        for (location, subsection_grade) in course_grade.subsection_grades.iteritems():
-            if subsection_grade.format is not None:
-                possible = subsection_grade.graded_total.possible
-                earned = subsection_grade.graded_total.earned
-                passing_grade = math.ceil(possible * grade_cutoffs['Pass'])
-                grades.append({
-                    'assignment_type': subsection_grade.format,
-                    'total_earned': earned,
-                    'total_possible': possible,
-                    'passing_grade': passing_grade,
-                    'location': unicode(location),
-                    'assigment_url': reverse('jump_to_id', kwargs={
-                        'course_id': unicode(course_key),
-                        'module_id': unicode(location),
+
+        chapter_grades = course_grade.chapter_grades.values()
+
+        for chapter in chapter_grades:
+            # Note: this code exists on the progress page. We should be able to remove it going forward.
+            if not chapter['display_name'] == "hidden":
+                for subsection_grade in chapter['sections']:
+                    log.info(subsection_grade.display_name)
+                    possible = subsection_grade.graded_total.possible
+                    earned = subsection_grade.graded_total.earned
+                    passing_grade = math.ceil(possible * grade_cutoffs['Pass'])
+                    grades.append({
+                        'assignment_type': subsection_grade.format,
+                        'total_earned': earned,
+                        'total_possible': possible,
+                        'passing_grade': passing_grade,
+                        'display_name': subsection_grade.display_name,
+                        'location': unicode(subsection_grade.location),
+                        'assigment_url': reverse('jump_to_id', kwargs={
+                            'course_id': unicode(course_key),
+                            'module_id': unicode(subsection_grade.location),
+                        })
                     })
-                })
-                if earned > 0:
-                    total_earned += earned
-                    total_possible += possible
+                    if earned > 0:
+                        total_earned += earned
+                        total_possible += possible
 
         if total_possible > 0:
             answered_percent = float(total_earned) / total_possible
-        return (grades, answered_percent)
+        return (grades, answered_percent, course_grade.percent)
 
     def sort_grade_and_schedule_data(self, grade_data, schedule_data):
         """
@@ -162,7 +196,7 @@ class LearnerAnalyticsView(View):
         """
         try:
             context = create_user_profile_context(request, course_key, request.user.id)
-        except CommentClient500Error:
+        except Exception as e:
             # TODO: LEARNER-3854: Clean-up error handling if continuing support.
             return {
                 'content_authored': 0,
@@ -204,9 +238,9 @@ class LearnerAnalyticsView(View):
         )
         assignment_blocks = []
         for (location, block) in all_blocks['blocks'].iteritems():
-            if block.get('graded', False) and block.get('due') is not None:
+            if block.get('graded', False):
                 assignment_blocks.append(block)
-                block['due'] = block['due'].isoformat()
+                block['due'] = block['due'].isoformat() if block.get('due') is not None else None
                 block['location'] = unicode(location)
 
         return assignment_blocks

@@ -3,18 +3,31 @@ from django.conf.urls import include, url
 from django.conf.urls.static import static
 from django.contrib.admin import autodiscover as django_autodiscover
 from django.utils.translation import ugettext_lazy as _
+from rest_framework_swagger.views import get_swagger_view
 
 import contentstore.views
+from cms.djangoapps.contentstore.views.organization import OrganizationListView
 import openedx.core.djangoapps.common_views.xblock
 import openedx.core.djangoapps.debug.views
 import openedx.core.djangoapps.external_auth.views
 import openedx.core.djangoapps.lang_pref.views
-from cms.djangoapps.contentstore.views.organization import OrganizationListView
+from openedx.core.djangoapps.password_policy import compliance as password_policy_compliance
+from openedx.core.djangoapps.password_policy.forms import PasswordPolicyAwareAdminAuthForm
+
 from ratelimitbackend import admin
 
 django_autodiscover()
 admin.site.site_header = _('Studio Administration')
 admin.site.site_title = admin.site.site_header
+
+if password_policy_compliance.should_enforce_compliance_on_login():
+    admin.site.login_form = PasswordPolicyAwareAdminAuthForm
+
+# Custom error pages
+# These are used by Django to render these error codes. Do not remove.
+# pylint: disable=invalid-name
+handler404 = contentstore.views.render_404
+handler500 = contentstore.views.render_500
 
 # Pattern to match a course key or a library key
 COURSELIKE_KEY_PATTERN = r'(?P<course_key_string>({}|{}))'.format(
@@ -25,6 +38,7 @@ COURSELIKE_KEY_PATTERN = r'(?P<course_key_string>({}|{}))'.format(
 LIBRARY_KEY_PATTERN = r'(?P<library_key_string>library-v1:[^/+]+\+[^/+]+)'
 
 urlpatterns = [
+    url(r'', include('openedx.core.djangoapps.user_authn.urls_common')),
     url(r'', include('student.urls')),
     url(r'^transcripts/upload$', contentstore.views.upload_transcripts, name='upload_transcripts'),
     url(r'^transcripts/download$', contentstore.views.download_transcripts, name='download_transcripts'),
@@ -32,7 +46,6 @@ urlpatterns = [
     url(r'^transcripts/choose$', contentstore.views.choose_transcripts, name='choose_transcripts'),
     url(r'^transcripts/replace$', contentstore.views.replace_transcripts, name='replace_transcripts'),
     url(r'^transcripts/rename$', contentstore.views.rename_transcripts, name='rename_transcripts'),
-    url(r'^transcripts/save$', contentstore.views.save_transcripts, name='save_transcripts'),
     url(r'^preview/xblock/(?P<usage_key_string>.*?)/handler/(?P<handler>[^/]*)(?:/(?P<suffix>.*))?$',
         contentstore.views.preview_handler, name='preview_handler'),
     url(r'^xblock/(?P<usage_key_string>.*?)/handler/(?P<handler>[^/]*)(?:/(?P<suffix>.*))?$',
@@ -45,7 +58,6 @@ urlpatterns = [
 
     # noop to squelch ajax errors
     url(r'^event$', contentstore.views.event, name='event'),
-    url(r'^xmodule/', include('pipeline_js.urls')),
     url(r'^heartbeat', include('openedx.core.djangoapps.heartbeat.urls')),
     url(r'^user_api/', include('openedx.core.djangoapps.user_api.legacy_urls')),
     url(r'^i18n/', include('django.conf.urls.i18n')),
@@ -85,6 +97,11 @@ urlpatterns = [
         name='course_search_index_handler'
         ),
     url(r'^course/{}?$'.format(settings.COURSE_KEY_PATTERN), contentstore.views.course_handler, name='course_handler'),
+
+    url(r'^checklists/{}?$'.format(settings.COURSE_KEY_PATTERN),
+        contentstore.views.checklists_handler,
+        name='checklists_handler'),
+
     url(r'^course_notifications/{}/(?P<action_state_id>\d+)?$'.format(settings.COURSE_KEY_PATTERN),
         contentstore.views.course_notifications_handler,
         name='course_notifications_handler'),
@@ -139,10 +156,8 @@ urlpatterns = [
         contentstore.views.transcript_preferences_handler, name='transcript_preferences_handler'),
     url(r'^transcript_credentials/{}$'.format(settings.COURSE_KEY_PATTERN),
         contentstore.views.transcript_credentials_handler, name='transcript_credentials_handler'),
-    url(r'^transcript_download/{}$'.format(settings.COURSE_KEY_PATTERN),
-        contentstore.views.transcript_download_handler, name='transcript_download_handler'),
-    url(r'^transcript_upload/{}$'.format(settings.COURSE_KEY_PATTERN),
-        contentstore.views.transcript_upload_handler, name='transcript_upload_handler'),
+    url(r'^transcript_download/$', contentstore.views.transcript_download_handler, name='transcript_download_handler'),
+    url(r'^transcript_upload/$', contentstore.views.transcript_upload_handler, name='transcript_upload_handler'),
     url(r'^transcript_delete/{}(?:/(?P<edx_video_id>[-\w]+))?(?:/(?P<language_code>[^/]*))?$'.format(
         settings.COURSE_KEY_PATTERN
     ), contentstore.views.transcript_delete_handler, name='transcript_delete_handler'),
@@ -157,7 +172,6 @@ urlpatterns = [
     url(r'^api/val/v0/', include('edxval.urls')),
     url(r'^api/tasks/v0/', include('user_tasks.urls')),
     url(r'^accessibility$', contentstore.views.accessibility, name='accessibility'),
-    url(r'^zendesk_proxy/', include('openedx.core.djangoapps.zendesk_proxy.urls')),
 ]
 
 JS_INFO_DICT = {
@@ -191,7 +205,10 @@ if settings.FEATURES.get('AUTH_USE_CAS'):
         url(r'^cas-auth/login/$', openedx.core.djangoapps.external_auth.views.cas_login, name="cas-login"),
         url(r'^cas-auth/logout/$', django_cas.views.logout, {'next_page': '/'}, name="cas-logout"),
     ]
-
+# The password pages in the admin tool are disabled so that all password
+# changes go through our user portal and follow complexity requirements.
+urlpatterns.append(url(r'^admin/password_change/$', handler404))
+urlpatterns.append(url(r'^admin/auth/user/\d+/password/$', handler404))
 urlpatterns.append(url(r'^admin/', include(admin.site.urls)))
 
 # enable entrance exams
@@ -248,17 +265,16 @@ if 'debug_toolbar' in settings.INSTALLED_APPS:
 urlpatterns.append(url(r'^template/(?P<template>.+)$', openedx.core.djangoapps.debug.views.show_reference_template,
                        name='openedx.core.djangoapps.debug.views.show_reference_template'))
 
-# Custom error pages
-# These are used by Django to render these error codes. Do not remove.
-# pylint: disable=invalid-name
-handler404 = contentstore.views.render_404
-handler500 = contentstore.views.render_500
-
 # display error page templates, for testing purposes
 urlpatterns += [
     url(r'^404$', handler404),
     url(r'^500$', handler500),
 ]
+
+if settings.FEATURES.get('ENABLE_API_DOCS'):
+    urlpatterns += [
+        url(r'^api-docs/$', get_swagger_view(title='Studio API')),
+    ]
 
 from openedx.core.djangoapps.plugins import constants as plugin_constants, plugin_urls
 urlpatterns.extend(plugin_urls.get_patterns(plugin_constants.ProjectType.CMS))

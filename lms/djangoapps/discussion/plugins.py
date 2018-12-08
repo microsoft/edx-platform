@@ -9,7 +9,7 @@ import django_comment_client.utils as utils
 from courseware.tabs import EnrolledTab
 from xmodule.tabs import TabFragmentViewMixin
 
-from . import USE_BOOTSTRAP_FLAG
+from .config import USE_BOOTSTRAP_FLAG
 
 
 class DiscussionTab(TabFragmentViewMixin, EnrolledTab):
@@ -20,7 +20,7 @@ class DiscussionTab(TabFragmentViewMixin, EnrolledTab):
     type = 'discussion'
     title = ugettext_noop('Discussion')
     priority = None
-    view_name = 'discussion.views.forum_form_discussion'
+    view_name = 'forum_form_discussion'
     fragment_view_name = 'discussion.views.DiscussionBoardFragmentView'
     is_hideable = settings.FEATURES.get('ALLOW_HIDING_DISCUSSION_TAB', False)
     is_default = False

@@ -18,6 +18,7 @@ from django.views.decorators.http import require_http_methods
 from opaque_keys.edx.keys import CourseKey
 from opaque_keys.edx.locator import LibraryUsageLocator
 from pytz import UTC
+from six import text_type
 from web_fragments.fragment import Fragment
 from xblock.core import XBlock
 from xblock.fields import Scope
@@ -134,7 +135,9 @@ def xblock_handler(request, usage_key_string):
                 :isPrereq: Set this xblock as a prerequisite which can be used to limit access to other xblocks
                 :prereqUsageKey: Use the xblock identified by this usage key to limit access to this xblock
                 :prereqMinScore: The minimum score that needs to be achieved on the prerequisite xblock
-                        identifed by prereqUsageKey
+                        identifed by prereqUsageKey. Ranging from 0 to 100.
+                :prereqMinCompletion: The minimum completion percentage that needs to be achieved on the
+                        prerequisite xblock identifed by prereqUsageKey. Ranging from 0 to 100.
                 :publish: can be:
                   'make_public': publish the content
                   'republish': publish this item *only* if it was previously published
@@ -198,6 +201,7 @@ def xblock_handler(request, usage_key_string):
                 is_prereq=request.json.get('isPrereq'),
                 prereq_usage_key=request.json.get('prereqUsageKey'),
                 prereq_min_score=request.json.get('prereqMinScore'),
+                prereq_min_completion=request.json.get('prereqMinCompletion'),
                 publish=request.json.get('publish'),
                 fields=request.json.get('fields'),
             )
@@ -479,7 +483,7 @@ def _update_with_callback(xblock, user, old_metadata=None, old_content=None):
 
 def _save_xblock(user, xblock, data=None, children_strings=None, metadata=None, nullout=None,
                  grader_type=None, is_prereq=None, prereq_usage_key=None, prereq_min_score=None,
-                 publish=None, fields=None):
+                 prereq_min_completion=None, publish=None, fields=None):
     """
     Saves xblock w/ its fields. Has special processing for grader_type, publish, and nullout and Nones in metadata.
     nullout means to truly set the field to None whereas nones in metadata mean to unset them (so they revert
@@ -574,8 +578,8 @@ def _save_xblock(user, xblock, data=None, children_strings=None, metadata=None, 
                             value = field.from_json(value)
                         except ValueError as verr:
                             reason = _("Invalid data")
-                            if verr.message:
-                                reason = _("Invalid data ({details})").format(details=verr.message)
+                            if text_type(verr):
+                                reason = _("Invalid data ({details})").format(details=text_type(verr))
                             return JsonResponse({"error": reason}, 400)
 
                         field.write_to(xblock, value)
@@ -620,7 +624,11 @@ def _save_xblock(user, xblock, data=None, children_strings=None, metadata=None, 
 
             if prereq_usage_key is not None:
                 gating_api.set_required_content(
-                    xblock.location.course_key, xblock.location, prereq_usage_key, prereq_min_score
+                    xblock.location.course_key,
+                    xblock.location,
+                    prereq_usage_key,
+                    prereq_min_score,
+                    prereq_min_completion
                 )
 
         # If publish is set to 'republish' and this item is not in direct only categories and has previously been
@@ -1044,17 +1052,18 @@ def _get_gating_info(course, xblock):
         if not hasattr(course, 'gating_prerequisites'):
             # Cache gating prerequisites on course module so that we are not
             # hitting the database for every xblock in the course
-            setattr(course, 'gating_prerequisites', gating_api.get_prerequisites(course.id))  # pylint: disable=literal-used-as-attribute
+            setattr(course, 'gating_prerequisites', gating_api.get_prerequisites(course.id))
         info["is_prereq"] = gating_api.is_prerequisite(course.id, xblock.location)
         info["prereqs"] = [
             p for p in course.gating_prerequisites if unicode(xblock.location) not in p['namespace']
         ]
-        prereq, prereq_min_score = gating_api.get_required_content(
+        prereq, prereq_min_score, prereq_min_completion = gating_api.get_required_content(
             course.id,
             xblock.location
         )
         info["prereq"] = prereq
         info["prereq_min_score"] = prereq_min_score
+        info["prereq_min_completion"] = prereq_min_completion
         if prereq:
             info["visibility_state"] = VisibilityState.gated
     return info
@@ -1262,7 +1271,7 @@ def create_xblock_info(xblock, data=None, metadata=None, include_ancestor_info=F
     return xblock_info
 
 
-def add_container_page_publishing_info(xblock, xblock_info):  # pylint: disable=invalid-name
+def add_container_page_publishing_info(xblock, xblock_info):
     """
     Adds information about the xblock's publish state to the supplied
     xblock_info for the container page.
@@ -1396,7 +1405,7 @@ def _create_xblock_ancestor_info(xblock, course_outline=False, include_child_inf
 
 
 def _create_xblock_child_info(xblock, course_outline, graders, include_children_predicate=NEVER, user=None,
-                              course=None, is_concise=False):  # pylint: disable=line-too-long
+                              course=None, is_concise=False):
     """
     Returns information about the children of an xblock, as well as about the primary category
     of xblock expected as children.

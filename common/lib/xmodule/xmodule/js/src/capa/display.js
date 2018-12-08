@@ -155,7 +155,9 @@
                     return MathJax.Hub.Queue(['Typeset', MathJax.Hub, element]);
                 });
             }
-            window.update_schematics();
+            if (window.hasOwnProperty('update_schematics')) {
+                window.update_schematics();
+            }
             problemPrefix = this.element_id.replace(/problem_/, '');
             this.inputs = this.$('[id^="input_' + problemPrefix + '_"]');
             this.$('div.action button').click(this.refreshAnswers);
@@ -710,9 +712,10 @@
                 var answers;
                 answers = response.answers;
                 $.each(answers, function(key, value) {
+                    var safeKey = key.replace(':', '\\:'); // fix for courses which use url_names with colons, e.g. problem:question1
                     var answer;
                     if (!$.isArray(value)) {
-                        answer = that.$('#answer_' + key + ', #solution_' + key);
+                        answer = that.$('#answer_' + safeKey + ', #solution_' + safeKey);
                         edx.HtmlUtils.setHtml(answer, edx.HtmlUtils.HTML(value));
                         Collapsible.setCollapsibles(answer);
 
@@ -1061,6 +1064,7 @@
                 var answer, choice, inputId, i, len, results, $element, $inputLabel, $inputStatus;
                 $element = $(element);
                 inputId = $element.attr('id').replace(/inputtype_/, '');
+                inputId = inputId.replace(':', '\\:'); // fix for courses which use url_names with colons, e.g. problem:question1
                 answer = answers[inputId];
                 results = [];
                 for (i = 0, len = answer.length; i < len; i++) {

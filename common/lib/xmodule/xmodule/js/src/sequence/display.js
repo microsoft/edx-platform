@@ -57,6 +57,8 @@
             this.ajaxUrl = this.el.data('ajax-url');
             this.nextUrl = this.el.data('next-url');
             this.prevUrl = this.el.data('prev-url');
+            this.savePosition = this.el.data('save-position');
+            this.showCompletion = this.el.data('show-completion');
             this.keydownHandler($(element).find('#sequence-list .tab'));
             this.base_page_title = ($('title').data('base-title') || '').trim();
             this.bind();
@@ -230,10 +232,15 @@
             if (this.position !== newPosition) {
                 if (this.position) {
                     this.mark_visited(this.position);
-                    modxFullUrl = '' + this.ajaxUrl + '/goto_position';
-                    $.postWithPrefix(modxFullUrl, {
-                        position: newPosition
-                    });
+                    if (this.showCompletion) {
+                        this.update_completion(this.position);
+                    }
+                    if (this.savePosition) {
+                        modxFullUrl = '' + this.ajaxUrl + '/goto_position';
+                        $.postWithPrefix(modxFullUrl, {
+                            position: newPosition
+                        });
+                    }
                 }
 
                 // On Sequence change, fire custom event 'sequence:change' on element.
@@ -266,7 +273,9 @@
                 XBlock.initializeBlocks(this.content_container, this.requestToken);
 
                 // For embedded circuit simulator exercises in 6.002x
-                window.update_schematics();
+                if (window.hasOwnProperty('update_schematics')) {
+                    window.update_schematics();
+                }
                 this.position = newPosition;
                 this.toggleArrows();
                 this.hookUpContentStateChangeEvent();
@@ -398,6 +407,22 @@
                 .removeClass('active')
                 .removeClass('focused')
                 .addClass('visited');
+        };
+
+        Sequence.prototype.update_completion = function(position) {
+            var element = this.link_for(position);
+            var completionUrl = this.ajaxUrl + '/get_completion';
+            var usageKey = element[0].attributes['data-id'].value;
+            var completionIndicators = element.find('.check-circle');
+            if (completionIndicators.length) {
+                $.postWithPrefix(completionUrl, {
+                    usage_key: usageKey
+                }, function(data) {
+                    if (data.complete === true) {
+                        completionIndicators.removeClass('is-hidden');
+                    }
+                });
+            }
         };
 
         Sequence.prototype.mark_active = function(position) {

@@ -11,6 +11,7 @@ from django.dispatch import receiver
 from django.utils.translation import ugettext_lazy
 from django_countries.fields import CountryField
 from model_utils import FieldTracker
+from opaque_keys.edx.django.models import CourseKeyField
 
 from django_comment_common.signals import (
     comment_created,
@@ -27,7 +28,6 @@ from django_comment_common.signals import (
 )
 from lms.djangoapps.teams import TEAM_DISCUSSION_CONTEXT
 from lms.djangoapps.teams.utils import emit_team_event
-from openedx.core.djangoapps.xmodule_django.models import CourseKeyField
 from student.models import CourseEnrollment, LanguageField
 from django.utils.text import slugify
 
@@ -171,8 +171,8 @@ class CourseTeamMembership(models.Model):
         app_label = "teams"
         unique_together = (('user', 'team'),)
 
-    user = models.ForeignKey(User)
-    team = models.ForeignKey(CourseTeam, related_name='membership')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    team = models.ForeignKey(CourseTeam, related_name='membership', on_delete=models.CASCADE)
     date_joined = models.DateTimeField(auto_now_add=True)
     last_activity_at = models.DateTimeField()
 

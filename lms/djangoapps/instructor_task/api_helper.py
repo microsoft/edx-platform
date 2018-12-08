@@ -256,8 +256,8 @@ def _handle_instructor_task_failure(instructor_task, error):
     """
     Do required operations if task creation was not complete.
     """
-    log.info("instructor task (%s) failed, result: %s", instructor_task.task_id, error.message)
-    _update_instructor_task_state(instructor_task, FAILURE, error.message)
+    log.info("instructor task (%s) failed, result: %s", instructor_task.task_id, text_type(error))
+    _update_instructor_task_state(instructor_task, FAILURE, text_type(error))
 
     raise QueueConnectionError()
 
@@ -370,7 +370,7 @@ def check_entrance_exam_problems_for_rescoring(exam_key):  # pylint: disable=inv
         raise NotImplementedError(msg)
 
 
-def encode_problem_and_student_input(usage_key, student=None):  # pylint: disable=invalid-name
+def encode_problem_and_student_input(usage_key, student=None):
     """
     Encode optional usage_key and optional student into task_key and task_input values.
 
@@ -393,7 +393,7 @@ def encode_problem_and_student_input(usage_key, student=None):  # pylint: disabl
     return task_input, task_key
 
 
-def encode_entrance_exam_and_student_input(usage_key, student=None):  # pylint: disable=invalid-name
+def encode_entrance_exam_and_student_input(usage_key, student=None):
     """
     Encode usage_key and optional student into task_key and task_input values.
 

@@ -6,7 +6,6 @@ for displaying containers within units.
 import datetime
 
 import ddt
-from nose.plugins.attrib import attr
 
 from base_studio_test import ContainerBase
 from common.test.acceptance.fixtures.course import XBlockFixtureDesc
@@ -19,6 +18,7 @@ from common.test.acceptance.pages.studio.html_component_editor import HtmlXBlock
 from common.test.acceptance.pages.studio.move_xblock import MoveModalView
 from common.test.acceptance.pages.studio.utils import add_discussion
 from common.test.acceptance.tests.helpers import create_user_partition_json
+from openedx.core.lib.tests import attr
 from xmodule.partitions.partitions import ENROLLMENT_TRACK_PARTITION_ID, MINIMUM_STATIC_PARTITION_ID, Group
 
 
@@ -181,7 +181,7 @@ class DeleteComponentTest(NestedVerticalTest):
         self.delete_and_verify(group_a_item_1_delete_index, expected_ordering)
 
 
-@attr(shard=1)
+@attr(shard=16)
 class EditContainerTest(NestedVerticalTest):
     """
     Tests of editing a container.
@@ -212,24 +212,6 @@ class EditContainerTest(NestedVerticalTest):
         """
         container = self.go_to_nested_container_page()
         self.modify_display_name_and_verify(container)
-
-    def test_edit_raw_html(self):
-        """
-        Test the raw html editing functionality.
-        """
-        modified_content = "<p>modified content</p>"
-
-        #navigate to and open the component for editing
-        unit = self.go_to_unit_page()
-        container = unit.xblocks[1].go_to_container()
-        component = container.xblocks[1].children[0]
-        component.edit()
-
-        html_editor = HtmlXBlockEditorView(self.browser, component.locator)
-        html_editor.set_content_and_save(modified_content, raw=True)
-
-        #note we're expecting the <p> tags to have been removed
-        self.assertEqual(component.student_content, "modified content")
 
 
 class BaseGroupConfigurationsTest(ContainerBase):
@@ -414,7 +396,11 @@ class BaseGroupConfigurationsTest(ContainerBase):
         self.assertFalse(component.has_validation_error)
 
 
+@attr(shard=21)
 class UnitAccessContainerTest(BaseGroupConfigurationsTest):
+    """
+    Tests unit level access
+    """
     GROUP_RESTRICTED_MESSAGE = 'Access to this unit is restricted to: Dogs'
 
     def _toggle_container_unit_access(self, group_ids, unit):
@@ -467,7 +453,7 @@ class UnitAccessContainerTest(BaseGroupConfigurationsTest):
         self._verify_container_unit_access_message([self.id_base + 1], self.GROUP_RESTRICTED_MESSAGE)
 
 
-@attr(shard=3)
+@attr(shard=9)
 class ContentGroupVisibilityModalTest(BaseGroupConfigurationsTest):
     """
     Tests of the visibility settings modal for components on the unit
@@ -698,7 +684,7 @@ class EnrollmentTrackVisibilityModalTest(BaseGroupConfigurationsTest):
         self.verify_component_group_visibility_messsage(self.html_component, "Audit Track")
 
 
-@attr(shard=1)
+@attr(shard=16)
 class UnitPublishingTest(ContainerBase):
     """
     Tests of the publishing control and related widgets on the Unit page.
@@ -999,33 +985,6 @@ class UnitPublishingTest(ContainerBase):
         unit_page = unit.go_to()
         self._verify_explicit_lock_overrides_implicit_lock_information(unit_page)
 
-    def test_published_unit_with_draft_child(self):
-        """
-        Scenario: A published unit with a draft child can be published
-            Given I have a published unit with no unpublished changes
-            When I go to the unit page in Studio
-            And edit the content of the only component
-            Then the content changes
-            And the title in the Publish information box is "Draft (Unpublished changes)"
-            And when I click the Publish button
-            Then the title in the Publish information box is "Published and Live"
-            And when I click the View Live button
-            Then I see the changed content in LMS
-        """
-        modified_content = 'modified content'
-
-        unit = self.go_to_unit_page()
-        component = unit.xblocks[1]
-        component.edit()
-        HtmlXBlockEditorView(self.browser, component.locator).set_content_and_save(modified_content)
-        self.assertEqual(component.student_content, modified_content)
-        unit.verify_publish_title(self.DRAFT_STATUS)
-        unit.publish_action.click()
-        unit.wait_for_ajax()
-        unit.verify_publish_title(self.PUBLISHED_LIVE_STATUS)
-        self._view_published_version(unit)
-        self.assertIn(modified_content, self.courseware.xblock_component_html_content(0))
-
     def test_cancel_does_not_create_draft(self):
         """
         Scenario: Editing a component and then canceling does not create a draft version (TNL-399)
@@ -1255,7 +1214,7 @@ class ProblemCategoryTabsTest(ContainerBase):
         self.assertEqual(page.get_category_tab_components('problem', 1), expected_components)
 
 
-@attr(shard=1)
+@attr(shard=16)
 @ddt.ddt
 class MoveComponentTest(ContainerBase):
     """

@@ -2,20 +2,113 @@
 
 import unittest
 from datetime import timedelta
+from uuid import uuid4
 
 from django.conf import settings
 from django.test import TestCase
 from django.utils.timezone import now
+from mock import patch
+from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
+from xmodule.modulestore.tests.factories import CourseFactory
 
-from certificates.models import CertificateStatuses  # pylint: disable=import-error
+from course_modes.models import CourseMode
+from course_modes.tests.factories import CourseModeFactory
 from lms.djangoapps.certificates.api import MODES
+from lms.djangoapps.certificates.models import CertificateStatuses
 from lms.djangoapps.certificates.tests.factories import GeneratedCertificateFactory
 from openedx.core.djangoapps.content.course_overviews.tests.factories import CourseOverviewFactory
-from student.tests.factories import CourseEnrollmentFactory
+from student.models import CourseEnrollment
+from student.tests.factories import (TEST_PASSWORD, CourseEnrollmentFactory, UserFactory)
 
 # Entitlements is not in CMS' INSTALLED_APPS so these imports will error during test collection
 if settings.ROOT_URLCONF == 'lms.urls':
     from entitlements.tests.factories import CourseEntitlementFactory
+    from entitlements.models import CourseEntitlement
+
+
+@unittest.skipUnless(settings.ROOT_URLCONF == 'lms.urls', 'Test only valid in lms')
+class TestCourseEntitlementModelHelpers(ModuleStoreTestCase):
+    """
+    Series of tests for the helper methods in the CourseEntitlement Model Class.
+    """
+    def setUp(self):
+        super(TestCourseEntitlementModelHelpers, self).setUp()
+        self.user = UserFactory()
+        self.client.login(username=self.user.username, password=TEST_PASSWORD)
+
+    @patch("entitlements.models.get_course_uuid_for_course")
+    def test_check_for_existing_entitlement_and_enroll(self, mock_get_course_uuid):
+        course = CourseFactory()
+        CourseModeFactory(
+            course_id=course.id,
+            mode_slug=CourseMode.VERIFIED,
+            # This must be in the future to ensure it is returned by downstream code.
+            expiration_datetime=now() + timedelta(days=1)
+        )
+        entitlement = CourseEntitlementFactory.create(
+            mode=CourseMode.VERIFIED,
+            user=self.user,
+        )
+        mock_get_course_uuid.return_value = entitlement.course_uuid
+
+        assert not CourseEnrollment.is_enrolled(user=self.user, course_key=course.id)
+
+        CourseEntitlement.check_for_existing_entitlement_and_enroll(
+            user=self.user,
+            course_run_key=course.id,
+        )
+
+        assert CourseEnrollment.is_enrolled(user=self.user, course_key=course.id)
+
+        entitlement.refresh_from_db()
+        assert entitlement.enrollment_course_run
+
+    @patch("entitlements.models.get_course_uuid_for_course")
+    def test_check_for_no_entitlement_and_do_not_enroll(self, mock_get_course_uuid):
+        course = CourseFactory()
+        CourseModeFactory(
+            course_id=course.id,
+            mode_slug=CourseMode.VERIFIED,
+            # This must be in the future to ensure it is returned by downstream code.
+            expiration_datetime=now() + timedelta(days=1)
+        )
+        entitlement = CourseEntitlementFactory.create(
+            mode=CourseMode.VERIFIED,
+            user=self.user,
+        )
+        mock_get_course_uuid.return_value = None
+
+        assert not CourseEnrollment.is_enrolled(user=self.user, course_key=course.id)
+
+        CourseEntitlement.check_for_existing_entitlement_and_enroll(
+            user=self.user,
+            course_run_key=course.id,
+        )
+
+        assert not CourseEnrollment.is_enrolled(user=self.user, course_key=course.id)
+
+        entitlement.refresh_from_db()
+        assert entitlement.enrollment_course_run is None
+
+        new_course = CourseFactory()
+        CourseModeFactory(
+            course_id=new_course.id,
+            mode_slug=CourseMode.VERIFIED,
+            # This must be in the future to ensure it is returned by downstream code.
+            expiration_datetime=now() + timedelta(days=1)
+        )
+
+        # Return invalid uuid so that no entitlement returned for this new course
+        mock_get_course_uuid.return_value = uuid4().hex
+
+        try:
+            CourseEntitlement.check_for_existing_entitlement_and_enroll(
+                user=self.user,
+                course_run_key=new_course.id,
+            )
+            assert not CourseEnrollment.is_enrolled(user=self.user, course_key=new_course.id)
+        except AttributeError as error:
+            self.fail(error.message)
 
 
 @unittest.skipUnless(settings.ROOT_URLCONF == 'lms.urls', 'Test only valid in lms')
@@ -28,6 +121,8 @@ class TestModels(TestCase):
             start=now()
         )
         self.enrollment = CourseEnrollmentFactory.create(course_id=self.course.id)
+        self.user = UserFactory()
+        self.client.login(username=self.user.username, password=TEST_PASSWORD)
 
     def test_is_entitlement_redeemable(self):
         """
@@ -146,8 +241,8 @@ class TestModels(TestCase):
         assert expired_at_datetime is None
         assert entitlement.expired_at is None
 
-        # Verify an entitlement from two years ago is expired and the db row is updated
-        past_datetime = now() - timedelta(days=365 * 2)
+        # Verify an entitlement from three years ago day is expired and the db row is updated
+        past_datetime = now() - timedelta(days=365 * 3)
         entitlement.created = past_datetime
         entitlement.save()
         expired_at_datetime = entitlement.expired_at_datetime
@@ -190,10 +285,10 @@ class TestModels(TestCase):
         assert expired_at_datetime is None
         assert entitlement.expired_at is None
 
-        # Verify a date 451 days in the past (1 days after the policy expiration)
+        # Verify a date 731 days in the past (1 days after the policy expiration)
         # That is enrolled and started in within the regain period is still expired
         entitlement = CourseEntitlementFactory.create(enrollment_course_run=self.enrollment)
-        expired_datetime = now() - timedelta(days=451)
+        expired_datetime = now() - timedelta(days=731)
         entitlement.created = expired_datetime
         start = now()
         self.enrollment.created = start
@@ -205,3 +300,31 @@ class TestModels(TestCase):
         expired_at_datetime = entitlement.expired_at_datetime
         assert expired_at_datetime
         assert entitlement.expired_at
+
+    @patch("entitlements.models.get_course_uuid_for_course")
+    @patch("entitlements.models.CourseEntitlement.refund")
+    def test_unenroll_entitlement_with_audit_course_enrollment(self, mock_refund, mock_get_course_uuid):
+        """
+        Test that entitlement is not refunded if un-enroll is called on audit course un-enroll.
+        """
+        self.enrollment.mode = CourseMode.AUDIT
+        self.enrollment.user = self.user
+        self.enrollment.save()
+        entitlement = CourseEntitlementFactory.create(user=self.user)
+        mock_get_course_uuid.return_value = entitlement.course_uuid
+        CourseEnrollment.unenroll(self.user, self.course.id)
+
+        assert not mock_refund.called
+        entitlement.refresh_from_db()
+        assert entitlement.expired_at is None
+
+        self.enrollment.mode = CourseMode.VERIFIED
+        self.enrollment.is_active = True
+        self.enrollment.save()
+        entitlement.enrollment_course_run = self.enrollment
+        entitlement.save()
+        CourseEnrollment.unenroll(self.user, self.course.id)
+
+        assert mock_refund.called
+        entitlement.refresh_from_db()
+        assert entitlement.expired_at < now()

@@ -6,7 +6,7 @@ from string import join
 from urllib import urlencode
 from urlparse import urlunparse
 
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from opaque_keys.edx.locator import CourseLocator
 
 from student.models import CourseEnrollment
@@ -21,6 +21,7 @@ class TestBlocksView(SharedModuleStoreTestCase):
     """
     Test class for BlocksView
     """
+    shard = 4
     requested_fields = ['graded', 'format', 'student_view_multi_device', 'children', 'not_a_field', 'due']
     BLOCK_TYPES_WITH_STUDENT_VIEW_DATA = ['video', 'discussion', 'html']
 
@@ -246,10 +247,12 @@ class TestBlocksView(SharedModuleStoreTestCase):
         self.verify_response_with_requested_fields(response)
 
 
-class TestBlocksInCourseView(TestBlocksView):  # pylint: disable=test-inherits-tests
+class TestBlocksInCourseView(TestBlocksView):
     """
     Test class for BlocksInCourseView
     """
+    shard = 4
+
     def setUp(self):
         super(TestBlocksInCourseView, self).setUp()
         self.url = reverse('blocks_in_course')

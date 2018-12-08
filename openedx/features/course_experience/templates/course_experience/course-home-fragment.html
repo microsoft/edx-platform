@@ -9,13 +9,14 @@ import json
 from django.conf import settings
 from django.utils.translation import ugettext as _
 from django.template.defaultfilters import escapejs
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 
 from django_comment_client.permissions import has_permission
 from openedx.core.djangolib.js_utils import dump_js_escaped_json, js_escaped_string
 from openedx.core.djangolib.markup import HTML
 from openedx.features.course_experience import UNIFIED_COURSE_TAB_FLAG, SHOW_REVIEWS_TOOL_FLAG
 from openedx.features.learner_analytics import ENABLE_DASHBOARD_TAB
+from openedx.features.portfolio_project import INCLUDE_PORTFOLIO_UPSELL_MODAL
 %>
 
 <%block name="header_extras">
@@ -30,6 +31,14 @@ from openedx.features.learner_analytics import ENABLE_DASHBOARD_TAB
           component="UpsellExperimentModal",
           id="upsell-modal",
           props={},
+        )}
+    % endif
+
+    % if INCLUDE_PORTFOLIO_UPSELL_MODAL.is_enabled():
+        ${static.renderReact(
+            component="PortfolioExperimentUpsellModal",
+            id="portfolio-experiment-upsell-modal",
+            props={}
         )}
     % endif
 
@@ -71,7 +80,7 @@ from openedx.features.learner_analytics import ENABLE_DASHBOARD_TAB
         </div>
     </header>
     <div class="page-content">
-        <main class="page-content-main">
+        <div class="page-content-main">
             % if course_home_message_fragment:
                 ${HTML(course_home_message_fragment.body_html())}
             % endif
@@ -85,7 +94,7 @@ from openedx.features.learner_analytics import ENABLE_DASHBOARD_TAB
             % if outline_fragment:
                 ${HTML(outline_fragment.body_html())}
             % endif
-        </main>
+        </div>
         <aside class="page-content-secondary course-sidebar">
             % if has_goal_permission:
                 <div class="section section-goals ${'' if current_goal else 'hidden'}">

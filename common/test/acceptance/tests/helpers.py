@@ -4,15 +4,16 @@ Test helper functions and base classes.
 
 import functools
 import inspect
+import io
 import json
 import operator
 import os
 import pprint
-import unittest
+import sys
 import urlparse
 from contextlib import contextmanager
 from datetime import datetime
-from unittest import TestCase
+from unittest import SkipTest, TestCase
 
 import requests
 from bok_choy.javascript import js_defined
@@ -23,7 +24,6 @@ from opaque_keys.edx.locator import CourseLocator
 from path import Path as path
 from pymongo import ASCENDING, MongoClient
 from selenium.common.exceptions import StaleElementReferenceException
-from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.select import Select
@@ -52,10 +52,13 @@ def skip_if_browser(browser):
 
     """
     def decorator(test_function):
+        """
+        The decorator to be applied to the test function.
+        """
         @functools.wraps(test_function)
         def wrapper(self, *args, **kwargs):
             if self.browser.name == browser:
-                raise unittest.SkipTest('Skipping as this test will not work with {}'.format(browser))
+                raise SkipTest('Skipping as this test will not work with {}'.format(browser))
             test_function(self, *args, **kwargs)
         return wrapper
     return decorator
@@ -107,7 +110,7 @@ def load_data_str(rel_path):
     Load a file from the "data" directory as a string.
     `rel_path` is the path relative to the data directory.
     """
-    full_path = path(__file__).abspath().dirname() / "data" / rel_path
+    full_path = path(__file__).abspath().dirname() / "data" / rel_path  # pylint: disable=no-value-for-parameter
     with open(full_path) as data_file:
         return data_file.read()
 
@@ -318,7 +321,7 @@ def element_has_text(page, css_selector, text):
     text_present = False
     text_list = page.q(css=css_selector).text
 
-    if len(text_list) > 0 and (text in text_list):
+    if text_list and (text in text_list):
         text_present = True
 
     return text_present
@@ -427,8 +430,7 @@ def assert_opened_help_link_is_correct(test, url):
         url (str): url to verify.
     """
     test.browser.switch_to_window(test.browser.window_handles[-1])
-    # Assert that url in the browser is the same.
-    test.assertEqual(url, test.browser.current_url)
+    WebDriverWait(test.browser, 10).until(lambda driver: driver.current_url == url)
     # Check that the URL loads. Can't do this in the browser because it might
     # be loading a "Maze Found" missing content page.
     response = requests.get(url)
@@ -446,13 +448,13 @@ OPEN_BOOKS = {
 }
 
 
-def url_for_help(book_slug, path):
+def url_for_help(book_slug, path_component):
     """
     Create a full help URL given a book slug and a path component.
     """
     # Emulate the switch between books that happens in envs/bokchoy.py
     books = EDX_BOOKS if RELEASE_LINE == "master" else OPEN_BOOKS
-    url = 'http://edx.readthedocs.io/projects/{}/en/{}{}'.format(books[book_slug], doc_version(), path)
+    url = 'https://edx.readthedocs.io/projects/{}/en/{}{}'.format(books[book_slug], doc_version(), path_component)
     return url
 
 
@@ -736,13 +738,55 @@ class AcceptanceTest(WebAppTest):
     """
 
     def __init__(self, *args, **kwargs):
-        if 'BOK_CHOY_HOSTNAME' not in os.environ:
-            # Hack until we upgrade Firefox and install geckodriver in Vagrant and Jenkins
-            DesiredCapabilities.FIREFOX['marionette'] = False
         super(AcceptanceTest, self).__init__(*args, **kwargs)
 
         # Use long messages so that failures show actual and expected values
         self.longMessage = True  # pylint: disable=invalid-name
+
+    def tearDown(self):
+        self._save_console_log()
+        super(AcceptanceTest, self).tearDown()
+
+    def _save_console_log(self):
+        """
+        Retrieve any JS errors caught by our error handler in the browser
+        and save them to a log file.  This is a workaround for Firefox not
+        supporting the Selenium log capture API yet; for details, see
+        https://github.com/mozilla/geckodriver/issues/284
+        """
+        browser_name = os.environ.get('SELENIUM_BROWSER', 'firefox')
+        if browser_name != 'firefox':
+            return
+        result = sys.exc_info()
+        exception_type = result[0]
+
+        # Do not save for skipped tests.
+        if exception_type is SkipTest:
+            return
+
+        # If the test failed, save the browser console log.
+        # The exception info will either be an assertion error (on failure)
+        # or an actual exception (on error)
+        if result != (None, None, None):
+            logs = self.browser.execute_script("return window.localStorage.getItem('console_log_capture');")
+            if not logs:
+                return
+            logs = json.loads(logs)
+
+            log_dir = os.environ.get('SELENIUM_DRIVER_LOG_DIR')
+            if log_dir and not os.path.exists(log_dir):
+                os.makedirs(log_dir)
+
+            log_path = os.path.join(log_dir, '{}_browser.log'.format(self.id()))
+            with io.open(log_path, 'w') as browser_log:
+                for (message, url, line_no, col_no, stack) in logs:
+                    browser_log.write(u"{}:{}:{}: {}\n    {}\n".format(
+                        url,
+                        line_no,
+                        col_no,
+                        message,
+                        (stack or "").replace('\n', '\n    ')
+                    ))
 
 
 class UniqueCourseTest(AcceptanceTest):
@@ -788,8 +832,9 @@ class YouTubeStubConfig(object):
     Configure YouTube Stub Server.
     """
 
+    YOUTUBE_HOSTNAME = os.environ.get('BOK_CHOY_HOSTNAME', '127.0.0.1')
     PORT = 9080
-    URL = 'http://127.0.0.1:{}/'.format(PORT)
+    URL = 'http://{}:{}/'.format(YOUTUBE_HOSTNAME, PORT)
 
     @classmethod
     def configure(cls, config):
@@ -848,6 +893,23 @@ class YouTubeStubConfig(object):
             return json.loads(response.content)
         else:
             return {}
+
+
+def click_and_wait_for_window(page, element):
+    """
+    To avoid a race condition, click an element that launces a new window, and
+    wait for that window to launch.
+    To check this, make sure the number of window_handles increases by one.
+
+    Arguments:
+    page (PageObject): Page object to perform method on
+    element (WebElement): Clickable element that triggers the new window to open
+    """
+    num_windows = len(page.browser.window_handles)
+    element.click()
+    WebDriverWait(page.browser, 10).until(
+        lambda driver: len(driver.window_handles) > num_windows
+    )
 
 
 def create_user_partition_json(partition_id, name, description, groups, scheme="random"):

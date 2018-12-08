@@ -5,26 +5,21 @@ django-oauth-toolkit as appropriate.
 
 from __future__ import unicode_literals
 
-import hashlib
 import json
 
-from Cryptodome.PublicKey import RSA
 from django.conf import settings
-from django.core.urlresolvers import reverse
-from django.http import JsonResponse
 from django.views.generic import View
+from edx_django_utils import monitoring as monitoring_utils
 from edx_oauth2_provider import views as dop_views  # django-oauth2-provider views
-from jwkest.jwk import RSAKey
 from oauth2_provider import models as dot_models  # django-oauth-toolkit
 from oauth2_provider import views as dot_views
 from ratelimit import ALL
 from ratelimit.mixins import RatelimitMixin
 
 from openedx.core.djangoapps.auth_exchange import views as auth_exchange_views
-from openedx.core.lib.token_utils import JwtBuilder
-
-from . import adapters
-from .dot_overrides import views as dot_overrides_views
+from openedx.core.djangoapps.oauth_dispatch import adapters
+from openedx.core.djangoapps.oauth_dispatch.dot_overrides import views as dot_overrides_views
+from openedx.core.djangoapps.oauth_dispatch.jwt import create_jwt_from_token
 
 
 class _DispatchingView(View):
@@ -33,7 +28,6 @@ class _DispatchingView(View):
     behavior routes based on client_id, but this can be overridden by redefining
     `select_backend()` if particular views need different behavior.
     """
-    # pylint: disable=no-member
 
     dot_adapter = adapters.DOTAdapter()
     dop_adapter = adapters.DOPAdapter()
@@ -42,9 +36,14 @@ class _DispatchingView(View):
         """
         Returns the appropriate adapter based on the OAuth client linked to the request.
         """
-        if dot_models.Application.objects.filter(client_id=self._get_client_id(request)).exists():
+        client_id = self._get_client_id(request)
+        monitoring_utils.set_custom_metric('oauth_client_id', client_id)
+
+        if dot_models.Application.objects.filter(client_id=client_id).exists():
+            monitoring_utils.set_custom_metric('oauth_adapter', 'dot')
             return self.dot_adapter
         else:
+            monitoring_utils.set_custom_metric('oauth_adapter', 'dop')
             return self.dop_adapter
 
     def dispatch(self, request, *args, **kwargs):
@@ -100,29 +99,24 @@ class AccessTokenView(RatelimitMixin, _DispatchingView):
     def dispatch(self, request, *args, **kwargs):
         response = super(AccessTokenView, self).dispatch(request, *args, **kwargs)
 
-        if response.status_code == 200 and request.POST.get('token_type', '').lower() == 'jwt':
-            expires_in, scopes, user = self._decompose_access_token_response(request, response)
+        token_type = request.POST.get('token_type', 'no_token_type_supplied').lower()
+        monitoring_utils.set_custom_metric('oauth_token_type', token_type)
+        monitoring_utils.set_custom_metric('oauth_grant_type', request.POST.get('grant_type', ''))
 
-            content = {
-                'access_token': JwtBuilder(user).build_token(scopes, expires_in),
-                'expires_in': expires_in,
-                'token_type': 'JWT',
-                'scope': ' '.join(scopes),
-            }
-            response.content = json.dumps(content)
+        if response.status_code == 200 and token_type == 'jwt':
+            response.content = self._build_jwt_response_from_access_token_response(request, response)
 
         return response
 
-    def _decompose_access_token_response(self, request, response):
-        """ Decomposes the access token in the request to an expiration date, scopes, and User. """
-        content = json.loads(response.content)
-        access_token = content['access_token']
-        scope = content['scope']
-        access_token_obj = self.get_adapter(request).get_access_token(access_token)
-        user = access_token_obj.user
-        scopes = scope.split(' ')
-        expires_in = content['expires_in']
-        return expires_in, scopes, user
+    def _build_jwt_response_from_access_token_response(self, request, response):
+        """ Builds the content of the response, including the JWT token. """
+        token_dict = json.loads(response.content)
+        jwt = create_jwt_from_token(token_dict, self.get_adapter(request))
+        token_dict.update({
+            'access_token': jwt,
+            'token_type': 'JWT',
+        })
+        return json.dumps(token_dict)
 
 
 class AuthorizationView(_DispatchingView):
@@ -146,45 +140,3 @@ class RevokeTokenView(_DispatchingView):
     Dispatch to the RevokeTokenView of django-oauth-toolkit
     """
     dot_view = dot_views.RevokeTokenView
-
-
-class ProviderInfoView(View):
-    def get(self, request, *args, **kwargs):
-        data = {
-            'issuer': settings.JWT_AUTH['JWT_ISSUER'],
-            'authorization_endpoint': request.build_absolute_uri(reverse('authorize')),
-            'token_endpoint': request.build_absolute_uri(reverse('access_token')),
-            'end_session_endpoint': request.build_absolute_uri(reverse('logout')),
-            'token_endpoint_auth_methods_supported': ['client_secret_post'],
-            # NOTE (CCB): This is not part of the OpenID Connect standard. It is added here since we
-            # use JWS for our access tokens.
-            'access_token_signing_alg_values_supported': ['RS512', 'HS256'],
-            'scopes_supported': ['openid', 'profile', 'email'],
-            'claims_supported': ['sub', 'iss', 'name', 'given_name', 'family_name', 'email'],
-            'jwks_uri': request.build_absolute_uri(reverse('jwks')),
-        }
-        response = JsonResponse(data)
-        return response
-
-
-class JwksView(View):
-    @staticmethod
-    def serialize_rsa_key(key):
-        kid = hashlib.md5(key.encode('utf-8')).hexdigest()
-        key = RSAKey(kid=kid, key=RSA.importKey(key), use='sig', alg='RS512')
-        return key.serialize(private=False)
-
-    def get(self, request, *args, **kwargs):
-        secret_keys = []
-
-        if settings.JWT_PRIVATE_SIGNING_KEY:
-            secret_keys.append(settings.JWT_PRIVATE_SIGNING_KEY)
-
-        # NOTE: We provide the expired keys in case there are unexpired access tokens
-        # that need to have their signatures verified.
-        if settings.JWT_EXPIRED_PRIVATE_SIGNING_KEYS:
-            secret_keys += settings.JWT_EXPIRED_PRIVATE_SIGNING_KEYS
-
-        return JsonResponse({
-            'keys': [self.serialize_rsa_key(key) for key in secret_keys if key],
-        })
