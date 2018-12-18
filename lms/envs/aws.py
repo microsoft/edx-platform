@@ -1101,6 +1101,12 @@ RETIREMENT_STATES = ENV_TOKENS.get('RETIREMENT_STATES', RETIREMENT_STATES)
 ENABLE_COURSE_DISCOVERY = ENV_TOKENS.get('ENABLE_COURSE_DISCOVERY', ENABLE_COURSE_DISCOVERY)
 ENABLE_DASHBOARD_TABS = ENV_TOKENS.get('ENABLE_DASHBOARD_TABS', ENABLE_DASHBOARD_TABS)
 
+# Social Django defaults to HTTP scheme when generating redirect_uri
+# It is therefore necessary to add this setting in order to support
+# changing the redirect_uri to HTTPS. Defaulting to False (default behavior)
+# and expecting client to override.
+REDIRECT_IS_HTTPS = ENV_TOKENS.get('REDIRECT_IS_HTTPS', REDIRECT_IS_HTTPS)
+
 ############################### Plugin Settings ###############################
 
 from openedx.core.djangoapps.plugins import plugin_settings, constants as plugin_constants
