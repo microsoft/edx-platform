@@ -1097,6 +1097,10 @@ RETIREMENT_SERVICE_WORKER_USERNAME = ENV_TOKENS.get(
 )
 RETIREMENT_STATES = ENV_TOKENS.get('RETIREMENT_STATES', RETIREMENT_STATES)
 
+# Making the display of course discovery and dashboard tabs configurable
+ENABLE_COURSE_DISCOVERY = ENV_TOKENS.get('ENABLE_COURSE_DISCOVERY', ENABLE_COURSE_DISCOVERY)
+ENABLE_DASHBOARD_TABS = ENV_TOKENS.get('ENABLE_DASHBOARD_TABS', ENABLE_DASHBOARD_TABS)
+
 ############################### Plugin Settings ###############################
 
 from openedx.core.djangoapps.plugins import plugin_settings, constants as plugin_constants
