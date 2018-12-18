@@ -398,6 +398,10 @@ FEATURES = {
 
     # Whether to display the account deletion section the account settings page
     'ENABLE_ACCOUNT_DELETION': True,
+    
+    # Making the display of course discovery and dashboard tabs configurable
+    'ENABLE_COURSE_DISCOVERY': True,
+    'ENABLE_DASHBOARD_TABS': True,
 }
 
 # Settings for the course reviews tool template and identification key, set either to None to disable course reviews
