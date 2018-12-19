@@ -922,6 +922,9 @@ STUDENTMODULEHISTORYEXTENDED_OFFSET = ENV_TOKENS.get(
 if ENV_TOKENS.get('AUDIT_CERT_CUTOFF_DATE', None):
     AUDIT_CERT_CUTOFF_DATE = dateutil.parser.parse(ENV_TOKENS.get('AUDIT_CERT_CUTOFF_DATE'))
 
+# This enables  certificate geneartion for honor mode 
+ENABLE_CERTIFICATES_FOR_HONOR_MODE = False
+
 ################################ Settings for Credentials Service ################################
 
 CREDENTIALS_GENERATION_ROUTING_KEY = ENV_TOKENS.get('CREDENTIALS_GENERATION_ROUTING_KEY', HIGH_PRIORITY_QUEUE)
@@ -1105,7 +1108,8 @@ ENABLE_DASHBOARD_TABS = ENV_TOKENS.get('ENABLE_DASHBOARD_TABS', ENABLE_DASHBOARD
 
 from openedx.core.djangoapps.plugins import plugin_settings, constants as plugin_constants
 plugin_settings.add_plugins(__name__, plugin_constants.ProjectType.LMS, plugin_constants.SettingsType.AWS)
-
+######################### Enable honor mode eligible for certificate ##########
+ENABLE_CERTIFICATES_FOR_HONOR_MODE = ENV_TOKENS.get('ENABLE_CERTIFICATES_FOR_HONOR_MODE', ENABLE_CERTIFICATES_FOR_HONOR_MODE)
 ########################## Derive Any Derived Settings  #######################
 
 derive_settings(__name__)

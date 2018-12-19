@@ -3489,3 +3489,5 @@ plugin_settings.add_plugins(__name__, plugin_constants.ProjectType.LMS, plugin_c
 # changing the redirect_uri to HTTPS. Defaulting to False (default behavior)
 # and expecting client to override.
 REDIRECT_IS_HTTPS = False
+# this will enable certificate generation for honor mode enrollments
+ENABLE_CERTIFICATES_FOR_HONOR_MODE = False
