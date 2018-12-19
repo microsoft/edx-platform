@@ -922,9 +922,6 @@ STUDENTMODULEHISTORYEXTENDED_OFFSET = ENV_TOKENS.get(
 if ENV_TOKENS.get('AUDIT_CERT_CUTOFF_DATE', None):
     AUDIT_CERT_CUTOFF_DATE = dateutil.parser.parse(ENV_TOKENS.get('AUDIT_CERT_CUTOFF_DATE'))
 
-# This enables  certificate geneartion for honor mode 
-ENABLE_CERTIFICATES_FOR_HONOR_MODE = False
-
 ################################ Settings for Credentials Service ################################
 
 CREDENTIALS_GENERATION_ROUTING_KEY = ENV_TOKENS.get('CREDENTIALS_GENERATION_ROUTING_KEY', HIGH_PRIORITY_QUEUE)
