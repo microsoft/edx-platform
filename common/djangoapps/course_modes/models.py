@@ -692,7 +692,7 @@ class CourseMode(models.Model):
         be GeneratedCertificate records with mode='audit' which are
         eligible.
         """
-        if mode_slug == cls.AUDIT or mode_slug == cls.HONOR:
+        if mode_slug == cls.AUDIT:
             return False
 
         return True
