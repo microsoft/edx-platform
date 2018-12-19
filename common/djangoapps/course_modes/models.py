@@ -692,8 +692,10 @@ class CourseMode(models.Model):
         be GeneratedCertificate records with mode='audit' which are
         eligible.
         """
+
         if settings.ENABLE_CERTIFICATES_FOR_HONOR_MODE and mode_slug == cls.HONOR:
             return True
+
         if mode_slug == cls.AUDIT or mode_slug == cls.HONOR:
             return False
 
