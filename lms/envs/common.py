@@ -240,6 +240,11 @@ FEATURES = {
     # migrations if you enable this; we don't create tables by default.
     'ENABLE_THIRD_PARTY_AUTH': False,
 
+    # By default edX support custom username/password for authentication.  In some use cases, the use of custom auth
+    # is not needed. This option provides a master option for continuing to use custom authentication (default) or
+    # disable custom authentication in favor of third party authentication.
+    'ENABLE_CUSTOM_AUTH': True,
+
     # Toggle to enable alternate urls for marketing links
     'ENABLE_MKTG_SITE': False,
 

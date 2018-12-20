@@ -1107,6 +1107,11 @@ ENABLE_DASHBOARD_TABS = FEATURES.get('ENABLE_DASHBOARD_TABS')
 # and expecting client to override.
 REDIRECT_IS_HTTPS = ENV_TOKENS.get('REDIRECT_IS_HTTPS', REDIRECT_IS_HTTPS)
 
+# By default edX support custom username/password for authentication.  In some use cases, the use of custom auth
+# is not needed. This option provides a master option for continuing to use custom authentication (default) or
+# disable custom authentication in favor of third party authentication.
+ENABLE_CUSTOM_AUTH = FEATURES.get('ENABLE_CUSTOM_AUTH', True)
+
 ############################### Plugin Settings ###############################
 
 from openedx.core.djangoapps.plugins import plugin_settings, constants as plugin_constants
