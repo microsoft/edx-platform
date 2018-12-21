@@ -1105,7 +1105,7 @@ ENABLE_DASHBOARD_TABS = FEATURES.get('ENABLE_DASHBOARD_TABS')
 # It is therefore necessary to add this setting in order to support
 # changing the redirect_uri to HTTPS. Defaulting to False (default behavior)
 # and expecting client to override.
-REDIRECT_IS_HTTPS = ENV_TOKENS.get('REDIRECT_IS_HTTPS', REDIRECT_IS_HTTPS)
+REDIRECT_IS_HTTPS = ENV_TOKENS.get('REDIRECT_IS_HTTPS')
 
 # By default edX support custom username/password for authentication.  In some use cases, the use of custom auth
 # is not needed. This option provides a master option for continuing to use custom authentication (default) or
