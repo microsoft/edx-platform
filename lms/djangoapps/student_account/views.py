@@ -170,6 +170,11 @@ def login_and_registration_form(request, initial_mode="login"):
 
     enterprise_customer = enterprise_customer_for_request(request)
     update_logistration_context_for_enterprise(request, context, enterprise_customer)
+    
+    # this view is used for auto-provisioning accounts logging in via third_party_auth. In the interim, it is still
+    # useful to have. So, we will only render this form if the auto-provisioning flow is not activated.
+    if not context['data']['third_party_auth']['syncLearnerProfileData']:
+        return redirect(configuration_helpers.get_value('REGISTRATION_REDIRECT_URL', '/'))
 
     response = render_to_response('student_account/login_and_register.html', context)
     handle_enterprise_cookies_for_logistration(request, response, context)

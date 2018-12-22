@@ -146,7 +146,7 @@ urlpatterns = [
 # since these will be taken care of by the third-party authentication provider(s).
 # Therefore, only add the login/registration routes when custom authentication is
 # enabled.
-if settings.FEATURES.get('ENABLE_CUSTOM_AUTH'):
+if configuration_helpers.get_value('ENABLE_CUSTOM_AUTH', settings.FEATURES.get('ENABLE_CUSTOM_AUTH', False)):
 
     # TODO: This needs to move to a separate urls.py once the student_account and
     # student views below find a home together
@@ -167,11 +167,18 @@ if settings.FEATURES.get('ENABLE_CUSTOM_AUTH'):
 else:
     # Throughout the application, the signin_user and register_users routes are referenced by name.
     # Instead of removing them all, it is cheaper to put a redirect to the login/register page.
-    preferred_third_party_auth_login_url = configuration_helpers.get_value('PREFERRED_THIRD_PARTY_AUTH_LOGIN_URL', '/auth/login/live')
+    preferred_third_party_auth_login_url = configuration_helpers.get_value(
+        'PREFERRED_THIRD_PARTY_AUTH_LOGIN_URL', 
+        '/auth/login/live')
 
     urlpatterns += [
-        url(r'^login$', RedirectView.as_view(url=preferred_third_party_auth_login_url, permanent=False), name='signin_user'),
-        url(r'^register$', RedirectView.as_view(url=preferred_third_party_auth_login_url, permanent=False), name='register_user')
+        url(r'^login$', RedirectView.as_view(
+            url=preferred_third_party_auth_login_url, 
+            permanent=False), 
+            name='signin_user'),
+            
+        url(r'^register$', student_account_views.login_and_registration_form,
+                {'initial_mode': 'register'}, name='register_user'),
     ]
 
 if settings.FEATURES.get('ENABLE_MOBILE_REST_API'):
