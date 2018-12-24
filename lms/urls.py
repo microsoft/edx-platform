@@ -169,7 +169,7 @@ else:
     # Instead of removing them all, it is cheaper to put a redirect to the login/register page.
     preferred_third_party_auth_login_url = configuration_helpers.get_value(
         'PREFERRED_THIRD_PARTY_AUTH_LOGIN_URL', 
-        '/auth/login/live')
+        '/')
 
     urlpatterns += [
         url(r'^login$', RedirectView.as_view(
