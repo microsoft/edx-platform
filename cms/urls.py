@@ -51,8 +51,7 @@ if not configuration_helpers.get_value('ENABLE_CUSTOM_AUTH', settings.FEATURES.g
 
     register_uri = url(r'^register$', RedirectView.as_view(
                     url=home_url,
-                    permanent=False),
-                    name='signup'),
+                    permanent=False)),
 
 urlpatterns = [
     url(r'', include('student.urls')),
