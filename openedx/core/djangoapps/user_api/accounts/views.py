@@ -429,7 +429,7 @@ class DeactivateLogoutViewV2(APIView):
             if oauth_account_deletion:
                 user_email = request.POST.get('useremail', False)
                 if user_email:
-                    request.user = User.objects.get(email=useremail)
+                    request.user = User.objects.get(email=user_email)
                     self._check_excessive_login_attempts(request.user)
                 else:
                     self._process_account_deactivation(request)
