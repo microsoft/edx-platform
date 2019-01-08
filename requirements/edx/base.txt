@@ -216,7 +216,7 @@ python-saml==2.4.0
 python-swiftclient==3.5.0
 pytz==2016.10
 pyuca==1.1
-pyyaml==3.12
+pyyaml==4.2b4
 redis==2.10.6
 reportlab==3.1.44
 requests-oauthlib==0.6.1
