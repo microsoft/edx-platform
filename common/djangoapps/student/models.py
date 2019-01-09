@@ -22,6 +22,7 @@ from importlib import import_module
 from urllib import urlencode
 
 import analytics
+import random
 from config_models.models import ConfigurationModel
 from django.apps import apps
 from django.conf import settings
@@ -74,6 +75,7 @@ from util.query import use_read_replica_if_available
 log = logging.getLogger(__name__)
 AUDIT_LOG = logging.getLogger("audit")
 SessionStore = import_module(settings.SESSION_ENGINE).SessionStore  # pylint: disable=invalid-name
+RETIRE_SALTS = [str(random.randrange(1, 10**10)), str(random.randrange(1, 10**10))]285
 
 # enroll status changed events - signaled to email_marketing.  See email_marketing.tasks for more info
 
@@ -266,7 +268,7 @@ def get_retired_username_by_username(username):
             return status.retired_username
     except UserRetirementStatus.DoesNotExist:
         pass
-    return user_util.get_retired_username(username, settings.RETIRED_USER_SALTS, settings.RETIRED_USERNAME_FMT)
+    return user_util.get_retired_username(username, RETIRE_SALTS, settings.RETIRED_USERNAME_FMT)
 
 
 def get_retired_email_by_email(email):
@@ -282,7 +284,7 @@ def get_retired_email_by_email(email):
             return status.retired_email
     except UserRetirementStatus.DoesNotExist:
         pass
-    return user_util.get_retired_email(email, settings.RETIRED_USER_SALTS, settings.RETIRED_EMAIL_FMT)
+    return user_util.get_retired_email(email, RETIRE_SALTS, settings.RETIRED_EMAIL_FMT)
 
 
 def get_all_retired_usernames_by_username(username):
