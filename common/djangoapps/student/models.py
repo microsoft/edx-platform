@@ -75,7 +75,7 @@ from util.query import use_read_replica_if_available
 log = logging.getLogger(__name__)
 AUDIT_LOG = logging.getLogger("audit")
 SessionStore = import_module(settings.SESSION_ENGINE).SessionStore  # pylint: disable=invalid-name
-RETIRE_SALTS = [str(random.randrange(1, 10**10)), str(random.randrange(1, 10**10))]285
+RETIRE_SALTS = [str(random.randrange(1, 10**10)), str(random.randrange(1, 10**10))]
 
 # enroll status changed events - signaled to email_marketing.  See email_marketing.tasks for more info
 
