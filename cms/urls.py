@@ -3,7 +3,6 @@ from django.conf.urls import include, url
 from django.conf.urls.static import static
 from django.contrib.admin import autodiscover as django_autodiscover
 from django.utils.translation import ugettext_lazy as _
-from django.views.generic.base import RedirectView
 from rest_framework_swagger.views import get_swagger_view
 
 import contentstore.views
@@ -14,7 +13,6 @@ import openedx.core.djangoapps.external_auth.views
 import openedx.core.djangoapps.lang_pref.views
 from openedx.core.djangoapps.password_policy import compliance as password_policy_compliance
 from openedx.core.djangoapps.password_policy.forms import PasswordPolicyAwareAdminAuthForm
-from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 
 from ratelimitbackend import admin
 
@@ -33,25 +31,6 @@ COURSELIKE_KEY_PATTERN = r'(?P<course_key_string>({}|{}))'.format(
 
 # Pattern to match a library key only
 LIBRARY_KEY_PATTERN = r'(?P<library_key_string>library-v1:[^/+]+\+[^/+]+)'
-
-# When custom authentication is disabled, we need to disable /register and /signup
-# since third-party-auth takes care of this.
-signup_uri = url(r'^signup$', contentstore.views.signup, name='signup')
-register_uri = url(r'^register$', contentstore.views.signup)
-
-if not configuration_helpers.get_value('ENABLE_CUSTOM_AUTH', settings.FEATURES.get('ENABLE_CUSTOM_AUTH', False)):
-    # Custom authentication is disable, 
-    # Redirect both endpoints to home page
-
-    home_url = "/"
-    signup_uri = url(r'^signup$', RedirectView.as_view(
-                    url=home_url,
-                    permanent=False),
-                    name='signup')
-
-    register_uri = url(r'^register$', RedirectView.as_view(
-                    url=home_url,
-                    permanent=False))
 
 urlpatterns = [
     url(r'', include('student.urls')),
@@ -96,11 +75,8 @@ urlpatterns = [
     # restful api
     url(r'^$', contentstore.views.howitworks, name='homepage'),
     url(r'^howitworks$', contentstore.views.howitworks, name='howitworks'),
-    
-    # conditionally set signup & register routes (dependent on status of custom authentication)
-    signup_uri,
-    register_uri,
-    
+    url(r'^signup$', contentstore.views.signup, name='signup'),	
+    url(r'^register$', contentstore.views.signup),
     url(r'^signin$', contentstore.views.login_page, name='login'),
     url(r'^login$', contentstore.views.login_page),
     url(r'^request_course_creator$', contentstore.views.request_course_creator, name='request_course_creator'),
