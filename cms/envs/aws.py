@@ -103,8 +103,8 @@ if ENV_TOKENS.get('GET_SECRETS_FROM_AZURE_KEYVAULT', False):
     payload = ENV_TOKENS.get('KEYVAULT_PAYLOAD', None)
     key_vault_url = ENV_TOKENS.get('KEYVAULT_URL', None)
     non_secure_key = ENV_TOKENS.get('CMS_NON_SECURE_KEY_NAME', None)
-    api_version = ENV_TOKENS.get('KEYVAULT_API_VERSION', None)
-    ENV_TOKENS = override_configs_from_keyvault(ENV_TOKENS, request_uri, payload, key_vault_url, non_secure_key, api_version)
+    keyvault_api_version = ENV_TOKENS.get('KEYVAULT_API_VERSION', None)
+    ENV_TOKENS = override_configs_from_keyvault(ENV_TOKENS, request_uri, payload, key_vault_url, non_secure_key, keyvault_api_version)
 
 
 # Do NOT calculate this dynamically at startup with git because it's *slow*.
