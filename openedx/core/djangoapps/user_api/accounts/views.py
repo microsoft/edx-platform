@@ -81,6 +81,7 @@ from .signals import (
     USER_RETIRE_THIRD_PARTY_MAILINGS
 )
 from ..message_types import DeletionNotificationMessage
+from third_party_auth.models import UserSocialAuthMapping
 
 log = logging.getLogger(__name__)
 
@@ -433,8 +434,8 @@ class DeactivateLogoutViewV2(APIView):
                     request.user = User.objects.get(email=user_email)
                     self._check_excessive_login_attempts(request.user)
                 elif uid:
-                    user_id = UserSocialAuthMapping.objects.get(uid=uid)
-                    request.user = User.objects.get(id=user_id)
+                    user_social = UserSocialAuthMapping.objects.get(uid=uid)
+                    request.user = User.objects.get(id=user_social.user_id)
                 else:
                     self._process_account_deactivation(request)
             else:
