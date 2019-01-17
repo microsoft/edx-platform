@@ -1077,13 +1077,12 @@ class AccountRetirementView(ViewSet):
         any other PII associated with this user.
         """
         username = request.data['username']
-        return Response('hello',status=status.HTTP_200_OK)
-
+       
         try:
             retirement_status = UserRetirementStatus.get_retirement_for_retirement_action(username)
             user = retirement_status.user
             retired_username = retirement_status.retired_username or get_retired_username_by_username(username)
-            retired_email = retirement_status.retired_ema  il or get_retired_email_by_email(user.email)
+            retired_email = retirement_status.retired_email or get_retired_email_by_email(user.email)
             original_email = retirement_status.original_email
 
             # Retire core user/profile information
