@@ -78,6 +78,7 @@ def set_logged_in_cookies(request, response, user):
 
     """
     cookie_settings = standard_cookie_settings(request)
+    logged_in_cookie_is_secure = request.is_secure()
 
     # Backwards compatibility: set the cookie indicating that the user
     # is logged in.  This is just a boolean value, so it's not very useful.
@@ -86,7 +87,7 @@ def set_logged_in_cookies(request, response, user):
     response.set_cookie(
         settings.EDXMKTG_LOGGED_IN_COOKIE_NAME.encode('utf-8'),
         'true',
-        secure=None,
+        secure=logged_in_cookie_is_secure,
         **cookie_settings
     )
 
