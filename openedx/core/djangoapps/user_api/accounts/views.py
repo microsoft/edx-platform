@@ -1076,7 +1076,8 @@ class AccountRetirementView(ViewSet):
         retiring this username, the associated email address, and
         any other PII associated with this user.
         """
-        username = request.data['username']     
+        username = request.data['username']
+             
         try:
             retirement_status = UserRetirementStatus.get_retirement_for_retirement_action(username)
             user = retirement_status.user
