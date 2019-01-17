@@ -1087,7 +1087,7 @@ class AccountRetirementView(ViewSet):
 
             # Retire core user/profile information
             self.clear_pii_from_userprofile(user)
-            self.delete_users_profile_images(user)
+            #self.delete_users_profile_images(user)
             self.delete_users_country_cache(user)
 
             # Retire data from Enterprise models
