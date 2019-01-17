@@ -1087,6 +1087,7 @@ class AccountRetirementView(ViewSet):
 
             # Retire core user/profile information
             self.clear_pii_from_userprofile(user)
+            # TODO: this is an interim fix need to change the storage pointing to azure
             #self.delete_users_profile_images(user)
             self.delete_users_country_cache(user)
 
