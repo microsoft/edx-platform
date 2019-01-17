@@ -385,13 +385,15 @@ class DeactivateLogoutViewV2(APIView):
     {
         "password": "example_password",
         "useremail": "user1@example.com",
+        "uid":"2078n9f30d9zdce7"
     }
 
     **POST Parameters**
 
       A POST request can include one of the following parameter.
 
-      * useremail: Optional. the email of the user being deactivated
+      * uid: Optional. the puid of the user being deactivated.
+      * useremail: Optional. the email of the user being deactivated.
       * password: Required. The current password of the user being deactivated.
 
     **POST Response Values**
