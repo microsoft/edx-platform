@@ -385,14 +385,14 @@ class DeactivateLogoutViewV2(APIView):
     {
         "password": "example_password",
         "useremail": "user1@example.com",
-        "uid":"2078n9f30d9zdce7"
+        "puid":"0006BFWRF25E2C6D"
     }
 
     **POST Parameters**
 
       A POST request can include one of the following parameter.
 
-      * uid: Optional. the puid of the user being deactivated.
+      * puid: Optional. the puid of the user being deactivated.
       * useremail: Optional. the email of the user being deactivated.
       * password: Required. The current password of the user being deactivated.
 
@@ -431,12 +431,12 @@ class DeactivateLogoutViewV2(APIView):
             oauth_account_deletion = settings.FEATURES.get('ENABLE_OAUTH_ACCOUNT_DELETION', False)
             if oauth_account_deletion:
                 user_email = request.POST.get('useremail', False)
-                uid = request.POST.get('uid', False)
+                puid = request.POST.get('puid', False)
                 if user_email:
                     request.user = User.objects.get(email=user_email)
                     self._check_excessive_login_attempts(request.user)
-                elif uid:
-                    user_social_auth_mapping = UserSocialAuthMapping.objects.get(uid=uid)
+                elif puid:
+                    user_social_auth_mapping = UserSocialAuthMapping.objects.get(puid=puid)
                     request.user = User.objects.get(id=user_social_auth_mapping.user_id)
                 else:
                     self._process_account_deactivation(request)
