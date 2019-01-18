@@ -171,17 +171,18 @@ class TrackMiddleware(object):
             return ''
 
         # Follow the model of django.utils.crypto.salted_hmac() and
-        # django.contrib.sessions.backends.base._hash() but use MD5
-        # instead of SHA1 so that the result has the same length (32)
+        # django.contrib.sessions.backends.base._hash() but use SHA256 (secure)
+        # and truncate so that the result has the same length (32)
         # as the original session_key.
 
-        # TODO: Switch to SHA224, which is secure.
-        # If necessary, drop the last little bit of the hash to make it the same length.
-        # Using a known-insecure hash to shorten is silly.
-        # Also, why do we need same length?
         key_salt = "common.djangoapps.track" + self.__class__.__name__
-        key = hashlib.md5(key_salt + settings.SECRET_KEY).digest()
-        encrypted_session_key = hmac.new(key, msg=session_key, digestmod=hashlib.md5).hexdigest()
+		disgest_mod = hashlib.md5
+		
+		if not getattr(settings, 'ENCRYPT_SESSION_KEY_USING_MD5', true):
+		    disgest_mod = hashlib.sha256
+		
+		key = disgest_mod(key_salt + settings.SECRET_KEY).digest()
+        encrypted_session_key = hmac.new(key, msg=session_key, digestmod=disgest_mod).hexdigest()[:32]
         return encrypted_session_key
 
     def get_user_primary_key(self, request):
