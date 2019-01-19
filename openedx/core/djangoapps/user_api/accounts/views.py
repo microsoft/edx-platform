@@ -8,6 +8,7 @@ import datetime
 import logging
 from functools import wraps
 
+from rest_condition import C
 import pytz
 from consent.models import DataSharingConsent
 from django.conf import settings
@@ -814,7 +815,7 @@ class AccountRetirementStatusView(ViewSet):
     Provides API endpoints for managing the user retirement process.
     """
     authentication_classes = (JwtAuthentication,)
-    permission_classes = (JwtHasScope, permissions.IsAuthenticated, CanRetireUser,)
+    permission_classes = ((C(JwtHasScope) | CanRetireUser) , permissions.IsAuthenticated,)
     parser_classes = (JSONParser,)
     serializer_class = UserRetirementStatusSerializer
     required_scopes = ['gdpr:write']
@@ -1062,7 +1063,7 @@ class AccountRetirementView(ViewSet):
     Provides API endpoint for retiring a user.
     """
     authentication_classes = (JwtAuthentication,)
-    permission_classes = (JwtHasScope, permissions.IsAuthenticated, CanRetireUser,)
+    permission_classes = ((C(JwtHasScope) | CanRetireUser) , permissions.IsAuthenticated,)
     parser_classes = (JSONParser,)
     required_scopes = ['gdpr:write']
 
