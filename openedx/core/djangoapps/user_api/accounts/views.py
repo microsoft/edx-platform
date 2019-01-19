@@ -420,7 +420,7 @@ class DeactivateLogoutViewV2(APIView):
     """
     authentication_classes = (SessionAuthentication, JwtAuthentication, )
     permission_classes = (JwtHasScope, permissions.IsAuthenticated)
-    required_scopes = ['gdpr:write']
+    required_scopes = ['retire_user:write']
     def post(self, request):
         """
         POST /api/user/v1/accounts/deactivate_logoutv2/
@@ -818,7 +818,7 @@ class AccountRetirementStatusView(ViewSet):
     permission_classes = ((C(JwtHasScope) | CanRetireUser) , permissions.IsAuthenticated,)
     parser_classes = (JSONParser,)
     serializer_class = UserRetirementStatusSerializer
-    required_scopes = ['gdpr:write']
+    required_scopes = ['retire_user:write']
 
     def retirement_queue(self, request):
         """
@@ -1065,7 +1065,7 @@ class AccountRetirementView(ViewSet):
     authentication_classes = (JwtAuthentication,)
     permission_classes = ((C(JwtHasScope) | CanRetireUser) , permissions.IsAuthenticated,)
     parser_classes = (JSONParser,)
-    required_scopes = ['gdpr:write']
+    required_scopes = ['retire_user:write']
 
     @request_requires_username
     def post(self, request):
