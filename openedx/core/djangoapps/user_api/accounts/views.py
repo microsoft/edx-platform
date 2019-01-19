@@ -19,6 +19,7 @@ from django.utils.translation import ugettext as _
 from edx_ace import ace
 from edx_ace.recipient import Recipient
 from edx_rest_framework_extensions.authentication import JwtAuthentication
+from edx_rest_framework_extensions.permissions import JwtHasScope
 from enterprise.models import EnterpriseCourseEnrollment, EnterpriseCustomerUser, PendingEnterpriseCustomerUser
 from integrated_channels.degreed.models import DegreedLearnerDataTransmissionAudit
 from integrated_channels.sap_success_factors.models import SapSuccessFactorsLearnerDataTransmissionAudit
@@ -417,8 +418,8 @@ class DeactivateLogoutViewV2(APIView):
     - Create a row in the retirement table for that user
     """
     authentication_classes = (SessionAuthentication, JwtAuthentication, )
-    permission_classes = (permissions.IsAuthenticated, )
-
+    permission_classes = (JwtHasScope, permissions.IsAuthenticated)
+    required_scopes = ['gdpr:write']
     def post(self, request):
         """
         POST /api/user/v1/accounts/deactivate_logoutv2/
@@ -813,9 +814,10 @@ class AccountRetirementStatusView(ViewSet):
     Provides API endpoints for managing the user retirement process.
     """
     authentication_classes = (JwtAuthentication,)
-    permission_classes = (permissions.IsAuthenticated, CanRetireUser,)
+    permission_classes = (JwtHasScope, permissions.IsAuthenticated, CanRetireUser,)
     parser_classes = (JSONParser,)
     serializer_class = UserRetirementStatusSerializer
+    required_scopes = ['gdpr:write']
 
     def retirement_queue(self, request):
         """
@@ -1060,8 +1062,9 @@ class AccountRetirementView(ViewSet):
     Provides API endpoint for retiring a user.
     """
     authentication_classes = (JwtAuthentication,)
-    permission_classes = (permissions.IsAuthenticated, CanRetireUser,)
+    permission_classes = (JwtHasScope, permissions.IsAuthenticated, CanRetireUser,)
     parser_classes = (JSONParser,)
+    required_scopes = ['gdpr:write']
 
     @request_requires_username
     def post(self, request):
