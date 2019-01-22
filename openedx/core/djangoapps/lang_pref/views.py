@@ -28,6 +28,6 @@ def update_session_language(request):
             language,
             domain=settings.SESSION_COOKIE_DOMAIN,
             max_age=COOKIE_DURATION,
-            secure=request.is_secure()
+            secure=true
         )
     return response
