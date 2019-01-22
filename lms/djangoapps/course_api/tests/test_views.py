@@ -140,8 +140,6 @@ class CourseListViewTestCase(CourseApiTestViewMixin, SharedModuleStoreTestCase):
         """ Make sure throttle rate 20 is set correctly for different user scopes. """
         self.assert_throttle_configured_correctly(user_scope, throws_exception, expected_rate)
 
-
-@attr(shard=9)
     @with_site_configuration(configuration=TEST_SITE_CONFIGURATION)
     def test_as_honor_with_site_configuration(self):
         self.setup_user(self.honor_user)
