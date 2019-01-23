@@ -449,6 +449,7 @@ class DeactivateLogoutViewV2(APIView):
                 UserRetirementStatus.create_retirement(request.user)
                 # Unlink LMS social auth accounts
                 UserSocialAuth.objects.filter(user_id=request.user.id).delete()
+                UserSocialAuthMapping.objects.filter(user_id=request.user.id).delete()
                 # Change LMS password & email
                 user_email = request.user.email
                 request.user.email = get_retired_email_by_email(request.user.email)
