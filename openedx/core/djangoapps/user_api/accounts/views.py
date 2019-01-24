@@ -19,7 +19,7 @@ from django.db import transaction
 from django.utils.translation import ugettext as _
 from edx_ace import ace
 from edx_ace.recipient import Recipient
-from edx_rest_framework_extensions.authentication import JwtAuthentication
+from edx_rest_framework_extensions.authentication import JwtAuthentication, is_jwt_authenticated
 from edx_rest_framework_extensions.permissions import JwtHasScope
 from enterprise.models import EnterpriseCourseEnrollment, EnterpriseCustomerUser, PendingEnterpriseCustomerUser
 from integrated_channels.degreed.models import DegreedLearnerDataTransmissionAudit
@@ -440,8 +440,10 @@ class DeactivateLogoutViewV2(APIView):
                 elif puid:
                     user_social_auth_mapping = UserSocialAuthMapping.objects.get(puid=puid)
                     request.user = User.objects.get(id=user_social_auth_mapping.user_id)
-                else:
+                elif not is_jwt_authenticated(request):
                     self._process_account_deactivation(request)
+                else:
+                    raise RetirementStateError('useremail or puid is not provided')
             else:
                 self._process_account_deactivation(request)
                

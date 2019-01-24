@@ -13,6 +13,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ViewSet
 from six import text_type
+from rest_condition import C
+from edx_rest_framework_extensions.permissions import JwtHasScope
+
 
 from lms.lib import comment_client
 from discussion_api.api import (
@@ -541,7 +544,8 @@ class RetireUserView(APIView):
     """
 
     authentication_classes = (JwtAuthentication,)
-    permission_classes = (permissions.IsAuthenticated, CanRetireUser)
+    permission_classes = ((C(JwtHasScope) | CanRetireUser), permissions.IsAuthenticated,)
+    required_scopes = ['retire_user:write']
 
     def post(self, request):
         """
