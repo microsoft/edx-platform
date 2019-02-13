@@ -13,6 +13,7 @@ import openedx.core.djangoapps.external_auth.views
 import openedx.core.djangoapps.lang_pref.views
 from openedx.core.djangoapps.password_policy import compliance as password_policy_compliance
 from openedx.core.djangoapps.password_policy.forms import PasswordPolicyAwareAdminAuthForm
+from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 
 from ratelimitbackend import admin
 
@@ -169,12 +170,17 @@ urlpatterns = [
     url(r'^api/tasks/v0/', include('user_tasks.urls')),
     url(r'^accessibility$', contentstore.views.accessibility, name='accessibility'),
 ]
-
+    
 JS_INFO_DICT = {
     'domain': 'djangojs',
     # We need to explicitly include external Django apps that are not in LOCALE_PATHS.
     'packages': ('openassessment',),
 }
+
+if settings.FEATURES["ENABLE_AZURE_MEDIA_SERVICES_XBLOCK"]:
+    urlpatterns += (
+        url(r'^embed_player/', include('azure_media_services.urls')),
+    )
 
 if settings.FEATURES.get('ENABLE_CONTENT_LIBRARIES'):
     urlpatterns += [

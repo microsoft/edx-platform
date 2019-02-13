@@ -319,6 +319,9 @@ FEATURES = {
 
     # Set this to true to make API docs available at /api-docs/.
     'ENABLE_API_DOCS': False,
+
+    # Set this to True to enable Azure Media Service XBlock installed for embed video player
+    'ENABLE_AZURE_MEDIA_SERVICES_XBLOCK': False,
 }
 
 ENABLE_JASMINE = False
