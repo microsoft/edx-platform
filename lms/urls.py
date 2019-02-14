@@ -142,10 +142,10 @@ urlpatterns = [
     url(r'^api/experiments/', include('experiments.urls', namespace='api_experiments')),
 ]
 
-if settings.FEATURES["ENABLE_AZURE_MEDIA_SERVICES_XBLOCK"]:
-    urlpatterns += (
+if settings.FEATURES.get('ENABLE_AZURE_MEDIA_SERVICES_XBLOCK'):
+    urlpatterns += [
         url(r'^embed_player/', include('azure_media_services.urls')),
-    )
+    ]
 
 # TODO: This needs to move to a separate urls.py once the student_account and
 # student views below find a home together

@@ -177,10 +177,10 @@ JS_INFO_DICT = {
     'packages': ('openassessment',),
 }
 
-if settings.FEATURES["ENABLE_AZURE_MEDIA_SERVICES_XBLOCK"]:
-    urlpatterns += (
+if settings.FEATURES.get('ENABLE_AZURE_MEDIA_SERVICES_XBLOCK'):
+    urlpatterns += [
         url(r'^embed_player/', include('azure_media_services.urls')),
-    )
+    ]
 
 if settings.FEATURES.get('ENABLE_CONTENT_LIBRARIES'):
     urlpatterns += [
