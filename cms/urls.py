@@ -13,7 +13,6 @@ import openedx.core.djangoapps.external_auth.views
 import openedx.core.djangoapps.lang_pref.views
 from openedx.core.djangoapps.password_policy import compliance as password_policy_compliance
 from openedx.core.djangoapps.password_policy.forms import PasswordPolicyAwareAdminAuthForm
-from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 
 from ratelimitbackend import admin
 
