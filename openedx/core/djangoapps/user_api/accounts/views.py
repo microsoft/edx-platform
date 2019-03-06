@@ -485,6 +485,10 @@ class DeactivateLogoutViewV2(APIView):
             return Response(status=status.HTTP_204_NO_CONTENT)
         except KeyError:
             return Response(u'Username not specified.', status=status.HTTP_404_NOT_FOUND)
+        except UserSocialAuthMapping.DoesNotExist:
+            return Response(
+                u'The user with PUID={} does not exist.'.format(puid), status=status.HTTP_404_NOT_FOUND
+            )
         except user_model.DoesNotExist:
             return Response(
                 u'The user "{}" does not exist.'.format(request.user.username), status=status.HTTP_404_NOT_FOUND
