@@ -41,6 +41,7 @@ from openedx.core.djangoapps.api_admin.models import ApiAccessRequest
 from openedx.core.djangoapps.credit.models import CreditRequirementStatus, CreditRequest
 from openedx.core.djangoapps.course_groups.models import UnregisteredLearnerCohortAssignments
 from openedx.core.djangoapps.profile_images.images import remove_profile_images
+from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 from openedx.core.djangoapps.user_api.accounts.image_helpers import get_profile_image_names, set_has_profile_image
 from openedx.core.djangolib.oauth2_retirement_utils import retire_dot_oauth2_models, retire_dop_oauth2_models
 from openedx.core.lib.api.authentication import (
@@ -99,6 +100,136 @@ USER_PROFILE_PII = {
     'bio': None,
 }
 
+def get_dynamic_field_value(data_source, field_reference):
+    """
+    Use the field reference (dot-separated) to get the associated value
+    on the specified data source.
+    - data_source: any object/dict with properties
+    - field_reference: a dot-separated path a property value
+
+    For example:
+        data_source = obj1
+        field_reference = 'foo.bar'
+
+        The function will fetch the value at obj1.foo.bar if it exists
+        and return null otherwise.
+    """
+
+    data_obj = data_source
+    field_parts = field_reference.split('.')
+    for field in field_parts:
+        if field in data_obj:
+            data_obj = data_obj[field]
+        else:
+            return
+
+    return data_obj
+
+def get_model_reference(extension_model_str):
+    """
+    Get reference to a fully qualified class.
+
+    This is meant to support dynamically specifying a model whose data
+    is used for extending the output of another dataset.
+
+    For example:
+        get_model_reference('a.b.c.my_class') will return
+        a reference to my_class from a.b.c module
+    """
+
+    model_parts = extension_model_str.split(".")
+    boundary = len(model_parts) - 1
+
+    model_module_name = '.'.join(model_parts[0:boundary])
+    model_class_name = ''.join(model_parts[boundary:])
+
+    module = __import__(model_module_name, fromlist=[model_class_name])
+    model_reference = getattr(module, model_class_name)
+
+    return model_reference
+
+def extend_retirement_queue_response(serializer):
+    """
+    In some business cases, it is necessary to add extra metadata to the
+    response from /api/user/v1/accounts/retirement_queue/ api.
+
+    This function provides a flexible, configuration-based option
+    for extending the output of any serialized data output.
+
+    **Site Configuration**
+        The following site configuration is expected:
+
+        "RETIREMENT_QUEUE_EXTENSION": {
+            "enabled":true,
+            "retirement_response_key": "foo.bar",
+            "extension_model": "a.b.my_class",
+            "extension_model_key": "primary_key",
+            "extension_model_fields": [ "field1", "field2" ],
+            "retirement_response_field_name": "extension_header"
+        }
+
+            - enabled: whether or not the data extension is enabled
+            - retirement_response_key: key to link serialized data to the extension model
+            - extension_model: qualified path to a model whose data is used for extending the serialized data
+            - extension_model_key: a key to link extension model to the serialized data
+            - extension_model_fields: list of fields from the extension model to add to the serialized data
+            - retirement_response_field_name: name of the new field to add to the serialized data holding the extended data
+
+        All fields are required.
+
+    **Use Case**
+        The implicit assumption for retirement_queue is bulk retirement of users.
+        One corporate scenario is to retire users individually and provide confirmation
+        of the retirement in realtime. In order to support this scenario, it is necessary
+        to extend the serialized output with additional metadata that is useful to match
+        each record with identifiers provided by the corporate retirement worker (CRW).
+
+        In this scenario, it is assumed a model linking user_id to the unique identifier
+        the CRW uses.extend_retirement_queue_response can be used to add the extra metadata.
+    """
+
+    serializer_data = serializer.data
+
+    # If enabled, extend the results dynamically
+    # using the appropriate site configuration
+    retirement_queue_extension_setting = configuration_helpers.get_value(
+        'RETIREMENT_QUEUE_EXTENSION',
+        None)
+
+    if retirement_queue_extension_setting and retirement_queue_extension_setting['enabled']:
+        # extending the retirement queue output has been enabled
+        # get the unique values of the retirement_response_key = (list A)
+        retirements = list(serializer.data)
+        retirement_keys = [get_dynamic_field_value(retirement, retirement_queue_extension_setting['retirement_response_key']) for retirement in retirements]
+
+        # query the target extension_model on extension_model_key in (list A)
+        mapped_model = get_model_reference(retirement_queue_extension_setting['extension_model'])
+        mapped_extension_model_objects = mapped_model.objects.filter(user_id__in=retirement_keys)
+
+        # re-organize the mapped data by keys for easier refernece later
+        mapped_extension_model_objects_by_keys = {}
+        for mapping in mapped_extension_model_objects:
+            mapped_extension_model_objects_by_keys[mapping.user_id] = mapping
+
+        # for each item in result: build mapping data & add to result for matched serialized record
+        for idx, _ in enumerate(retirements):
+
+            # search for key in mapped_extension_model_objects
+            mapping_data = {}
+            retired_user_id = get_dynamic_field_value(
+                retirements[idx],
+                retirement_queue_extension_setting['retirement_response_key'])
+
+            if retired_user_id in mapped_extension_model_objects_by_keys:
+                for field_name in retirement_queue_extension_setting['extension_model_fields']:
+                    mapping_data[field_name] = getattr(mapped_extension_model_objects_by_keys[retired_user_id], field_name)
+
+            retirements[idx][retirement_queue_extension_setting['retirement_response_field_name']] = mapping_data
+
+        # apply updates to our response (includes the extended data)
+        serializer_data = retirements
+
+    return Response(serializer_data)
 
 def request_requires_username(function):
     """
@@ -859,7 +990,7 @@ class AccountRetirementStatusView(ViewSet):
                 'id'
             )
             serializer = UserRetirementStatusSerializer(retirements, many=True)
-            return Response(serializer.data)
+            return extend_retirement_queue_response(serializer)
         # This should only occur on the int() converstion of cool_off_days at this point
         except ValueError:
             return Response('Invalid cool_off_days, should be integer.', status=status.HTTP_400_BAD_REQUEST)
