@@ -557,6 +557,7 @@ def account_settings_context(request):
                 'options': TIME_ZONE_CHOICES,
             }
         },
+        'enable_msa': configuration_helpers.get_value('ENABLE_MSA', False),
         'platform_name': configuration_helpers.get_value('PLATFORM_NAME', settings.PLATFORM_NAME),
         'password_reset_support_link': configuration_helpers.get_value(
             'PASSWORD_RESET_SUPPORT_LINK', settings.PASSWORD_RESET_SUPPORT_LINK

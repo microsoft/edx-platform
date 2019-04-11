@@ -4,7 +4,7 @@ Django storage backends for Open edX.
 
 import pytz
 
-from azure.storage import AccessPolicy
+from azure.storage.blob.models import BlobPermissions
 from datetime import datetime, timedelta
 from django.contrib.staticfiles.storage import StaticFilesStorage, CachedFilesMixin
 from django.core.files.storage import get_storage_class
@@ -108,7 +108,7 @@ class AzureStorageExtended(AzureStorage):
         Override base implementation so that we can accept a container
         parameter and an expiration on urls
         """
-        super(AzureStorage, self).__init__(*args, **kwargs)
+        super(AzureStorage, self).__init__()
         self._connection = None
         self._service = None
         self.url_expiry_secs = url_expiry_secs
@@ -116,20 +116,12 @@ class AzureStorageExtended(AzureStorage):
         if container:
             self.azure_container = container
 
-    def listdir(self, path):
+
+    def url(self, name, expire=None):
         """
-        The base implementation does not have a definition for this method
-        which Open edX requires
+        Assign expiry_secs to expire, otherwise the sas token will not be created
         """
-        if not path:
-            path = None
+        if expire is None:
+            expire = self.url_expiry_secs
 
-        blobs = self.list_all(path=path)
-
-        results = []
-        for blob_name in blobs:
-            if path:
-                blob_name = blob_name.replace(path, '')
-            results.append(blob_name)
-
-        return ((), results)
+        return super(AzureStorageExtended, self).url(name, expire)
