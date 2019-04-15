@@ -1000,6 +1000,7 @@ INSTALLED_APPS = [
 
     # edX Video Pipeline integration
     'openedx.core.djangoapps.video_pipeline',
+    'third_party_auth',
 
     # For CMS
     'contentstore.apps.ContentstoreConfig',
@@ -1541,3 +1542,9 @@ plugin_settings.add_plugins(__name__, plugin_constants.ProjectType.CMS, plugin_c
 # setting for the FileWrapper class used to iterate over the export file data.
 # See: https://docs.python.org/2/library/wsgiref.html#wsgiref.util.FileWrapper
 COURSE_EXPORT_DOWNLOAD_CHUNK_SIZE = 8192
+
+# Social Django defaults to HTTP scheme when generating redirect_uri
+# It is therefore necessary to add this setting in order to support
+# changing the redirect_uri to HTTPS. Defaulting to False (default behavior)
+# and expecting client to override.
+REDIRECT_IS_HTTPS = False

@@ -8,7 +8,6 @@ from __future__ import absolute_import
 import json
 import logging
 import re
-
 from config_models.models import ConfigurationModel, cache
 from django.conf import settings
 from django.contrib.sites.models import Site
@@ -32,7 +31,6 @@ from .lti import LTI_PARAMS_KEY, LTIAuthBackend
 from .saml import STANDARD_SAML_PROVIDER_KEY, get_saml_idp_choices, get_saml_idp_class
 
 log = logging.getLogger(__name__)
-
 REGISTRATION_FORM_FIELD_BLACKLIST = [
     'name',
     'username'
