@@ -361,6 +361,57 @@ class MongoConnection(object):
             tagger.measure("structures", len(docs))
             return docs
 
+    def course_block_elem_match_filter(self, ids, filters):
+        """
+        Custom implementation to support use of CosmosDB (which doesn't support elemMatch & slice projections)
+
+        Arguments:
+            ids (list): A list of structure ids
+            filters (dict): A dictionary of filters to apply to the dataset. Filters take the following forms:
+            [
+                {
+                    'type': 'elemMatch',
+                    'root': 'blocks',
+                    'key': 'block_type',
+                    'value': block_type_value
+                },
+                {
+                    'type': 'field',
+                    'key': 'root',
+                    'value': 1
+                }
+            ]
+
+            All filters are combined as AND conditionals and applied to the dataset. The above filters
+            are equivalent to the following projection: 
+
+            {'blocks': {'$elemMatch': {'block_type': block_type}}, 'root': 1}
+        """
+
+        # TODO: make this more flexible
+        dataset = []
+        structures = self.structures.find({'_id': {'$in': ids}})
+        for structure in structures:
+
+            generated_structure = {'_id': structure['_id']}
+
+            for f in filters:
+                if f['type'] == 'elemMatch':
+                    # it is assumed when doing element match, there are 1+ count of the element
+                    generated_structure[ f['root'] ] = []
+
+                    for element in structure[ f['root'] ]:
+                        if element[ f['key'] ] == f['value']:
+                            generated_structure[ f['root'] ].append(element)
+
+                elif f['type'] == 'field' and f['value'] == 1:
+                    generated_structure[ f['key'] ] = structure[ f['key'] ]
+
+            # add the generated structure to the dataset
+            dataset.append(generated_structure)
+
+        return dataset
+
     @autoretry_read()
     def find_courselike_blocks_by_id(self, ids, block_type, course_context=None):
         """
@@ -370,14 +421,25 @@ class MongoConnection(object):
             ids (list): A list of structure ids
             block_type: type of block to return
         """
+
+        filters = [
+            {
+                'type': 'elemMatch',
+                'root': 'blocks',
+                'key': 'block_type',
+                'value': block_type
+            },
+            {
+                'type': 'field',
+                'key': 'root',
+                'value': 1
+            }]
+
         with TIMER.timer("find_courselike_blocks_by_id", course_context) as tagger:
             tagger.measure("requested_ids", len(ids))
             docs = [
                 structure_from_mongo(structure, course_context)
-                for structure in self.structures.find(
-                    {'_id': {'$in': ids}},
-                    {'blocks': {'$elemMatch': {'block_type': block_type}}, 'root': 1}
-                )
+                for structure in self.course_block_elem_match_filter(ids, filters)
             ]
             tagger.measure("structures", len(docs))
             return docs

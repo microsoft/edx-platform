@@ -58,7 +58,9 @@ django-ses==0.8.4
 django-simple-history
 django-splash
 django-statici18n==1.4.0
-django-storages==1.4.1
+#django-storages==1.7.1
+# Interim fix for azure storage integration with django-storages
+git+https://github.com/eltoncarr/django-storages.git@eltonc/support_kwargs_azure_storage#egg=django-storages
 django-user-tasks
 django-waffle==0.12.0
 django-webpack-loader               # Used to wire webpack bundles into the django asset pipeline

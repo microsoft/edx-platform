@@ -1,11 +1,17 @@
 """
 Django storage backends for Open edX.
 """
-from django.contrib.staticfiles.storage import StaticFilesStorage
+
+import pytz
+
+from azure.storage.blob.models import BlobPermissions
+from datetime import datetime, timedelta
+from django.contrib.staticfiles.storage import StaticFilesStorage, CachedFilesMixin
 from django.core.files.storage import get_storage_class
 from django.utils.lru_cache import lru_cache
-from pipeline.storage import NonPackagingMixin, PipelineCachedStorage
+from pipeline.storage import NonPackagingMixin, PipelineCachedStorage, PipelineMixin
 from require.storage import OptimizedFilesMixin
+from storages.backends.azure_storage import AzureStorage
 from storages.backends.s3boto import S3BotoStorage
 
 from openedx.core.djangoapps.theming.storage import ThemeCachedFilesMixin, ThemePipelineMixin, ThemeStorage
@@ -24,7 +30,6 @@ class PipelineForgivingStorage(PipelineCachedStorage):
             # some packages have missing files in their css all the time.
             out = name
         return out
-
 
 class ProductionStorage(
         PipelineForgivingStorage,
@@ -89,3 +94,34 @@ def get_storage(storage_class=None, **kwargs):
     example.
     """
     return get_storage_class(storage_class)(**kwargs)
+
+
+class AzureStorageExtended(AzureStorage):
+    """
+    A wrapper around the django-stores implementation for Azure blob storage
+    so that it is fully comptaible. The version in the library's repository
+    is out of date
+    """
+
+    def __init__(self, container=None, url_expiry_secs=None, *args, **kwargs):
+        """
+        Override base implementation so that we can accept a container
+        parameter and an expiration on urls
+        """
+        super(AzureStorage, self).__init__()
+        self._connection = None
+        self._service = None
+        self.url_expiry_secs = url_expiry_secs
+
+        if container:
+            self.azure_container = container
+
+
+    def url(self, name, expire=None):
+        """
+        Assign expiry_secs to expire, otherwise the sas token will not be created
+        """
+        if expire is None:
+            expire = self.url_expiry_secs
+
+        return super(AzureStorageExtended, self).url(name, expire)

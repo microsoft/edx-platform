@@ -1,0 +1,121 @@
+from os import listdir, stat
+from os.path import isfile, join
+
+from optparse import make_option
+
+from django.core.management.base import BaseCommand
+
+from openedx.core.storage import get_storage
+
+
+class Command(BaseCommand):
+    help = """
+    This command creates and registers a user in a given course
+    as "audit", "verified" or "honor".
+
+    example:
+        # Enroll a user test@example.com into the demo course
+        # The username and name will default to "test"
+        manage.py ... create_user -e test@example.com -p insecure -c edX/Open_DemoX/edx_demo_course -m verified
+    """
+
+    def add_arguments(self, parser):
+
+	parser.add_argument(
+		'--path',
+		'-p',
+		dest='path',
+		default='/edx/var/log/tracking',
+		help='where to find the tracking logs',
+	)
+
+	parser.add_argument(
+		'--container',
+		'-c',
+		dest='container',
+		default=None,
+		help='Which container/bucket to use',
+	)
+
+	parser.add_argument(
+		'--folder',
+		'-f',
+		dest='folder',
+		default=None,
+		help='Which folder to put the files in'
+	)
+
+	parser.add_argument(
+		'--storage',
+		'-s',
+		dest='storage',
+		# default to Azure blob storage
+		default='openedx.core.storage.AzureStorageExtended',
+		help='Which storage class to use'
+	)
+
+	parser.add_argument(
+		'--overwrite',
+		'-o',
+		action='store_true',
+		dest='overwrite',
+		default=False,
+		help='Overwrite existing files in remote storage'
+	)
+
+	parser.add_argument(
+		'--delete',
+		'-d',
+		action='store_true',
+		dest='delete',
+		default=False,
+		help='delete files already uploaded',
+	)
+
+    def handle(self, *args, **options):
+        storage_class = options['storage']
+        folder = options['folder']
+        container = options['container']
+        path = options['path']
+        overwrite = options['overwrite']
+
+        if not storage_class or not folder or not container or not path:
+            print 'You must specify the -c, -f, -p, and -s parameters for this command'
+
+        storage = get_storage(storage_class, container=container)
+
+        files = [f for f in listdir(path) if isfile(join(path, f))]
+
+        for file in files:
+            print 'Inspecting {} ....'.format(file)
+            local_path = join(path, file)
+            with open(local_path,'r') as f:
+                try:
+                    dest_fn = '{}/{}'.format(folder, file)
+                    exists = storage.exists(dest_fn)
+
+                    # does it already exist? Don't overwrite
+                    if not exists or overwrite:
+                        # even if we overwrite, don't do so if filesize has not
+                        # changed
+                        if overwrite and exists:
+                            remote_size = storage.size(dest_fn)
+
+                            local_size = stat(local_path).st_size
+                            print '{} {}'.format(remote_size, local_size)
+                            if long(remote_size) == long(local_size):
+                                print '{} does not appear to have changed since last transfer. Skipping'.format(file)
+                                continue
+
+                            # remote storage often don't support updates, so we need to
+                            # delete/save pair
+                            storage.delete(dest_fn)
+
+                        print 'Shipping {} to remote storage...'.format(file)
+                        storage.save(dest_fn, f)
+                    else:
+                        print 'File {} already exists in remote storage. Skipping...'.format(file)
+                except Exception, ex:
+                    print 'Exception: {}'.format(str(ex))
+
+

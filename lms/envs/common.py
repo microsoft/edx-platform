@@ -1301,6 +1301,7 @@ MIDDLEWARE_CLASSES = [
     'openedx.features.enterprise_support.middleware.EnterpriseMiddleware',
 
     'edx_rest_framework_extensions.middleware.EnsureJWTAuthSettingsMiddleware',
+    'openedx.core.djangoapps.site_configuration.middleware.LoginRequiredMiddleware',
 
     # This must be last
     'openedx.core.djangoapps.site_configuration.middleware.SessionCookieDomainOverrideMiddleware',
